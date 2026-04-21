@@ -1,0 +1,1578 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+
+
+
+
+<meta charset="utf-8">
+<title>Swing Desk — Trading Concepts</title>
+<meta name="viewport" content="width=1440">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<style>
+  :root {
+    /* --- Palette: cool-dark, subtly blue-tinted --- */
+    --bg-0: oklch(0.14 0.012 250);      /* page */
+    --bg-1: oklch(0.175 0.012 250);     /* panels */
+    --bg-2: oklch(0.21 0.012 250);      /* cards / rows */
+    --bg-3: oklch(0.255 0.014 250);     /* hover */
+    --bg-4: oklch(0.30 0.014 250);      /* chips */
+    --line: oklch(0.28 0.012 250 / .6);
+    --line-strong: oklch(0.35 0.014 250 / .8);
+    --fg-0: oklch(0.97 0.005 250);      /* primary text */
+    --fg-1: oklch(0.78 0.008 250);      /* secondary */
+    --fg-2: oklch(0.60 0.010 250);      /* tertiary / labels */
+    --fg-3: oklch(0.45 0.010 250);      /* muted */
+
+    /* accent — a cool mint/teal, distinct from the up/down greens */
+    --accent-h: 195;
+    --accent: oklch(0.78 0.12 var(--accent-h));
+    --accent-dim: oklch(0.78 0.12 var(--accent-h) / .14);
+    --accent-line: oklch(0.78 0.12 var(--accent-h) / .35);
+
+    /* P&L semantics: US convention — green up, red down */
+    --up:   oklch(0.78 0.17 145);
+    --up-dim: oklch(0.78 0.17 145 / .14);
+    --down: oklch(0.70 0.19 25);
+    --down-dim: oklch(0.70 0.19 25 / .14);
+
+    /* status */
+    --warn: oklch(0.80 0.15 75);
+    --warn-dim: oklch(0.80 0.15 75 / .14);
+    --danger: oklch(0.68 0.20 22);
+    --danger-dim: oklch(0.68 0.20 22 / .14);
+    --ok: oklch(0.78 0.17 145);
+    --ok-dim: oklch(0.78 0.17 145 / .14);
+    --neutral: oklch(0.65 0.02 250);
+    --neutral-dim: oklch(0.65 0.02 250 / .14);
+
+    /* density (set on <body>) */
+    --row-h: 56px;
+    --row-pad-y: 14px;
+    --card-pad: 20px;
+    --gap: 16px;
+    --fs-num-lg: 30px;
+    --fs-num-md: 18px;
+    --fs-body: 13px;
+    --fs-small: 11.5px;
+
+    /* font stack */
+    --f-sans: "Geist", ui-sans-serif, -apple-system, system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --mono-weight: 500;
+
+    --radius: 10px;
+    --radius-sm: 7px;
+  }
+
+  /* density modes */
+  body[data-density="compact"]{
+    --row-h: 40px; --row-pad-y: 8px; --card-pad: 14px; --gap: 10px;
+    --fs-num-lg: 24px; --fs-num-md: 16px; --fs-body: 12px; --fs-small: 10.5px;
+  }
+  body[data-density="medium"]{
+    --row-h: 48px; --row-pad-y: 11px; --card-pad: 16px; --gap: 12px;
+    --fs-num-lg: 27px; --fs-num-md: 17px; --fs-body: 12.5px; --fs-small: 11px;
+  }
+
+  /* font mode */
+  body[data-font="mono"]{
+    --f-sans: "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg-0);
+    color: var(--fg-0);
+    font-family: var(--f-sans);
+    font-size: var(--fs-body);
+    line-height: 1.45;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    min-width: 1440px;
+  }
+  /* faint starfield grid */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, oklch(0.78 0.12 var(--accent-h) / 0.06), transparent 60%),
+      radial-gradient(900px 500px at -5% 110%, oklch(0.70 0.15 280 / 0.05), transparent 60%);
+  }
+
+  .num, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: var(--mono-weight); }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .muted { color: var(--fg-2); }
+  .dim { color: var(--fg-3); }
+  .label { font-size: var(--fs-small); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
+
+  /* ============ TOP BAR ============ */
+  .topbar{
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; gap: 20px;
+    padding: 12px 28px;
+    background: color-mix(in oklch, var(--bg-0) 85%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand{ display:flex; align-items:center; gap: 10px; font-weight: 600; letter-spacing: -0.01em;}
+  .brand .mark{
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent) 0%, oklch(0.55 0.18 calc(var(--accent-h) + 50)) 100%);
+    box-shadow: 0 0 0 1px oklch(1 0 0 / .08) inset, 0 4px 14px -3px oklch(0.78 0.12 var(--accent-h) / .6);
+    position: relative;
+  }
+  .brand .mark::after{
+    content:""; position:absolute; inset: 5px 5px 5px 5px;
+    background: var(--bg-0); border-radius: 2px;
+    clip-path: polygon(0 70%, 25% 45%, 50% 60%, 75% 20%, 100% 35%, 100% 100%, 0 100%);
+  }
+  .brand .name{ font-size: 14px; }
+  .brand .name .dim{ color: var(--fg-2); font-weight: 400; }
+  .topbar .divider{ width: 1px; height: 22px; background: var(--line); }
+  .search{
+    display:flex; align-items:center; gap: 8px;
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 12px; width: 340px;
+    color: var(--fg-1); font-size: 12.5px;
+  }
+  .search input{
+    all: unset; flex: 1; color: var(--fg-0); font-family: var(--f-sans);
+  }
+  .search .kbd{ color: var(--fg-3); font-size: 11px; font-family: var(--f-mono); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px;}
+  .top-actions{ margin-left: auto; display:flex; align-items:center; gap: 10px; }
+  .btn{
+    all: unset; display: inline-flex; align-items:center; gap: 8px;
+    padding: 7px 12px; border-radius: 7px;
+    font-size: 12.5px; color: var(--fg-1); cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg-2);
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover{ background: var(--bg-3); border-color: var(--line-strong); color: var(--fg-0);}
+  .btn.primary{ background: var(--accent-dim); border-color: var(--accent-line); color: var(--accent);}
+  .btn.primary:hover{ background: color-mix(in oklch, var(--accent-dim) 60%, var(--accent) 10%); color: var(--fg-0);}
+  .btn.icon{ padding: 7px 9px; }
+  .clock{ font-family: var(--f-mono); font-size: 12px; color: var(--fg-2); display:flex; align-items:center; gap: 8px;}
+  .live-dot{ width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up); animation: pulse 1.8s infinite;}
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  /* ============ LAYOUT ============ */
+  main{
+    position: relative; z-index: 1;
+    padding: 24px 28px 40px;
+    display: flex; flex-direction: column; gap: var(--gap);
+  }
+
+  /* ============ OVERVIEW STRIP ============ */
+  .overview{
+    display: grid;
+    grid-template-columns: repeat(6, 1fr) 280px;
+    gap: var(--gap);
+  }
+  .ov-card{
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--card-pad);
+    position: relative; overflow: hidden;
+    min-height: 118px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .ov-card .label{ display: flex; align-items: center; gap: 6px; }
+  .ov-card .label .info{
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 1px solid var(--line-strong); display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; color: var(--fg-3); font-family: var(--f-sans); letter-spacing: 0;
+  }
+  .ov-card .value{
+    font-family: var(--f-mono); font-weight: 600;
+    font-size: var(--fs-num-lg); letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+  }
+  .ov-card .sub{
+    font-size: var(--fs-small); color: var(--fg-2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ov-card .sub .chip{
+    font-family: var(--f-mono); padding: 2px 6px; border-radius: 4px; font-size: 10.5px;
+  }
+  .chip.up{ background: var(--up-dim); color: var(--up); }
+  .chip.down{ background: var(--down-dim); color: var(--down); }
+  .chip.neu{ background: var(--bg-3); color: var(--fg-1);}
+
+  .ov-card .spark{ position:absolute; right: 12px; bottom: 10px; opacity: .85; }
+
+  /* pie card */
+  .ov-pie{
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--card-pad);
+    display: flex; gap: 16px; align-items: center;
+    min-height: 118px;
+  }
+  .pie-wrap{ position: relative; flex-shrink: 0; }
+  .pie-center{
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  }
+  .pie-center .big{ font-size: 15px; font-weight: 600; }
+  .pie-center .tiny{ font-size: 9.5px; color: var(--fg-2); letter-spacing: 0.08em; text-transform: uppercase;}
+  .legend{ flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+  .legend .li{ display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fg-1);}
+  .legend .sw{ width: 8px; height: 8px; border-radius: 2px; }
+  .legend .pct{ margin-left: auto; font-family: var(--f-mono); color: var(--fg-2); }
+
+  /* discipline bars */
+  .disc-bars{ display: flex; gap: 3px; align-items: flex-end; height: 22px; margin-top: 4px;}
+  .disc-bars span{ width: 4px; background: var(--accent); border-radius: 1px; opacity: .8;}
+  .disc-bars span.miss{ background: var(--down); opacity: .55;}
+
+  /* ============ HOLDINGS TABLE ============ */
+  .panel{
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+  .panel-head{
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+  }
+  .panel-title{ font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .panel-title .count{ color: var(--fg-2); font-weight: 400; margin-left: 6px; font-family: var(--f-mono);}
+  .panel-head .filters{ margin-left: auto; display: flex; gap: 6px; align-items: center;}
+  .filter-chip{
+    padding: 5px 10px; border-radius: 6px; font-size: 11.5px;
+    background: var(--bg-2); border: 1px solid var(--line); color: var(--fg-1); cursor: pointer;
+    font-family: var(--f-sans);
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: all .15s;
+  }
+  .filter-chip:hover{ border-color: var(--line-strong); color: var(--fg-0);}
+  .filter-chip.active{ background: var(--accent-dim); border-color: var(--accent-line); color: var(--accent); }
+  .filter-chip .c{ font-family: var(--f-mono); font-size: 10.5px; opacity: .75;}
+
+  /* table */
+  table.holdings{
+    width: 100%; border-collapse: collapse;
+    font-size: var(--fs-body);
+  }
+  table.holdings thead th{
+    text-align: left; font-weight: 500; color: var(--fg-2);
+    font-size: var(--fs-small); letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 10px 10px; background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0;
+    cursor: pointer; user-select: none;
+    white-space: nowrap;
+  }
+  table.holdings thead th:hover{ color: var(--fg-0); }
+  table.holdings thead th.sorted::after{ content: "↓"; margin-left: 4px; color: var(--accent); font-size: 10px;}
+  table.holdings thead th.right{ text-align: right; }
+  table.holdings tbody td{
+    padding: var(--row-pad-y) 10px;
+    border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent);
+    vertical-align: middle; white-space: nowrap;
+  }
+  table.holdings tbody tr{ cursor: pointer; transition: background .12s;}
+  table.holdings tbody tr:hover{ background: color-mix(in oklch, var(--bg-2) 70%, transparent);}
+  table.holdings tbody tr.selected{ background: var(--accent-dim); }
+  table.holdings tbody tr.selected td{ border-bottom-color: var(--accent-line); }
+  table.holdings td.right, table.holdings th.right{ text-align: right; }
+  table.holdings td.ticker{ padding-left: 18px;}
+  table.holdings th:first-child, table.holdings td:first-child{ padding-left: 18px;}
+  table.holdings th:last-child, table.holdings td:last-child{ padding-right: 18px;}
+
+  .tk{ display: flex; align-items: center; gap: 10px;}
+  .tk .avatar{
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--bg-3); color: var(--fg-0);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--f-mono); font-weight: 600; font-size: 10.5px;
+    flex-shrink: 0; border: 1px solid var(--line);
+  }
+  .tk .avatar.crypto{ background: linear-gradient(135deg, oklch(0.4 0.1 var(--accent-h)), oklch(0.3 0.05 var(--accent-h)));}
+  .tk .meta .sym{ font-family: var(--f-mono); font-weight: 600; font-size: 13px; letter-spacing: 0.01em;}
+  .tk .meta .nm{ color: var(--fg-2); font-size: 10.5px;}
+
+  .setup-chip{
+    display: inline-block; padding: 2px 7px; border-radius: 4px;
+    background: var(--bg-3); color: var(--fg-1);
+    font-size: 10.5px; font-family: var(--f-mono);
+    border: 1px solid var(--line);
+  }
+
+  .status{
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px; border-radius: 5px;
+    font-size: 10.5px; font-weight: 500; letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .status .dot{ width: 5px; height: 5px; border-radius: 50%;}
+  .status.ok{ background: var(--ok-dim); color: var(--ok);} .status.ok .dot{ background: var(--ok);}
+  .status.warn{ background: var(--warn-dim); color: var(--warn);} .status.warn .dot{ background: var(--warn);}
+  .status.danger{ background: var(--danger-dim); color: var(--danger);} .status.danger .dot{ background: var(--danger);}
+  .status.target{ background: var(--accent-dim); color: var(--accent);} .status.target .dot{ background: var(--accent);}
+  .status.neutral{ background: var(--neutral-dim); color: var(--fg-1);} .status.neutral .dot{ background: var(--neutral);}
+
+  /* position bar */
+  .posbar{ display: flex; align-items: center; gap: 8px; justify-content: flex-end;}
+  .posbar .bar{ width: 44px; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; position: relative;}
+  .posbar .fill{ height: 100%; background: var(--accent); border-radius: 2px;}
+
+  /* R-multiple bar */
+  .rbar{ display:inline-flex; align-items:center; gap: 6px; }
+  .rbar .track{
+    width: 56px; height: 4px; background: var(--bg-3); border-radius: 2px; position: relative; overflow: hidden;
+  }
+  .rbar .track .zero{ position: absolute; left: 33.33%; top: 0; bottom: 0; width: 1px; background: var(--fg-3); opacity: .7;}
+  .rbar .track .fill{ position: absolute; top:0; bottom:0; background: var(--up); border-radius: 2px;}
+  .rbar .track .fill.neg{ background: var(--down); }
+
+  /* sparkline */
+  .spark-cell{ width: 82px; }
+  svg.spark{ display: block; }
+
+  /* ============ DRAWER ============ */
+  .drawer-backdrop{
+    position: fixed; inset: 0; background: oklch(0 0 0 / .45); backdrop-filter: blur(2px);
+    z-index: 60; opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .drawer-backdrop.open{ opacity: 1; pointer-events: auto; }
+  .drawer{
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 540px; z-index: 70;
+    background: var(--bg-1);
+    border-left: 1px solid var(--line);
+    transform: translateX(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1);
+    display: flex; flex-direction: column;
+    box-shadow: -20px 0 60px -20px oklch(0 0 0 / .5);
+  }
+  .drawer.open{ transform: translateX(0); }
+  .drawer-head{
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .drawer-top{ display:flex; align-items: center; gap: 12px; }
+  .drawer-top .tk .avatar{ width: 38px; height: 38px; font-size: 12px; border-radius: 8px;}
+  .drawer-top .tk .sym{ font-size: 17px; }
+  .drawer-top .tk .nm{ font-size: 11px; }
+  .drawer-top .close{
+    margin-left: auto; all: unset; cursor: pointer; color: var(--fg-2);
+    width: 28px; height: 28px; border-radius: 6px; display:grid; place-items:center;
+    border: 1px solid var(--line);
+  }
+  .drawer-top .close:hover{ color: var(--fg-0); background: var(--bg-3); }
+
+  .hero-price{ display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;}
+  .hero-price .p{ font-family: var(--f-mono); font-weight: 600; font-size: 28px; letter-spacing: -0.01em;}
+  .hero-price .pct{ font-family: var(--f-mono); font-size: 14px; }
+  .hero-price .pnl{ font-family: var(--f-mono); font-size: 14px; }
+  .statlight{
+    margin-left:auto; display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 500;
+  }
+  .statlight .dot{ width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 8px currentColor;}
+
+  .drawer-body{ flex: 1; overflow-y: auto; padding: 0; }
+  .drawer-body::-webkit-scrollbar{ width: 8px; }
+  .drawer-body::-webkit-scrollbar-thumb{ background: var(--bg-3); border-radius: 4px;}
+
+  .drawer-section{
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .drawer-section h4{
+    margin: 0 0 12px; font-size: 10.5px; font-weight: 600;
+    color: var(--fg-2); letter-spacing: 0.12em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .drawer-section h4 .idx{
+    font-family: var(--f-mono); color: var(--accent); font-size: 10px;
+    border: 1px solid var(--accent-line); padding: 1px 5px; border-radius: 3px;
+  }
+  .kv-grid{
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px;
+  }
+  .kv-grid .k{ font-size: 10.5px; color: var(--fg-2); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px;}
+  .kv-grid .v{ font-family: var(--f-mono); font-weight: 500; font-size: 13.5px;}
+  .kv-grid .v.big{ font-size: 17px; }
+  .kv-grid .v .sub{ font-family: var(--f-sans); font-weight: 400; font-size: 11px; color: var(--fg-2); margin-left: 4px;}
+
+  /* level bar: entry - stop - now - target */
+  .levelbar{
+    margin: 12px 0 4px;
+    position: relative; height: 36px;
+  }
+  .levelbar .track{
+    position: absolute; left: 0; right: 0; top: 17px; height: 3px;
+    background: linear-gradient(90deg, var(--down-dim) 0%, var(--bg-3) 50%, var(--up-dim) 100%);
+    border-radius: 2px;
+  }
+  .levelbar .marker{
+    position: absolute; top: 11px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .levelbar .marker .node{ width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--bg-1);}
+  .levelbar .marker.now .node{ background: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);}
+  .levelbar .marker.stop .node{ background: var(--down);}
+  .levelbar .marker.target .node{ background: var(--up);}
+  .levelbar .marker.entry .node{ background: var(--fg-2); width: 10px; height: 10px; margin-top: 2px;}
+  .levelbar .marker .tag{
+    position: absolute; white-space: nowrap;
+    font-family: var(--f-mono); font-size: 10px;
+    padding: 1px 4px; border-radius: 3px;
+  }
+  .levelbar .marker .tag.above{ bottom: 18px; }
+  .levelbar .marker .tag.below{ top: 18px; color: var(--fg-2);}
+
+  /* thesis */
+  .thesis{
+    background: var(--bg-2); border-left: 2px solid var(--accent);
+    padding: 12px 14px; border-radius: 0 6px 6px 0;
+    font-size: 12px; color: var(--fg-1); line-height: 1.55;
+  }
+  .thesis em{ color: var(--accent); font-style: normal; font-weight: 500; }
+
+  /* timeline */
+  .timeline{ position: relative; padding-left: 18px; }
+  .timeline::before{
+    content:""; position:absolute; left: 5px; top: 6px; bottom: 6px;
+    width: 1px; background: var(--line);
+  }
+  .tl-item{ position: relative; padding: 6px 0 14px;}
+  .tl-item::before{
+    content:""; position: absolute; left: -18px; top: 10px;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--bg-2); border: 2px solid var(--fg-3);
+  }
+  .tl-item.open::before{ border-color: var(--accent); background: var(--accent);}
+  .tl-item.add::before{ border-color: var(--up); background: var(--up);}
+  .tl-item.trim::before{ border-color: var(--warn); background: var(--warn);}
+  .tl-item.stop::before{ border-color: var(--down); background: var(--down);}
+  .tl-item .row{ display: flex; align-items: center; gap: 10px; font-size: 12px;}
+  .tl-item .act{ font-weight: 500;}
+  .tl-item .dt{ font-family: var(--f-mono); color: var(--fg-2); font-size: 11px;}
+  .tl-item .detail{ font-family: var(--f-mono); color: var(--fg-1); font-size: 11.5px; margin-left: auto;}
+  .tl-item .note{ color: var(--fg-2); font-size: 11px; margin-top: 2px;}
+
+  /* review */
+  .review-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 12px;}
+  .review-card{
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 12px 13px;
+  }
+  .review-card h5{
+    margin: 0 0 6px; font-size: 10.5px; font-weight: 600;
+    color: var(--fg-2); letter-spacing: 0.06em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .review-card.win h5{ color: var(--up);}
+  .review-card.loss h5{ color: var(--down);}
+  .review-card p{ margin: 0; font-size: 12px; color: var(--fg-1); line-height: 1.5;}
+  .review-flags{ display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;}
+  .flag{
+    font-size: 10.5px; padding: 3px 8px; border-radius: 4px;
+    background: var(--bg-3); color: var(--fg-1); font-family: var(--f-mono);
+    border: 1px solid var(--line);
+  }
+  .flag.yes{ color: var(--up); background: var(--up-dim); border-color: transparent;}
+  .flag.no{ color: var(--down); background: var(--down-dim); border-color: transparent;}
+
+  /* ============ BOTTOM REVIEW ============ */
+  .bottom-grid{
+    display: grid;
+    grid-template-columns: 1.2fr 1.6fr 1fr;
+    gap: var(--gap);
+  }
+  .metric-grid{
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+    background: var(--line); border-radius: var(--radius);
+    overflow: hidden; border: 1px solid var(--line);
+  }
+  .metric{
+    background: var(--bg-1); padding: 16px 18px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    min-height: 96px;
+  }
+  .metric .label{ margin-bottom: 8px;}
+  .metric .v{ font-family: var(--f-mono); font-weight: 600; font-size: 22px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums;}
+  .metric .v .u{ font-size: 12px; color: var(--fg-2); font-weight: 400; margin-left: 3px;}
+
+  /* setup comparison bars */
+  .setup-list{ padding: 12px 16px 16px; }
+  .setup-row{ display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12px;}
+  .setup-row .nm{ min-width: 112px; font-weight: 500;}
+  .setup-row .bar-wrap{ flex: 1; height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; position: relative;}
+  .setup-row .bar-wrap .bar{ position: absolute; top: 0; bottom: 0;}
+  .setup-row .bar-wrap .zero{ position:absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--fg-3); opacity: .5;}
+  .setup-row .val{ font-family: var(--f-mono); min-width: 62px; text-align: right; font-size: 11.5px;}
+  .setup-row .count{ font-family: var(--f-mono); color: var(--fg-2); font-size: 10.5px; min-width: 32px; text-align: right;}
+
+  /* error flags */
+  .err-cloud{ padding: 14px 18px 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .err-cloud .tag{
+    font-size: 11.5px; padding: 5px 10px; border-radius: 5px;
+    background: var(--bg-2); color: var(--fg-1); border: 1px solid var(--line);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .err-cloud .tag .c{ font-family: var(--f-mono); color: var(--fg-2); font-size: 10.5px;}
+  .err-cloud .tag.hot{ background: var(--down-dim); color: var(--down); border-color: transparent;}
+  .err-cloud .tag.hot .c{ color: var(--down); opacity: .7;}
+
+  /* event calendar */
+  .events{ padding: 4px 0 6px; }
+  .event{
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 18px; border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent);
+    font-size: 12px;
+  }
+  .event:last-child{ border: 0;}
+  .event .when{
+    font-family: var(--f-mono); font-size: 11px; color: var(--fg-2);
+    min-width: 62px;
+    display: flex; flex-direction: column; line-height: 1.1;
+  }
+  .event .when .d{ color: var(--fg-0); font-size: 14px; font-weight: 600;}
+  .event .sym{ font-family: var(--f-mono); font-weight: 600; width: 54px;}
+  .event .kind{ font-size: 10.5px; color: var(--fg-2); text-transform: uppercase; letter-spacing: 0.06em;}
+  .event .alert{ margin-left: auto; font-size: 10.5px; padding: 2px 6px; border-radius: 4px;}
+
+  /* ============ TWEAKS PANEL ============ */
+  .tweaks{
+    position: fixed; right: 22px; bottom: 22px; z-index: 90;
+    width: 300px; background: var(--bg-1); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px 16px;
+    box-shadow: 0 20px 50px -20px oklch(0 0 0 / .6);
+    display: none;
+  }
+  .tweaks.open{ display: block; }
+  .tweaks h5{ margin: 0 0 12px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-2); display: flex; align-items: center;}
+  .tweaks h5 .x{ margin-left: auto; cursor: pointer; color: var(--fg-3); font-size: 14px;}
+  .tweaks .group{ margin-bottom: 14px;}
+  .tweaks .group:last-child{ margin-bottom: 0;}
+  .tweaks .gl{ font-size: 10.5px; color: var(--fg-2); margin-bottom: 6px; letter-spacing: 0.05em; text-transform: uppercase;}
+  .seg{
+    display: flex; gap: 0; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 2px;
+  }
+  .seg button{
+    all: unset; flex: 1; text-align: center; padding: 6px 8px;
+    font-size: 11.5px; cursor: pointer; border-radius: 5px; color: var(--fg-2);
+    font-family: var(--f-sans);
+  }
+  .seg button.active{ background: var(--bg-3); color: var(--fg-0); box-shadow: 0 0 0 1px var(--line-strong) inset;}
+  .hue-row{ display:flex; align-items:center; gap: 10px;}
+  .hue-row input[type="range"]{ flex: 1; accent-color: var(--accent); }
+  .hue-row .swatch{ width: 22px; height: 22px; border-radius: 6px; background: var(--accent); box-shadow: 0 0 0 1px var(--line) inset;}
+  .cols-list{ max-height: 140px; overflow-y: auto; }
+  .cols-list label{
+    display: flex; align-items: center; gap: 8px; font-size: 11.5px; padding: 4px 0; color: var(--fg-1); cursor: pointer;
+  }
+  .cols-list input{ accent-color: var(--accent); }
+
+  /* minor */
+  .sr-only{ position:absolute; left:-9999px; }
+
+  /* ============ STYLE UPGRADE: editorial / terminal vibe ============ */
+
+  /* subtle scan-grid on dark */
+  body[data-theme="dark"]::after{
+    content:""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(oklch(1 0 0 / .012) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(1 0 0 / .012) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(120% 80% at 50% 30%, #000 40%, transparent 90%);
+    -webkit-mask-image: radial-gradient(120% 80% at 50% 30%, #000 40%, transparent 90%);
+  }
+
+  /* ticker tape */
+  .tape{
+    position: sticky; top: 56px; z-index: 35;
+    overflow: hidden; white-space: nowrap;
+    background: linear-gradient(180deg, oklch(0.13 0.012 250) 0%, oklch(0.11 0.012 250) 100%);
+    border-bottom: 1px solid var(--line);
+    font-family: var(--f-mono); font-size: 11.5px;
+    display: flex; align-items: center;
+    height: 34px;
+  }
+  body[data-theme="light"] .tape{
+    background: linear-gradient(180deg, oklch(0.96 0.004 250) 0%, oklch(0.94 0.004 250) 100%);
+  }
+  .tape .label{
+    padding: 0 14px; font-size: 9.5px; letter-spacing: 0.18em; font-weight: 700;
+    color: var(--accent); border-right: 1px solid var(--line); height: 100%;
+    display: flex; align-items: center; flex-shrink: 0;
+    background: oklch(0.78 0.12 var(--accent-h) / .06);
+  }
+  .tape .rail{ flex: 1; overflow: hidden; position: relative; mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%); }
+  .tape .track{ display: inline-flex; gap: 28px; padding-left: 20px; animation: tapeScroll 60s linear infinite; will-change: transform; }
+  @keyframes tapeScroll { from{transform: translateX(0);} to{transform: translateX(-50%);} }
+  .tape .ti{ display: inline-flex; align-items: baseline; gap: 6px; }
+  .tape .ti .s{ color: var(--fg-1); font-weight: 600; letter-spacing: 0.02em;}
+  .tape .ti .p{ color: var(--fg-0);}
+  .tape .ti .c{ font-size: 10.5px; }
+
+  /* corner brackets on panels */
+  .panel{ position: relative; }
+  .panel::before, .panel::after,
+  .panel > .br-tl, .panel > .br-br{
+    content:""; position: absolute; width: 10px; height: 10px;
+    border-color: var(--accent); pointer-events: none; opacity: .55;
+  }
+  .panel::before{ top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
+  .panel::after{ bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  /* section frame labels (editorial) */
+  .section-label{
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 4px; margin: 4px 0 -4px;
+    font-family: var(--f-mono);
+    font-size: 10.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-2);
+  }
+  .section-label .num{
+    color: var(--accent); font-weight: 700;
+    padding: 2px 6px; border: 1px solid var(--accent-line);
+    border-radius: 3px; font-size: 10px;
+    background: var(--accent-dim);
+  }
+  .section-label .rule{
+    flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent);
+  }
+  .section-label .meta{ font-family: var(--f-mono); color: var(--fg-3); font-size: 10px; letter-spacing: 0.1em;}
+
+  /* overview: hero treatment for first two cards */
+  .overview{ grid-template-columns: 1.4fr 1.1fr repeat(4, 1fr) 280px !important; }
+  .ov-card{ position: relative; overflow: hidden; }
+  .ov-card::before{
+    content: ""; position: absolute; right: -30px; top: -30px;
+    width: 90px; height: 90px; border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-dim) 0%, transparent 70%);
+    opacity: .6; pointer-events: none;
+  }
+  .ov-card:nth-child(1){
+    background: linear-gradient(135deg, var(--bg-1) 0%, oklch(0.20 0.022 var(--accent-h)) 100%);
+    border-color: var(--accent-line);
+  }
+  .ov-card:nth-child(1) .value{
+    font-size: 38px; letter-spacing: -0.02em;
+    background: linear-gradient(180deg, var(--fg-0) 0%, color-mix(in oklch, var(--accent) 60%, var(--fg-0)) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .ov-card:nth-child(1)::after{
+    content: "NAV";
+    position: absolute; right: 14px; top: 12px;
+    font-family: var(--f-mono); font-size: 9.5px; letter-spacing: 0.25em;
+    color: var(--accent); opacity: .55; font-weight: 700;
+  }
+  .ov-card:nth-child(2) .value{
+    font-size: 34px; letter-spacing: -0.02em;
+    text-shadow: 0 0 28px oklch(0.78 0.17 145 / .35);
+  }
+  body[data-theme="light"] .ov-card:nth-child(2) .value{ text-shadow: none; }
+  .ov-card .label{
+    padding-bottom: 6px; border-bottom: 1px dashed var(--line);
+  }
+
+  /* holdings table polish */
+  table.holdings thead th{
+    background: linear-gradient(180deg, oklch(0.185 0.012 250) 0%, var(--bg-1) 100%) !important;
+    font-size: 10px !important; letter-spacing: 0.12em !important;
+    color: var(--fg-3) !important;
+  }
+  body[data-theme="light"] table.holdings thead th{
+    background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%) !important;
+  }
+  table.holdings tbody tr{ position: relative; }
+  table.holdings tbody tr::before{
+    content: ""; position: absolute; left: 0; top: 6px; bottom: 6px;
+    width: 2px; background: transparent; transition: background .15s;
+    border-radius: 0 2px 2px 0;
+  }
+  table.holdings tbody tr:hover::before{ background: var(--accent); }
+  table.holdings tbody tr.selected::before{ background: var(--accent); box-shadow: 0 0 12px var(--accent);}
+
+  .tk .avatar{
+    background: linear-gradient(135deg, var(--bg-3) 0%, var(--bg-2) 100%) !important;
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / .06), 0 2px 8px oklch(0 0 0 / .25);
+    letter-spacing: 0.02em;
+  }
+  .tk .avatar.crypto{
+    background: linear-gradient(135deg, oklch(0.45 0.14 var(--accent-h)) 0%, oklch(0.28 0.08 var(--accent-h)) 100%) !important;
+    color: #fff !important;
+  }
+
+  /* status chips: fuller treatment */
+  .status{
+    padding: 3px 9px 3px 10px !important;
+    border-radius: 3px !important;
+    font-family: var(--f-mono) !important;
+    font-size: 10px !important; letter-spacing: 0.08em !important;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+  }
+  .status.ok{ border-color: oklch(0.78 0.17 145 / .3); }
+  .status.warn{ border-color: oklch(0.80 0.15 75 / .35); }
+  .status.danger{ border-color: oklch(0.68 0.20 22 / .35); animation: pulseDanger 2.4s infinite;}
+  .status.target{ border-color: oklch(0.78 0.12 var(--accent-h) / .35);}
+  @keyframes pulseDanger { 0%,100%{box-shadow: 0 0 0 0 var(--down-dim);} 50%{box-shadow: 0 0 0 3px transparent;} }
+
+  /* setup chip */
+  .setup-chip{
+    font-family: var(--f-mono) !important;
+    font-size: 10px !important; letter-spacing: 0.04em;
+    padding: 3px 8px !important; border-radius: 3px !important;
+    background: oklch(0.22 0.014 250) !important;
+    color: var(--fg-1) !important;
+    border: 1px solid var(--line) !important;
+  }
+  body[data-theme="light"] .setup-chip{ background: var(--bg-2) !important; }
+
+  /* big numerals glow on drawer hero */
+  .hero-price .p{
+    font-size: 34px !important;
+    background: linear-gradient(180deg, var(--fg-0) 0%, color-mix(in oklch, var(--accent) 40%, var(--fg-0)) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  /* filter chip sharpen */
+  .filter-chip{ border-radius: 4px !important; font-size: 10.5px !important; letter-spacing: 0.04em !important; font-weight: 600 !important;}
+  .filter-chip.active{ box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 16px -4px var(--accent-dim); }
+
+  /* panel head big type */
+  .panel-title{
+    font-family: var(--f-sans);
+    font-size: 14px !important; letter-spacing: -0.01em !important; font-weight: 700 !important;
+  }
+  .panel-head{
+    padding: 16px 20px !important;
+    background: linear-gradient(180deg, oklch(0.185 0.012 250 / .4) 0%, transparent 100%);
+  }
+  body[data-theme="light"] .panel-head{
+    background: linear-gradient(180deg, oklch(0.97 0.004 250 / .6) 0%, transparent 100%);
+  }
+
+  /* footer stamp */
+  main > div:last-child{
+    font-family: var(--f-mono) !important;
+    display: inline-flex !important; align-items: center; gap: 10px;
+    padding: 8px 14px; border: 1px solid var(--line); border-radius: 3px;
+    background: oklch(0.15 0.012 250 / .4);
+    margin: 16px auto 0 !important; align-self: center; width: fit-content;
+    letter-spacing: 0.15em !important; font-size: 9.5px !important;
+  }
+  body[data-theme="light"] main > div:last-child{ background: oklch(0.98 0.004 250 / .6); }
+  main{ align-items: stretch; }
+
+  body{ font-family: var(--f-sans) !important; font-size: var(--fs-body) !important; cursor: default !important; }
+  .topbar{
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; gap: 18px;
+    padding: 10px 24px;
+    background:
+      linear-gradient(180deg, oklch(0.19 0.014 250 / .92) 0%, oklch(0.15 0.012 250 / .82) 100%);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 1px 0 oklch(1 0 0 / .03) inset, 0 8px 24px -16px oklch(0 0 0 / .6);
+  }
+  .brand{
+    display: flex; align-items: center; gap: 12px;
+    text-decoration: none; color: inherit;
+    padding: 4px 12px 4px 4px;
+    border-radius: 10px;
+    transition: background .15s;
+  }
+  .brand:hover{ background: oklch(1 0 0 / .03); }
+  .logo{
+    width: 40px; height: 40px; border-radius: 11px;
+    box-shadow:
+      0 0 0 1px oklch(1 0 0 / .08),
+      0 12px 32px -10px oklch(0.78 0.14 var(--accent-h) / .62),
+      0 1px 0 oklch(1 0 0 / .20) inset;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+    position: relative;
+    transition: transform .3s cubic-bezier(.2,.8,.2,1);
+  }
+  .brand:hover .logo{ transform: translateY(-1px) rotate(-2deg); }
+  .logo::after{
+    content:""; position: absolute; inset: -5px; border-radius: 15px;
+    background: radial-gradient(closest-side, oklch(0.78 0.14 var(--accent-h) / .32), transparent 70%);
+    z-index: -1; pointer-events: none;
+  }
+
+  .wordmark .title{
+    display: inline-flex; align-items: center; gap: 8px;
+    line-height: 1;
+  }
+  .wordmark .title .bt{
+    position: relative;
+    font-family: var(--f-sans);
+    font-size: 22px; font-weight: 800;
+    letter-spacing: -0.035em;
+    font-feature-settings: "ss01", "ss02", "cv11";
+    font-variation-settings: "wght" 800;
+    font-style: italic;
+    color: var(--fg-0);
+    background: linear-gradient(180deg,
+      var(--fg-0) 0%,
+      color-mix(in oklch, var(--accent) 30%, var(--fg-1)) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    padding: 0 3px 0 0;
+  }
+
+  .wordmark .title .sub{
+    position: relative;
+    font-family: var(--f-mono);
+    font-weight: 700; font-size: 10px; letter-spacing: 0.16em;
+    color: var(--accent); text-transform: uppercase;
+    padding: 3px 7px 3px 7px; border: 1px solid var(--accent-line); border-radius: 3px;
+    background: var(--accent-dim);
+    box-shadow: inset 0 0 0 1px oklch(1 0 0 / .04);
+  }
+  .wordmark .title .sub::before,
+  .wordmark .title .sub::after{
+    content: ""; position: absolute; top: 50%;
+    width: 3px; height: 1px; background: var(--accent-line);
+  }
+  .wordmark .title .sub::before{ right: 100%; margin-right: 3px;}
+  .wordmark .title .sub::after{ left: 100%; margin-left: 3px;}
+
+  .wordmark .tagline{
+    font-family: var(--f-mono);
+    font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3); margin-top: 7px; font-weight: 500;
+  }
+  body[data-theme="light"] .wordmark .title .bt{
+    background: linear-gradient(180deg, var(--fg-0) 0%, color-mix(in oklch, var(--accent) 45%, var(--fg-0)) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .navbar{
+    display: flex; align-items: center; gap: 2px;
+    margin-left: 14px; padding-left: 18px;
+    border-left: 1px solid var(--line);
+    height: 28px;
+  }
+  .navlink{
+    position: relative;
+    padding: 6px 12px; border-radius: 6px;
+    font-size: 12.5px; font-weight: 500;
+    color: var(--fg-2); text-decoration: none;
+    transition: color .15s, background .15s;
+  }
+  .navlink:hover{ color: var(--fg-0); background: oklch(1 0 0 / .03); }
+  .navlink.active{ color: var(--fg-0); background: var(--bg-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .navlink.active::after{
+    content: ""; position: absolute; left: 10px; right: 10px; bottom: -11px;
+    height: 2px; background: var(--accent);
+    border-radius: 2px 2px 0 0;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  .topbar .search{
+    margin-left: auto; width: 320px;
+    background: oklch(0.19 0.012 250 / .6);
+    border: 1px solid var(--line);
+    transition: border-color .15s, background .15s;
+  }
+  .topbar .search:focus-within{ border-color: var(--accent-line); background: var(--bg-2); }
+
+  .clock{
+    display: flex; align-items: center; gap: 9px;
+    padding: 5px 11px 5px 10px;
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .clock .clock-text{ display: flex; flex-direction: column; line-height: 1.15; }
+  .clock .clock-text #clock-txt{
+    font-family: var(--f-mono); font-weight: 600; font-size: 12.5px;
+    color: var(--fg-0); font-variant-numeric: tabular-nums;
+  }
+  .clock .clock-text .clock-sub{
+    font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.1em;
+    color: var(--up); font-weight: 600;
+  }
+
+  .avatar-btn{
+    all: unset; cursor: pointer;
+    width: 32px; height: 32px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--f-mono); font-size: 11px; font-weight: 600;
+    color: var(--fg-0);
+    background: linear-gradient(135deg, oklch(0.45 0.08 calc(var(--accent-h) + 30)), oklch(0.30 0.06 var(--accent-h)));
+    box-shadow: 0 0 0 1px var(--line-strong), 0 0 0 3px transparent;
+    transition: box-shadow .15s;
+  }
+  .avatar-btn:hover{ box-shadow: 0 0 0 1px var(--accent-line), 0 0 0 3px var(--accent-dim); }
+
+  /* Theme toggle button in topbar */
+  .theme-toggle{
+    all: unset; cursor: pointer;
+    display: inline-flex; align-items: center;
+    width: 52px; height: 26px; border-radius: 999px;
+    background: var(--bg-2); border: 1px solid var(--line);
+    padding: 2px; position: relative;
+    transition: background .2s, border-color .2s;
+  }
+  .theme-toggle .knob{
+    width: 20px; height: 20px; border-radius: 50%;
+    background: linear-gradient(135deg, oklch(0.85 0.04 90), oklch(0.72 0.08 70));
+    display: grid; place-items: center;
+    transform: translateX(0);
+    transition: transform .25s cubic-bezier(.5,.1,.4,1.2);
+    box-shadow: 0 2px 6px oklch(0 0 0 / .3);
+  }
+  body[data-theme="dark"] .theme-toggle .knob{
+    transform: translateX(26px);
+    background: linear-gradient(135deg, oklch(0.35 0.06 260), oklch(0.22 0.04 260));
+  }
+  .theme-toggle .knob svg{ width: 12px; height: 12px; }
+  .theme-toggle .knob .sun{ color: oklch(0.35 0.1 60); display: block; }
+  .theme-toggle .knob .moon{ color: oklch(0.82 0.08 240); display: none; }
+  body[data-theme="dark"] .theme-toggle .knob .sun{ display: none; }
+  body[data-theme="dark"] .theme-toggle .knob .moon{ display: block; }
+  .theme-toggle .icon-bg{
+    position: absolute; top: 50%; transform: translateY(-50%);
+    font-size: 9px; color: var(--fg-3); pointer-events: none;
+  }
+  .theme-toggle .icon-bg.l{ left: 7px; }
+  .theme-toggle .icon-bg.r{ right: 7px; }
+
+  /* ============ LIGHT THEME ============ */
+  body[data-theme="light"]{
+    --bg-0: oklch(0.985 0.003 250);
+    --bg-1: oklch(1.00 0.000 250);
+    --bg-2: oklch(0.965 0.004 250);
+    --bg-3: oklch(0.935 0.006 250);
+    --bg-4: oklch(0.90 0.008 250);
+    --line: oklch(0.88 0.008 250 / .9);
+    --line-strong: oklch(0.78 0.010 250 / .9);
+    --fg-0: oklch(0.20 0.015 250);
+    --fg-1: oklch(0.38 0.012 250);
+    --fg-2: oklch(0.52 0.010 250);
+    --fg-3: oklch(0.66 0.008 250);
+
+    --accent: oklch(0.55 0.14 var(--accent-h));
+    --accent-dim: oklch(0.55 0.14 var(--accent-h) / .12);
+    --accent-line: oklch(0.55 0.14 var(--accent-h) / .35);
+
+    --up:   oklch(0.55 0.18 145);
+    --up-dim: oklch(0.55 0.18 145 / .12);
+    --down: oklch(0.55 0.22 25);
+    --down-dim: oklch(0.55 0.22 25 / .12);
+    --warn: oklch(0.62 0.16 75);
+    --warn-dim: oklch(0.62 0.16 75 / .14);
+    --danger: oklch(0.55 0.22 25);
+    --danger-dim: oklch(0.55 0.22 25 / .12);
+    --ok: oklch(0.55 0.18 145);
+    --ok-dim: oklch(0.55 0.18 145 / .12);
+  }
+  body[data-theme="light"]::before{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, oklch(0.55 0.12 var(--accent-h) / 0.05), transparent 60%),
+      radial-gradient(900px 500px at -5% 110%, oklch(0.55 0.15 280 / 0.04), transparent 60%);
+  }
+  body[data-theme="light"] .topbar{
+    background: linear-gradient(180deg, oklch(1 0 0 / .9) 0%, oklch(0.98 0.003 250 / .85) 100%);
+    box-shadow: 0 1px 0 oklch(1 0 0 / .6) inset, 0 6px 20px -14px oklch(0.20 0.015 250 / .15);
+  }
+  body[data-theme="light"] .logo{
+    box-shadow: 0 0 0 1px oklch(0 0 0 / .05), 0 6px 18px -6px oklch(0.55 0.14 var(--accent-h) / .35), 0 1px 0 oklch(1 0 0 / .8) inset;
+  }
+  body[data-theme="light"] .avatar-btn{
+    background: linear-gradient(135deg, oklch(0.75 0.09 calc(var(--accent-h) + 30)), oklch(0.60 0.10 var(--accent-h)));
+    color: #fff;
+  }
+  body[data-theme="light"] .drawer{
+    box-shadow: -20px 0 60px -20px oklch(0.20 0.015 250 / .18);
+  }
+  body[data-theme="light"] .thesis{ background: var(--bg-2); }
+  body[data-theme="light"] .status.ok{ background: var(--ok-dim); color: oklch(0.40 0.16 145);}
+  body[data-theme="light"] .status.warn{ background: var(--warn-dim); color: oklch(0.48 0.14 75);}
+  body[data-theme="light"] .status.danger{ background: var(--danger-dim); color: var(--down);}
+  body[data-theme="light"] .status.target{ background: var(--accent-dim); color: var(--accent);}
+</style>
+<link id="gfont-Roboto" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&amp;display=swap"><link id="gfont-Open-Sans" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&amp;display=swap"><link id="gfont-Montserrat" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&amp;display=swap"></head>
+<body data-density="medium" data-font="sans" data-theme="dark" data-screen-label="01 Swing Desk" data-cc-id="cc-1" style="background-color: rgb(21, 21, 21); font-family: Montserrat; font-size: 26px; cursor: crosshair;">
+
+<!-- persistent tweak defaults for host-side rewriting -->
+<script id="tweak-defaults" type="application/json">
+/*EDITMODE-BEGIN*/{
+  "density": "medium",
+  "font": "sans",
+  "accentHue": 195,
+  "theme": "dark",
+  "hiddenCols": []
+}/*EDITMODE-END*/
+</script>
+
+<header class="topbar">
+  <a class="brand" href="#">
+    <div class="logo" aria-hidden="true">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <defs>
+          <linearGradient id="lgGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="oklch(0.86 0.13 var(--accent-h))"/>
+            <stop offset="0.55" stop-color="oklch(0.60 0.17 calc(var(--accent-h) + 20))"/>
+            <stop offset="1" stop-color="oklch(0.28 0.14 calc(var(--accent-h) + 70))"/>
+          </linearGradient>
+          <linearGradient id="lgSheen" x1="0" y1="0" x2="0" y2="40">
+            <stop offset="0" stop-color="oklch(1 0 0 / .28)"/>
+            <stop offset="0.6" stop-color="oklch(1 0 0 / 0)"/>
+          </linearGradient>
+          <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="oklch(0.12 0.012 250 / .55)"/>
+            <stop offset="1" stop-color="oklch(0.12 0.012 250 / 0)"/>
+          </linearGradient>
+        </defs>
+
+        <!-- tile -->
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#lgGrad)"/>
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#lgSheen)"/>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="10.5" fill="none" stroke="oklch(1 0 0 / .22)"/>
+
+        <!-- subtle grid lines -->
+        <g stroke="oklch(0.12 0.012 250 / .12)" stroke-width="0.6">
+          <line x1="7" y1="14" x2="33" y2="14"/>
+          <line x1="7" y1="22" x2="33" y2="22"/>
+          <line x1="7" y1="30" x2="33" y2="30"/>
+        </g>
+
+        <!-- trendline area fill under the line -->
+        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9 L 33 33 L 7 33 Z"
+              fill="url(#areaFill)"/>
+
+        <!-- trendline (the "trend" in Trendo) -->
+        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9"
+              fill="none" stroke="oklch(0.10 0.012 250)"
+              stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+        <!-- price nodes -->
+        <g fill="oklch(0.10 0.012 250)">
+          <circle cx="13" cy="24" r="1.4"/>
+          <circle cx="18" cy="26" r="1.4"/>
+          <circle cx="24" cy="18" r="1.4"/>
+        </g>
+        <!-- final node highlighted as breakout -->
+        <circle cx="30" cy="12" r="2.6" fill="oklch(0.95 0.10 var(--accent-h))"
+                stroke="oklch(0.10 0.012 250)" stroke-width="1.2"/>
+
+        <!-- breakout arrow from final node -->
+        <g stroke="oklch(0.10 0.012 250)" stroke-width="1.6" stroke-linecap="round" fill="none">
+          <path d="M 32 10 L 35 7"/>
+          <path d="M 35 7 L 32.5 7"/>
+          <path d="M 35 7 L 35 9.5"/>
+        </g>
+      </svg>
+    </div>
+    <div class="wordmark">
+      <div class="title">
+        <span class="bt">Trendo</span>
+        <span class="sub">Thesis</span>
+      </div>
+      <div class="tagline">Swing Trade Concepts</div>
+    </div>
+  </a>
+
+  <nav class="navbar" aria-label="primary">
+    <a class="navlink active" href="#">Dashboard</a>
+    <a class="navlink" href="#">Journal</a>
+    <a class="navlink" href="#">Analytics</a>
+    <a class="navlink" href="#">Watchlist</a>
+  </nav>
+
+  <div class="search" role="search">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3-3"></path></svg>
+    <input id="search-input" placeholder="搜索 ticker、setup、备注…">
+    <span class="kbd">/</span>
+  </div>
+
+  <div class="top-actions">
+    <div class="clock" title="美东时间">
+      <span class="live-dot"></span>
+      <div class="clock-text">
+        <span id="clock-txt">13:51:43</span>
+        <span class="clock-sub">MKT OPEN · NY</span>
+      </div>
+    </div>
+    <button class="btn icon" title="刷新">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"></path><path d="M3 3v5h5"></path></svg>
+    </button>
+    <button class="btn" id="tweaks-toggle" title="Tweaks">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h8"/><circle cx="18" cy="6" r="2.3"/><circle cx="8" cy="18" r="2.3"/></svg>
+      Tweaks
+    </button>
+    <button class="btn primary">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
+      New position
+    </button>
+    <button class="avatar-btn" title="Trader">YZ</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="切换主题">
+      <span class="icon-bg l">☀</span>
+      <span class="icon-bg r">☾</span>
+      <span class="knob">
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </span>
+    </button>
+  </div>
+</header>
+
+<!-- ticker tape -->
+<div class="tape" aria-hidden="true">
+  <div class="label">LIVE · TAPE</div>
+  <div class="rail">
+    <div class="track" id="tape-track"></div>
+  </div>
+</div>
+
+<main>
+  <!-- ============ OVERVIEW ============ -->
+  <div class="section-label"><span class="num">§01</span>PORTFOLIO OVERVIEW<span class="rule"></span><span class="meta">NAV · 今日盈亏 · 风险</span></div>
+  <section class="overview" id="overview">
+      
+      <div class="ov-card">
+        <div class="label">总资产 (Equity)<span class="info">i</span></div>
+        <div class="value">$284,620</div>
+        <div class="sub"><span class="chip up">+1.37%</span><span class="muted">今日</span></div>
+        <div class="spark"><svg class="spark" width="110" height="36"><path d="M0.0 28.7 L18.3 34.0 L36.7 21.0 L55.0 24.6 L73.3 11.0 L91.7 15.1 L110.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></div>
+      </div>
+      
+      <div class="ov-card">
+        <div class="label">今日盈亏<span class="info">i</span></div>
+        <div class="value"><span class="up">+$3,840</span></div>
+        <div class="sub"><span class="chip up">+1.37%</span><span class="muted">vs 昨日收盘</span></div>
+        <div class="spark"><svg class="spark" width="110" height="36"><path d="M0.0 34.0 L18.3 30.7 L36.7 24.0 L55.0 27.3 L73.3 16.5 L91.7 5.7 L110.0 2.0 L 110 36 L 0 36 Z" fill="var(--up)" opacity=".12"></path><path d="M0.0 34.0 L18.3 30.7 L36.7 24.0 L55.0 27.3 L73.3 16.5 L91.7 5.7 L110.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></div>
+      </div>
+      
+      <div class="ov-card">
+        <div class="label">总浮盈 / 浮亏<span class="info">i</span></div>
+        <div class="value"><span class="up">+$18,420</span></div>
+        <div class="sub"><span class="chip up">+6.96%</span><span class="muted">9 盈 · 6 亏</span></div>
+        <div class="spark"><svg width="110" height="36">
+      <rect x="0" y="26" width="66" height="6" fill="var(--up)" rx="1"></rect>
+      <rect x="68" y="26" width="42" height="6" fill="var(--down)" rx="1"></rect>
+      <text x="0" y="20" fill="var(--up)" font-family="JetBrains Mono" font-size="10">9W</text>
+      <text x="110" y="20" text-anchor="end" fill="var(--down)" font-family="JetBrains Mono" font-size="10">6L</text>
+    </svg></div>
+      </div>
+      
+      <div class="ov-card">
+        <div class="label">当前持仓数</div>
+        <div class="value">15</div>
+        <div class="sub"><span class="chip neu">10 美股</span><span class="chip neu">5 加密</span></div>
+        
+      </div>
+      
+      <div class="ov-card">
+        <div class="label">总风险敞口<span class="info">i</span></div>
+        <div class="value">$4,820</div>
+        <div class="sub"><span class="chip neu">1.69% equity</span><span class="muted">上限 3.0%</span></div>
+        <div class="spark"><svg width="110" height="36">
+      <path d="M 66 30 A 20 20 0 0 1 106 30" fill="none" stroke="var(--bg-3)" stroke-width="3"></path>
+      <path d="M 66 30.000000000000004 A 20 20 0 0 1 89.95314680758253 10.394576507565564" fill="none" stroke="var(--warn)" stroke-width="3" stroke-linecap="round"></path>
+    </svg></div>
+      </div>
+      
+      <div class="ov-card">
+        <div class="label">本周纪律分<span class="info">i</span></div>
+        <div class="value">86<span class="num" style="font-size:14px;color:var(--fg-2)">/100</span></div>
+        <div class="sub"><span class="chip up">+4</span><span class="muted">vs 上周</span></div>
+        <div class="spark"><div class="disc-bars"><span style="height:15.84px"></span><span style="height:17.16px"></span><span style="height:14.3px"></span><span style="height:17.82px"></span><span style="height:15.4px"></span><span style="height:18.04px"></span><span style="height:16.28px"></span><span style="height:18.92px;background:var(--accent);opacity:1"></span></div></div>
+      </div>
+      
+      <div class="ov-pie">
+        <div class="pie-wrap">
+          <svg width="92" height="92"><path d="M 46 8 A 38 38 0 0 1 80.1773995595221 62.610399132735445 L 69.38453654072565 57.36500993292425 A 26 26 0 0 0 46 20 Z" fill="oklch(0.70 0.16 200)" stroke="var(--bg-1)" stroke-width="1"></path><path d="M 80.1773995595221 62.610399132735445 A 38 38 0 0 1 26.656426201485907 78.70819702614986 L 32.76492319049036 68.37929270210253 A 26 26 0 0 0 69.38453654072565 57.36500993292425 Z" fill="oklch(0.72 0.16 40)" stroke="var(--bg-1)" stroke-width="1"></path><path d="M 26.656426201485907 78.70819702614986 A 38 38 0 0 1 8.467843057384762 40.05549032847125 L 20.320103144526417 41.93270390895401 A 26 26 0 0 0 32.76492319049036 68.37929270210253 Z" fill="oklch(0.72 0.14 280)" stroke="var(--bg-1)" stroke-width="1"></path><path d="M 8.467843057384762 40.05549032847125 A 38 38 0 0 1 16.720496774519997 21.77788838954981 L 25.96665568782947 29.426976266534076 A 26 26 0 0 0 20.320103144526417 41.93270390895401 Z" fill="oklch(0.75 0.14 140)" stroke="var(--bg-1)" stroke-width="1"></path><path d="M 16.720496774519997 21.77788838954981 A 38 38 0 0 1 29.820386920527227 11.616572006291264 L 34.9297384193081 22.474496635883497 A 26 26 0 0 0 25.96665568782947 29.426976266534076 Z" fill="oklch(0.78 0.13 90)" stroke="var(--bg-1)" stroke-width="1"></path><path d="M 29.820386920527227 11.616572006291264 A 38 38 0 0 1 45.99999999999999 8 L 45.99999999999999 20 A 26 26 0 0 0 34.9297384193081 22.474496635883497 Z" fill="oklch(0.35 0.01 250)" stroke="var(--bg-1)" stroke-width="1"></path></svg>
+          <div class="pie-center"><div class="tiny">Allocation</div><div class="big">93%</div></div>
+        </div>
+        <div class="legend">
+          
+            <div class="li"><span class="sw" style="background:oklch(0.70 0.16 200)"></span>Semi / AI<span class="pct">32.2%</span></div>
+          
+            <div class="li"><span class="sw" style="background:oklch(0.72 0.16 40)"></span>Crypto<span class="pct">26.3%</span></div>
+          
+            <div class="li"><span class="sw" style="background:oklch(0.72 0.14 280)"></span>Mega-cap Tech<span class="pct">19.0%</span></div>
+          
+            <div class="li"><span class="sw" style="background:oklch(0.75 0.14 140)"></span>Fintech<span class="pct">8.5%</span></div>
+          
+            <div class="li"><span class="sw" style="background:oklch(0.78 0.13 90)"></span>Cybersecurity<span class="pct">7.0%</span></div>
+          
+            <div class="li"><span class="sw" style="background:oklch(0.35 0.01 250)"></span>现金<span class="pct">7.0%</span></div>
+          
+        </div>
+      </div>
+    </section>
+
+  <!-- ============ HOLDINGS ============ -->
+  <div class="section-label"><span class="num">§02</span>OPEN POSITIONS<span class="rule"></span><span class="meta">15 笔 · 实时</span></div>
+  <section class="panel">
+    <div class="panel-head">
+      <div class="panel-title">Open positions <span class="count" id="row-count">15</span></div>
+      <div class="filters">
+        <button class="filter-chip active" data-filter="all">全部 <span class="c" id="c-all">15</span></button>
+        <button class="filter-chip" data-filter="equity">美股 <span class="c" id="c-eq">10</span></button>
+        <button class="filter-chip" data-filter="crypto">加密 <span class="c" id="c-cr">5</span></button>
+        <button class="filter-chip" data-filter="risk">风险项 <span class="c" id="c-rk">5</span></button>
+        <button class="filter-chip" data-filter="target">近目标 <span class="c" id="c-tg">2</span></button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="holdings" id="holdings">
+        <thead><tr id="thead-row"><th class=" " data-col="tk">Ticker</th><th class=" " data-col="setup">Setup</th><th class=" " data-col="entry">建仓</th><th class="right " data-col="days">持仓</th><th class="right " data-col="cost">成本</th><th class="right " data-col="last">最新</th><th class=" " data-col="spark">24h</th><th class="right " data-col="size">仓位%</th><th class="right sorted" data-col="pnld">浮盈亏 $</th><th class="right " data-col="pnlp">浮盈亏 %</th><th class="right " data-col="stop">止损</th><th class="right " data-col="target">目标</th><th class="right " data-col="rmult">R</th><th class=" " data-col="status">状态</th></tr></thead>
+        <tbody id="tbody"><tr class="" data-sym="META"><td class="ticker"><div class="tk">
+          <div class="avatar ">META</div>
+          <div class="meta"><div class="sym">META</div><div class="nm">Meta Platforms</div></div>
+        </div></td><td><span class="setup-chip">EP Breakout</span></td><td class="num muted" style="font-size:11.5px">Mar 18</td><td class="right num muted" style="font-size:11.5px">34d</td><td class="right num muted">$512.30</td><td class="right num" style="font-weight:600">$614.80</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 19.2 L6.3 18.9 L9.4 18.4 L12.5 18.0 L15.7 16.9 L18.8 15.7 L21.9 15.1 L25.0 14.5 L28.2 13.6 L31.3 12.8 L34.4 12.3 L37.6 11.0 L40.7 9.8 L43.8 9.5 L47.0 9.2 L50.1 8.8 L53.2 8.5 L56.3 7.6 L59.5 6.9 L62.6 5.8 L65.7 4.6 L68.9 3.9 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">11.5%</span><div class="bar"><div class="fill" style="width:76.66666666666667%"></div></div></div></td><td class="right num up" style="font-weight:600">+$23,009</td><td class="right num up">+20.01%</td><td class="right num" style="color:var(--down)">$555.00</td><td class="right num" style="color:var(--up)">$640.00</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−2.40R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:0%;width:33.33333333333333%"></div></div>
+      </div>
+    </td><td><span class="status target"><span class="dot"></span>接近目标</span></td></tr><tr class="" data-sym="BTC"><td class="ticker"><div class="tk">
+          <div class="avatar crypto">BTC</div>
+          <div class="meta"><div class="sym">BTC</div><div class="nm">Bitcoin</div></div>
+        </div></td><td><span class="setup-chip">Breakout</span></td><td class="num muted" style="font-size:11.5px">Mar 15</td><td class="right num muted" style="font-size:11.5px">37d</td><td class="right num muted">$68,400</td><td class="right num" style="font-weight:600">$76,820</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 19.4 L6.3 18.3 L9.4 17.7 L12.5 17.6 L15.7 16.8 L18.8 16.3 L21.9 15.1 L25.0 13.8 L28.2 12.4 L31.3 10.9 L34.4 11.0 L37.6 10.2 L40.7 8.9 L43.8 8.2 L47.0 7.4 L50.1 7.3 L53.2 6.3 L56.3 5.7 L59.5 4.2 L62.6 4.3 L65.7 3.4 L68.9 2.0 L72.0 4.6" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">12.0%</span><div class="bar"><div class="fill" style="width:80%"></div></div></div></td><td class="right num up" style="font-weight:600">+$14,772</td><td class="right num up">+12.31%</td><td class="right num" style="color:var(--down)">$71,500</td><td class="right num" style="color:var(--up)">$88,000</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−2.72R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:0%;width:33.33333333333333%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="NVDA"><td class="ticker"><div class="tk">
+          <div class="avatar ">NVDA</div>
+          <div class="meta"><div class="sym">NVDA</div><div class="nm">NVIDIA Corp</div></div>
+        </div></td><td><span class="setup-chip">EP Breakout</span></td><td class="num muted" style="font-size:11.5px">Apr 08</td><td class="right num muted" style="font-size:11.5px">13d</td><td class="right num muted">$842.40</td><td class="right num" style="font-weight:600">$918.20</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 19.7 L6.3 18.0 L9.4 17.1 L12.5 17.3 L15.7 15.8 L18.8 15.2 L21.9 15.1 L25.0 15.3 L28.2 14.2 L31.3 14.5 L34.4 14.2 L37.6 13.5 L40.7 13.9 L43.8 12.4 L47.0 11.9 L50.1 11.0 L53.2 9.1 L56.3 7.6 L59.5 8.0 L62.6 7.9 L65.7 8.0 L68.9 6.3 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">14.2%</span><div class="bar"><div class="fill" style="width:94.66666666666667%"></div></div></div></td><td class="right num up" style="font-weight:600">+$12,777</td><td class="right num up">+9.00%</td><td class="right num" style="color:var(--down)">$868.00</td><td class="right num" style="color:var(--up)">$1,020</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−2.96R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:0%;width:33.33333333333333%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="SOL"><td class="ticker"><div class="tk">
+          <div class="avatar crypto">SOL</div>
+          <div class="meta"><div class="sym">SOL</div><div class="nm">Solana</div></div>
+        </div></td><td><span class="setup-chip">EP Breakout</span></td><td class="num muted" style="font-size:11.5px">Apr 09</td><td class="right num muted" style="font-size:11.5px">12d</td><td class="right num muted">$158.00</td><td class="right num" style="font-weight:600">$192.40</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 19.1 L6.3 18.5 L9.4 18.2 L12.5 17.7 L15.7 16.7 L18.8 16.1 L21.9 15.3 L25.0 14.5 L28.2 13.6 L31.3 12.4 L34.4 11.8 L37.6 11.2 L40.7 10.1 L43.8 9.5 L47.0 8.4 L50.1 7.5 L53.2 7.0 L56.3 6.3 L59.5 5.1 L62.6 4.6 L65.7 3.5 L68.9 2.4 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">4.5%</span><div class="bar"><div class="fill" style="width:30%"></div></div></div></td><td class="right num up" style="font-weight:600">+$9,797</td><td class="right num up">+21.77%</td><td class="right num" style="color:var(--down)">$172.00</td><td class="right num" style="color:var(--up)">$220.00</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−2.46R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:0%;width:33.33333333333333%"></div></div>
+      </div>
+    </td><td><span class="status target"><span class="dot"></span>接近目标</span></td></tr><tr class="" data-sym="PLTR"><td class="ticker"><div class="tk">
+          <div class="avatar ">PLTR</div>
+          <div class="meta"><div class="sym">PLTR</div><div class="nm">Palantir</div></div>
+        </div></td><td><span class="setup-chip">VCP</span></td><td class="num muted" style="font-size:11.5px">Mar 25</td><td class="right num muted" style="font-size:11.5px">27d</td><td class="right num muted">$28.40</td><td class="right num" style="font-weight:600">$32.10</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 18.4 L6.3 17.7 L9.4 16.2 L12.5 16.3 L15.7 14.8 L18.8 14.0 L21.9 12.5 L25.0 11.4 L28.2 10.5 L31.3 10.2 L34.4 9.7 L37.6 8.8 L40.7 8.4 L43.8 8.2 L47.0 6.6 L50.1 6.0 L53.2 4.9 L56.3 4.8 L59.5 4.5 L62.6 4.3 L65.7 3.5 L68.9 2.0 L72.0 2.6" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">5.5%</span><div class="bar"><div class="fill" style="width:36.666666666666664%"></div></div></div></td><td class="right num up" style="font-weight:600">+$7,165</td><td class="right num up">+13.03%</td><td class="right num" style="color:var(--down)">$29.50</td><td class="right num" style="color:var(--up)">$36.00</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−3.36R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:0%;width:33.33333333333333%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="GOOGL"><td class="ticker"><div class="tk">
+          <div class="avatar ">GOOG</div>
+          <div class="meta"><div class="sym">GOOGL</div><div class="nm">Alphabet</div></div>
+        </div></td><td><span class="setup-chip">Base Breakout</span></td><td class="num muted" style="font-size:11.5px">Mar 31</td><td class="right num muted" style="font-size:11.5px">21d</td><td class="right num muted">$162.40</td><td class="right num" style="font-weight:600">$170.80</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 20.0 L6.3 17.6 L9.4 16.7 L12.5 17.6 L15.7 15.6 L18.8 15.1 L21.9 15.4 L25.0 16.3 L28.2 15.0 L31.3 16.1 L34.4 16.2 L37.6 15.6 L40.7 16.8 L43.8 14.8 L47.0 14.6 L50.1 13.6 L53.2 10.9 L56.3 8.8 L59.5 10.1 L62.6 10.5 L65.7 11.3 L68.9 8.8 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">7.5%</span><div class="bar"><div class="fill" style="width:50%"></div></div></div></td><td class="right num up" style="font-weight:600">+$3,879</td><td class="right num up">+5.17%</td><td class="right num" style="color:var(--down)">$159.00</td><td class="right num" style="color:var(--up)">$185.00</td><td class="right">
+      <div class="rbar">
+        <span class="num up" style="min-width:46px;display:inline-block;text-align:right">+2.47R</span>
+        <div class="track"><div class="zero"></div><div class="fill " style="left:33.33333333333333%;width:54.901960784313665%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="CRWD"><td class="ticker"><div class="tk">
+          <div class="avatar ">CRWD</div>
+          <div class="meta"><div class="sym">CRWD</div><div class="nm">CrowdStrike</div></div>
+        </div></td><td><span class="setup-chip">Pullback</span></td><td class="num muted" style="font-size:11.5px">Apr 10</td><td class="right num muted" style="font-size:11.5px">11d</td><td class="right num muted">$342.00</td><td class="right num" style="font-weight:600">$358.40</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 17.3 L3.1 18.3 L6.3 19.2 L9.4 20.0 L12.5 18.3 L15.7 19.4 L18.8 18.1 L21.9 16.2 L25.0 16.4 L28.2 14.2 L31.3 12.7 L34.4 13.6 L37.6 14.5 L40.7 12.3 L43.8 13.4 L47.0 14.8 L50.1 13.2 L53.2 12.4 L56.3 9.8 L59.5 8.4 L62.6 5.9 L65.7 6.9 L68.9 7.8 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">7.0%</span><div class="bar"><div class="fill" style="width:46.666666666666664%"></div></div></div></td><td class="right num up" style="font-weight:600">+$3,357</td><td class="right num up">+4.80%</td><td class="right num" style="color:var(--down)">$335.00</td><td class="right num" style="color:var(--up)">$395.00</td><td class="right">
+      <div class="rbar">
+        <span class="num up" style="min-width:46px;display:inline-block;text-align:right">+2.34R</span>
+        <div class="track"><div class="zero"></div><div class="fill " style="left:33.33333333333333%;width:52.06349206349199%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="ETH"><td class="ticker"><div class="tk">
+          <div class="avatar crypto">ETH</div>
+          <div class="meta"><div class="sym">ETH</div><div class="nm">Ethereum</div></div>
+        </div></td><td><span class="setup-chip">Pullback</span></td><td class="num muted" style="font-size:11.5px">Apr 06</td><td class="right num muted" style="font-size:11.5px">15d</td><td class="right num muted">$3,320</td><td class="right num" style="font-weight:600">$3,485</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 17.0 L6.3 17.9 L9.4 19.0 L12.5 15.8 L15.7 13.7 L18.8 10.5 L21.9 9.9 L25.0 10.3 L28.2 7.4 L31.3 5.4 L34.4 6.7 L37.6 6.9 L40.7 7.3 L43.8 6.0 L47.0 5.1 L50.1 4.5 L53.2 4.9 L56.3 6.4 L59.5 4.4 L62.6 3.8 L65.7 4.4 L68.9 3.5 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">6.0%</span><div class="bar"><div class="fill" style="width:40%"></div></div></div></td><td class="right num up" style="font-weight:600">+$2,982</td><td class="right num up">+4.97%</td><td class="right num" style="color:var(--down)">$3,240</td><td class="right num" style="color:var(--up)">$4,100</td><td class="right">
+      <div class="rbar">
+        <span class="num up" style="min-width:46px;display:inline-block;text-align:right">+2.06R</span>
+        <div class="track"><div class="zero"></div><div class="fill " style="left:33.33333333333333%;width:45.83333333333333%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="HOOD"><td class="ticker"><div class="tk">
+          <div class="avatar ">HOOD</div>
+          <div class="meta"><div class="sym">HOOD</div><div class="nm">Robinhood Markets</div></div>
+        </div></td><td><span class="setup-chip">EP Breakout</span></td><td class="num muted" style="font-size:11.5px">Apr 12</td><td class="right num muted" style="font-size:11.5px">9d</td><td class="right num muted">$22.10</td><td class="right num" style="font-weight:600">$23.40</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 19.1 L3.1 19.1 L6.3 19.8 L9.4 20.0 L12.5 19.5 L15.7 19.1 L18.8 19.2 L21.9 20.0 L25.0 20.0 L28.2 18.5 L31.3 17.6 L34.4 17.9 L37.6 18.8 L40.7 18.6 L43.8 17.6 L47.0 16.7 L50.1 14.7 L53.2 12.9 L56.3 11.3 L59.5 10.5 L62.6 10.4 L65.7 11.3 L68.9 9.7 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">3.5%</span><div class="bar"><div class="fill" style="width:23.333333333333332%"></div></div></div></td><td class="right num up" style="font-weight:600">+$2,059</td><td class="right num up">+5.88%</td><td class="right num" style="color:var(--down)">$21.40</td><td class="right num" style="color:var(--up)">$27.50</td><td class="right">
+      <div class="rbar">
+        <span class="num up" style="min-width:46px;display:inline-block;text-align:right">+1.86R</span>
+        <div class="track"><div class="zero"></div><div class="fill " style="left:33.33333333333333%;width:41.26984126984101%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="COIN"><td class="ticker"><div class="tk">
+          <div class="avatar ">COIN</div>
+          <div class="meta"><div class="sym">COIN</div><div class="nm">Coinbase Global</div></div>
+        </div></td><td><span class="setup-chip">Momentum</span></td><td class="num muted" style="font-size:11.5px">Apr 05</td><td class="right num muted" style="font-size:11.5px">16d</td><td class="right num muted">$238.00</td><td class="right num" style="font-weight:600">$245.30</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 14.9 L3.1 16.7 L6.3 18.5 L9.4 20.0 L12.5 17.9 L15.7 20.0 L18.8 18.4 L21.9 16.0 L25.0 16.8 L28.2 14.0 L31.3 12.3 L34.4 14.0 L37.6 15.6 L40.7 12.8 L43.8 14.9 L47.0 17.3 L50.1 15.4 L53.2 14.5 L56.3 11.3 L59.5 9.7 L62.6 6.4 L65.7 8.2 L68.9 9.9 L72.0 2.0" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">5.0%</span><div class="bar"><div class="fill" style="width:33.33333333333333%"></div></div></div></td><td class="right num up" style="font-weight:600">+$1,534</td><td class="right num up">+3.07%</td><td class="right num" style="color:var(--down)">$232.00</td><td class="right num" style="color:var(--up)">$280.00</td><td class="right">
+      <div class="rbar">
+        <span class="num up" style="min-width:46px;display:inline-block;text-align:right">+1.22R</span>
+        <div class="track"><div class="zero"></div><div class="fill " style="left:33.33333333333333%;width:27.037037037037077%"></div></div>
+      </div>
+    </td><td><span class="status warn"><span class="dot"></span>接近止损</span></td></tr><tr class="" data-sym="AMD"><td class="ticker"><div class="tk">
+          <div class="avatar ">AMD</div>
+          <div class="meta"><div class="sym">AMD</div><div class="nm">Advanced Micro Devices</div></div>
+        </div></td><td><span class="setup-chip">Base Breakout</span></td><td class="num muted" style="font-size:11.5px">Apr 14</td><td class="right num muted" style="font-size:11.5px">7d</td><td class="right num muted">$178.50</td><td class="right num" style="font-weight:600">$181.20</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 20.0 L3.1 18.9 L6.3 15.3 L9.4 16.8 L12.5 18.6 L15.7 18.2 L18.8 15.2 L21.9 11.4 L25.0 14.2 L28.2 10.4 L31.3 10.8 L34.4 14.0 L37.6 10.2 L40.7 7.6 L43.8 5.2 L47.0 6.3 L50.1 4.6 L53.2 2.0 L56.3 2.9 L59.5 3.2 L62.6 2.7 L65.7 2.5 L68.9 2.8 L72.0 12.5" fill="none" stroke="var(--up)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">6.5%</span><div class="bar"><div class="fill" style="width:43.333333333333336%"></div></div></div></td><td class="right num up" style="font-weight:600">+$983</td><td class="right num up">+1.51%</td><td class="right num" style="color:var(--down)">$172.00</td><td class="right num" style="color:var(--up)">$210.00</td><td class="right">
+      <div class="rbar">
+        <span class="num up" style="min-width:46px;display:inline-block;text-align:right">+0.42R</span>
+        <div class="track"><div class="zero"></div><div class="fill " style="left:33.33333333333333%;width:9.230769230769193%"></div></div>
+      </div>
+    </td><td><span class="status ok"><span class="dot"></span>正常持有</span></td></tr><tr class="" data-sym="LINK"><td class="ticker"><div class="tk">
+          <div class="avatar crypto">LIN</div>
+          <div class="meta"><div class="sym">LINK</div><div class="nm">Chainlink</div></div>
+        </div></td><td><span class="setup-chip">VCP</span></td><td class="num muted" style="font-size:11.5px">Apr 11</td><td class="right num muted" style="font-size:11.5px">10d</td><td class="right num muted">$18.40</td><td class="right num" style="font-weight:600">$17.20</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 2.0 L3.1 2.3 L6.3 3.9 L9.4 6.1 L12.5 7.9 L15.7 8.2 L18.8 9.3 L21.9 10.1 L25.0 10.9 L28.2 11.1 L31.3 10.5 L34.4 12.1 L37.6 13.6 L40.7 13.3 L43.8 14.5 L47.0 14.3 L50.1 14.6 L53.2 16.3 L56.3 17.3 L59.5 16.8 L62.6 18.4 L65.7 18.3 L68.9 17.8 L72.0 20.0" fill="none" stroke="var(--down)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">1.8%</span><div class="bar"><div class="fill" style="width:12.000000000000002%"></div></div></div></td><td class="right num down" style="font-weight:600">−$1,174</td><td class="right num down">−6.52%</td><td class="right num" style="color:var(--down)">$16.90</td><td class="right num" style="color:var(--up)">$24.50</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−0.80R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:15.555555555555568%;width:17.777777777777764%"></div></div>
+      </div>
+    </td><td><span class="status warn"><span class="dot"></span>接近止损</span></td></tr><tr class="" data-sym="TSLA"><td class="ticker"><div class="tk">
+          <div class="avatar ">TSLA</div>
+          <div class="meta"><div class="sym">TSLA</div><div class="nm">Tesla Inc</div></div>
+        </div></td><td><span class="setup-chip">Pullback</span></td><td class="num muted" style="font-size:11.5px">Apr 02</td><td class="right num muted" style="font-size:11.5px">19d</td><td class="right num muted">$262.10</td><td class="right num" style="font-weight:600">$254.80</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 4.7 L3.1 6.4 L6.3 6.1 L9.4 4.7 L12.5 3.4 L15.7 6.2 L18.8 6.0 L21.9 7.2 L25.0 5.1 L28.2 5.6 L31.3 5.8 L34.4 7.0 L37.6 5.1 L40.7 4.5 L43.8 2.0 L47.0 4.5 L50.1 7.0 L53.2 10.2 L56.3 8.6 L59.5 9.1 L62.6 12.0 L65.7 14.4 L68.9 17.8 L72.0 20.0" fill="none" stroke="var(--down)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">8.0%</span><div class="bar"><div class="fill" style="width:53.333333333333336%"></div></div></div></td><td class="right num down" style="font-weight:600">−$2,228</td><td class="right num down">−2.79%</td><td class="right num" style="color:var(--down)">$248.50</td><td class="right num" style="color:var(--up)">$298.00</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−0.54R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:21.405228758169937%;width:11.928104575163395%"></div></div>
+      </div>
+    </td><td><span class="status warn"><span class="dot"></span>接近止损</span></td></tr><tr class="" data-sym="AVAX"><td class="ticker"><div class="tk">
+          <div class="avatar crypto">AVA</div>
+          <div class="meta"><div class="sym">AVAX</div><div class="nm">Avalanche</div></div>
+        </div></td><td><span class="setup-chip">Reversal</span></td><td class="num muted" style="font-size:11.5px">Mar 28</td><td class="right num muted" style="font-size:11.5px">24d</td><td class="right num muted">$42.10</td><td class="right num" style="font-weight:600">$35.60</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 2.0 L3.1 2.8 L6.3 3.5 L9.4 4.0 L12.5 4.3 L15.7 4.4 L18.8 5.0 L21.9 6.5 L25.0 7.0 L28.2 7.2 L31.3 8.0 L34.4 9.3 L37.6 10.8 L40.7 11.4 L43.8 11.9 L47.0 12.8 L50.1 13.1 L53.2 13.4 L56.3 14.2 L59.5 14.9 L62.6 15.1 L65.7 15.5 L68.9 16.9 L72.0 20.0" fill="none" stroke="var(--down)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">2.0%</span><div class="bar"><div class="fill" style="width:13.333333333333334%"></div></div></div></td><td class="right num down" style="font-weight:600">−$3,088</td><td class="right num down">−15.44%</td><td class="right num" style="color:var(--down)">$35.40</td><td class="right num" style="color:var(--up)">$58.00</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−0.97R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:11.77446102819238%;width:21.55887230514095%"></div></div>
+      </div>
+    </td><td><span class="status danger"><span class="dot"></span>计划失效</span></td></tr><tr class="" data-sym="SMCI"><td class="ticker"><div class="tk">
+          <div class="avatar ">SMCI</div>
+          <div class="meta"><div class="sym">SMCI</div><div class="nm">Super Micro Computer</div></div>
+        </div></td><td><span class="setup-chip">Momentum</span></td><td class="num muted" style="font-size:11.5px">Apr 01</td><td class="right num muted" style="font-size:11.5px">20d</td><td class="right num muted">$48.20</td><td class="right num" style="font-weight:600">$41.60</td><td class="spark-cell"><svg class="spark" width="72" height="22"><path d="M0.0 2.0 L3.1 2.8 L6.3 3.0 L9.4 3.6 L12.5 3.8 L15.7 5.2 L18.8 6.6 L21.9 7.4 L25.0 8.7 L28.2 9.4 L31.3 9.4 L34.4 10.4 L37.6 11.4 L40.7 12.1 L43.8 13.2 L47.0 13.3 L50.1 13.7 L53.2 14.9 L56.3 15.4 L59.5 15.4 L62.6 16.0 L65.7 17.5 L68.9 18.2 L72.0 20.0" fill="none" stroke="var(--down)" stroke-width="1.4"></path></svg></td><td class="right"><div class="posbar"><span class="num muted">4.0%</span><div class="bar"><div class="fill" style="width:26.666666666666668%"></div></div></div></td><td class="right num down" style="font-weight:600">−$5,477</td><td class="right num down">−13.69%</td><td class="right num" style="color:var(--down)">$41.80</td><td class="right num" style="color:var(--up)">$58.00</td><td class="right">
+      <div class="rbar">
+        <span class="num down" style="min-width:46px;display:inline-block;text-align:right">−1.03R</span>
+        <div class="track"><div class="zero"></div><div class="fill neg" style="left:10.41666666666668%;width:22.91666666666665%"></div></div>
+      </div>
+    </td><td><span class="status danger"><span class="dot"></span>计划失效</span></td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ BOTTOM ============ -->
+  <div class="section-label"><span class="num">§03</span>WEEKLY REVIEW<span class="rule"></span><span class="meta">Apr 14 — Apr 20 · 本周</span></div>
+  <section class="bottom-grid">
+    <!-- left: weekly metrics -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">本周复盘 <span class="count">Apr 14 – Apr 20</span></div>
+        <button class="filter-chip" style="margin-left:auto">本周</button>
+        <button class="filter-chip">本月</button>
+        <button class="filter-chip">季度</button>
+      </div>
+      <div class="metric-grid" style="grid-template-columns:repeat(3,1fr); border:0; border-radius:0; background:transparent;">
+        <div class="metric"><div class="label">本周胜率</div><div class="v up">62.5<span class="u">%</span></div><div class="sub label" style="text-transform:none;letter-spacing:0">5 胜 / 3 负 / 8 笔</div></div>
+        <div class="metric"><div class="label">平均盈亏比</div><div class="v">2.34<span class="u">R</span></div><div class="sub label" style="text-transform:none;letter-spacing:0">目标 ≥ 2.0R · <span class="up">达标</span></div></div>
+        <div class="metric"><div class="label">平均持有</div><div class="v">6.4<span class="u">天</span></div><div class="sub label" style="text-transform:none;letter-spacing:0">盈利 8.1d · 亏损 3.2d</div></div>
+      </div>
+      <div class="panel-head" style="border-top:1px solid var(--line); border-bottom:0">
+        <div class="panel-title" style="font-size:11.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--fg-2); font-weight:500">Setup 表现</div>
+      </div>
+      <div class="setup-list" id="setup-list"><div class="setup-row">
+        <div class="nm">EP Breakout</div>
+        <div class="bar-wrap"><div class="bar" style="left:50%;width:48%;background:var(--up)"></div><div class="zero"></div></div>
+        <div class="val up">+18.4R</div>
+        <div class="count">7笔</div>
+      </div><div class="setup-row">
+        <div class="nm">VCP</div>
+        <div class="bar-wrap"><div class="bar" style="left:50%;width:15.913043478260871%;background:var(--up)"></div><div class="zero"></div></div>
+        <div class="val up">+6.1R</div>
+        <div class="count">4笔</div>
+      </div><div class="setup-row">
+        <div class="nm">Base Breakout</div>
+        <div class="bar-wrap"><div class="bar" style="left:50%;width:12.521739130434781%;background:var(--up)"></div><div class="zero"></div></div>
+        <div class="val up">+4.8R</div>
+        <div class="count">5笔</div>
+      </div><div class="setup-row">
+        <div class="nm">Pullback</div>
+        <div class="bar-wrap"><div class="bar" style="left:50%;width:6%;background:var(--up)"></div><div class="zero"></div></div>
+        <div class="val up">+2.3R</div>
+        <div class="count">6笔</div>
+      </div><div class="setup-row">
+        <div class="nm">Momentum</div>
+        <div class="bar-wrap"><div class="bar" style="right:50%;width:4.695652173913044%;background:var(--down)"></div><div class="zero"></div></div>
+        <div class="val down">−1.8R</div>
+        <div class="count">4笔</div>
+      </div><div class="setup-row">
+        <div class="nm">Reversal</div>
+        <div class="bar-wrap"><div class="bar" style="right:50%;width:16.173913043478265%;background:var(--down)"></div><div class="zero"></div></div>
+        <div class="val down">−6.2R</div>
+        <div class="count">5笔</div>
+      </div></div>
+    </div>
+
+    <!-- middle: error flags + events -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">最常见错误标签</div>
+        <span class="muted" style="font-size:11px; margin-left:auto">最近 30 天</span>
+      </div>
+      <div class="err-cloud" id="err-cloud">
+      <span class="tag hot">过早追高<span class="c">7</span></span>
+    
+      <span class="tag hot">忽略大盘背景<span class="c">5</span></span>
+    
+      <span class="tag ">止损过紧<span class="c">4</span></span>
+    
+      <span class="tag ">未执行止盈<span class="c">3</span></span>
+    
+      <span class="tag hot">财报硬抗<span class="c">3</span></span>
+    
+      <span class="tag ">尺寸过大<span class="c">2</span></span>
+    
+      <span class="tag ">setup 不符<span class="c">2</span></span>
+    
+      <span class="tag ">情绪交易<span class="c">2</span></span>
+    
+      <span class="tag ">过度交易<span class="c">1</span></span>
+    </div>
+      <div class="panel-head" style="border-top:1px solid var(--line)">
+        <div class="panel-title">事件日历</div>
+        <span class="muted" style="font-size:11px; margin-left:auto">仅持仓相关</span>
+      </div>
+      <div class="events" id="events"><div class="event">
+        <div class="when"><span class="d">23</span>Apr · Thu</div>
+        <div class="sym">TSLA</div>
+        <div class="kind">财报 · After close</div>
+        <span class="alert" style="color:var(--down);background:color-mix(in oklch, var(--down) 15%, transparent)">财报前清仓</span>
+      </div><div class="event">
+        <div class="when"><span class="d">28</span>Apr · Mon</div>
+        <div class="sym">GOOGL</div>
+        <div class="kind">财报 · After close</div>
+        <span class="alert" style="color:var(--warn);background:color-mix(in oklch, var(--warn) 15%, transparent)">减仓</span>
+      </div><div class="event">
+        <div class="when"><span class="d">30</span>Apr · Wed</div>
+        <div class="sym">META</div>
+        <div class="kind">财报 · After close</div>
+        <span class="alert" style="color:var(--warn);background:color-mix(in oklch, var(--warn) 15%, transparent)">减仓</span>
+      </div><div class="event">
+        <div class="when"><span class="d">01</span>May · Thu</div>
+        <div class="sym">FOMC</div>
+        <div class="kind">FOMC 利率决议</div>
+        <span class="alert muted" style="background:var(--bg-3)">宏观</span>
+      </div><div class="event">
+        <div class="when"><span class="d">05</span>May · Mon</div>
+        <div class="sym">AMD</div>
+        <div class="kind">财报 · After close</div>
+        <span class="alert" style="color:var(--up);background:color-mix(in oklch, var(--up) 15%, transparent)">计划持有</span>
+      </div><div class="event">
+        <div class="when"><span class="d">07</span>May · Wed</div>
+        <div class="sym">HOOD</div>
+        <div class="kind">财报 · After close</div>
+        <span class="alert" style="color:var(--up);background:color-mix(in oklch, var(--up) 15%, transparent)">计划持有</span>
+      </div></div>
+    </div>
+
+    <!-- right: best / worst setup -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">Setup 冠亚军</div>
+      </div>
+      <div style="padding: 16px 18px 8px;">
+        <div style="font-size:10.5px;color:var(--up);letter-spacing:0.1em;text-transform:uppercase;font-weight:600">▲ 表现最好</div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px">
+          <div style="font-family:var(--f-sans);font-size:17px;font-weight:600">EP Breakout</div>
+          <div class="up num" style="font-weight:600">+18.4R</div>
+        </div>
+        <div class="muted" style="font-size:11px; margin-top:3px">7 笔 · 胜率 71% · 平均持仓 9 天</div>
+        <div class="muted" style="font-size:11px; margin-top:8px; line-height:1.55">
+          关键词：<span style="color:var(--fg-1)">有明显催化、volume dry-up、突破当天不追涨</span>
+        </div>
+      </div>
+      <div style="padding: 14px 18px 16px; border-top:1px solid var(--line);">
+        <div style="font-size:10.5px;color:var(--down);letter-spacing:0.1em;text-transform:uppercase;font-weight:600">▼ 表现最差</div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px">
+          <div style="font-family:var(--f-sans);font-size:17px;font-weight:600">Reversal Buy</div>
+          <div class="down num" style="font-weight:600">−6.2R</div>
+        </div>
+        <div class="muted" style="font-size:11px; margin-top:3px">5 笔 · 胜率 20% · 平均持仓 2.4 天</div>
+        <div class="muted" style="font-size:11px; margin-top:8px; line-height:1.55">
+          行动项：<span style="color:var(--fg-1)">暂停此类 setup 两周，复盘完再恢复</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div style="text-align:center; color:var(--fg-3); font-size:10.5px; margin-top:8px; font-family:var(--f-mono); letter-spacing:0.08em">
+    SWING-DESK · 本地数据 · 报价延迟 ~15s · <span id="last-updated">更新于 13:51:43</span>
+  </div>
+</main>
+
+<!-- ============ DRAWER ============ -->
+<div class="drawer-backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+
+<!-- ============ TWEAKS ============ -->
+<div class="tweaks" id="tweaks">
+  <h5>TWEAKS <span class="x" id="tweaks-close">×</span></h5>
+  <div class="group">
+    <div class="gl">主题</div>
+    <div class="seg" data-seg="theme">
+      <button data-val="dark" class="active">深色</button>
+      <button data-val="light">浅色</button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="gl">信息密度</div>
+    <div class="seg" data-seg="density">
+      <button data-val="compact" class="">紧凑</button>
+      <button data-val="medium" class="active">中等</button>
+      <button data-val="loose" class="">宽松</button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="gl">字体风格</div>
+    <div class="seg" data-seg="font">
+      <button data-val="sans" class="active">Sans-heavy</button>
+      <button data-val="mono">Mono-heavy</button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="gl">强调色色相 <span class="mono muted" id="hue-val" style="float:right">195°</span></div>
+    <div class="hue-row">
+      <input type="range" min="0" max="360" value="195" id="hue-slider">
+      <div class="swatch" id="hue-swatch"></div>
+    </div>
+  </div>
+  <div class="group">
+    <div class="gl">主表显示字段</div>
+    <div class="cols-list" id="cols-list">
+      <label><input type="checkbox" data-col="tk" checked="" disabled=""> Ticker <span class="muted" style="font-size:10px">(锁定)</span></label>
+    
+      <label><input type="checkbox" data-col="setup" checked=""> Setup</label>
+    
+      <label><input type="checkbox" data-col="entry" checked=""> 建仓</label>
+    
+      <label><input type="checkbox" data-col="days" checked=""> 持仓</label>
+    
+      <label><input type="checkbox" data-col="cost" checked=""> 成本</label>
+    
+      <label><input type="checkbox" data-col="last" checked=""> 最新</label>
+    
+      <label><input type="checkbox" data-col="spark" checked=""> 24h</label>
+    
+      <label><input type="checkbox" data-col="size" checked=""> 仓位%</label>
+    
+      <label><input type="checkbox" data-col="pnld" checked=""> 浮盈亏 $</label>
+    
+      <label><input type="checkbox" data-col="pnlp" checked=""> 浮盈亏 %</label>
+    
+      <label><input type="checkbox" data-col="stop" checked=""> 止损</label>
+    
+      <label><input type="checkbox" data-col="target" checked=""> 目标</label>
+    
+      <label><input type="checkbox" data-col="rmult" checked=""> R</label>
+    
+      <label><input type="checkbox" data-col="status" checked="" disabled=""> 状态 <span class="muted" style="font-size:10px">(锁定)</span></label>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="desk.js"></script>
+
+
+</body></html>
