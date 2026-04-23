@@ -998,9 +998,53 @@
   body[data-theme="light"] .status.warn{ background: var(--warn-dim); color: oklch(0.48 0.14 75);}
   body[data-theme="light"] .status.danger{ background: var(--danger-dim); color: var(--down);}
   body[data-theme="light"] .status.target{ background: var(--accent-dim); color: var(--accent);}
+  /* ============ BX TREND SECTION ============ */
+  .bx-row { margin-bottom: 13px; }
+  .bx-row-label { font-size: 10.5px; color: var(--fg-2); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500; margin-bottom: 7px; display: flex; align-items: center; gap: 10px; }
+  .bx-hint { font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); text-transform: none; letter-spacing: 0; }
+  .bx-daily-seg { display: flex; gap: 5px; }
+  .bx-daily-btn { all: unset; flex: 1; text-align: center; padding: 7px 6px; border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line); font-family: var(--f-mono); font-weight: 600; font-size: 12px; color: var(--fg-2); cursor: pointer; transition: all .12s; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .bx-daily-btn .bx-sub { font-size: 9px; font-weight: 400; color: var(--fg-3); font-family: var(--f-sans); }
+  .bx-daily-btn:hover { background: var(--bg-3); color: var(--fg-1); }
+  .bx-daily-btn.active { background: var(--accent-dim); border-color: var(--accent-line); color: var(--accent); }
+  .bx-daily-btn.active .bx-sub { color: var(--accent); opacity: .7; }
+  .bx-score-seg { display: flex; gap: 4px; }
+  .bx-score-btn { all: unset; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 4px; border-radius: 6px; background: var(--bg-2); border: 1px solid transparent; font-family: var(--f-mono); font-weight: 700; font-size: 12.5px; color: var(--fg-2); cursor: pointer; transition: all .12s; text-align: center; }
+  .bx-score-btn .bx-val { line-height: 1; }
+  .bx-score-btn .bx-sub { font-size: 8.5px; font-family: var(--f-sans); font-weight: 400; color: var(--fg-3); white-space: nowrap; letter-spacing: 0; }
+  .bx-score-btn:hover { background: var(--bg-3); }
+  .bx-score-btn.bx-down { background: var(--down-dim); border-color: oklch(0.70 0.19 25 / .3); color: var(--down); }
+  .bx-score-btn.bx-down .bx-sub { color: var(--down); opacity: .6; }
+  .bx-score-btn.bx-warn { background: var(--warn-dim); border-color: oklch(0.80 0.15 75 / .3); color: var(--warn); }
+  .bx-score-btn.bx-warn .bx-sub { color: var(--warn); opacity: .6; }
+  .bx-score-btn.bx-neu { background: var(--bg-3); border-color: var(--line); color: var(--fg-1); }
+  .bx-score-btn.bx-neu .bx-sub { color: var(--fg-3); }
+  .bx-score-btn.bx-softup { background: oklch(0.78 0.17 145 / .08); border-color: oklch(0.78 0.17 145 / .2); color: oklch(0.78 0.17 145 / .8); }
+  .bx-score-btn.bx-softup .bx-sub { color: oklch(0.78 0.17 145 / .6); }
+  .bx-score-btn.bx-up { background: var(--up-dim); border-color: oklch(0.78 0.17 145 / .3); color: var(--up); }
+  .bx-score-btn.bx-up .bx-sub { color: var(--up); opacity: .65; }
+  .bx-score-btn.active { box-shadow: inset 0 0 0 1.5px currentColor, 0 0 12px -4px currentColor; }
+  .bx-subhead { font-family: var(--f-mono); font-size: 9.5px; letter-spacing: 0.18em; font-weight: 700; color: var(--fg-3); text-transform: uppercase; margin: 16px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .bx-subhead::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .bx-context-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 11px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; }
+  .bx-swatch { all: unset; width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0; cursor: pointer; box-shadow: inset 0 1px 0 oklch(1 0 0 / .18), 0 1px 3px oklch(0 0 0 / .3); transition: transform .15s; }
+  .bx-swatch:hover { transform: scale(1.12); }
+  .bx-name { font-size: 12.5px; font-weight: 500; color: var(--fg-0); padding: 2px 5px; border-radius: 4px; min-width: 60px; cursor: text; outline: none; flex: 1; }
+  .bx-name:hover { background: var(--bg-3); }
+  .bx-name:focus { background: var(--bg-3); box-shadow: 0 0 0 1px var(--accent-line); }
+  .bx-meta { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .bx-meta-lbl { font-size: 9.5px; color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase; }
+  .bx-chip-score { font-family: var(--f-mono); font-weight: 600; font-size: 12px; padding: 3px 8px; border-radius: 4px; cursor: text; outline: none; background: var(--bg-3); border: 1px solid var(--line); color: var(--fg-0); min-width: 32px; text-align: center; }
+  .bx-chip-score:focus { border-color: var(--accent-line); background: var(--bg-2); }
+  .bx-chip-slope { all: unset; font-family: var(--f-mono); font-weight: 600; font-size: 11px; padding: 3px 9px; border-radius: 4px; cursor: pointer; border: 1px solid transparent; transition: all .12s; white-space: nowrap; }
+  .bx-chip-slope.up { background: var(--up-dim); border-color: oklch(0.78 0.17 145 / .3); color: var(--up); }
+  .bx-chip-slope.flat { background: var(--bg-3); border-color: var(--line); color: var(--fg-2); }
+  .bx-chip-slope.down { background: var(--down-dim); border-color: oklch(0.70 0.19 25 / .3); color: var(--down); }
+  .bx-chip-slope:hover { opacity: .8; }
+
 </style>
-<link id="gfont-Roboto" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&amp;display=swap"><link id="gfont-Open-Sans" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&amp;display=swap"><link id="gfont-Montserrat" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&amp;display=swap"></head>
-<body data-density="medium" data-font="sans" data-theme="dark" data-screen-label="01 Swing Desk" data-cc-id="cc-1" style="background-color: rgb(21, 21, 21); font-family: Montserrat; font-size: 26px; cursor: crosshair;">
+</head>
+<body data-density="medium" data-font="sans" data-theme="dark">
 
 <!-- persistent tweak defaults for host-side rewriting -->
 <script id="tweak-defaults" type="application/json">

@@ -149,6 +149,126 @@
       </div>`;
   }
 
+
+  // ============ BX TREND ============
+  const BX_SCORE_OPTS = [
+    { val: -2, label: "−2", sub: "Bearish",    cls: "bx-down"   },
+    { val: -1, label: "−1", sub: "→ Bull",     cls: "bx-warn"   },
+    { val:  0, label: " 0", sub: "Neutral",    cls: "bx-neu"    },
+    { val:  1, label: "+1", sub: "Less Bull",  cls: "bx-softup" },
+    { val:  2, label: "+2", sub: "Bullish",    cls: "bx-up"     },
+  ];
+  const SWATCH_COLORS = [
+    "oklch(0.70 0.16 200)", "oklch(0.72 0.16 40)",  "oklch(0.72 0.14 280)",
+    "oklch(0.75 0.14 140)", "oklch(0.78 0.13 90)",  "oklch(0.70 0.18 25)",
+    "oklch(0.72 0.14 320)", "oklch(0.35 0.01 250)",
+  ];
+  const slopeIcon  = s => ({ up: "↗ UP", flat: "→ FLAT", down: "↘ DOWN" }[s] || s);
+  const slopeClass = s => ({ up: "up", flat: "flat", down: "down" }[s] || "flat");
+
+  function bxSectionHTML(h) {
+    const bx = h.bx;
+    const scoreButtons = field => BX_SCORE_OPTS.map(o => `
+      <button class="bx-score-btn ${o.cls} ${bx[field] === o.val ? "active" : ""}"
+              data-bx-field="${field}" data-bx-val="${o.val}">
+        <span class="bx-val">${o.label}</span>
+        <span class="bx-sub">${o.sub}</span>
+      </button>`).join("");
+    return `
+      <div class="drawer-section">
+        <h4><span class="idx">02</span>BX Trend &amp; 市场背景</h4>
+
+        <div class="bx-row">
+          <div class="bx-row-label">Daily BX Trend <span class="bx-hint">入场后第 ${h.days} 日</span></div>
+          <div class="bx-daily-seg">
+            ${["0-5","5-15","15+"].map(v => `
+              <button class="bx-daily-btn ${bx.dailyBars === v ? "active" : ""}"
+                      data-bx-field="dailyBars" data-bx-val="${v}">
+                ${v}<span class="bx-sub">bars</span>
+              </button>`).join("")}
+          </div>
+        </div>
+
+        <div class="bx-row">
+          <div class="bx-row-label">Weekly BX</div>
+          <div class="bx-score-seg">${scoreButtons("weekly")}</div>
+        </div>
+
+        <div class="bx-row">
+          <div class="bx-row-label">Monthly BX</div>
+          <div class="bx-score-seg">${scoreButtons("monthly")}</div>
+        </div>
+
+        <div class="bx-subhead">Sector</div>
+        <div class="bx-context-row">
+          <button class="bx-swatch" style="background:${bx.sector.color}"
+                  data-bx-field="sectorColor" title="点击切换颜色"></button>
+          <span class="bx-name" contenteditable="true"
+                data-bx-field="sectorName" spellcheck="false">${bx.sector.name}</span>
+          <div class="bx-meta">
+            <span class="bx-meta-lbl">Score</span>
+            <span class="bx-chip-score" contenteditable="true"
+                  data-bx-field="sectorScore">${bx.sector.score}</span>
+          </div>
+          <div class="bx-meta">
+            <span class="bx-meta-lbl">Slope</span>
+            <button class="bx-chip-slope ${slopeClass(bx.sector.slope)}"
+                    data-bx-field="sectorSlope">${slopeIcon(bx.sector.slope)}</button>
+          </div>
+        </div>
+
+        <div class="bx-subhead" style="margin-top:10px">Overall vs VOO</div>
+        <div class="bx-context-row">
+          <div class="bx-meta">
+            <span class="bx-meta-lbl">Score</span>
+            <span class="bx-chip-score" contenteditable="true"
+                  data-bx-field="overallScore">${bx.overall.score}</span>
+          </div>
+          <div class="bx-meta">
+            <span class="bx-meta-lbl">Slope</span>
+            <button class="bx-chip-slope ${slopeClass(bx.overall.slope)}"
+                    data-bx-field="overallSlope">${slopeIcon(bx.overall.slope)}</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function wireBX(h) {
+    const dr = $("#drawer");
+    $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
+      if (btn.tagName !== "BUTTON") return;
+      btn.addEventListener("click", () => {
+        const field = btn.dataset.bxField, val = btn.dataset.bxVal;
+        if (field === "dailyBars") {
+          h.bx.dailyBars = val;
+          $$(`[data-bx-field="dailyBars"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === val));
+        } else if (field === "weekly" || field === "monthly") {
+          h.bx[field] = +val;
+          $$(`[data-bx-field="${field}"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === val));
+        } else if (field === "sectorSlope" || field === "overallSlope") {
+          const slopes = ["up", "flat", "down"];
+          const obj = field === "sectorSlope" ? h.bx.sector : h.bx.overall;
+          obj.slope = slopes[(slopes.indexOf(obj.slope) + 1) % 3];
+          btn.textContent = slopeIcon(obj.slope);
+          btn.className = `bx-chip-slope ${slopeClass(obj.slope)}`;
+        } else if (field === "sectorColor") {
+          const cur = SWATCH_COLORS.indexOf(h.bx.sector.color);
+          h.bx.sector.color = SWATCH_COLORS[(cur + 1) % SWATCH_COLORS.length];
+          btn.style.background = h.bx.sector.color;
+        }
+      });
+    });
+    $$("[contenteditable][data-bx-field]", dr).forEach(el => {
+      el.addEventListener("blur", () => {
+        const v = el.textContent.trim(), f = el.dataset.bxField;
+        if (f === "sectorName")  h.bx.sector.name  = v;
+        if (f === "sectorScore") h.bx.sector.score = v;
+        if (f === "overallScore") h.bx.overall.score = v;
+      });
+      el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
+    });
+  }
+
   // ============ HOLDINGS TABLE ============
   let sortKey = "pnld", sortDir = -1, filter = "all", query = "", selectedSym = null;
 
@@ -271,6 +391,7 @@
     selectedSym = sym;
     renderTable();
     $("#drawer").innerHTML = drawerHTML(h);
+    wireBX(h);
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
@@ -323,9 +444,12 @@
           </div>
         </div>
 
-        <!-- 2. 交易计划 -->
+        <!-- 2. BX Trend -->
+        ${bxSectionHTML(h)}
+
+        <!-- 3. 交易计划 -->
         <div class="drawer-section">
-          <h4><span class="idx">02</span>交易计划</h4>
+          <h4><span class="idx">03</span>交易计划</h4>
           <div class="kv-grid" style="margin-bottom:12px">
             <div><div class="k">Setup 类型</div><div class="v" style="font-family:var(--f-sans);font-size:13px">${h.setup}</div></div>
             <div><div class="k">原始止损</div><div class="v">$${price(h.stop)} <span class="sub">(-${((h.cost - h.stop) / h.cost * 100).toFixed(1)}%)</span></div></div>
@@ -336,15 +460,15 @@
           <div class="thesis">${h.thesis}</div>
         </div>
 
-        <!-- 3. 时间轴 -->
+        <!-- 4. 时间轴 -->
         <div class="drawer-section">
-          <h4><span class="idx">03</span>执行记录</h4>
+          <h4><span class="idx">04</span>执行记录</h4>
           ${timeline(h)}
         </div>
 
-        <!-- 4. 复盘笔记 -->
+        <!-- 5. 复盘笔记 -->
         <div class="drawer-section">
-          <h4><span class="idx">04</span>复盘笔记<span class="mono muted" style="margin-left:auto;font-size:10px;letter-spacing:0">平仓后自动填充</span></h4>
+          <h4><span class="idx">05</span>复盘笔记<span class="mono muted" style="margin-left:auto;font-size:10px;letter-spacing:0">平仓后自动填充</span></h4>
           ${reviewHTML(h)}
         </div>
       </div>

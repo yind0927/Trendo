@@ -103,6 +103,33 @@ window.EVENTS = [
   { date: "May 07", weekday: "Wed", sym: "HOOD",  kind: "财报 · After close", severity: "ok",     inPos: true },
 ];
 
+// BX Trend data keyed by symbol
+const BX_DATA = {
+  NVDA:  { dailyBars: "5-15", weekly: 2,  monthly: 2,  sector: { name: "Semi / AI",      color: "oklch(0.70 0.16 200)", score: "82", slope: "up"   }, overall: { score: "75", slope: "up"   } },
+  TSLA:  { dailyBars: "15+",  weekly: -1, monthly: 0,  sector: { name: "EV / Auto",       color: "oklch(0.70 0.18 25)",  score: "35", slope: "down" }, overall: { score: "48", slope: "flat" } },
+  META:  { dailyBars: "15+",  weekly: 2,  monthly: 2,  sector: { name: "Mega-cap Tech",   color: "oklch(0.72 0.14 280)", score: "78", slope: "up"   }, overall: { score: "72", slope: "up"   } },
+  AMD:   { dailyBars: "0-5",  weekly: 1,  monthly: 1,  sector: { name: "Semi / AI",      color: "oklch(0.70 0.16 200)", score: "70", slope: "flat" }, overall: { score: "65", slope: "flat" } },
+  CRWD:  { dailyBars: "5-15", weekly: 2,  monthly: 2,  sector: { name: "Cybersecurity",   color: "oklch(0.78 0.13 90)",  score: "80", slope: "up"   }, overall: { score: "72", slope: "up"   } },
+  SMCI:  { dailyBars: "15+",  weekly: -2, monthly: -1, sector: { name: "Semi / AI",      color: "oklch(0.70 0.16 200)", score: "40", slope: "down" }, overall: { score: "50", slope: "flat" } },
+  PLTR:  { dailyBars: "15+",  weekly: 1,  monthly: 2,  sector: { name: "Gov Tech",        color: "oklch(0.78 0.13 90)",  score: "72", slope: "up"   }, overall: { score: "70", slope: "up"   } },
+  HOOD:  { dailyBars: "5-15", weekly: 1,  monthly: 1,  sector: { name: "Fintech",         color: "oklch(0.75 0.14 140)", score: "65", slope: "flat" }, overall: { score: "60", slope: "flat" } },
+  COIN:  { dailyBars: "15+",  weekly: 0,  monthly: 1,  sector: { name: "Crypto / Fin",    color: "oklch(0.72 0.16 40)",  score: "55", slope: "flat" }, overall: { score: "58", slope: "flat" } },
+  GOOGL: { dailyBars: "15+",  weekly: 2,  monthly: 2,  sector: { name: "Mega-cap Tech",   color: "oklch(0.72 0.14 280)", score: "80", slope: "up"   }, overall: { score: "75", slope: "up"   } },
+  BTC:   { dailyBars: "15+",  weekly: 2,  monthly: 2,  sector: { name: "Crypto",          color: "oklch(0.72 0.16 40)",  score: "78", slope: "up"   }, overall: { score: "72", slope: "up"   } },
+  ETH:   { dailyBars: "15+",  weekly: 1,  monthly: 2,  sector: { name: "Crypto",          color: "oklch(0.72 0.16 40)",  score: "68", slope: "flat" }, overall: { score: "65", slope: "flat" } },
+  SOL:   { dailyBars: "5-15", weekly: 2,  monthly: 2,  sector: { name: "Crypto",          color: "oklch(0.72 0.16 40)",  score: "82", slope: "up"   }, overall: { score: "74", slope: "up"   } },
+  LINK:  { dailyBars: "5-15", weekly: -1, monthly: 0,  sector: { name: "Crypto",          color: "oklch(0.72 0.16 40)",  score: "45", slope: "down" }, overall: { score: "58", slope: "flat" } },
+  AVAX:  { dailyBars: "15+",  weekly: -2, monthly: -2, sector: { name: "Crypto",          color: "oklch(0.72 0.16 40)",  score: "30", slope: "down" }, overall: { score: "45", slope: "down" } },
+};
+const DEFAULT_BX = { dailyBars: "0-5", weekly: 0, monthly: 0,
+  sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: "flat" },
+  overall: { score: "50", slope: "flat" }
+};
+window.HOLDINGS.forEach(h => {
+  const src = BX_DATA[h.sym] || DEFAULT_BX;
+  h.bx = JSON.parse(JSON.stringify(src));
+});
+
 // columns configuration for the main table (id, label, right-align, visible by default)
 window.COLS = [
   { id: "tk",      label: "Ticker",   r: false, on: true, locked: true },
