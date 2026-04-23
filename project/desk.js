@@ -22,23 +22,20 @@
 
   // ============ OVERVIEW CARDS ============
   function renderOverview() {
-    const totalNotional = 284_620;
     const todayPnl = 3_840;
     const todayPnlPct = 0.0137;
     const openPnl = 18_420;
     const openPnlPct = 0.0696;
     const openCount = HOLDINGS.length;
-    const maxRisk = 4_820; // sum of 1R dollar risk
-    const maxRiskPct = 0.0169;
-    const discipline = 86; // score 0-100
 
     const ov = $("#overview");
     ov.innerHTML = `
-      ${card({
-        label: "总资产 (Equity)", info: true,
-        value: "$284,620", sub: `<span class="chip up">+1.37%</span><span class="muted">今日</span>`,
-        spark: sparkSVG([280100, 279200, 281400, 280800, 283100, 282400, 284620], 110, 36, "var(--up)")
-      })}
+      <div class="ov-card" id="nav-card" role="button" tabindex="0" title="Click to edit" style="cursor:pointer">
+        <div class="label">总资产 (Equity)<span class="info">i</span></div>
+        <div class="value">$${totalNotional.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
+        <div class="sub"><span class="chip up">+1.37%</span><span class="muted">今日</span></div>
+        <div class="spark">${sparkSVG([280100, 279200, 281400, 280800, 283100, 282400, totalNotional], 110, 36, "var(--up)")}</div>
+      </div>
       ${card({
         label: "今日盈亏", info: true,
         value: `<span class="up">+$3,840</span>`,
@@ -53,21 +50,9 @@
       })}
       ${card({
         label: "当前持仓数", info: false,
-        value: `15`,
-        sub: `<span class="chip neu">10 美股</span><span class="chip neu">5 加密</span>`,
+        value: `${openCount}`,
+        sub: `<span class="chip neu">${HOLDINGS.filter(h => h.kind === "equity").length} 美股</span><span class="chip neu">${HOLDINGS.filter(h => h.kind === "crypto").length} 加密</span>`,
         spark: ""
-      })}
-      ${card({
-        label: "总风险敞口", info: true,
-        value: `$4,820`,
-        sub: `<span class="chip neu">1.69% equity</span><span class="muted">上限 3.0%</span>`,
-        spark: gaugeSVG(1.69, 3.0, 110, 36)
-      })}
-      ${card({
-        label: "本周纪律分", info: true,
-        value: `86<span class="num" style="font-size:14px;color:var(--fg-2)">/100</span>`,
-        sub: `<span class="chip up">+4</span><span class="muted">vs 上周</span>`,
-        spark: disciplineBars()
       })}
       ${pieCard()}
     `;
@@ -269,25 +254,27 @@
     });
   }
 
-  // ============ PROGRESS STATUS ============
-  const PROGRESS_STATUSES = [
-    { key: "danger", label: "止损区",  cls: "danger" },
-    { key: "warn",   label: "缓冲区",  cls: "warn"   },
-    { key: "ok",     label: "正常持有", cls: "ok"     },
-    { key: "trim",   label: "减仓区",  cls: "trim"   },
-    { key: "target", label: "目标区",  cls: "target" },
-  ];
-  function progressStatus(h) {
-    const p = (h.last - h.stop) / (h.target - h.stop);
-    if (p < 0)    return PROGRESS_STATUSES[0];
-    if (p < 0.25) return PROGRESS_STATUSES[1];
-    if (p < 0.75) return PROGRESS_STATUSES[2];
-    if (p < 1.0)  return PROGRESS_STATUSES[3];
-    return PROGRESS_STATUSES[4];
+  // ============ GLOBAL STATE ============
+  let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
+  let activeTab = "open";
+  let totalNotional = 284620;
+
+  // ============ MODAL MANAGEMENT ============
+  function openModal(modalId) {
+    const modal = $(`#${modalId}`);
+    if (modal) modal.classList.add("open");
+  }
+  function closeModal(modalId) {
+    const modal = $(`#${modalId}`);
+    if (modal) modal.classList.remove("open");
+  }
+
+  // ============ TAB & DATA ROUTING ============
+  function getTableData() {
+    return activeTab === "open" ? HOLDINGS : CLOSED_POSITIONS;
   }
 
   // ============ HOLDINGS TABLE ============
-  let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
 
   function renderTable() {
     // header
@@ -303,14 +290,21 @@
     }));
 
     // filter + sort
-    let rows = HOLDINGS.filter(h => {
+    const data = getTableData();
+    let rows = data.filter(h => {
       if (filter === "equity" && h.kind !== "equity") return false;
       if (filter === "crypto" && h.kind !== "crypto") return false;
-      if (filter === "risk" && !(["warn","danger"].includes(progressStatus(h).key))) return false;
-      if (filter === "target" && !(["target","trim"].includes(progressStatus(h).key))) return false;
+      if (filter === "risk") {
+        const bucket = progressBucket(h);
+        if (!["Early", "Near Stop"].includes(bucket)) return false;
+      }
+      if (filter === "target") {
+        const bucket = progressBucket(h);
+        if (bucket !== "Near Target") return false;
+      }
       if (query) {
         const q = query.toLowerCase();
-        if (!(h.sym.toLowerCase().includes(q) || h.name.toLowerCase().includes(q) || h.setup.toLowerCase().includes(q))) return false;
+        if (!(h.sym.toLowerCase().includes(q) || h.name.toLowerCase().includes(q))) return false;
       }
       return true;
     });
@@ -318,7 +312,7 @@
     const keyFn = {
       tk: h => h.sym, bxbars: h => h.bx.dailyBars, cost: h => h.cost, last: h => h.last,
       qty: h => h.qty, pnl: h => h.pnlDollar, stop: h => h.stop, target: h => h.target,
-      progstatus: h => progressStatus(h).key,
+      progstatus: h => progressBucket(h),
     }[sortKey] || (h => h.pnlDollar);
     rows.sort((a, b) => {
       const va = keyFn(a), vb = keyFn(b);
@@ -332,18 +326,36 @@
     $("#tbody").innerHTML = rows.map(h => {
       const isSel = selectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
-      return `<tr class="${isSel}" data-sym="${h.sym}">${cells}</tr>`;
+      const deleteBtn = activeTab === "open"
+        ? `<td style="width:40px;text-align:center;padding:8px 6px"><button class="delete-btn" data-sym="${h.sym}" title="Close position">🗑</button></td>`
+        : "";
+      return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${deleteBtn}</tr>`;
     }).join("");
 
-    $$("#tbody tr").forEach(tr => tr.addEventListener("click", () => openDrawer(tr.dataset.sym)));
+    $$("#tbody tr").forEach(tr => {
+      tr.addEventListener("click", e => {
+        if (e.target.closest(".delete-btn")) return;
+        openDrawer(tr.dataset.sym);
+      });
+    });
+
+    $$(".delete-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const confirmed = confirm(`Close ${btn.dataset.sym}?`);
+        if (confirmed) closePosition(btn.dataset.sym);
+      });
+    });
 
     // counts
     $("#row-count").textContent = rows.length;
-    $("#c-all").textContent = HOLDINGS.length;
-    $("#c-eq").textContent = HOLDINGS.filter(h => h.kind === "equity").length;
-    $("#c-cr").textContent = HOLDINGS.filter(h => h.kind === "crypto").length;
-    $("#c-rk").textContent = HOLDINGS.filter(h => ["warn","danger"].includes(progressStatus(h).key)).length;
-    $("#c-tg").textContent = HOLDINGS.filter(h => ["target","trim"].includes(progressStatus(h).key)).length;
+    $("#c-all").textContent = data.length;
+    $("#c-eq").textContent = data.filter(h => h.kind === "equity").length;
+    $("#c-cr").textContent = data.filter(h => h.kind === "crypto").length;
+    $("#c-rk").textContent = data.filter(h => ["Early", "Near Stop"].includes(progressBucket(h))).length;
+    $("#c-tg").textContent = data.filter(h => progressBucket(h) === "Near Target").length;
+    $("#c-open").textContent = HOLDINGS.length;
+    $("#c-closed").textContent = CLOSED_POSITIONS.length;
   }
 
   function renderCell(h, id) {
@@ -365,8 +377,9 @@
       case "stop": return `<td class="right num" style="color:var(--down)">$${price(h.stop)}</td>`;
       case "target": return `<td class="right num" style="color:var(--up)">$${price(h.target)}</td>`;
       case "progstatus": {
-        const ps = progressStatus(h);
-        return `<td><span class="status ${ps.cls}"><span class="dot"></span>${ps.label}</span></td>`;
+        const bucket = progressBucket(h);
+        const status = BUCKET_STATUS[bucket];
+        return `<td><span class="status ${status.cls}"><span class="dot"></span>${status.label}</span></td>`;
       }
       case "setup": return `<td><span class="setup-chip">${h.setup}</span></td>`;
       case "entry": return `<td class="num muted" style="font-size:11.5px">${fmt.date(h.entry)}</td>`;
@@ -414,15 +427,31 @@
 
   // ============ DRAWER ============
   function openDrawer(sym) {
-    const h = HOLDINGS.find(x => x.sym === sym);
+    const data = getTableData();
+    const h = data.find(x => x.sym === sym);
     if (!h) return;
     selectedSym = sym;
     renderTable();
     $("#drawer").innerHTML = drawerHTML(h);
     wireBX(h);
+    if (activeTab === "open") {
+      wireDrawerCloseButton();
+    }
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
+  }
+
+  function wireDrawerCloseButton() {
+    const closeBtn = $("#drawer-close-position");
+    if (!closeBtn) return;
+    closeBtn.addEventListener("click", () => {
+      const confirmed = confirm(`Close ${selectedSym}?`);
+      if (confirmed) {
+        closePosition(selectedSym);
+        closeDrawer();
+      }
+    });
   }
   function closeDrawer() {
     selectedSym = null;
@@ -458,6 +487,7 @@
           <span class="muted" style="font-family:var(--f-mono);font-size:11px;margin-left:auto">持仓 ${h.days}d · since ${fmt.date(h.entry)}</span>
         </div>
         ${levelBar(h)}
+        ${activeTab === "open" ? `<div class="drawer-actions"><button class="btn" id="drawer-close-position">Close Position</button></div>` : ""}
       </div>
 
       <div class="drawer-body">
@@ -616,6 +646,123 @@
     }).join("");
   }
 
+  // ============ TAB SWITCHING ============
+  function wireTableTabs() {
+    $$(".panel-head .tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        $$(".panel-head .tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        activeTab = tab.dataset.tab;
+        closeDrawer();
+        renderTable();
+      });
+    });
+  }
+
+  // ============ MODAL HANDLERS ============
+  function wireNewPositionModal() {
+    const form = $("#new-position-form");
+    const openBtn = $("#new-pos-btn");
+    const closeBtn = $("#new-pos-close");
+    const cancelBtn = $("#new-pos-cancel");
+
+    openBtn.addEventListener("click", () => openModal("new-position-modal"));
+    closeBtn.addEventListener("click", () => closeModal("new-position-modal"));
+    cancelBtn.addEventListener("click", () => closeModal("new-position-modal"));
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      const sym = $("#form-ticker").value.toUpperCase().trim();
+      const entry = parseFloat($("#form-entry").value);
+      const stop = parseFloat($("#form-stop").value);
+      const target = parseFloat($("#form-target").value);
+      const qty = parseInt($("#form-qty").value);
+
+      if (!sym || !entry || !stop || !target || !qty) {
+        alert("All fields required");
+        return;
+      }
+      if (HOLDINGS.find(h => h.sym === sym) || CLOSED_POSITIONS.find(h => h.sym === sym)) {
+        alert("Position already exists");
+        return;
+      }
+      if (stop >= entry || entry >= target) {
+        alert("Invalid price levels: stop < entry < target");
+        return;
+      }
+
+      const newPos = {
+        sym, qty, name: sym,
+        kind: sym.length <= 4 ? "equity" : "crypto",
+        entry: new Date().toISOString().slice(0, 10),
+        cost: entry, last: entry,
+        size: 2.5,
+        stop, target,
+        setup: "Manual Entry",
+        thesis: "Manually entered position",
+        earnings: null, holdEarn: false,
+        status: "ok",
+        pnlPct: 0, pnlDollar: 0,
+        risk1R: entry - stop,
+        rMult: 0,
+        days: 1,
+        spark: [entry],
+        bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: "flat" }, overall: { score: "50", slope: "flat" } }
+      };
+
+      HOLDINGS.push(newPos);
+      form.reset();
+      closeModal("new-position-modal");
+      renderTable();
+      renderOverview();
+    });
+  }
+
+  function wireEquityModal() {
+    const navCard = $("#nav-card");
+    const form = $("#equity-form");
+    const closeBtn = $("#equity-close");
+    const cancelBtn = $("#equity-cancel");
+
+    if (!navCard) return;
+    navCard.addEventListener("click", () => {
+      $("#equity-nav").value = totalNotional;
+      openModal("equity-modal");
+    });
+
+    closeBtn.addEventListener("click", () => closeModal("equity-modal"));
+    cancelBtn.addEventListener("click", () => closeModal("equity-modal"));
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      const newNav = parseFloat($("#equity-nav").value);
+      if (newNav > 0) {
+        totalNotional = newNav;
+        renderOverview();
+        closeModal("equity-modal");
+      }
+    });
+  }
+
+  // ============ POSITION CLOSING ============
+  function closePosition(sym) {
+    const pos = HOLDINGS.find(h => h.sym === sym);
+    if (!pos) return;
+
+    pos.closedAt = new Date().toISOString().slice(0, 10);
+    pos.closePrice = pos.last;
+    pos.pnlFinal = pos.pnlDollar;
+    pos.exitReason = "manual";
+
+    HOLDINGS.splice(HOLDINGS.indexOf(pos), 1);
+    CLOSED_POSITIONS.push(pos);
+
+    renderTable();
+    renderOverview();
+
+    if (selectedSym === sym) closeDrawer();
+  }
+
   // ============ SEARCH / FILTERS / KEYBOARD ============
   function wireControls() {
     $("#search-input").addEventListener("input", e => { query = e.target.value; renderTable(); });
@@ -726,22 +873,11 @@
   function renderTape() {
     const track = document.getElementById("tape-track");
     if (!track) return;
-    const macro = [
-      { s: "SPY",  p: "518.42", c: +0.82 },
-      { s: "QQQ",  p: "445.71", c: +1.24 },
-      { s: "IWM",  p: "198.30", c: -0.44 },
-      { s: "VIX",  p: "14.85",  c: -2.10 },
-      { s: "DXY",  p: "104.32", c: +0.15 },
-      { s: "10Y",  p: "4.28%",  c: +0.03 },
-      { s: "GLD",  p: "302.10", c: +0.55 },
-      { s: "WTI",  p: "82.41",  c: -0.92 },
-    ];
-    const holdings = window.HOLDINGS.slice(0, 10).map(h => ({
+    const holdings = HOLDINGS.slice(0, 15).map(h => ({
       s: h.sym, p: h.last >= 1000 ? h.last.toLocaleString("en-US",{maximumFractionDigits:0}) : h.last.toFixed(2),
       c: +(h.pnlPct * 100).toFixed(2)
     }));
-    const items = [...macro, ...holdings];
-    const html = items.map(i => {
+    const html = holdings.map(i => {
       const cls = i.c >= 0 ? "up" : "down";
       const sign = i.c >= 0 ? "+" : "−";
       return `<span class="ti"><span class="s">${i.s}</span><span class="p">${i.p}</span><span class="c ${cls}">${sign}${Math.abs(i.c).toFixed(2)}%</span></span>`;
@@ -756,6 +892,9 @@
   renderBottom();
   wireControls();
   wireTweaks();
+  wireTableTabs();
+  wireNewPositionModal();
+  wireEquityModal();
   tick(); setInterval(tick, 1000);
 
 })();

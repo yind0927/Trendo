@@ -1055,6 +1055,118 @@
   /* Trim status (progress-based) */
   .status.trim { background: var(--accent-dim); color: var(--accent); } .status.trim .dot { background: var(--accent); }
 
+  /* MODALS */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: oklch(0 0 0 / .5);
+    z-index: 100; display: none; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg-1); border: 1px solid var(--line);
+    border-radius: 12px; padding: 24px; width: 90%; max-width: 450px;
+    box-shadow: 0 20px 60px -20px oklch(0 0 0 / .8);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .modal-header h2 { margin: 0; font-size: 18px; }
+  .modal-close {
+    all: unset; cursor: pointer; color: var(--fg-2); font-size: 24px;
+    width: 28px; height: 28px; display: grid; place-items: center;
+  }
+  .modal-close:hover { color: var(--fg-0); }
+  .form-row {
+    margin-bottom: 16px; display: flex; flex-direction: column;
+  }
+  .form-row label {
+    font-size: 12px; color: var(--fg-2); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .form-row input {
+    padding: 9px 12px; border: 1px solid var(--line);
+    background: var(--bg-2); color: var(--fg-0);
+    border-radius: 6px; font-family: var(--f-mono);
+    font-size: 14px;
+  }
+  .form-row input:focus { outline: 2px solid var(--accent); }
+  .form-actions {
+    display: flex; gap: 10px; margin-top: 20px;
+  }
+  .form-actions .btn { flex: 1; }
+
+  /* TABS */
+  .panel-head .tab {
+    all: unset; cursor: pointer; padding: 6px 12px;
+    border-radius: 6px; font-size: 13px; font-weight: 600;
+    color: var(--fg-2); border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  .panel-head .tab:hover { color: var(--fg-0); }
+  .panel-head .tab.active {
+    color: var(--accent); border-bottom-color: var(--accent);
+  }
+  .panel-head .tab .c {
+    font-family: var(--f-mono); font-size: 11px; margin-left: 4px;
+  }
+
+  /* DELETE BUTTON IN CELLS */
+  .delete-btn {
+    all: unset; cursor: pointer; color: var(--down);
+    font-size: 14px; opacity: 0; transition: opacity .15s;
+    display: grid; place-items: center;
+  }
+  table.holdings tbody tr:hover .delete-btn { opacity: 1; }
+  .delete-btn:hover { color: var(--down); opacity: 1 !important; }
+
+  /* 5-BUCKET PROGRESS STATUS COLORS */
+  .status.early {
+    background: oklch(0.70 0.19 25 / .14);
+    color: oklch(0.70 0.19 25);
+    border: 1px solid oklch(0.70 0.19 25 / .35);
+  }
+  .status.early .dot { background: oklch(0.70 0.19 25); }
+
+  .status.midway {
+    background: oklch(0.80 0.15 75 / .14);
+    color: oklch(0.80 0.15 75);
+    border: 1px solid oklch(0.80 0.15 75 / .35);
+  }
+  .status.midway .dot { background: oklch(0.80 0.15 75); }
+
+  .status.on-track {
+    background: oklch(0.78 0.17 145 / .14);
+    color: oklch(0.78 0.17 145);
+    border: 1px solid oklch(0.78 0.17 145 / .35);
+  }
+  .status.on-track .dot { background: oklch(0.78 0.17 145); }
+
+  .status.near-target {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid var(--accent-line);
+  }
+  .status.near-target .dot { background: var(--accent); }
+
+  .status.near-stop {
+    background: oklch(0.70 0.19 25 / .14);
+    color: oklch(0.70 0.19 25);
+    border: 1px solid oklch(0.70 0.19 25 / .35);
+    animation: pulseDanger 2.4s infinite;
+  }
+  .status.near-stop .dot { background: oklch(0.70 0.19 25); }
+
+  /* TAPE PAUSE ON HOVER */
+  .tape:hover .track {
+    animation-play-state: paused;
+  }
+
+  /* DRAWER ACTIONS */
+  .drawer-actions {
+    display: flex; gap: 10px; margin-top: 12px;
+  }
+  .drawer-actions .btn { flex: 1; }
+
 </style>
 </head>
 <body data-density="medium" data-font="sans" data-theme="dark">
@@ -1166,9 +1278,9 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h8"/><circle cx="18" cy="6" r="2.3"/><circle cx="8" cy="18" r="2.3"/></svg>
       Tweaks
     </button>
-    <button class="btn primary">
+    <button class="btn primary" id="new-pos-btn">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
-      New position
+      New Position
     </button>
     <button class="avatar-btn" title="Trader">YZ</button>
     <button class="theme-toggle" id="theme-toggle" aria-label="切换主题">
@@ -1272,7 +1384,10 @@
   <div class="section-label"><span class="num">§02</span>OPEN POSITIONS<span class="rule"></span><span class="meta">15 笔 · 实时</span></div>
   <section class="panel">
     <div class="panel-head">
-      <div class="panel-title">Open positions <span class="count" id="row-count">15</span></div>
+      <div class="panel-title">
+        <button class="tab active" data-tab="open">Open <span class="c" id="c-open">15</span></button>
+        <button class="tab" data-tab="closed">Closed <span class="c" id="c-closed">0</span></button>
+      </div>
       <div class="filters">
         <button class="filter-chip active" data-filter="all">全部 <span class="c" id="c-all">15</span></button>
         <button class="filter-chip" data-filter="equity">美股 <span class="c" id="c-eq">10</span></button>
@@ -1625,6 +1740,62 @@
     
       <label><input type="checkbox" data-col="status" checked="" disabled=""> 状态 <span class="muted" style="font-size:10px">(锁定)</span></label>
     </div>
+  </div>
+</div>
+
+<!-- New Position Modal -->
+<div id="new-position-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>New Position</h2>
+      <button class="modal-close" id="new-pos-close">✕</button>
+    </div>
+    <form id="new-position-form">
+      <div class="form-row">
+        <label>Ticker Symbol</label>
+        <input type="text" id="form-ticker" placeholder="e.g. NVDA" maxlength="6" required/>
+      </div>
+      <div class="form-row">
+        <label>Entry Price</label>
+        <input type="number" id="form-entry" placeholder="0.00" step="0.01" required/>
+      </div>
+      <div class="form-row">
+        <label>Stop Loss</label>
+        <input type="number" id="form-stop" placeholder="0.00" step="0.01" required/>
+      </div>
+      <div class="form-row">
+        <label>Target Price</label>
+        <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
+      </div>
+      <div class="form-row">
+        <label>Quantity (shares)</label>
+        <input type="number" id="form-qty" placeholder="100" step="1" required/>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Add Position</button>
+        <button type="button" id="new-pos-cancel" class="btn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Equity Edit Modal -->
+<div id="equity-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Edit Equity</h2>
+      <button class="modal-close" id="equity-close">✕</button>
+    </div>
+    <form id="equity-form">
+      <div class="form-row">
+        <label>Total Equity (NAV)</label>
+        <input type="number" id="equity-nav" placeholder="284620" step="1" required/>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">Update</button>
+        <button type="button" id="equity-cancel" class="btn">Cancel</button>
+      </div>
+    </form>
   </div>
 </div>
 

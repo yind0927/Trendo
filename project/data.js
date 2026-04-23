@@ -35,6 +35,8 @@ window.HOLDINGS = [
     thesis: "V-bottom 尝试失败；原计划已失效。", status: "danger" },
 ];
 
+window.CLOSED_POSITIONS = [];
+
 // pre-compute derived fields
 window.HOLDINGS.forEach(h => {
   h.pnlPct = (h.last - h.cost) / h.cost;
@@ -130,6 +132,26 @@ window.HOLDINGS.forEach(h => {
   const src = BX_DATA[h.sym] || DEFAULT_BX;
   h.bx = JSON.parse(JSON.stringify(src));
 });
+
+// Progress bucket function for 5-stage position lifecycle
+window.progressBucket = h => {
+  const p = (h.last - h.stop) / (h.target - h.stop);
+  // Near Stop override: distance to stop < 5% of range
+  if ((h.target - h.last) / (h.target - h.stop) < 0.05) return "Near Stop";
+  if (p < 0) return "Near Stop";
+  if (p < 0.30) return "Early";
+  if (p < 0.60) return "Midway";
+  if (p < 0.95) return "On Track";
+  return "Near Target";
+};
+
+window.BUCKET_STATUS = {
+  "Early": { label: "Early 0-30%", cls: "early", color: "var(--down)" },
+  "Midway": { label: "Midway 30-60%", cls: "midway", color: "var(--warn)" },
+  "On Track": { label: "On Track 60-95%", cls: "on-track", color: "var(--ok)" },
+  "Near Target": { label: "Near Target 95%+", cls: "near-target", color: "var(--accent)" },
+  "Near Stop": { label: "Near Stop <5%", cls: "near-stop", color: "var(--down)" }
+};
 
 // columns configuration for the main table (id, label, right-align, visible by default)
 window.COLS = [
