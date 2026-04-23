@@ -45,6 +45,8 @@
     --ok-dim: oklch(0.78 0.17 145 / .14);
     --neutral: oklch(0.65 0.02 250);
     --neutral-dim: oklch(0.65 0.02 250 / .14);
+    --orange: oklch(0.75 0.17 50);
+    --orange-dim: oklch(0.75 0.17 50 / .14);
 
     /* density (set on <body>) */
     --row-h: 56px;
@@ -1171,6 +1173,36 @@
     animation: pulseDanger 2.4s infinite;
   }
   .status.near-stop .dot { background: oklch(0.70 0.19 25); }
+
+  /* ALLOCATION BAR CHART (replaces pie) */
+  .ov-alloc { flex-direction: column; gap: 8px; align-items: stretch; }
+  .alloc-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .alloc-head .tiny { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
+  .alloc-head .big { font-family: var(--f-mono); font-size: 18px; font-weight: 700; color: var(--fg-0); }
+  .alloc-bars { display: flex; flex-direction: column; gap: 5px; }
+  .alloc-row { display: flex; align-items: center; gap: 7px; }
+  .alloc-name { font-size: 11px; color: var(--fg-1); width: 100px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alloc-track { flex: 1; height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+  .alloc-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  .alloc-pct { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-2); width: 34px; text-align: right; flex-shrink: 0; }
+
+  /* BX ALIGN GRID (Sector + Overall vs VOO) */
+  .bx-align-grid { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .bx-align-hdr, .bx-align-row {
+    display: grid; grid-template-columns: 1fr 72px 100px;
+    align-items: center; gap: 6px; padding: 7px 11px;
+  }
+  .bx-align-hdr { background: var(--bg-2); padding-top: 5px; padding-bottom: 5px; }
+  .bx-align-hdr .bx-meta-lbl { text-align: center; }
+  .bx-align-row { background: var(--bg-1); }
+  .bx-align-row + .bx-align-row { border-top: 1px solid var(--line); }
+  .bx-align-label { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .bx-align-grid .bx-chip-score { text-align: center; }
+  .bx-align-grid .bx-chip-slope { width: 100%; text-align: center; }
+
+  /* EARLY status — orange (overrides old .status.early) */
+  .status.early { background: var(--orange-dim); color: var(--orange); border: 1px solid oklch(0.75 0.17 50 / .35); }
+  .status.early .dot { background: var(--orange); }
 
   /* TAPE PAUSE ON HOVER */
   .tape:hover .track {

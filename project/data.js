@@ -146,11 +146,11 @@ window.progressBucket = h => {
 };
 
 window.BUCKET_STATUS = {
-  "Early": { label: "Early 0-30%", cls: "early", color: "var(--down)" },
-  "Midway": { label: "Midway 30-60%", cls: "midway", color: "var(--warn)" },
-  "On Track": { label: "On Track 60-95%", cls: "on-track", color: "var(--ok)" },
-  "Near Target": { label: "Near Target 95%+", cls: "near-target", color: "var(--accent)" },
-  "Near Stop": { label: "Near Stop <5%", cls: "near-stop", color: "var(--down)" }
+  "Early":       { label: "初期 · Early",       cls: "early",       color: "var(--orange)" },
+  "Midway":      { label: "中期 · Midway",       cls: "midway",      color: "var(--warn)"   },
+  "On Track":    { label: "进行中 · On Track",   cls: "on-track",    color: "var(--ok)"     },
+  "Near Target": { label: "接近止盈 · Near Target", cls: "near-target", color: "var(--accent)" },
+  "Near Stop":   { label: "接近止损 · Near Stop",  cls: "near-stop",   color: "var(--down)"   },
 };
 
 // columns configuration for the main table (id, label, right-align, visible by default)

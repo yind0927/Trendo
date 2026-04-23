@@ -110,28 +110,23 @@
   }
 
   function pieCard() {
-    const cx = 46, cy = 46, r = 38, inner = 26;
-    let a = -Math.PI / 2;
-    const segs = SECTOR_SPLIT.map(s => {
-      const da = (s.pct / 100) * Math.PI * 2;
-      const a0 = a, a1 = a + da;
-      a = a1;
-      const large = da > Math.PI ? 1 : 0;
-      const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
-      const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
-      const xi0 = cx + inner * Math.cos(a0), yi0 = cy + inner * Math.sin(a0);
-      const xi1 = cx + inner * Math.cos(a1), yi1 = cy + inner * Math.sin(a1);
-      return `<path d="M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} L ${xi1} ${yi1} A ${inner} ${inner} 0 ${large} 0 ${xi0} ${yi0} Z" fill="${s.color}" stroke="var(--bg-1)" stroke-width="1"/>`;
-    }).join("");
+    const invested = SECTOR_SPLIT.filter(s => s.name !== "现金").reduce((a, s) => a + s.pct, 0);
+    const maxPct = Math.max(...SECTOR_SPLIT.map(s => s.pct));
     return `
-      <div class="ov-pie">
-        <div class="pie-wrap">
-          <svg width="92" height="92">${segs}</svg>
-          <div class="pie-center"><div class="tiny">Allocation</div><div class="big">93%</div></div>
+      <div class="ov-pie ov-alloc">
+        <div class="alloc-head">
+          <span class="tiny">仓位分布</span>
+          <span class="big">${invested.toFixed(0)}% <span class="tiny">已投</span></span>
         </div>
-        <div class="legend">
+        <div class="alloc-bars">
           ${SECTOR_SPLIT.map(s => `
-            <div class="li"><span class="sw" style="background:${s.color}"></span>${s.name}<span class="pct">${s.pct.toFixed(1)}%</span></div>
+            <div class="alloc-row">
+              <span class="alloc-name">${s.name}</span>
+              <div class="alloc-track">
+                <div class="alloc-fill" style="width:${(s.pct / maxPct * 100).toFixed(1)}%;background:${s.color}"></div>
+              </div>
+              <span class="alloc-pct">${s.pct.toFixed(1)}%</span>
+            </div>
           `).join("")}
         </div>
       </div>`;
@@ -187,33 +182,28 @@
           <div class="bx-score-seg">${scoreButtons("monthly")}</div>
         </div>
 
-        <div class="bx-subhead">Sector</div>
-        <div class="bx-context-row">
-          <button class="bx-swatch" style="background:${bx.sector.color}"
-                  data-bx-field="sectorColor" title="点击切换颜色"></button>
-          <span class="bx-name" contenteditable="true"
-                data-bx-field="sectorName" spellcheck="false">${bx.sector.name}</span>
-          <div class="bx-meta">
-            <span class="bx-meta-lbl">Score</span>
+        <div class="bx-align-grid">
+          <div class="bx-align-hdr">
+            <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
+          </div>
+          <div class="bx-align-row">
+            <div class="bx-align-label">
+              <button class="bx-swatch" style="background:${bx.sector.color}"
+                      data-bx-field="sectorColor" title="点击切换颜色"></button>
+              <span class="bx-name" contenteditable="true"
+                    data-bx-field="sectorName" spellcheck="false">${bx.sector.name}</span>
+            </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="sectorScore">${bx.sector.score}</span>
-          </div>
-          <div class="bx-meta">
-            <span class="bx-meta-lbl">Slope</span>
             <button class="bx-chip-slope ${slopeClass(bx.sector.slope)}"
                     data-bx-field="sectorSlope">${slopeIcon(bx.sector.slope)}</button>
           </div>
-        </div>
-
-        <div class="bx-subhead" style="margin-top:10px">Overall vs VOO</div>
-        <div class="bx-context-row">
-          <div class="bx-meta">
-            <span class="bx-meta-lbl">Score</span>
+          <div class="bx-align-row">
+            <div class="bx-align-label">
+              <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">Overall vs VOO</span>
+            </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="overallScore">${bx.overall.score}</span>
-          </div>
-          <div class="bx-meta">
-            <span class="bx-meta-lbl">Slope</span>
             <button class="bx-chip-slope ${slopeClass(bx.overall.slope)}"
                     data-bx-field="overallSlope">${slopeIcon(bx.overall.slope)}</button>
           </div>
@@ -329,15 +319,15 @@
     $("#tbody").innerHTML = rows.map(h => {
       const isSel = selectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
-      // Open tab: show archive (close) + permanent delete buttons
+      // Open: archive + delete; Closed: delete only
       const actions = activeTab === "open"
-        ? `<td style="width:60px;padding:6px 4px">
-             <div class="row-actions">
-               <button class="close-pos-btn" data-sym="${h.sym}" title="平仓 (归档)">⊟</button>
-               <button class="delete-btn" data-sym="${h.sym}" title="永久删除">✕</button>
-             </div>
-           </td>`
-        : "";
+        ? `<td style="width:60px;padding:6px 4px"><div class="row-actions">
+             <button class="close-pos-btn" data-sym="${h.sym}" title="平仓 (归档)">⊟</button>
+             <button class="delete-btn" data-sym="${h.sym}" title="永久删除">✕</button>
+           </div></td>`
+        : `<td style="width:40px;padding:6px 4px"><div class="row-actions">
+             <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="永久删除">✕</button>
+           </div></td>`;
       return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
     }).join("");
 
@@ -356,11 +346,14 @@
       });
     });
 
-    // Delete button: permanent removal
+    // Delete button: permanent removal (works for both open and closed tabs)
     $$(".delete-btn").forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        if (confirm(`永久删除 ${btn.dataset.sym}？此操作不可撤销`)) deletePosition(btn.dataset.sym);
+        if (confirm(`永久删除 ${btn.dataset.sym}？此操作不可撤销`)) {
+          if (btn.dataset.from === "closed") deleteClosedPosition(btn.dataset.sym);
+          else deletePosition(btn.dataset.sym);
+        }
       });
     });
 
@@ -384,7 +377,7 @@
       case "bxbars": {
         const v = h.bx.dailyBars;
         const cls = v === "0-5" ? "bxbar-early" : (v === "5-15" ? "bxbar-mid" : "bxbar-late");
-        const lbl = v === "0-5" ? "早期" : (v === "5-15" ? "中期" : "延伸");
+        const lbl = v === "0-5" ? "开始" : (v === "5-15" ? "中间" : "延续");
         return `<td><span class="bx-bar-chip ${cls}">${v}<span class="bx-bar-sub">${lbl}</span></span></td>`;
       }
       case "cost": return `<td class="right num muted">$${price(h.cost)}</td>`;
@@ -786,6 +779,15 @@
     if (selectedSym === sym) closeDrawer();
     renderTable();
     renderOverview();
+  }
+
+  // deleteClosedPosition → permanently removes from CLOSED_POSITIONS
+  function deleteClosedPosition(sym) {
+    const idx = CLOSED_POSITIONS.findIndex(h => h.sym === sym);
+    if (idx === -1) return;
+    CLOSED_POSITIONS.splice(idx, 1);
+    if (selectedSym === sym) closeDrawer();
+    renderTable();
   }
 
   // ============ SEARCH / FILTERS / KEYBOARD ============
