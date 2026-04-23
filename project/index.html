@@ -193,7 +193,8 @@
   }
   .ov-card .sub{
     font-size: var(--fs-small); color: var(--fg-2);
-    display: flex; align-items: center; gap: 8px;
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap; padding-right: 80px;
   }
   .ov-card .sub .chip{
     font-family: var(--f-mono); padding: 2px 6px; border-radius: 4px; font-size: 10.5px;
@@ -647,7 +648,7 @@
   .section-label .meta{ font-family: var(--f-mono); color: var(--fg-3); font-size: 10px; letter-spacing: 0.1em;}
 
   /* overview: hero treatment for first two cards */
-  .overview{ grid-template-columns: 1.4fr 1.1fr repeat(4, 1fr) 280px !important; }
+  .overview{ grid-template-columns: 1.5fr 1fr 1fr 1fr 280px !important; }
   .ov-card{ position: relative; overflow: hidden; }
   .ov-card::before{
     content: ""; position: absolute; right: -30px; top: -30px;
@@ -1110,14 +1111,29 @@
     font-family: var(--f-mono); font-size: 11px; margin-left: 4px;
   }
 
-  /* DELETE BUTTON IN CELLS */
-  .delete-btn {
-    all: unset; cursor: pointer; color: var(--down);
-    font-size: 14px; opacity: 0; transition: opacity .15s;
-    display: grid; place-items: center;
+  /* NAV card edit icon */
+  .nav-edit-btn {
+    all: unset; cursor: pointer; color: var(--fg-3); font-size: 13px;
+    width: 20px; height: 20px; border-radius: 4px; display: inline-flex;
+    align-items: center; justify-content: center; margin-left: auto;
+    transition: all .15s; flex-shrink: 0;
   }
+  .nav-edit-btn:hover { color: var(--accent); background: var(--accent-dim); }
+
+  /* ROW ACTIONS: close (archive) vs delete (permanent) */
+  .close-pos-btn, .delete-btn {
+    all: unset; cursor: pointer; font-size: 13px; opacity: 0; transition: opacity .15s;
+    display: grid; place-items: center; border-radius: 4px; width: 22px; height: 22px;
+  }
+  .close-pos-btn { color: var(--accent); }
+  .delete-btn { color: var(--down); }
+  table.holdings tbody tr:hover .close-pos-btn,
   table.holdings tbody tr:hover .delete-btn { opacity: 1; }
-  .delete-btn:hover { color: var(--down); opacity: 1 !important; }
+  .close-pos-btn:hover { background: var(--accent-dim); opacity: 1 !important; }
+  .delete-btn:hover { background: var(--down-dim); opacity: 1 !important; }
+
+  /* row-actions cell */
+  .row-actions { display: flex; gap: 4px; align-items: center; justify-content: center; }
 
   /* 5-BUCKET PROGRESS STATUS COLORS */
   .status.early {
@@ -1280,7 +1296,7 @@
     </button>
     <button class="btn primary" id="new-pos-btn">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
-      New Position
+      Open Position
     </button>
     <button class="avatar-btn" title="Trader">YZ</button>
     <button class="theme-toggle" id="theme-toggle" aria-label="切换主题">

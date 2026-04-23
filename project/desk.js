@@ -22,36 +22,39 @@
 
   // ============ OVERVIEW CARDS ============
   function renderOverview() {
-    const todayPnl = 3_840;
-    const todayPnlPct = 0.0137;
-    const openPnl = 18_420;
-    const openPnlPct = 0.0696;
-    const openCount = HOLDINGS.length;
+    // Compute real values from live HOLDINGS data
+    const totalPnlDollar = HOLDINGS.reduce((sum, h) => sum + (h.pnlDollar || 0), 0);
+    const totalPnlPct = totalNotional > 0 ? totalPnlDollar / totalNotional : 0;
+    const winners = HOLDINGS.filter(h => (h.pnlDollar || 0) > 0).length;
+    const losers = HOLDINGS.filter(h => (h.pnlDollar || 0) <= 0).length;
+    const eqCount = HOLDINGS.filter(h => h.kind === "equity").length;
+    const crCount = HOLDINGS.filter(h => h.kind === "crypto").length;
+    const pnlSign = fmt.sign(totalPnlDollar);
 
     const ov = $("#overview");
     ov.innerHTML = `
-      <div class="ov-card" id="nav-card" role="button" tabindex="0" title="Click to edit" style="cursor:pointer">
-        <div class="label">总资产 (Equity)<span class="info">i</span></div>
+      <div class="ov-card" id="nav-card">
+        <div class="label">总资产 (Equity)<span class="info">i</span><button class="nav-edit-btn" title="Edit equity">✎</button></div>
         <div class="value">$${totalNotional.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
-        <div class="sub"><span class="chip up">+1.37%</span><span class="muted">今日</span></div>
-        <div class="spark">${sparkSVG([280100, 279200, 281400, 280800, 283100, 282400, totalNotional], 110, 36, "var(--up)")}</div>
+        <div class="sub"><span class="muted">Portfolio NAV · 点击 ✎ 修改</span></div>
+        <div class="spark">${sparkSVG([totalNotional*.97, totalNotional*.98, totalNotional*.975, totalNotional*.99, totalNotional*.995, totalNotional], 110, 36, "var(--accent)")}</div>
       </div>
       ${card({
-        label: "今日盈亏", info: true,
+        label: "总浮盈 / 浮亏", info: false,
+        value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
+        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners} 盈 · ${losers} 亏</span>`,
+        spark: barBalanceSVG(Math.max(winners, 1), Math.max(losers, 0), 110, 36)
+      })}
+      ${card({
+        label: "今日盈亏", info: false,
         value: `<span class="up">+$3,840</span>`,
-        sub: `<span class="chip up">+1.37%</span><span class="muted">vs 昨日收盘</span>`,
+        sub: `<span class="chip up">+1.37%</span><span class="muted">vs 昨收</span>`,
         spark: sparkSVG([0, 400, 1200, 800, 2100, 3400, 3840], 110, 36, "var(--up)", true)
       })}
       ${card({
-        label: "总浮盈 / 浮亏", info: true,
-        value: `<span class="up">+$18,420</span>`,
-        sub: `<span class="chip up">+6.96%</span><span class="muted">9 盈 · 6 亏</span>`,
-        spark: barBalanceSVG(9, 6, 110, 36)
-      })}
-      ${card({
         label: "当前持仓数", info: false,
-        value: `${openCount}`,
-        sub: `<span class="chip neu">${HOLDINGS.filter(h => h.kind === "equity").length} 美股</span><span class="chip neu">${HOLDINGS.filter(h => h.kind === "crypto").length} 加密</span>`,
+        value: `${HOLDINGS.length}`,
+        sub: `<span class="chip neu">${eqCount} 美股</span><span class="chip neu">${crCount} 加密</span>`,
         spark: ""
       })}
       ${pieCard()}
@@ -326,29 +329,43 @@
     $("#tbody").innerHTML = rows.map(h => {
       const isSel = selectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
-      const deleteBtn = activeTab === "open"
-        ? `<td style="width:40px;text-align:center;padding:8px 6px"><button class="delete-btn" data-sym="${h.sym}" title="Close position">🗑</button></td>`
+      // Open tab: show archive (close) + permanent delete buttons
+      const actions = activeTab === "open"
+        ? `<td style="width:60px;padding:6px 4px">
+             <div class="row-actions">
+               <button class="close-pos-btn" data-sym="${h.sym}" title="平仓 (归档)">⊟</button>
+               <button class="delete-btn" data-sym="${h.sym}" title="永久删除">✕</button>
+             </div>
+           </td>`
         : "";
-      return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${deleteBtn}</tr>`;
+      return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
     }).join("");
 
     $$("#tbody tr").forEach(tr => {
       tr.addEventListener("click", e => {
-        if (e.target.closest(".delete-btn")) return;
+        if (e.target.closest(".close-pos-btn, .delete-btn")) return;
         openDrawer(tr.dataset.sym);
       });
     });
 
+    // Archive button: move to CLOSED_POSITIONS
+    $$(".close-pos-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        if (confirm(`平仓 ${btn.dataset.sym}？将移入"已关闭"归档`)) closePosition(btn.dataset.sym);
+      });
+    });
+
+    // Delete button: permanent removal
     $$(".delete-btn").forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        const confirmed = confirm(`Close ${btn.dataset.sym}?`);
-        if (confirmed) closePosition(btn.dataset.sym);
+        if (confirm(`永久删除 ${btn.dataset.sym}？此操作不可撤销`)) deletePosition(btn.dataset.sym);
       });
     });
 
     // counts
-    $("#row-count").textContent = rows.length;
+    const rc = $("#row-count"); if (rc) rc.textContent = rows.length;
     $("#c-all").textContent = data.length;
     $("#c-eq").textContent = data.filter(h => h.kind === "equity").length;
     $("#c-cr").textContent = data.filter(h => h.kind === "crypto").length;
@@ -719,21 +736,18 @@
   }
 
   function wireEquityModal() {
-    const navCard = $("#nav-card");
-    const form = $("#equity-form");
-    const closeBtn = $("#equity-close");
-    const cancelBtn = $("#equity-cancel");
-
-    if (!navCard) return;
-    navCard.addEventListener("click", () => {
-      $("#equity-nav").value = totalNotional;
-      openModal("equity-modal");
+    // Use event delegation so it survives renderOverview() re-renders
+    document.addEventListener("click", e => {
+      if (e.target.closest(".nav-edit-btn")) {
+        $("#equity-nav").value = totalNotional;
+        openModal("equity-modal");
+      }
     });
 
-    closeBtn.addEventListener("click", () => closeModal("equity-modal"));
-    cancelBtn.addEventListener("click", () => closeModal("equity-modal"));
+    $("#equity-close").addEventListener("click", () => closeModal("equity-modal"));
+    $("#equity-cancel").addEventListener("click", () => closeModal("equity-modal"));
 
-    form.addEventListener("submit", e => {
+    $("#equity-form").addEventListener("submit", e => {
       e.preventDefault();
       const newNav = parseFloat($("#equity-nav").value);
       if (newNav > 0) {
@@ -745,6 +759,8 @@
   }
 
   // ============ POSITION CLOSING ============
+
+  // closePosition → archives to CLOSED_POSITIONS (accessible in Closed tab)
   function closePosition(sym) {
     const pos = HOLDINGS.find(h => h.sym === sym);
     if (!pos) return;
@@ -757,10 +773,19 @@
     HOLDINGS.splice(HOLDINGS.indexOf(pos), 1);
     CLOSED_POSITIONS.push(pos);
 
+    if (selectedSym === sym) closeDrawer();
     renderTable();
     renderOverview();
+  }
 
+  // deletePosition → permanently removes from HOLDINGS (not archived)
+  function deletePosition(sym) {
+    const idx = HOLDINGS.findIndex(h => h.sym === sym);
+    if (idx === -1) return;
+    HOLDINGS.splice(idx, 1);
     if (selectedSym === sym) closeDrawer();
+    renderTable();
+    renderOverview();
   }
 
   // ============ SEARCH / FILTERS / KEYBOARD ============
