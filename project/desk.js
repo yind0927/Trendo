@@ -269,8 +269,25 @@
     });
   }
 
+  // ============ PROGRESS STATUS ============
+  const PROGRESS_STATUSES = [
+    { key: "danger", label: "止损区",  cls: "danger" },
+    { key: "warn",   label: "缓冲区",  cls: "warn"   },
+    { key: "ok",     label: "正常持有", cls: "ok"     },
+    { key: "trim",   label: "减仓区",  cls: "trim"   },
+    { key: "target", label: "目标区",  cls: "target" },
+  ];
+  function progressStatus(h) {
+    const p = (h.last - h.stop) / (h.target - h.stop);
+    if (p < 0)    return PROGRESS_STATUSES[0];
+    if (p < 0.25) return PROGRESS_STATUSES[1];
+    if (p < 0.75) return PROGRESS_STATUSES[2];
+    if (p < 1.0)  return PROGRESS_STATUSES[3];
+    return PROGRESS_STATUSES[4];
+  }
+
   // ============ HOLDINGS TABLE ============
-  let sortKey = "pnld", sortDir = -1, filter = "all", query = "", selectedSym = null;
+  let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
 
   function renderTable() {
     // header
@@ -289,8 +306,8 @@
     let rows = HOLDINGS.filter(h => {
       if (filter === "equity" && h.kind !== "equity") return false;
       if (filter === "crypto" && h.kind !== "crypto") return false;
-      if (filter === "risk" && !(h.status === "warn" || h.status === "danger")) return false;
-      if (filter === "target" && h.status !== "target") return false;
+      if (filter === "risk" && !(["warn","danger"].includes(progressStatus(h).key))) return false;
+      if (filter === "target" && !(["target","trim"].includes(progressStatus(h).key))) return false;
       if (query) {
         const q = query.toLowerCase();
         if (!(h.sym.toLowerCase().includes(q) || h.name.toLowerCase().includes(q) || h.setup.toLowerCase().includes(q))) return false;
@@ -299,10 +316,9 @@
     });
 
     const keyFn = {
-      tk: h => h.sym, setup: h => h.setup, entry: h => h.entry, days: h => h.days,
-      cost: h => h.cost, last: h => h.last, size: h => h.size, pnld: h => h.pnlDollar,
-      pnlp: h => h.pnlPct, stop: h => h.stop, target: h => h.target, rmult: h => h.rMult,
-      status: h => h.status, spark: h => h.pnlPct,
+      tk: h => h.sym, bxbars: h => h.bx.dailyBars, cost: h => h.cost, last: h => h.last,
+      qty: h => h.qty, pnl: h => h.pnlDollar, stop: h => h.stop, target: h => h.target,
+      progstatus: h => progressStatus(h).key,
     }[sortKey] || (h => h.pnlDollar);
     rows.sort((a, b) => {
       const va = keyFn(a), vb = keyFn(b);
@@ -326,8 +342,8 @@
     $("#c-all").textContent = HOLDINGS.length;
     $("#c-eq").textContent = HOLDINGS.filter(h => h.kind === "equity").length;
     $("#c-cr").textContent = HOLDINGS.filter(h => h.kind === "crypto").length;
-    $("#c-rk").textContent = HOLDINGS.filter(h => h.status === "warn" || h.status === "danger").length;
-    $("#c-tg").textContent = HOLDINGS.filter(h => h.status === "target").length;
+    $("#c-rk").textContent = HOLDINGS.filter(h => ["warn","danger"].includes(progressStatus(h).key)).length;
+    $("#c-tg").textContent = HOLDINGS.filter(h => ["target","trim"].includes(progressStatus(h).key)).length;
   }
 
   function renderCell(h, id) {
@@ -336,11 +352,25 @@
           <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}</div>
           <div class="meta"><div class="sym">${h.sym}</div><div class="nm">${h.name}</div></div>
         </div></td>`;
+      case "bxbars": {
+        const v = h.bx.dailyBars;
+        const cls = v === "0-5" ? "bxbar-early" : (v === "5-15" ? "bxbar-mid" : "bxbar-late");
+        const lbl = v === "0-5" ? "早期" : (v === "5-15" ? "中期" : "延伸");
+        return `<td><span class="bx-bar-chip ${cls}">${v}<span class="bx-bar-sub">${lbl}</span></span></td>`;
+      }
+      case "cost": return `<td class="right num muted">$${price(h.cost)}</td>`;
+      case "last": return `<td class="right num" style="font-weight:600">$${price(h.last)}</td>`;
+      case "qty": return `<td class="right num muted">${h.qty.toLocaleString("en-US")}</td>`;
+      case "pnl": return `<td class="right"><div class="pnl-cell"><span class="num ${fmt.sign(h.pnlDollar)}" style="font-weight:600">${fmt.signed(h.pnlDollar)}</span><span class="num muted" style="font-size:10.5px">${fmt.pct(h.pnlPct)}</span></div></td>`;
+      case "stop": return `<td class="right num" style="color:var(--down)">$${price(h.stop)}</td>`;
+      case "target": return `<td class="right num" style="color:var(--up)">$${price(h.target)}</td>`;
+      case "progstatus": {
+        const ps = progressStatus(h);
+        return `<td><span class="status ${ps.cls}"><span class="dot"></span>${ps.label}</span></td>`;
+      }
       case "setup": return `<td><span class="setup-chip">${h.setup}</span></td>`;
       case "entry": return `<td class="num muted" style="font-size:11.5px">${fmt.date(h.entry)}</td>`;
       case "days": return `<td class="right num muted" style="font-size:11.5px">${h.days}d</td>`;
-      case "cost": return `<td class="right num muted">$${price(h.cost)}</td>`;
-      case "last": return `<td class="right num" style="font-weight:600">$${price(h.last)}</td>`;
       case "spark": {
         const color = h.pnlPct >= 0 ? "var(--up)" : "var(--down)";
         return `<td class="spark-cell">${sparkSVG(h.spark, 72, 22, color)}</td>`;
@@ -351,8 +381,6 @@
       }
       case "pnld": return `<td class="right num ${fmt.sign(h.pnlDollar)}" style="font-weight:600">${fmt.signed(h.pnlDollar)}</td>`;
       case "pnlp": return `<td class="right num ${fmt.sign(h.pnlPct)}">${fmt.pct(h.pnlPct)}</td>`;
-      case "stop": return `<td class="right num" style="color:var(--down)">$${price(h.stop)}</td>`;
-      case "target": return `<td class="right num" style="color:var(--up)">$${price(h.target)}</td>`;
       case "rmult": return renderRCell(h);
       case "status": return `<td><span class="status ${statusClass(h.status)}"><span class="dot"></span>${STATUS_LABEL[h.status]}</span></td>`;
     }

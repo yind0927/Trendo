@@ -55,6 +55,7 @@ window.HOLDINGS.forEach(h => {
   }
   arr[arr.length - 1] = h.last;
   h.spark = arr;
+  h.qty = Math.round((h.size / 100 * 284620) / h.cost);
 });
 
 // status label text
@@ -132,18 +133,13 @@ window.HOLDINGS.forEach(h => {
 
 // columns configuration for the main table (id, label, right-align, visible by default)
 window.COLS = [
-  { id: "tk",      label: "Ticker",   r: false, on: true, locked: true },
-  { id: "setup",   label: "Setup",    r: false, on: true },
-  { id: "entry",   label: "建仓",     r: false, on: true },
-  { id: "days",    label: "持仓",     r: true,  on: true },
-  { id: "cost",    label: "成本",     r: true,  on: true },
-  { id: "last",    label: "最新",     r: true,  on: true },
-  { id: "spark",   label: "24h",      r: false, on: true },
-  { id: "size",    label: "仓位%",    r: true,  on: true },
-  { id: "pnld",    label: "浮盈亏 $", r: true,  on: true },
-  { id: "pnlp",    label: "浮盈亏 %", r: true,  on: true },
-  { id: "stop",    label: "止损",     r: true,  on: true },
-  { id: "target",  label: "目标",     r: true,  on: true },
-  { id: "rmult",   label: "R",        r: true,  on: true },
-  { id: "status",  label: "状态",     r: false, on: true, locked: true },
+  { id: "tk",         label: "Ticker",  r: false, on: true, locked: true },
+  { id: "bxbars",     label: "BX Bars", r: false, on: true },
+  { id: "cost",       label: "入场价",  r: true,  on: true },
+  { id: "last",       label: "最新价",  r: true,  on: true },
+  { id: "qty",        label: "数量",    r: true,  on: true },
+  { id: "pnl",        label: "浮盈亏",  r: true,  on: true },
+  { id: "stop",       label: "止损",    r: true,  on: true },
+  { id: "target",     label: "止盈",    r: true,  on: true },
+  { id: "progstatus", label: "状态",    r: false, on: true, locked: true },
 ];
