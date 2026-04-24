@@ -146,8 +146,8 @@
     "oklch(0.75 0.14 140)", "oklch(0.78 0.13 90)",  "oklch(0.70 0.18 25)",
     "oklch(0.72 0.14 320)", "oklch(0.35 0.01 250)",
   ];
-  const slopeIcon  = s => ({ up: "↗ UP", flat: "→ FLAT", down: "↘ DOWN" }[s] || s);
-  const slopeClass = s => ({ up: "up", flat: "flat", down: "down" }[s] || "flat");
+  const slopeNumClass   = v => { const n = parseFloat(v); return n > 0 ? "up" : n < 0 ? "down" : "flat"; };
+  const slopeNumDisplay = v => { const n = parseFloat(v) || 0; return n > 0 ? `+${n}` : `${n}`; };
 
   function bxSectionHTML(h) {
     const bx = h.bx;
@@ -195,8 +195,9 @@
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="sectorScore">${bx.sector.score}</span>
-            <button class="bx-chip-slope ${slopeClass(bx.sector.slope)}"
-                    data-bx-field="sectorSlope">${slopeIcon(bx.sector.slope)}</button>
+            <span class="bx-chip-slope ${slopeNumClass(bx.sector.slope)}"
+                  contenteditable="true" data-bx-field="sectorSlope"
+                  spellcheck="false">${slopeNumDisplay(bx.sector.slope)}</span>
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
@@ -204,8 +205,9 @@
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="overallScore">${bx.overall.score}</span>
-            <button class="bx-chip-slope ${slopeClass(bx.overall.slope)}"
-                    data-bx-field="overallSlope">${slopeIcon(bx.overall.slope)}</button>
+            <span class="bx-chip-slope ${slopeNumClass(bx.overall.slope)}"
+                  contenteditable="true" data-bx-field="overallSlope"
+                  spellcheck="false">${slopeNumDisplay(bx.overall.slope)}</span>
           </div>
         </div>
       </div>`;
@@ -223,12 +225,6 @@
         } else if (field === "weekly" || field === "monthly") {
           h.bx[field] = +val;
           $$(`[data-bx-field="${field}"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === val));
-        } else if (field === "sectorSlope" || field === "overallSlope") {
-          const slopes = ["up", "flat", "down"];
-          const obj = field === "sectorSlope" ? h.bx.sector : h.bx.overall;
-          obj.slope = slopes[(slopes.indexOf(obj.slope) + 1) % 3];
-          btn.textContent = slopeIcon(obj.slope);
-          btn.className = `bx-chip-slope ${slopeClass(obj.slope)}`;
         } else if (field === "sectorColor") {
           const cur = SWATCH_COLORS.indexOf(h.bx.sector.color);
           h.bx.sector.color = SWATCH_COLORS[(cur + 1) % SWATCH_COLORS.length];
@@ -239,9 +235,19 @@
     $$("[contenteditable][data-bx-field]", dr).forEach(el => {
       el.addEventListener("blur", () => {
         const v = el.textContent.trim(), f = el.dataset.bxField;
-        if (f === "sectorName")  h.bx.sector.name  = v;
-        if (f === "sectorScore") h.bx.sector.score = v;
-        if (f === "overallScore") h.bx.overall.score = v;
+        if (f === "sectorName")  { h.bx.sector.name  = v; }
+        if (f === "sectorScore") { h.bx.sector.score = v; }
+        if (f === "overallScore") { h.bx.overall.score = v; }
+        if (f === "sectorSlope") {
+          h.bx.sector.slope = parseFloat(v) || 0;
+          el.className = `bx-chip-slope ${slopeNumClass(h.bx.sector.slope)}`;
+          el.textContent = slopeNumDisplay(h.bx.sector.slope);
+        }
+        if (f === "overallSlope") {
+          h.bx.overall.slope = parseFloat(v) || 0;
+          el.className = `bx-chip-slope ${slopeNumClass(h.bx.overall.slope)}`;
+          el.textContent = slopeNumDisplay(h.bx.overall.slope);
+        }
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
     });
@@ -251,6 +257,7 @@
   let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
   let activeTab = "open";
   let totalNotional = 284620;
+  let reviewPeriod = "week";
 
   // ============ MODAL MANAGEMENT ============
   function openModal(modalId) {
@@ -519,9 +526,9 @@
         <div class="drawer-section">
           <h4><span class="idx">03</span>交易计划</h4>
           <div class="kv-grid" style="margin-bottom:12px">
-            <div><div class="k">Setup 类型</div><div class="v" style="font-family:var(--f-sans);font-size:13px">${h.setup}</div></div>
             <div><div class="k">原始止损</div><div class="v">$${price(h.stop)} <span class="sub">(-${((h.cost - h.stop) / h.cost * 100).toFixed(1)}%)</span></div></div>
             <div><div class="k">目标位</div><div class="v">$${price(h.target)} <span class="sub">(${((h.target - h.cost) / (h.cost - h.stop)).toFixed(1)}R)</span></div></div>
+            <div><div class="k">风险比</div><div class="v">${((h.target - h.cost) / (h.cost - h.stop)).toFixed(2)}<span class="sub">R reward/risk</span></div></div>
             <div><div class="k">过财报</div><div class="v" style="font-family:var(--f-sans);font-size:13px">${h.earnings ? (h.holdEarn ? "✓ 允许" : "✗ 财报前清仓") : "—"}</div></div>
           </div>
           <div class="k" style="margin-bottom:6px">入场逻辑 / Thesis</div>
@@ -622,30 +629,117 @@
     }
   }
 
-  // ============ BOTTOM: setup bars / errors / events ============
+  // ============ BOTTOM: review / errors / events ============
+  function getReviewData() {
+    const today = new Date("2026-04-24");
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - today.getDay() + 1); // Monday
+    weekStart.setHours(0, 0, 0, 0);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    return CLOSED_POSITIONS.filter(h => {
+      if (!h.closedAt) return false;
+      const d = new Date(h.closedAt);
+      if (reviewPeriod === "week")  return d >= weekStart;
+      if (reviewPeriod === "month") return d >= monthStart;
+      return true;
+    });
+  }
+
   function renderBottom() {
-    // setup bars — normalized around zero
-    const maxAbs = Math.max(...SETUP_STATS.map(s => Math.abs(s.r)));
-    $("#setup-list").innerHTML = SETUP_STATS.map(s => {
-      const pct = Math.abs(s.r) / maxAbs * 48;
-      const barHTML = s.r >= 0
-        ? `<div class="bar" style="left:50%;width:${pct}%;background:var(--up)"></div>`
-        : `<div class="bar" style="right:50%;width:${pct}%;background:var(--down)"></div>`;
-      return `<div class="setup-row">
-        <div class="nm">${s.name}</div>
-        <div class="bar-wrap">${barHTML}<div class="zero"></div></div>
-        <div class="val ${s.r >= 0 ? "up" : "down"}">${s.r >= 0 ? "+" : "−"}${Math.abs(s.r).toFixed(1)}R</div>
-        <div class="count">${s.trades}笔</div>
-      </div>`;
-    }).join("");
+    const data = getReviewData();
+    const total = data.length;
+    const wins  = data.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
+    const losses = total - wins;
+    const winRatePct = total > 0 ? (wins / total * 100).toFixed(1) : null;
+    const avgR   = total > 0 ? (data.reduce((s,h) => s + (h.rMult || 0), 0) / total).toFixed(2) : null;
+    const avgDays = total > 0 ? (data.reduce((s,h) => s + (h.days || 1), 0) / total).toFixed(1) : null;
 
-    $("#err-cloud").innerHTML = ERROR_TAGS.map(t => `
-      <span class="tag ${t.hot ? "hot" : ""}">${t.name}<span class="c">${t.c}</span></span>
-    `).join("");
+    const periodTitles = { week: "本周复盘", month: "本月复盘", all: "全部复盘" };
+    const periodRanges = { week: "Apr 21 – Apr 24", month: "Apr 2026", all: "所有时间" };
 
+    // BX bars breakdown
+    const buckets = { "0-5": [], "5-15": [], "15+": [] };
+    data.forEach(h => { const b = h.bx?.dailyBars || "15+"; if (buckets[b]) buckets[b].push(h); });
+    const maxCount = Math.max(1, ...Object.values(buckets).map(b => b.length));
+
+    function bxReviewRow(bucket, positions) {
+      const cnt = positions.length;
+      const w   = positions.filter(p => (p.pnlFinal ?? p.pnlDollar ?? 0) > 0).length;
+      const totalR = positions.reduce((s, p) => s + (p.rMult || 0), 0);
+      const aR     = cnt > 0 ? (totalR / cnt) : 0;
+      const barW   = Math.round(cnt / maxCount * 100);
+      const rColor = aR >= 0 ? "var(--up)" : "var(--down)";
+      const cls = bucket === "0-5" ? "bxbar-early" : bucket === "5-15" ? "bxbar-mid" : "bxbar-late";
+      const lbl = bucket === "0-5" ? "开始" : bucket === "5-15" ? "中间" : "延续";
+      return `
+        <div class="bx-review-row">
+          <div class="bx-review-chip">
+            <span class="bx-bar-chip ${cls}">${bucket}<span class="bx-bar-sub">${lbl}</span></span>
+          </div>
+          <div class="bx-review-body">
+            <div class="bx-review-track">
+              <div class="bx-review-fill" style="width:${barW}%;background:${cnt > 0 ? rColor : "var(--bg-3)"}"></div>
+            </div>
+            <div class="bx-review-meta">
+              ${cnt > 0
+                ? `<span class="mono" style="font-size:10px;color:var(--fg-2)">${cnt} 笔 · ${Math.round(w / cnt * 100)}% 胜</span>
+                   <span class="mono" style="font-size:10px;color:${rColor}">${aR >= 0 ? "+" : ""}${aR.toFixed(1)}R avg</span>`
+                : `<span style="font-size:10.5px;color:var(--fg-3)">—</span>`}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    const reviewPanel = $("#review-panel");
+    reviewPanel.innerHTML = `
+      <div class="panel-head">
+        <div class="panel-title">${periodTitles[reviewPeriod]} <span class="count">${periodRanges[reviewPeriod]}</span></div>
+        <div style="margin-left:auto;display:flex;gap:4px">
+          <button class="filter-chip ${reviewPeriod === "week"  ? "active" : ""}" data-period="week">本周</button>
+          <button class="filter-chip ${reviewPeriod === "month" ? "active" : ""}" data-period="month">本月</button>
+          <button class="filter-chip ${reviewPeriod === "all"   ? "active" : ""}" data-period="all">所有</button>
+        </div>
+      </div>
+      <div class="metric-grid" style="grid-template-columns:repeat(3,1fr); border:0; border-radius:0; background:transparent;">
+        <div class="metric">
+          <div class="label">胜率</div>
+          <div class="v ${winRatePct !== null && parseFloat(winRatePct) >= 50 ? "up" : (winRatePct !== null ? "down" : "")}">${winRatePct !== null ? winRatePct : "—"}<span class="u">${winRatePct !== null ? "%" : ""}</span></div>
+          <div class="sub label" style="text-transform:none;letter-spacing:0">${total > 0 ? `${wins} 胜 / ${losses} 负 / ${total} 笔` : "暂无数据"}</div>
+        </div>
+        <div class="metric">
+          <div class="label">平均盈亏比</div>
+          <div class="v">${avgR !== null ? avgR : "—"}<span class="u">${avgR !== null ? "R" : ""}</span></div>
+          <div class="sub label" style="text-transform:none;letter-spacing:0">${avgR !== null ? (parseFloat(avgR) >= 2.0 ? '<span class="up">达标 ≥2R</span>' : '<span class="down">未达标</span>') : ""}</div>
+        </div>
+        <div class="metric">
+          <div class="label">平均持有</div>
+          <div class="v">${avgDays !== null ? avgDays : "—"}<span class="u">${avgDays !== null ? "天" : ""}</span></div>
+          <div class="sub label" style="text-transform:none;letter-spacing:0">${total > 0 ? `共 ${total} 笔平仓` : ""}</div>
+        </div>
+      </div>
+      <div class="panel-head" style="border-top:1px solid var(--line); border-bottom:0">
+        <div class="panel-title" style="font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-2);font-weight:500">BX Bars 分布</div>
+      </div>
+      <div style="padding:10px 16px 14px">
+        ${total === 0
+          ? `<div style="color:var(--fg-3);font-size:12px;padding:14px 0;text-align:center">暂无已平仓数据<br><span style="font-size:10.5px;margin-top:4px;display:block">平仓后将在此显示 BX Bars 分布统计</span></div>`
+          : Object.entries(buckets).map(([b, pos]) => bxReviewRow(b, pos)).join("")}
+      </div>
+    `;
+
+    // Wire period buttons
+    $$("[data-period]", reviewPanel).forEach(btn => {
+      btn.addEventListener("click", () => { reviewPeriod = btn.dataset.period; renderBottom(); });
+    });
+
+    // Error tags (unchanged)
+    $("#err-cloud").innerHTML = ERROR_TAGS.map(t =>
+      `<span class="tag ${t.hot ? "hot" : ""}">${t.name}<span class="c">${t.c}</span></span>`
+    ).join("");
+
+    // Events (unchanged)
     $("#events").innerHTML = EVENTS.map(e => {
-      const cls = e.severity === "danger" ? "down-dim" : (e.severity === "warn" ? "warn-dim" : "up-dim");
-      const txt = e.severity === "danger" ? "财报前清仓" : (e.severity === "warn" ? "减仓" : "计划持有");
+      const txt   = e.severity === "danger" ? "财报前清仓" : (e.severity === "warn" ? "减仓" : "计划持有");
       const color = e.severity === "danger" ? "var(--down)" : (e.severity === "warn" ? "var(--warn)" : "var(--up)");
       return `<div class="event">
         <div class="when"><span class="d">${e.date.split(" ")[1]}</span>${e.date.split(" ")[0]} · ${e.weekday}</div>
