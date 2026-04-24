@@ -22,13 +22,14 @@
 
   // ============ OVERVIEW CARDS ============
   function renderOverview() {
-    // Compute real values from live HOLDINGS data
     const totalPnlDollar = HOLDINGS.reduce((sum, h) => sum + (h.pnlDollar || 0), 0);
     const totalPnlPct = totalNotional > 0 ? totalPnlDollar / totalNotional : 0;
     const winners = HOLDINGS.filter(h => (h.pnlDollar || 0) > 0).length;
-    const losers = HOLDINGS.filter(h => (h.pnlDollar || 0) <= 0).length;
-    const eqCount = HOLDINGS.filter(h => h.kind === "equity").length;
-    const crCount = HOLDINGS.filter(h => h.kind === "crypto").length;
+    const losers  = HOLDINGS.filter(h => (h.pnlDollar || 0) <= 0).length;
+    const eqCount  = HOLDINGS.filter(h => h.kind === "equity").length;
+    const etfCount = HOLDINGS.filter(h => h.kind === "etf").length;
+    const crCount  = HOLDINGS.filter(h => h.kind === "crypto").length;
+    const eqLabel  = eqCount + (etfCount > 0 ? `+${etfCount}ETF` : "") + " 美股";
     const pnlSign = fmt.sign(totalPnlDollar);
 
     const ov = $("#overview");
@@ -42,19 +43,19 @@
       ${card({
         label: "总浮盈 / 浮亏", info: false,
         value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
-        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners} 盈 · ${losers} 亏</span>`,
-        spark: barBalanceSVG(Math.max(winners, 1), Math.max(losers, 0), 110, 36)
+        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners}W · ${losers}L</span>`,
+        spark: barBalanceSVG(Math.max(winners, 1), Math.max(losers, 0), 90, 36)
       })}
       ${card({
         label: "今日盈亏", info: false,
         value: `<span class="up">+$3,840</span>`,
         sub: `<span class="chip up">+1.37%</span><span class="muted">vs 昨收</span>`,
-        spark: sparkSVG([0, 400, 1200, 800, 2100, 3400, 3840], 110, 36, "var(--up)", true)
+        spark: sparkSVG([0, 400, 1200, 800, 2100, 3400, 3840], 90, 36, "var(--up)", true)
       })}
       ${card({
         label: "当前持仓数", info: false,
         value: `${HOLDINGS.length}`,
-        sub: `<span class="chip neu">${eqCount} 美股</span><span class="chip neu">${crCount} 加密</span>`,
+        sub: `<span class="chip neu">${eqLabel}</span><span class="chip neu">${crCount} 加密</span>`,
         spark: ""
       })}
       ${pieCard()}
@@ -82,12 +83,11 @@
 
   function barBalanceSVG(wins, losses, w, h) {
     const total = wins + losses;
-    const wW = (wins / total) * w;
+    const wW = Math.max(2, (wins / total) * (w - 2));
+    const lW = Math.max(2, (w - 2) - wW);
     return `<svg width="${w}" height="${h}">
-      <rect x="0" y="${h - 10}" width="${wW}" height="6" fill="var(--up)" rx="1"/>
-      <rect x="${wW + 2}" y="${h - 10}" width="${w - wW - 2}" height="6" fill="var(--down)" rx="1"/>
-      <text x="0" y="${h - 16}" fill="var(--up)" font-family="JetBrains Mono" font-size="10">${wins}W</text>
-      <text x="${w}" y="${h - 16}" text-anchor="end" fill="var(--down)" font-family="JetBrains Mono" font-size="10">${losses}L</text>
+      <rect x="0" y="${h - 8}" width="${wW}" height="6" fill="var(--up)" rx="2"/>
+      <rect x="${wW + 2}" y="${h - 8}" width="${lW}" height="6" fill="var(--down)" rx="2"/>
     </svg>`;
   }
 
@@ -258,6 +258,8 @@
   let activeTab = "open";
   let totalNotional = 284620;
   let reviewPeriod = "week";
+  let pendingCloseSym = null;
+  let pendingDeleteSym = null, pendingDeleteFrom = null;
 
   // ============ MODAL MANAGEMENT ============
   function openModal(modalId) {
@@ -281,7 +283,8 @@
     const thead = $("#thead-row");
     thead.innerHTML = COLS.filter(c => c.on).map(c => {
       const sorted = sortKey === c.id ? "sorted" : "";
-      return `<th class="${c.r ? "right" : ""} ${sorted}" data-col="${c.id}">${c.label}</th>`;
+      const label = (activeTab === "closed" && c.id === "last") ? "平仓价" : c.label;
+      return `<th class="${c.r ? "right" : ""} ${sorted}" data-col="${c.id}">${label}</th>`;
     }).join("");
     $$("#thead-row th").forEach(th => th.addEventListener("click", () => {
       const col = th.dataset.col;
@@ -292,7 +295,7 @@
     // filter + sort
     const data = getTableData();
     let rows = data.filter(h => {
-      if (filter === "equity" && h.kind !== "equity") return false;
+      if (filter === "equity" && !["equity", "etf"].includes(h.kind)) return false;
       if (filter === "crypto" && h.kind !== "crypto") return false;
       if (filter === "risk") {
         const bucket = progressBucket(h);
@@ -345,22 +348,19 @@
       });
     });
 
-    // Archive button: move to CLOSED_POSITIONS
+    // Archive button: open close-position modal
     $$(".close-pos-btn").forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        if (confirm(`平仓 ${btn.dataset.sym}？将移入"已关闭"归档`)) closePosition(btn.dataset.sym);
+        openCloseModal(btn.dataset.sym);
       });
     });
 
-    // Delete button: permanent removal (works for both open and closed tabs)
+    // Delete button: open delete confirmation modal
     $$(".delete-btn").forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        if (confirm(`永久删除 ${btn.dataset.sym}？此操作不可撤销`)) {
-          if (btn.dataset.from === "closed") deleteClosedPosition(btn.dataset.sym);
-          else deletePosition(btn.dataset.sym);
-        }
+        openDeleteModal(btn.dataset.sym, btn.dataset.from || "open");
       });
     });
 
@@ -388,7 +388,10 @@
         return `<td><span class="bx-bar-chip ${cls}">${v}<span class="bx-bar-sub">${lbl}</span></span></td>`;
       }
       case "cost": return `<td class="right num muted">$${price(h.cost)}</td>`;
-      case "last": return `<td class="right num" style="font-weight:600">$${price(h.last)}</td>`;
+      case "last": {
+        const p = (activeTab === "closed" && h.closePrice != null) ? h.closePrice : h.last;
+        return `<td class="right num" style="font-weight:600">$${price(p)}</td>`;
+      }
       case "qty": return `<td class="right num muted">${h.qty.toLocaleString("en-US")}</td>`;
       case "pnl": return `<td class="right"><div class="pnl-cell"><span class="num ${fmt.sign(h.pnlDollar)}" style="font-weight:600">${fmt.signed(h.pnlDollar)}</span><span class="num muted" style="font-size:10.5px">${fmt.pct(h.pnlPct)}</span></div></td>`;
       case "stop": return `<td class="right num" style="color:var(--down)">$${price(h.stop)}</td>`;
@@ -462,13 +465,7 @@
   function wireDrawerCloseButton() {
     const closeBtn = $("#drawer-close-position");
     if (!closeBtn) return;
-    closeBtn.addEventListener("click", () => {
-      const confirmed = confirm(`Close ${selectedSym}?`);
-      if (confirmed) {
-        closePosition(selectedSym);
-        closeDrawer();
-      }
-    });
+    closeBtn.addEventListener("click", () => openCloseModal(selectedSym));
   }
   function closeDrawer() {
     selectedSym = null;
@@ -479,9 +476,21 @@
   }
 
   function drawerHTML(h) {
-    const light = h.status === "ok" ? "ok" : (h.status === "warn" ? "warn" : (h.status === "danger" ? "danger" : (h.status === "target" ? "target" : "ok")));
-    const lightColor = { ok: "var(--up)", warn: "var(--warn)", danger: "var(--down)", target: "var(--accent)" }[light];
-    const lightTxt = { ok: "计划内 · 正常", warn: "注意 · 接近关键位", danger: "风险 · 计划失效", target: "接近目标 · 考虑减仓" }[light];
+    const isClosed = activeTab === "closed";
+    // Status badge
+    let badgeColor, badgeTxt;
+    if (isClosed) {
+      badgeColor = "var(--fg-2)"; badgeTxt = "已平仓 · Closed";
+    } else {
+      const bucket = progressBucket(h);
+      const bs = BUCKET_STATUS[bucket];
+      badgeColor = bs.color; badgeTxt = bs.label;
+    }
+    const kindLabel = h.kind === "crypto" ? "Crypto" : h.kind === "etf" ? "ETF" : "Equity";
+    const displayPrice = isClosed ? (h.closePrice ?? h.last) : h.last;
+    const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
+    const pnlPct = isClosed ? h.pnlPct : h.pnlPct;
+    const pnlSign = fmt.sign(pnlAmt);
     return `
       <div class="drawer-head">
         <div class="drawer-top">
@@ -490,21 +499,27 @@
           </div>
           <div>
             <div class="mono" style="font-size:17px;font-weight:600">${h.sym}</div>
-            <div class="muted" style="font-size:11.5px">${h.name} · ${h.kind === "crypto" ? "Crypto" : "Equity"}</div>
+            <div class="muted" style="font-size:11.5px">${h.name} · ${kindLabel}</div>
           </div>
-          <span class="statlight" style="color:${lightColor}; background: color-mix(in oklch, ${lightColor} 15%, transparent);">
-            <span class="dot" style="background:${lightColor}"></span>${lightTxt}
+          <span class="statlight" style="color:${badgeColor}; background: color-mix(in oklch, ${badgeColor} 15%, transparent);">
+            <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
           </span>
           <button class="close" id="drawer-close" title="关闭 (Esc)">✕</button>
         </div>
         <div class="hero-price">
-          <span class="p">$${price(h.last)}</span>
-          <span class="pct ${fmt.sign(h.pnlPct)}">${fmt.pct(h.pnlPct)}</span>
-          <span class="pnl ${fmt.sign(h.pnlDollar)}">${fmt.signed(h.pnlDollar)}</span>
-          <span class="muted" style="font-family:var(--f-mono);font-size:11px;margin-left:auto">持仓 ${h.days}d · since ${fmt.date(h.entry)}</span>
+          <span class="p">$${price(displayPrice)}</span>
+          ${isClosed ? `<span class="muted" style="font-size:11px;font-family:var(--f-mono);align-self:center">平仓价</span>` : ""}
+          <span class="pct ${pnlSign}">${fmt.pct(pnlPct)}</span>
+          <span class="pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>
+          <span class="muted" style="font-family:var(--f-mono);font-size:11px;margin-left:auto">${isClosed ? `平仓 ${fmt.date(h.closedAt)}` : `持仓 ${h.days}d · since ${fmt.date(h.entry)}`}</span>
         </div>
         ${levelBar(h)}
-        ${activeTab === "open" ? `<div class="drawer-actions"><button class="btn" id="drawer-close-position">Close Position</button></div>` : ""}
+        ${!isClosed ? `<div class="drawer-actions">
+          <button class="btn" id="drawer-close-position" style="display:flex;align-items:center;gap:7px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            平仓
+          </button>
+        </div>` : ""}
       </div>
 
       <div class="drawer-body">
@@ -774,6 +789,17 @@
     closeBtn.addEventListener("click", () => closeModal("new-position-modal"));
     cancelBtn.addEventListener("click", () => closeModal("new-position-modal"));
 
+    // Kind segmented control
+    const kindSeg = $("#form-kind-seg");
+    if (kindSeg) {
+      kindSeg.addEventListener("click", e => {
+        const btn = e.target.closest("button[data-kind]");
+        if (!btn) return;
+        $$("button", kindSeg).forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+    }
+
     form.addEventListener("submit", e => {
       e.preventDefault();
       const sym = $("#form-ticker").value.toUpperCase().trim();
@@ -795,9 +821,12 @@
         return;
       }
 
+      const kindBtn = $("#form-kind-seg .active");
+      const kind = kindBtn ? kindBtn.dataset.kind : "equity";
+
       const newPos = {
         sym, qty, name: sym,
-        kind: sym.length <= 4 ? "equity" : "crypto",
+        kind,
         entry: new Date().toISOString().slice(0, 10),
         cost: entry, last: entry,
         size: 2.5,
@@ -847,13 +876,67 @@
 
   // ============ POSITION CLOSING ============
 
+  function openCloseModal(sym) {
+    const pos = HOLDINGS.find(h => h.sym === sym);
+    if (!pos) return;
+    pendingCloseSym = sym;
+    const input = $("#close-pos-price-input");
+    input.value = pos.last;
+    $("#close-pos-sym-label").textContent = sym;
+    updateClosePnlPreview(pos, pos.last);
+    openModal("close-pos-modal");
+    setTimeout(() => { input.select(); }, 80);
+  }
+
+  function updateClosePnlPreview(pos, closePrice) {
+    const pnlDollar = (closePrice - pos.cost) * pos.qty;
+    const pnlPct = pos.cost > 0 ? pnlDollar / (pos.cost * pos.qty) : 0;
+    const rMult = pos.risk1R > 0 ? (closePrice - pos.cost) / pos.risk1R : 0;
+    const sign = pnlDollar >= 0 ? "up" : "down";
+    const preview = $("#close-pos-pnl-preview");
+    if (preview) {
+      preview.innerHTML = `<span class="${sign}">${fmt.signed(pnlDollar)}</span><span class="muted" style="font-size:11px;margin-left:8px">${fmt.pct(pnlPct)}</span><span class="mono muted" style="font-size:11px;margin-left:8px">${fmt.rMult(rMult)}</span>`;
+    }
+  }
+
+  function wireClosePositionModal() {
+    const input = $("#close-pos-price-input");
+    input.addEventListener("input", () => {
+      if (!pendingCloseSym) return;
+      const pos = HOLDINGS.find(h => h.sym === pendingCloseSym);
+      if (!pos) return;
+      const val = parseFloat(input.value);
+      if (!isNaN(val) && val > 0) updateClosePnlPreview(pos, val);
+    });
+
+    const closeFn = () => { pendingCloseSym = null; closeModal("close-pos-modal"); };
+    $("#close-pos-modal-x").addEventListener("click", closeFn);
+    $("#close-pos-cancel-btn").addEventListener("click", closeFn);
+
+    const backdrop = $("#close-pos-modal");
+    backdrop.addEventListener("click", e => { if (e.target === backdrop) { pendingCloseSym = null; closeModal("close-pos-modal"); } });
+
+    $("#close-pos-confirm-btn").addEventListener("click", () => {
+      if (!pendingCloseSym) return;
+      const val = parseFloat(input.value);
+      if (isNaN(val) || val <= 0) { input.focus(); return; }
+      closePosition(pendingCloseSym, val);
+      pendingCloseSym = null;
+      closeModal("close-pos-modal");
+    });
+  }
+
   // closePosition → archives to CLOSED_POSITIONS (accessible in Closed tab)
-  function closePosition(sym) {
+  function closePosition(sym, closePrice) {
     const pos = HOLDINGS.find(h => h.sym === sym);
     if (!pos) return;
 
+    const cp = (closePrice != null && closePrice > 0) ? closePrice : pos.last;
     pos.closedAt = new Date().toISOString().slice(0, 10);
-    pos.closePrice = pos.last;
+    pos.closePrice = cp;
+    pos.pnlDollar = (cp - pos.cost) * pos.qty;
+    pos.pnlPct = pos.cost > 0 ? pos.pnlDollar / (pos.cost * pos.qty) : 0;
+    pos.rMult = pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0;
     pos.pnlFinal = pos.pnlDollar;
     pos.exitReason = "manual";
 
@@ -863,6 +946,39 @@
     if (selectedSym === sym) closeDrawer();
     renderTable();
     renderOverview();
+  }
+
+  function openDeleteModal(sym, from) {
+    pendingDeleteSym = sym;
+    pendingDeleteFrom = from || "open";
+    const msg = $("#delete-confirm-msg");
+    if (msg) msg.textContent = `永久删除 ${sym}？此操作不可撤销。`;
+    openModal("delete-confirm-modal");
+  }
+
+  function wireDeleteModal() {
+    const deleteCancelFn = () => {
+      pendingDeleteSym = null; pendingDeleteFrom = null;
+      closeModal("delete-confirm-modal");
+    };
+    $("#delete-confirm-modal-x").addEventListener("click", deleteCancelFn);
+    $("#delete-cancel-btn").addEventListener("click", deleteCancelFn);
+
+    const deleteBackdrop = $("#delete-confirm-modal");
+    deleteBackdrop.addEventListener("click", e => {
+      if (e.target === deleteBackdrop) deleteCancelFn();
+    });
+
+    $("#delete-confirm-btn").addEventListener("click", () => {
+      if (!pendingDeleteSym) return;
+      if (pendingDeleteFrom === "closed") {
+        deleteClosedPosition(pendingDeleteSym);
+      } else {
+        deletePosition(pendingDeleteSym);
+      }
+      pendingDeleteSym = null; pendingDeleteFrom = null;
+      closeModal("delete-confirm-modal");
+    });
   }
 
   // deletePosition → permanently removes from HOLDINGS (not archived)
@@ -1016,6 +1132,8 @@
   wireTableTabs();
   wireNewPositionModal();
   wireEquityModal();
+  wireClosePositionModal();
+  wireDeleteModal();
   tick(); setInterval(tick, 1000);
 
 })();
