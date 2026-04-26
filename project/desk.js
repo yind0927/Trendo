@@ -1392,31 +1392,105 @@
     return { values, labels };
   }
 
-  function portfolioCurveSVG(points, labels, h) {
+  function portfolioCurveSVG(points, labels, h, chartId) {
     if (points.length < 2) return "";
     const W = 560;
-    const min = Math.min(...points), max = Math.max(...points);
-    const rng = max - min || 1;
-    const sx = i => ((i / (points.length - 1)) * (W - 4) + 2);
-    const sy = v => h - 4 - ((v - min) / rng) * (h - 12);
+    const minV = Math.min(...points), maxV = Math.max(...points);
+    const rng = maxV - minV || 1;
+    const lo = minV - rng * 0.05, hi = maxV + rng * 0.05;
+    const range = hi - lo;
+    const sx = i => ((i / (points.length - 1)) * (W - 16) + 8);
+    const sy = v => (h - 6) - ((v - lo) / range) * (h - 14);
     const pathD = points.map((v, i) => `${i ? "L" : "M"}${sx(i).toFixed(1)} ${sy(v).toFixed(1)}`).join(" ");
     const areaD = `${pathD} L${sx(points.length - 1).toFixed(1)} ${(h - 2).toFixed(1)} L${sx(0).toFixed(1)} ${(h - 2).toFixed(1)} Z`;
     const lastUp = points[points.length - 1] >= points[0];
     const col = lastUp ? "var(--up)" : "var(--down)";
     const gid = "pcg" + (Math.random() * 1e6 | 0);
+
+    // Horizontal grid lines with $ labels
+    const gridSVG = [0.25, 0.5, 0.75].map(t => {
+      const v = minV + rng * t;
+      const gy = sy(v).toFixed(1);
+      const lbl = "$" + (v / 1000).toFixed(1) + "k";
+      return `<line x1="8" y1="${gy}" x2="${W - 8}" y2="${gy}" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="4,5" opacity="0.8"/>` +
+             `<text x="${W - 10}" y="${gy}" text-anchor="end" dominant-baseline="middle" fill="var(--fg-3)" font-size="8" font-family="sans-serif">${lbl}</text>`;
+    }).join("");
+
+    // X-axis labels: first, mid, last
     const lIdx = [0, Math.floor((points.length - 1) / 2), points.length - 1];
-    const labelSVG = labels ? lIdx.map((i, pos) =>
-      `<text x="${sx(i).toFixed(1)}" y="${h + 11}" text-anchor="${pos === 0 ? 'start' : pos === 2 ? 'end' : 'middle'}" fill="var(--fg-3)" font-size="9.5" font-family="sans-serif">${labels[i] || ""}</text>`
+    const xLabels = labels ? lIdx.map((i, pos) =>
+      `<text x="${sx(i).toFixed(1)}" y="${h + 12}" text-anchor="${pos === 0 ? 'start' : pos === 2 ? 'end' : 'middle'}" fill="var(--fg-3)" font-size="9.5" font-family="sans-serif">${labels[i] || ""}</text>`
     ).join("") : "";
-    return `<svg viewBox="0 0 ${W} ${h + 14}" preserveAspectRatio="none" style="display:block;width:100%;height:${h + 14}px">
-      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="${col}" stop-opacity="0.25"/>
-        <stop offset="1" stop-color="${col}" stop-opacity="0.02"/>
-      </linearGradient></defs>
-      <path d="${areaD}" fill="url(#${gid})"/>
-      <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      ${labelSVG}
-    </svg>`;
+
+    return `<div id="${chartId}-wrap" style="position:relative">
+<svg id="${chartId}" viewBox="0 0 ${W} ${h + 16}" preserveAspectRatio="none" style="display:block;width:100%;height:${h + 16}px;cursor:crosshair">
+  <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${col}" stop-opacity="0.22"/>
+    <stop offset="1" stop-color="${col}" stop-opacity="0.02"/>
+  </linearGradient></defs>
+  ${gridSVG}
+  <path d="${areaD}" fill="url(#${gid})"/>
+  <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="${sx(0).toFixed(1)}" cy="${sy(points[0]).toFixed(1)}" r="3" fill="${col}" stroke="var(--bg-1)" stroke-width="1.5" opacity="0.6"/>
+  <circle cx="${sx(points.length - 1).toFixed(1)}" cy="${sy(points[points.length - 1]).toFixed(1)}" r="4.5" fill="${col}" stroke="var(--bg-1)" stroke-width="2"/>
+  ${xLabels}
+  <line id="${chartId}-cross" x1="0" y1="2" x2="0" y2="${h - 2}" stroke="var(--fg-2)" stroke-width="1" stroke-dasharray="3,2" opacity="0"/>
+  <circle id="${chartId}-hdot" cx="0" cy="0" r="4.5" fill="${col}" stroke="var(--bg-1)" stroke-width="2" opacity="0"/>
+</svg>
+<div id="${chartId}-tip" class="ec-tooltip" style="display:none"></div>
+</div>`;
+  }
+
+  function wireCurveTooltip(chartId, points, labels) {
+    const svg  = document.getElementById(chartId);
+    const tip  = document.getElementById(chartId + "-tip");
+    const cross = document.getElementById(chartId + "-cross");
+    const hdot = document.getElementById(chartId + "-hdot");
+    if (!svg || !tip || !cross || !hdot) return;
+
+    const W = 560;
+    const minV = Math.min(...points), maxV = Math.max(...points);
+    const rng = maxV - minV || 1;
+    const lo = minV - rng * 0.05, hi = maxV + rng * 0.05;
+    const range = hi - lo;
+    const h = svg.viewBox.baseVal.height - 16;
+    const sx = i => ((i / (points.length - 1)) * (W - 16) + 8);
+    const sy = v => (h - 6) - ((v - lo) / range) * (h - 14);
+
+    svg.addEventListener("mousemove", e => {
+      const rect = svg.getBoundingClientRect();
+      const relX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      const pct  = relX / rect.width;
+      const idx  = Math.min(points.length - 1, Math.max(0, Math.round(pct * (points.length - 1))));
+      const val  = points[idx];
+      const lbl  = labels ? (labels[idx] || "") : "";
+      const chg  = val - points[0];
+      const chgPct = ((val / points[0] - 1) * 100);
+
+      // Crosshair + dot in viewBox coords
+      const vx = sx(idx);
+      cross.setAttribute("x1", vx); cross.setAttribute("x2", vx);
+      cross.setAttribute("opacity", "0.55");
+      hdot.setAttribute("cx", vx); hdot.setAttribute("cy", sy(val));
+      hdot.setAttribute("opacity", "1");
+
+      // Tooltip
+      tip.innerHTML = `<div class="ec-tip-label">${lbl}</div>` +
+        `<div class="ec-tip-val">${fmt.usd(Math.round(val))}</div>` +
+        `<div class="ec-tip-chg ${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '+' : '−'}$${Math.abs(Math.round(chg)).toLocaleString()} (${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(2)}%)</div>`;
+
+      // Clamp left so tooltip stays inside container
+      const tipHalf = 65;
+      const clampedX = Math.max(tipHalf, Math.min(rect.width - tipHalf, relX));
+      tip.style.left = clampedX + "px";
+      tip.style.display = "block";
+    });
+
+    svg.addEventListener("mouseleave", () => {
+      cross.setAttribute("opacity", "0");
+      hdot.setAttribute("opacity", "0");
+      tip.style.display = "none";
+    });
   }
 
   function renderAnalytics() {
@@ -1480,7 +1554,7 @@
               <button class="ec-period-btn${equityPeriod === 'month' ? ' active' : ''}" data-period="month">月</button>
             </div>
           </div>
-          <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136)}</div>
+          <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136, "ec-main")}</div>
         </div>
         <div class="analytics-card" style="flex:1">
           <div class="analytics-card-title">BX Bars 效能</div>
@@ -1548,6 +1622,8 @@
         renderAnalytics();
       });
     });
+
+    wireCurveTooltip("ec-main", curveData.values, curveData.labels);
   }
 
   function ametric(label, value, colorCls, sub) {

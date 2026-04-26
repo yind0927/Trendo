@@ -1295,6 +1295,18 @@
   }
   .ec-period-btn:hover { color: var(--fg-0); }
   .ec-period-btn.active { background: var(--bg-1); color: var(--fg-0); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .ec-tooltip {
+    position: absolute; top: 6px; transform: translateX(-50%);
+    background: var(--bg-1); border: 1px solid var(--line);
+    border-radius: 9px; padding: 7px 11px; pointer-events: none;
+    white-space: nowrap; z-index: 20; text-align: center;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+  }
+  .ec-tip-label { font-size: 10px; color: var(--fg-3); font-family: var(--f-sans); margin-bottom: 2px; }
+  .ec-tip-val { font-size: 14px; font-weight: 700; color: var(--fg-0); font-family: var(--f-mono); line-height: 1.2; }
+  .ec-tip-chg { font-size: 10.5px; font-family: var(--f-mono); margin-top: 2px; }
+  .ec-tip-chg.up { color: var(--up); }
+  .ec-tip-chg.down { color: var(--down); }
   .trade-bar-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
   .trade-bar-sym { font-size: 10.5px; font-weight: 600; width: 42px; flex-shrink: 0; }
   .trade-bar-track { flex: 1; height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
