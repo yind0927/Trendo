@@ -321,6 +321,7 @@
   let pendingDeleteSym = null, pendingDeleteFrom = null;
   let currentPage = "desk";
   let journalFilter = "all";
+  let equityPeriod = "week";
 
   // ============ PERSISTENCE ============
   function saveToStorage() {
@@ -1339,6 +1340,85 @@
   }
 
   // ============ ANALYTICS ============
+  function generatePortfolioCurve(period) {
+    const totalPnlDollar = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
+    const currentValue = totalNotional + totalPnlDollar;
+    // stable pseudo-random seeded on current state
+    let seed = Math.round(totalNotional + Math.abs(totalPnlDollar * 7));
+    const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+
+    if (period === "day") {
+      const prevValue = totalNotional + HOLDINGS.reduce((s, h) => s + ((h.prevClose || h.cost) - h.cost) * (h.qty || 0), 0);
+      const labels = ["9:30", "10:15", "11:00", "11:45", "12:30", "14:00", "15:00", "16:00"];
+      const n = 8;
+      const range = Math.abs(currentValue - prevValue) || currentValue * 0.003;
+      const values = Array.from({length: n}, (_, i) => {
+        const t = i / (n - 1);
+        const noise = i > 0 && i < n - 1 ? (rand() - 0.5) * range * 0.5 : 0;
+        return prevValue + (currentValue - prevValue) * t + noise;
+      });
+      values[0] = prevValue; values[n - 1] = currentValue;
+      return { values, labels };
+    }
+
+    if (period === "week") {
+      const labels = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+      const weekStart = currentValue - totalPnlDollar * 0.75;
+      const range = Math.abs(totalPnlDollar) || currentValue * 0.01;
+      const values = Array.from({length: 5}, (_, i) => {
+        const t = i / 4;
+        const noise = i > 0 && i < 4 ? (rand() - 0.5) * range * 0.3 : 0;
+        return weekStart + totalPnlDollar * 0.75 * t + noise;
+      });
+      values[4] = currentValue;
+      return { values, labels };
+    }
+
+    // month: 22 trading days
+    const n = 22;
+    const today = new Date();
+    const labels = Array.from({length: n}, (_, i) => {
+      const d = new Date(today); d.setDate(today.getDate() - (n - 1 - i));
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    });
+    const monthStart = currentValue - totalPnlDollar * 1.3;
+    const range = Math.abs(totalPnlDollar) || currentValue * 0.015;
+    const values = Array.from({length: n}, (_, i) => {
+      const t = i / (n - 1);
+      const noise = i > 0 && i < n - 1 ? (rand() - 0.5) * range * 0.35 : 0;
+      return monthStart + totalPnlDollar * 1.3 * t + noise;
+    });
+    values[n - 1] = currentValue;
+    return { values, labels };
+  }
+
+  function portfolioCurveSVG(points, labels, h) {
+    if (points.length < 2) return "";
+    const W = 560;
+    const min = Math.min(...points), max = Math.max(...points);
+    const rng = max - min || 1;
+    const sx = i => ((i / (points.length - 1)) * (W - 4) + 2);
+    const sy = v => h - 4 - ((v - min) / rng) * (h - 12);
+    const pathD = points.map((v, i) => `${i ? "L" : "M"}${sx(i).toFixed(1)} ${sy(v).toFixed(1)}`).join(" ");
+    const areaD = `${pathD} L${sx(points.length - 1).toFixed(1)} ${(h - 2).toFixed(1)} L${sx(0).toFixed(1)} ${(h - 2).toFixed(1)} Z`;
+    const lastUp = points[points.length - 1] >= points[0];
+    const col = lastUp ? "var(--up)" : "var(--down)";
+    const gid = "pcg" + (Math.random() * 1e6 | 0);
+    const lIdx = [0, Math.floor((points.length - 1) / 2), points.length - 1];
+    const labelSVG = labels ? lIdx.map((i, pos) =>
+      `<text x="${sx(i).toFixed(1)}" y="${h + 11}" text-anchor="${pos === 0 ? 'start' : pos === 2 ? 'end' : 'middle'}" fill="var(--fg-3)" font-size="9.5" font-family="sans-serif">${labels[i] || ""}</text>`
+    ).join("") : "";
+    return `<svg viewBox="0 0 ${W} ${h + 14}" preserveAspectRatio="none" style="display:block;width:100%;height:${h + 14}px">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${col}" stop-opacity="0.25"/>
+        <stop offset="1" stop-color="${col}" stop-opacity="0.02"/>
+      </linearGradient></defs>
+      <path d="${areaD}" fill="url(#${gid})"/>
+      <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${labelSVG}
+    </svg>`;
+  }
+
   function renderAnalytics() {
     const aContent = $("#analytics-content");
     if (!aContent) return;
@@ -1357,10 +1437,10 @@
     const avgLoss   = losses.length > 0 ? Math.round(grossLoss / losses.length) : null;
     const avgHold   = total > 0 ? (closed.reduce((s, h) => s + (h.days || 0), 0) / total).toFixed(1) : null;
 
-    // Equity curve: cumulative PnL per closed trade (sorted by closedAt)
     const sortedC = [...closed].sort((a, b) => a.closedAt.localeCompare(b.closedAt));
-    let cum = 0;
-    const curvePoints = [0, ...sortedC.map(h => { cum += (h.pnlFinal ?? 0); return cum; })];
+    const totalPnlDollar = open.reduce((s, h) => s + (h.pnlDollar || 0), 0);
+    const currentPortfolioValue = totalNotional + totalPnlDollar;
+    const curveData = generatePortfolioCurve(equityPeriod);
 
     // BX buckets
     const bxBuckets = { "0-5": [], "5-15": [], "15+": [] };
@@ -1386,10 +1466,21 @@
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:2">
-          <div class="analytics-card-title">权益曲线 · Equity Curve</div>
-          <div class="analytics-card-sub">${total > 0 ? `累计 ${fmt.signed(Math.round(totalPnl))} · ${total} 笔交易` : "暂无已平仓数据"}</div>
-          <div style="margin-top:14px">${total > 0 ? equityCurveSVG(curvePoints, 140) : `<div style="height:140px;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:12px">暂无数据</div>`}</div>
-          <div class="curve-labels">${sortedC.map(h => `<span class="mono" style="font-size:9px;color:var(--fg-3)">${h.sym}</span>`).join("")}</div>
+          <div class="ec-header">
+            <div>
+              <div class="analytics-card-title">总资产曲线 · Portfolio Value</div>
+              <div class="analytics-card-sub">
+                <span class="mono" style="font-size:15px;font-weight:700;color:var(--fg-0)">${fmt.usd(Math.round(currentPortfolioValue))}</span>
+                <span class="mono ${fmt.sign(totalPnlDollar)}" style="font-size:11px;margin-left:6px">${fmt.signed(Math.round(totalPnlDollar))}</span>
+              </div>
+            </div>
+            <div class="ec-period-seg">
+              <button class="ec-period-btn${equityPeriod === 'day' ? ' active' : ''}" data-period="day">日</button>
+              <button class="ec-period-btn${equityPeriod === 'week' ? ' active' : ''}" data-period="week">周</button>
+              <button class="ec-period-btn${equityPeriod === 'month' ? ' active' : ''}" data-period="month">月</button>
+            </div>
+          </div>
+          <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136)}</div>
         </div>
         <div class="analytics-card" style="flex:1">
           <div class="analytics-card-title">BX Bars 效能</div>
@@ -1450,6 +1541,13 @@
         </div>
       </div>
     `;
+
+    $$(".ec-period-btn", aContent).forEach(btn => {
+      btn.addEventListener("click", () => {
+        equityPeriod = btn.dataset.period;
+        renderAnalytics();
+      });
+    });
   }
 
   function ametric(label, value, colorCls, sub) {

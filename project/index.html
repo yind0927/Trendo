@@ -1249,7 +1249,7 @@
     border-left: 3px solid var(--accent-line);
   }
   .jc-result { display: flex; gap: 14px; align-items: center; padding-top: 4px; border-top: 1px solid var(--line); }
-  .jc-note-wrap textarea.journal-note-area {
+  textarea.journal-note-area {
     width: 100%; box-sizing: border-box;
     background: var(--bg-2); border: 1px solid var(--line);
     border-radius: 8px; padding: 9px 12px;
@@ -1257,8 +1257,8 @@
     resize: vertical; outline: none;
     transition: border-color .15s;
   }
-  .jc-note-wrap textarea.journal-note-area:focus { border-color: var(--accent-line); }
-  .jc-note-wrap textarea.journal-note-area::placeholder { color: var(--fg-3); }
+  textarea.journal-note-area:focus { border-color: var(--accent-line); }
+  textarea.journal-note-area::placeholder { color: var(--fg-3); }
 
   /* ANALYTICS VIEW */
   #analytics-view { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
@@ -1286,6 +1286,15 @@
   .analytics-card-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-1); }
   .analytics-card-sub { font-size: 10.5px; color: var(--fg-3); margin-top: 2px; font-family: var(--f-mono); }
   .curve-labels { display: flex; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
+  .ec-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .ec-period-seg { display: flex; gap: 2px; background: var(--bg-2); border-radius: 8px; padding: 3px; flex-shrink: 0; }
+  .ec-period-btn {
+    background: none; border: none; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 11px; color: var(--fg-2); font-family: var(--f-sans); font-weight: 500;
+    transition: background .15s, color .15s;
+  }
+  .ec-period-btn:hover { color: var(--fg-0); }
+  .ec-period-btn.active { background: var(--bg-1); color: var(--fg-0); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   .trade-bar-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
   .trade-bar-sym { font-size: 10.5px; font-weight: 600; width: 42px; flex-shrink: 0; }
   .trade-bar-track { flex: 1; height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
