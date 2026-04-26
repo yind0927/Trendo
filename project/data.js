@@ -108,13 +108,22 @@ window.CLOSED_POSITIONS = [
       overall: { score: "58", slope: 2 } } },
 ];
 
+// prevClose values for today's PnL calculation (mock prior-day prices)
+const PREV_CLOSE = {
+  NVDA: 908, TSLA: 260, META: 608, AMD: 179, CRWD: 352,
+  SMCI: 43.2, PLTR: 31.5, HOOD: 23.1, COIN: 242, GOOGL: 169,
+  BTC: 75400, ETH: 3440, SOL: 188, LINK: 17.6, AVAX: 36.5,
+};
+
 // pre-compute derived fields
 window.HOLDINGS.forEach(h => {
+  h.prevClose = PREV_CLOSE[h.sym] || h.last;
   h.pnlPct = (h.last - h.cost) / h.cost;
-  h.pnlDollar = Math.round((h.last - h.cost) * (h.size * 10000 / h.cost)); // rough $ based on size-weighted notional
-  h.risk1R = h.cost - h.stop;                        // $ per share of initial risk
-  h.rMult = (h.last - h.cost) / (h.cost - h.stop);   // current R
-  const today = new Date("2026-04-21");
+  h.qty = Math.round((h.size / 100 * 284620) / h.cost);
+  h.pnlDollar = Math.round((h.last - h.cost) * h.qty);
+  h.risk1R = h.cost - h.stop;
+  h.rMult = (h.last - h.cost) / (h.cost - h.stop);
+  const today = new Date("2026-04-26");
   h.days = Math.max(1, Math.round((today - new Date(h.entry)) / 86400000));
   // sparkline — deterministic wander from cost → last
   const n = 24;
@@ -128,7 +137,6 @@ window.HOLDINGS.forEach(h => {
   }
   arr[arr.length - 1] = h.last;
   h.spark = arr;
-  h.qty = Math.round((h.size / 100 * 284620) / h.cost);
 });
 
 // status label text
@@ -232,7 +240,7 @@ window.COLS = [
   { id: "last",       label: "最新价",  r: true,  on: true },
   { id: "qty",        label: "数量",    r: true,  on: true },
   { id: "pnl",        label: "浮盈亏",  r: true,  on: true },
-  { id: "stop",       label: "止损",    r: true,  on: true },
-  { id: "target",     label: "止盈",    r: true,  on: true },
+  { id: "stop",       label: "止损",    r: true,  on: true, closedHide: true },
+  { id: "target",     label: "止盈",    r: true,  on: true, closedHide: true },
   { id: "progstatus", label: "状态",    r: false, on: true, locked: true },
 ];

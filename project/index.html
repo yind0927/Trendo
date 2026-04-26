@@ -1215,6 +1215,34 @@
     display: flex; gap: 10px; margin-top: 12px;
   }
   .drawer-actions .btn { flex: 1; }
+  .btn-exit-pos {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
+    background: color-mix(in oklch, var(--down) 14%, transparent);
+    color: var(--down); border-color: color-mix(in oklch, var(--down) 35%, transparent);
+    padding: 10px 0;
+    transition: background .15s, transform .1s;
+  }
+  .btn-exit-pos:hover {
+    background: color-mix(in oklch, var(--down) 24%, transparent);
+    transform: translateY(-1px);
+  }
+  .btn-exit-pos:active { transform: translateY(0); }
+
+  /* EDITABLE POSITION FIELDS */
+  .pos-edit {
+    display: inline-block; cursor: text; outline: none;
+    border-bottom: 1px dashed var(--fg-3); padding-bottom: 1px;
+    min-width: 60px; border-radius: 2px;
+    transition: border-color .15s, background .15s;
+  }
+  .pos-edit:hover { border-color: var(--fg-2); }
+  .pos-edit:focus { border-bottom: 1px solid var(--accent); background: color-mix(in oklch, var(--accent) 8%, transparent); border-radius: 2px 2px 0 0; padding: 1px 4px 1px; }
+  .edit-hint {
+    display: inline-block; font-size: 9px; color: var(--fg-3);
+    margin-left: 4px; font-family: var(--f-sans); letter-spacing: 0.02em;
+    font-weight: 400; text-transform: none; vertical-align: middle;
+  }
 
   /* BX BARS REVIEW (§03 left panel) */
   .bx-review-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }

@@ -32,6 +32,11 @@
     const eqLabel  = eqCount + (etfCount > 0 ? `+${etfCount}ETF` : "") + " 美股";
     const pnlSign = fmt.sign(totalPnlDollar);
 
+    // Today PnL: real calculation from prevClose
+    const todayPnl = HOLDINGS.reduce((sum, h) => sum + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0);
+    const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
+    const todaySign = fmt.sign(todayPnl);
+
     const ov = $("#overview");
     ov.innerHTML = `
       <div class="ov-card" id="nav-card">
@@ -48,9 +53,9 @@
       })}
       ${card({
         label: "今日盈亏", info: false,
-        value: `<span class="up">+$3,840</span>`,
-        sub: `<span class="chip up">+1.37%</span><span class="muted">vs 昨收</span>`,
-        spark: sparkSVG([0, 400, 1200, 800, 2100, 3400, 3840], 90, 36, "var(--up)", true)
+        value: `<span class="${todaySign}">${fmt.signed(todayPnl)}</span>`,
+        sub: `<span class="chip ${todaySign}">${fmt.pct(todayPct)}</span><span class="muted">vs 昨收</span>`,
+        spark: sparkSVG([0, todayPnl * .2, todayPnl * .5, todayPnl * .35, todayPnl * .75, todayPnl * .9, todayPnl].map(v => v + 100), 90, 36, `var(--${todaySign})`, true)
       })}
       ${card({
         label: "当前持仓数", info: false,
@@ -213,6 +218,48 @@
       </div>`;
   }
 
+  function wireDrawerEdits(h) {
+    const dr = $("#drawer");
+    $$("[data-pos-field]", dr).forEach(el => {
+      el.addEventListener("focus", () => {
+        // strip leading $ for easier editing
+        el.textContent = el.textContent.replace(/^\$/, "");
+        document.execCommand("selectAll", false, null);
+      });
+      el.addEventListener("blur", () => {
+        const f = el.dataset.posField;
+        const v = parseFloat(el.textContent.trim().replace(/[^0-9.-]/g, ""));
+        if (isNaN(v) || v <= 0) {
+          el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`;
+          return;
+        }
+        h[f] = v;
+        if (f === "size") h.qty = Math.round((v / 100 * totalNotional) / h.cost);
+        recomputeHolding(h);
+        saveToStorage();
+        renderTable();
+        renderOverview();
+        // Restore display format
+        el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`;
+        // Update hero price / pnl
+        const pnlSign = fmt.sign(h.pnlDollar);
+        const heroP = $(".hero-price .p", dr);
+        const heroPct = $(".hero-price .pct", dr);
+        const heroPnl = $(".hero-price .pnl", dr);
+        if (heroP) heroP.textContent = `$${price(h.last)}`;
+        if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct); heroPct.className = `pct ${pnlSign}`; }
+        if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlDollar); heroPnl.className = `pnl ${pnlSign}`; }
+        // Update level bar
+        const lb = $(".levelbar", dr);
+        if (lb) { const tmp = document.createElement("div"); tmp.innerHTML = levelBar(h); lb.replaceWith(tmp.firstElementChild); }
+        // Update R in kv-grid (last cell)
+        const rCell = $(".kv-grid .v.big", dr);
+        if (rCell) { rCell.textContent = fmt.rMult(h.rMult); rCell.className = `v big ${fmt.sign(h.rMult)}`; }
+      });
+      el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
+    });
+  }
+
   function wireBX(h) {
     const dr = $("#drawer");
     $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
@@ -261,6 +308,35 @@
   let pendingCloseSym = null;
   let pendingDeleteSym = null, pendingDeleteFrom = null;
 
+  // ============ PERSISTENCE ============
+  function saveToStorage() {
+    try {
+      localStorage.setItem("trendo_v3_holdings", JSON.stringify(HOLDINGS));
+      localStorage.setItem("trendo_v3_closed", JSON.stringify(CLOSED_POSITIONS));
+      localStorage.setItem("trendo_v3_notional", String(totalNotional));
+    } catch (e) { /* storage unavailable */ }
+  }
+
+  function loadFromStorage() {
+    try {
+      const h = localStorage.getItem("trendo_v3_holdings");
+      const c = localStorage.getItem("trendo_v3_closed");
+      const n = localStorage.getItem("trendo_v3_notional");
+      if (h) { const parsed = JSON.parse(h); HOLDINGS.splice(0, HOLDINGS.length, ...parsed); }
+      if (c) { const parsed = JSON.parse(c); CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...parsed); }
+      if (n) totalNotional = parseFloat(n) || totalNotional;
+    } catch (e) { /* corrupted storage, use defaults */ }
+  }
+
+  // ============ DERIVED FIELD RECOMPUTE ============
+  function recomputeHolding(h) {
+    h.qty = Math.round((h.size / 100 * totalNotional) / h.cost);
+    h.pnlDollar = Math.round((h.last - h.cost) * h.qty);
+    h.pnlPct = h.cost > 0 ? (h.last - h.cost) / h.cost : 0;
+    h.risk1R = h.cost - h.stop;
+    h.rMult = h.risk1R !== 0 ? (h.last - h.cost) / h.risk1R : 0;
+  }
+
   // ============ MODAL MANAGEMENT ============
   function openModal(modalId) {
     const modal = $(`#${modalId}`);
@@ -281,7 +357,7 @@
   function renderTable() {
     // header
     const thead = $("#thead-row");
-    thead.innerHTML = COLS.filter(c => c.on).map(c => {
+    thead.innerHTML = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide)).map(c => {
       const sorted = sortKey === c.id ? "sorted" : "";
       const label = (activeTab === "closed" && c.id === "last") ? "平仓价" : c.label;
       return `<th class="${c.r ? "right" : ""} ${sorted}" data-col="${c.id}">${label}</th>`;
@@ -325,7 +401,7 @@
     });
 
     // body
-    const cols = COLS.filter(c => c.on);
+    const cols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
     $("#tbody").innerHTML = rows.map(h => {
       const isSel = selectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
@@ -397,6 +473,11 @@
       case "stop": return `<td class="right num" style="color:var(--down)">$${price(h.stop)}</td>`;
       case "target": return `<td class="right num" style="color:var(--up)">$${price(h.target)}</td>`;
       case "progstatus": {
+        if (activeTab === "closed") {
+          const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
+          const win = pnl > 0;
+          return `<td><span class="status ${win ? "on-track" : "near-stop"}"><span class="dot"></span>${win ? "盈利 · Win" : "亏损 · Loss"}</span></td>`;
+        }
         const bucket = progressBucket(h);
         const status = BUCKET_STATUS[bucket];
         return `<td><span class="status ${status.cls}"><span class="dot"></span>${status.label}</span></td>`;
@@ -455,6 +536,7 @@
     $("#drawer").innerHTML = drawerHTML(h);
     wireBX(h);
     if (activeTab === "open") {
+      wireDrawerEdits(h);
       wireDrawerCloseButton();
     }
     $("#drawer").classList.add("open");
@@ -515,9 +597,9 @@
         </div>
         ${levelBar(h)}
         ${!isClosed ? `<div class="drawer-actions">
-          <button class="btn" id="drawer-close-position" style="display:flex;align-items:center;gap:7px">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            平仓
+          <button class="btn btn-exit-pos" id="drawer-close-position">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            平仓出场
           </button>
         </div>` : ""}
       </div>
@@ -525,13 +607,24 @@
       <div class="drawer-body">
         <!-- 1. 概况 -->
         <div class="drawer-section">
-          <h4><span class="idx">01</span>持仓概况</h4>
+          <h4><span class="idx">01</span>${isClosed ? "平仓记录" : "持仓概况"}</h4>
+          ${isClosed ? `
           <div class="kv-grid">
-            <div><div class="k">成本 / 现价</div><div class="v">$${price(h.cost)} <span class="sub">→</span> $${price(h.last)}</div></div>
-            <div><div class="k">仓位占比</div><div class="v">${h.size.toFixed(1)}<span class="sub">% 净资产</span></div></div>
-            <div><div class="k">止损 / 目标</div><div class="v">$${price(h.stop)} <span class="sub">·</span> $${price(h.target)}</div></div>
+            <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}</div></div>
+            <div><div class="k">出场价格</div><div class="v mono">$${price(h.closePrice ?? h.last)}</div></div>
+            <div><div class="k">盈亏金额</div><div class="v big ${fmt.sign(pnlAmt)}">${fmt.signed(pnlAmt)}</div></div>
+            <div><div class="k">盈亏百分比</div><div class="v ${fmt.sign(pnlAmt)}">${fmt.pct(h.pnlPct)}</div></div>
+            <div><div class="k">R 倍数</div><div class="v big ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</div></div>
+            <div><div class="k">持有天数</div><div class="v">${h.days}<span class="sub">天</span></div></div>
+          </div>` : `
+          <div class="kv-grid">
+            <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}</div></div>
+            <div><div class="k">现价<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit mono" data-pos-field="last" contenteditable="true" spellcheck="false">$${price(h.last)}</span></div></div>
+            <div><div class="k">止损<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="stop" contenteditable="true" spellcheck="false">$${price(h.stop)}</span></div></div>
+            <div><div class="k">目标<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="target" contenteditable="true" spellcheck="false">$${price(h.target)}</span></div></div>
+            <div><div class="k">仓位占比<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="size" contenteditable="true" spellcheck="false">${h.size.toFixed(1)}</span><span class="sub">%</span></div></div>
             <div><div class="k">当前 R 倍数</div><div class="v big ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</div></div>
-          </div>
+          </div>`}
         </div>
 
         <!-- 2. BX Trend -->
@@ -680,10 +773,9 @@
     function bxReviewRow(bucket, positions) {
       const cnt = positions.length;
       const w   = positions.filter(p => (p.pnlFinal ?? p.pnlDollar ?? 0) > 0).length;
-      const totalR = positions.reduce((s, p) => s + (p.rMult || 0), 0);
-      const aR     = cnt > 0 ? (totalR / cnt) : 0;
+      const avgPct = cnt > 0 ? positions.reduce((s, p) => s + (p.pnlPct || 0), 0) / cnt * 100 : 0;
       const barW   = Math.round(cnt / maxCount * 100);
-      const rColor = aR >= 0 ? "var(--up)" : "var(--down)";
+      const pColor = avgPct >= 0 ? "var(--up)" : "var(--down)";
       const cls = bucket === "0-5" ? "bxbar-early" : bucket === "5-15" ? "bxbar-mid" : "bxbar-late";
       const lbl = bucket === "0-5" ? "开始" : bucket === "5-15" ? "中间" : "延续";
       return `
@@ -693,12 +785,12 @@
           </div>
           <div class="bx-review-body">
             <div class="bx-review-track">
-              <div class="bx-review-fill" style="width:${barW}%;background:${cnt > 0 ? rColor : "var(--bg-3)"}"></div>
+              <div class="bx-review-fill" style="width:${barW}%;background:${cnt > 0 ? pColor : "var(--bg-3)"}"></div>
             </div>
             <div class="bx-review-meta">
               ${cnt > 0
                 ? `<span class="mono" style="font-size:10px;color:var(--fg-2)">${cnt} 笔 · ${Math.round(w / cnt * 100)}% 胜</span>
-                   <span class="mono" style="font-size:10px;color:${rColor}">${aR >= 0 ? "+" : ""}${aR.toFixed(1)}R avg</span>`
+                   <span class="mono" style="font-size:10px;color:${pColor}">${avgPct >= 0 ? "+" : ""}${avgPct.toFixed(1)}% avg</span>`
                 : `<span style="font-size:10.5px;color:var(--fg-3)">—</span>`}
             </div>
           </div>
@@ -868,6 +960,7 @@
       const newNav = parseFloat($("#equity-nav").value);
       if (newNav > 0) {
         totalNotional = newNav;
+        saveToStorage();
         renderOverview();
         closeModal("equity-modal");
       }
@@ -943,6 +1036,7 @@
     HOLDINGS.splice(HOLDINGS.indexOf(pos), 1);
     CLOSED_POSITIONS.push(pos);
 
+    saveToStorage();
     if (selectedSym === sym) closeDrawer();
     renderTable();
     renderOverview();
@@ -986,6 +1080,7 @@
     const idx = HOLDINGS.findIndex(h => h.sym === sym);
     if (idx === -1) return;
     HOLDINGS.splice(idx, 1);
+    saveToStorage();
     if (selectedSym === sym) closeDrawer();
     renderTable();
     renderOverview();
@@ -996,6 +1091,7 @@
     const idx = CLOSED_POSITIONS.findIndex(h => h.sym === sym);
     if (idx === -1) return;
     CLOSED_POSITIONS.splice(idx, 1);
+    saveToStorage();
     if (selectedSym === sym) closeDrawer();
     renderTable();
   }
@@ -1122,6 +1218,7 @@
     // duplicate for seamless loop
     track.innerHTML = html + html;
   }
+  loadFromStorage();
   renderTape();
   wireHost();
   renderOverview();
