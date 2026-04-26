@@ -1218,16 +1218,47 @@
   .btn-exit-pos {
     display: flex; align-items: center; justify-content: center; gap: 7px;
     font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
-    background: color-mix(in oklch, var(--down) 14%, transparent);
-    color: var(--down); border-color: color-mix(in oklch, var(--down) 35%, transparent);
+    background: var(--accent-dim);
+    color: var(--accent); border-color: var(--accent-line);
     padding: 10px 0;
     transition: background .15s, transform .1s;
   }
   .btn-exit-pos:hover {
-    background: color-mix(in oklch, var(--down) 24%, transparent);
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
     transform: translateY(-1px);
   }
   .btn-exit-pos:active { transform: translateY(0); }
+
+  /* JOURNAL VIEW */
+  #journal-view { max-width: 860px; margin: 0 auto; padding: 24px 20px 60px; }
+  .journal-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
+  .journal-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .journal-filters-row { display: flex; gap: 6px; }
+  .journal-feed { display: flex; flex-direction: column; gap: 14px; }
+  .journal-card {
+    background: var(--bg-1); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .journal-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .jc-ticker { display: flex; align-items: center; gap: 10px; }
+  .jc-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+  .jc-bx { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .jc-thesis {
+    font-size: 12.5px; line-height: 1.7; color: var(--fg-1);
+    background: var(--bg-2); border-radius: 8px; padding: 10px 12px;
+    border-left: 3px solid var(--accent-line);
+  }
+  .jc-result { display: flex; gap: 14px; align-items: center; padding-top: 4px; border-top: 1px solid var(--line); }
+  .jc-note-wrap textarea.journal-note-area {
+    width: 100%; box-sizing: border-box;
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 12px;
+    color: var(--fg-0); font-family: var(--f-sans); font-size: 12.5px; line-height: 1.65;
+    resize: vertical; outline: none;
+    transition: border-color .15s;
+  }
+  .jc-note-wrap textarea.journal-note-area:focus { border-color: var(--accent-line); }
+  .jc-note-wrap textarea.journal-note-area::placeholder { color: var(--fg-3); }
 
   /* EDITABLE POSITION FIELDS */
   .pos-edit {
@@ -1337,10 +1368,10 @@
   </a>
 
   <nav class="navbar" aria-label="primary">
-    <a class="navlink active" href="#">Dashboard</a>
-    <a class="navlink" href="#">Journal</a>
-    <a class="navlink" href="#">Analytics</a>
-    <a class="navlink" href="#">Watchlist</a>
+    <a class="navlink active" href="#" data-page="desk">Dashboard</a>
+    <a class="navlink" href="#" data-page="journal">Journal</a>
+    <a class="navlink" href="#" data-page="analytics">Analytics</a>
+    <a class="navlink" href="#" data-page="watchlist">Watchlist</a>
   </nav>
 
   <div class="search" role="search">
@@ -1388,6 +1419,7 @@
   </div>
 </div>
 
+<div id="desk-view">
 <main>
   <!-- ============ OVERVIEW ============ -->
   <div class="section-label"><span class="num">§01</span>PORTFOLIO OVERVIEW<span class="rule"></span><span class="meta">NAV · 今日盈亏 · 风险</span></div>
@@ -1684,6 +1716,20 @@
     SWING-DESK · 本地数据 · 报价延迟 ~15s · <span id="last-updated">更新于 13:51:43</span>
   </div>
 </main>
+</div><!-- #desk-view -->
+
+<!-- ============ JOURNAL VIEW ============ -->
+<div id="journal-view" style="display:none">
+  <div class="journal-topbar">
+    <div class="journal-title">Trade Journal</div>
+    <div class="journal-filters-row">
+      <button class="filter-chip active" data-journal-filter="all">所有</button>
+      <button class="filter-chip" data-journal-filter="open">持仓中</button>
+      <button class="filter-chip" data-journal-filter="closed">已平仓</button>
+    </div>
+  </div>
+  <div id="journal-feed" class="journal-feed"></div>
+</div>
 
 <!-- ============ DRAWER ============ -->
 <div class="drawer-backdrop" id="backdrop"></div>

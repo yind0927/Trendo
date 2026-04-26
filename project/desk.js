@@ -40,10 +40,9 @@
     const ov = $("#overview");
     ov.innerHTML = `
       <div class="ov-card" id="nav-card">
-        <div class="label">总资产 (Equity)<span class="info">i</span><button class="nav-edit-btn" title="Edit equity">✎</button></div>
+        <div class="label" style="justify-content:space-between">总资产 (Equity NAV)<button class="nav-edit-btn" title="Edit equity">✎</button></div>
         <div class="value">$${totalNotional.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
-        <div class="sub"><span class="muted">Portfolio NAV · 点击 ✎ 修改</span></div>
-        <div class="spark">${sparkSVG([totalNotional*.97, totalNotional*.98, totalNotional*.975, totalNotional*.99, totalNotional*.995, totalNotional], 110, 36, "var(--accent)")}</div>
+        <div class="sub"><span class="muted">点击 ✎ 修改 NAV</span></div>
       </div>
       ${card({
         label: "总浮盈 / 浮亏", info: false,
@@ -55,7 +54,7 @@
         label: "今日盈亏", info: false,
         value: `<span class="${todaySign}">${fmt.signed(todayPnl)}</span>`,
         sub: `<span class="chip ${todaySign}">${fmt.pct(todayPct)}</span><span class="muted">vs 昨收</span>`,
-        spark: sparkSVG([0, todayPnl * .2, todayPnl * .5, todayPnl * .35, todayPnl * .75, todayPnl * .9, todayPnl].map(v => v + 100), 90, 36, `var(--${todaySign})`, true)
+        spark: ""
       })}
       ${card({
         label: "当前持仓数", info: false,
@@ -115,8 +114,19 @@
   }
 
   function pieCard() {
-    const invested = SECTOR_SPLIT.filter(s => s.name !== "现金").reduce((a, s) => a + s.pct, 0);
-    const maxPct = Math.max(...SECTOR_SPLIT.map(s => s.pct));
+    // Real calculation from HOLDINGS
+    const sectorMap = {};
+    HOLDINGS.forEach(h => {
+      const nm  = h.bx?.sector?.name  || "其他";
+      const col = h.bx?.sector?.color || "oklch(0.35 0.01 250)";
+      if (!sectorMap[nm]) sectorMap[nm] = { name: nm, color: col, pct: 0 };
+      sectorMap[nm].pct += h.size || 0;
+    });
+    const sectors = Object.values(sectorMap).sort((a, b) => b.pct - a.pct);
+    const invested = sectors.reduce((s, x) => s + x.pct, 0);
+    const cash = Math.max(0, 100 - invested);
+    if (cash > 0.1) sectors.push({ name: "现金", color: "oklch(0.35 0.01 250)", pct: +cash.toFixed(1) });
+    const maxPct = Math.max(...sectors.map(s => s.pct));
     return `
       <div class="ov-pie ov-alloc">
         <div class="alloc-head">
@@ -124,7 +134,7 @@
           <span class="big">${invested.toFixed(0)}% <span class="tiny">已投</span></span>
         </div>
         <div class="alloc-bars">
-          ${SECTOR_SPLIT.map(s => `
+          ${sectors.slice(0, 7).map(s => `
             <div class="alloc-row">
               <span class="alloc-name">${s.name}</span>
               <div class="alloc-track">
@@ -307,6 +317,8 @@
   let reviewPeriod = "week";
   let pendingCloseSym = null;
   let pendingDeleteSym = null, pendingDeleteFrom = null;
+  let currentPage = "desk";
+  let journalFilter = "all";
 
   // ============ PERSISTENCE ============
   function saveToStorage() {
@@ -623,7 +635,7 @@
             <div><div class="k">止损<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="stop" contenteditable="true" spellcheck="false">$${price(h.stop)}</span></div></div>
             <div><div class="k">目标<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="target" contenteditable="true" spellcheck="false">$${price(h.target)}</span></div></div>
             <div><div class="k">仓位占比<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="size" contenteditable="true" spellcheck="false">${h.size.toFixed(1)}</span><span class="sub">%</span></div></div>
-            <div><div class="k">当前 R 倍数</div><div class="v big ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</div></div>
+            <div><div class="k">盈亏比 (R:R)</div><div class="v big up">${((h.target - h.cost) / (h.cost - h.stop)).toFixed(2)}<span class="sub">R</span></div></div>
           </div>`}
         </div>
 
@@ -1098,6 +1110,11 @@
 
   // ============ SEARCH / FILTERS / KEYBOARD ============
   function wireControls() {
+    // Nav page switching
+    $$(".navlink[data-page]").forEach(a => {
+      a.addEventListener("click", e => { e.preventDefault(); switchPage(a.dataset.page); });
+    });
+
     $("#search-input").addEventListener("input", e => { query = e.target.value; renderTable(); });
     $$(".filter-chip[data-filter]").forEach(b => b.addEventListener("click", () => {
       $$(".filter-chip[data-filter]").forEach(x => x.classList.remove("active"));
@@ -1200,6 +1217,121 @@
     $("#clock-txt").textContent = `${hh}:${mm}:${ss}`;
     const lu = $("#last-updated");
     if (lu) lu.textContent = "更新于 " + hh + ":" + mm + ":" + ss;
+  }
+
+  // ============ PAGE SWITCHING ============
+  function switchPage(page) {
+    currentPage = page;
+    const deskView = document.getElementById("desk-view");
+    const journalView = document.getElementById("journal-view");
+    $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
+    if (page === "journal") {
+      if (deskView) deskView.style.display = "none";
+      if (journalView) { journalView.style.display = ""; renderJournal(); }
+    } else {
+      if (deskView) deskView.style.display = "";
+      if (journalView) journalView.style.display = "none";
+    }
+  }
+
+  // ============ JOURNAL ============
+  function renderJournal() {
+    const combined = [
+      ...HOLDINGS.map(h => ({ h, from: "open" })),
+      ...CLOSED_POSITIONS.map(h => ({ h, from: "closed" })),
+    ].filter(({ h, from }) => {
+      if (journalFilter === "open")   return from === "open";
+      if (journalFilter === "closed") return from === "closed";
+      return true;
+    }).sort((a, b) => {
+      const dA = a.from === "closed" ? (a.h.closedAt || a.h.entry) : a.h.entry;
+      const dB = b.from === "closed" ? (b.h.closedAt || b.h.entry) : b.h.entry;
+      return dB.localeCompare(dA);
+    });
+
+    const feed = $("#journal-feed");
+    if (!feed) return;
+    feed.innerHTML = combined.map(({ h, from }) => journalCardHTML(h, from)).join("");
+
+    $$("[data-journal-filter]").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.journalFilter === journalFilter);
+      btn.addEventListener("click", () => { journalFilter = btn.dataset.journalFilter; renderJournal(); });
+    });
+
+    $$(".journal-note-area", feed).forEach(ta => {
+      ta.addEventListener("blur", () => {
+        const arr = ta.dataset.from === "closed" ? CLOSED_POSITIONS : HOLDINGS;
+        const pos = arr.find(x => x.sym === ta.dataset.sym);
+        if (pos) { pos.journalNote = ta.value; saveToStorage(); }
+      });
+    });
+  }
+
+  function journalCardHTML(h, from) {
+    const isClosed = from === "closed";
+    const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
+    const pnlSign = pnlAmt != null ? fmt.sign(pnlAmt) : "up";
+    const bx = h.bx || {};
+
+    let badgeColor, badgeTxt;
+    if (isClosed) {
+      const win = (pnlAmt ?? 0) > 0;
+      badgeColor = win ? "var(--up)" : "var(--down)";
+      badgeTxt   = win ? "盈利 · Win" : "亏损 · Loss";
+    } else {
+      const bs = BUCKET_STATUS[progressBucket(h)];
+      badgeColor = bs.color; badgeTxt = bs.label;
+    }
+
+    const barsCls = bx.dailyBars === "0-5" ? "bxbar-early" : bx.dailyBars === "5-15" ? "bxbar-mid" : "bxbar-late";
+    const barsLbl = bx.dailyBars === "0-5" ? "开始"        : bx.dailyBars === "5-15" ? "中间"      : "延续";
+    const dateStr = isClosed
+      ? `${fmt.date(h.entry)} → ${fmt.date(h.closedAt)}`
+      : `${fmt.date(h.entry)} · ${h.days}d`;
+
+    return `
+      <div class="journal-card">
+        <div class="journal-card-head">
+          <div class="jc-ticker">
+            <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}</div>
+            <div>
+              <div class="mono" style="font-size:14px;font-weight:600">${h.sym}</div>
+              <div class="muted" style="font-size:11px">${h.name}</div>
+            </div>
+          </div>
+          <div class="jc-meta">
+            <span class="statlight" style="color:${badgeColor};background:color-mix(in oklch,${badgeColor} 14%,transparent)">
+              <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
+            </span>
+            <span class="mono muted" style="font-size:10.5px">${dateStr}</span>
+            ${pnlAmt != null ? `<span class="mono ${pnlSign}" style="font-size:12.5px;font-weight:600">${fmt.signed(pnlAmt)}</span>` : ""}
+          </div>
+        </div>
+
+        <div class="jc-bx">
+          <span class="bx-bar-chip ${barsCls}">${bx.dailyBars ?? "—"}<span class="bx-bar-sub">${barsLbl}</span></span>
+          ${bx.weekly  != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">W ${bx.weekly  >= 0 ? "+" : ""}${bx.weekly}</span>`  : ""}
+          ${bx.monthly != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">M ${bx.monthly >= 0 ? "+" : ""}${bx.monthly}</span>` : ""}
+          ${bx.sector?.name ? `<span class="muted" style="font-size:10.5px;display:flex;align-items:center;gap:4px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${bx.sector.color};flex-shrink:0;display:inline-block"></span>${bx.sector.name}
+          </span>` : ""}
+        </div>
+
+        ${h.thesis ? `<div class="jc-thesis">${h.thesis}</div>` : ""}
+
+        <div class="jc-note-wrap">
+          <div class="k" style="margin-bottom:5px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg-3)">笔记</div>
+          <textarea class="journal-note-area" data-sym="${h.sym}" data-from="${from}"
+                    placeholder="记录入场思路、心态、执行情况…" rows="3">${h.journalNote || ""}</textarea>
+        </div>
+
+        ${isClosed ? `
+        <div class="jc-result">
+          <span class="mono muted" style="font-size:10.5px">持有 ${h.days ?? "—"}d</span>
+          <span class="mono ${fmt.sign(h.rMult ?? 0)}" style="font-size:10.5px">${fmt.rMult(h.rMult ?? 0)}</span>
+          <span class="mono ${fmt.sign(h.pnlPct ?? 0)}" style="font-size:10.5px">${fmt.pct(h.pnlPct ?? 0)}</span>
+        </div>` : ""}
+      </div>`;
   }
 
   // ============ TICKER TAPE ============
