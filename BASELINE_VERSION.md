@@ -1,11 +1,11 @@
-# Trendo v4.1 Baseline Version
+# Trendo v5.0 Baseline Version
 
 **记录时间**: 2026-04-26  
 **Git Commit**: `aef70af`  
-**Git Tag**: `v4.1-baseline`  
+**Git Tag**: `v5.0-baseline`  
 **状态**: ✅ 完全功能 + 已部署到 Vercel
 
-> **注意**: "回到版本" 指的是此版本 (v4.1-baseline)。
+> **注意**: "回到版本" 指的是此版本 (v5.0-baseline)。
 
 ---
 
