@@ -1,11 +1,22 @@
-# Trendo v4.0 Baseline Version
+# Trendo v4.1 Baseline Version
 
 **记录时间**: 2026-04-26  
-**Git Commit**: `c272fa1`  
-**Git Tag**: `v4.0-baseline`  
+**Git Commit**: `aef70af`  
+**Git Tag**: `v4.1-baseline`  
 **状态**: ✅ 完全功能 + 已部署到 Vercel
 
-> **注意**: "回到版本" 指的是此版本 (v4.0-baseline)。
+> **注意**: "回到版本" 指的是此版本 (v4.1-baseline)。
+
+---
+
+## 功能清单（在 v4.0 基础上新增）
+
+### v4.1 新增
+
+- ✅ **权益曲线增强** — 水平网格线 + $k 价值标注
+  - 起始点和当前点圆点标记（终点高亮）
+  - 鼠标悬浮：竖向十字准线跟随数据点吸附
+  - Tooltip 显示：时间标签 / 总资产金额 / 相对起点的 $ 和 % 变化
 
 ---
 
