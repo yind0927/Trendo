@@ -37,12 +37,14 @@
     const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
     const todaySign = fmt.sign(todayPnl);
 
+    const portfolioValue = totalNotional + totalPnlDollar;
+
     const ov = $("#overview");
     ov.innerHTML = `
       <div class="ov-card" id="nav-card">
-        <div class="label" style="justify-content:space-between">总资产 (Equity NAV)<button class="nav-edit-btn" title="Edit equity">✎</button></div>
-        <div class="value">$${totalNotional.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
-        <div class="sub"><span class="muted">点击 ✎ 修改 NAV</span></div>
+        <div class="label" style="justify-content:space-between">总资产<button class="nav-edit-btn" title="Edit base NAV">✎</button></div>
+        <div class="value">$${portfolioValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
+        <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${totalPnlDollar >= 0 ? "+" : ""}${fmt.signed(totalPnlDollar)}</span></span></div>
       </div>
       ${card({
         label: "总浮盈 / 浮亏", info: false,
@@ -323,9 +325,10 @@
   // ============ PERSISTENCE ============
   function saveToStorage() {
     try {
-      localStorage.setItem("trendo_v3_holdings", JSON.stringify(HOLDINGS));
-      localStorage.setItem("trendo_v3_closed", JSON.stringify(CLOSED_POSITIONS));
-      localStorage.setItem("trendo_v3_notional", String(totalNotional));
+      localStorage.setItem("trendo_v3_holdings",  JSON.stringify(HOLDINGS));
+      localStorage.setItem("trendo_v3_closed",    JSON.stringify(CLOSED_POSITIONS));
+      localStorage.setItem("trendo_v3_notional",  String(totalNotional));
+      localStorage.setItem("trendo_v3_watchlist", JSON.stringify(WATCHLIST));
     } catch (e) { /* storage unavailable */ }
   }
 
@@ -334,9 +337,11 @@
       const h = localStorage.getItem("trendo_v3_holdings");
       const c = localStorage.getItem("trendo_v3_closed");
       const n = localStorage.getItem("trendo_v3_notional");
+      const w = localStorage.getItem("trendo_v3_watchlist");
       if (h) { const parsed = JSON.parse(h); HOLDINGS.splice(0, HOLDINGS.length, ...parsed); }
       if (c) { const parsed = JSON.parse(c); CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...parsed); }
       if (n) totalNotional = parseFloat(n) || totalNotional;
+      if (w) { const parsed = JSON.parse(w); WATCHLIST.splice(0, WATCHLIST.length, ...parsed); }
     } catch (e) { /* corrupted storage, use defaults */ }
   }
 
@@ -785,9 +790,9 @@
     function bxReviewRow(bucket, positions) {
       const cnt = positions.length;
       const w   = positions.filter(p => (p.pnlFinal ?? p.pnlDollar ?? 0) > 0).length;
-      const avgPct = cnt > 0 ? positions.reduce((s, p) => s + (p.pnlPct || 0), 0) / cnt * 100 : 0;
+      const avgDollar = cnt > 0 ? Math.round(positions.reduce((s, p) => s + (p.pnlFinal ?? p.pnlDollar ?? 0), 0) / cnt) : 0;
       const barW   = Math.round(cnt / maxCount * 100);
-      const pColor = avgPct >= 0 ? "var(--up)" : "var(--down)";
+      const dColor = avgDollar >= 0 ? "var(--up)" : "var(--down)";
       const cls = bucket === "0-5" ? "bxbar-early" : bucket === "5-15" ? "bxbar-mid" : "bxbar-late";
       const lbl = bucket === "0-5" ? "开始" : bucket === "5-15" ? "中间" : "延续";
       return `
@@ -797,12 +802,12 @@
           </div>
           <div class="bx-review-body">
             <div class="bx-review-track">
-              <div class="bx-review-fill" style="width:${barW}%;background:${cnt > 0 ? pColor : "var(--bg-3)"}"></div>
+              <div class="bx-review-fill" style="width:${barW}%;background:${cnt > 0 ? dColor : "var(--bg-3)"}"></div>
             </div>
             <div class="bx-review-meta">
               ${cnt > 0
                 ? `<span class="mono" style="font-size:10px;color:var(--fg-2)">${cnt} 笔 · ${Math.round(w / cnt * 100)}% 胜</span>
-                   <span class="mono" style="font-size:10px;color:${pColor}">${avgPct >= 0 ? "+" : ""}${avgPct.toFixed(1)}% avg</span>`
+                   <span class="mono" style="font-size:10px;color:${dColor}">${fmt.signed(avgDollar)}</span>`
                 : `<span style="font-size:10.5px;color:var(--fg-3)">—</span>`}
             </div>
           </div>
@@ -1222,16 +1227,15 @@
   // ============ PAGE SWITCHING ============
   function switchPage(page) {
     currentPage = page;
-    const deskView = document.getElementById("desk-view");
-    const journalView = document.getElementById("journal-view");
+    const VIEWS = { desk: "desk-view", journal: "journal-view", analytics: "analytics-view", watchlist: "watchlist-view" };
+    Object.entries(VIEWS).forEach(([p, id]) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = p === page ? "" : "none";
+    });
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
-    if (page === "journal") {
-      if (deskView) deskView.style.display = "none";
-      if (journalView) { journalView.style.display = ""; renderJournal(); }
-    } else {
-      if (deskView) deskView.style.display = "";
-      if (journalView) journalView.style.display = "none";
-    }
+    if (page === "journal")   renderJournal();
+    if (page === "analytics") renderAnalytics();
+    if (page === "watchlist") renderWatchlist();
   }
 
   // ============ JOURNAL ============
@@ -1334,6 +1338,286 @@
       </div>`;
   }
 
+  // ============ ANALYTICS ============
+  function renderAnalytics() {
+    const aContent = $("#analytics-content");
+    if (!aContent) return;
+
+    const closed = CLOSED_POSITIONS;
+    const open   = HOLDINGS;
+    const total  = closed.length;
+    const wins   = closed.filter(h => (h.pnlFinal ?? 0) > 0);
+    const losses = closed.filter(h => (h.pnlFinal ?? 0) <= 0);
+    const totalPnl  = closed.reduce((s, h) => s + (h.pnlFinal ?? 0), 0);
+    const grossWin  = wins.reduce((s, h) => s + (h.pnlFinal ?? 0), 0);
+    const grossLoss = Math.abs(losses.reduce((s, h) => s + (h.pnlFinal ?? 0), 0));
+    const winRate   = total > 0 ? (wins.length / total * 100).toFixed(1) : null;
+    const pfStr     = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (wins.length > 0 ? "∞" : null);
+    const avgWin    = wins.length > 0 ? Math.round(grossWin / wins.length) : null;
+    const avgLoss   = losses.length > 0 ? Math.round(grossLoss / losses.length) : null;
+    const avgHold   = total > 0 ? (closed.reduce((s, h) => s + (h.days || 0), 0) / total).toFixed(1) : null;
+
+    // Equity curve: cumulative PnL per closed trade (sorted by closedAt)
+    const sortedC = [...closed].sort((a, b) => a.closedAt.localeCompare(b.closedAt));
+    let cum = 0;
+    const curvePoints = [0, ...sortedC.map(h => { cum += (h.pnlFinal ?? 0); return cum; })];
+
+    // BX buckets
+    const bxBuckets = { "0-5": [], "5-15": [], "15+": [] };
+    closed.forEach(h => { const b = h.bx?.dailyBars || "15+"; if (bxBuckets[b]) bxBuckets[b].push(h); });
+
+    // Open portfolio sorted by size
+    const openSorted = [...open].sort((a, b) => b.size - a.size);
+
+    aContent.innerHTML = `
+      <div class="analytics-topbar">
+        <div class="journal-title">Analytics</div>
+        <div class="muted" style="font-size:12px;font-family:var(--f-mono)">${total} 笔已平仓 · ${open.length} 笔持仓中</div>
+      </div>
+
+      <div class="analytics-metrics">
+        ${ametric("已实现盈亏",  total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl), total ? `${total} 笔交易` : "暂无数据")}
+        ${ametric("胜率",        winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", winRate !== null ? `${wins.length}胜/${losses.length}负` : "")}
+        ${ametric("盈亏因子",    pfStr || "—", parseFloat(pfStr) >= 1.5 ? "up" : "down", "总盈 ÷ 总亏")}
+        ${ametric("平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `${wins.length} 笔赢` : "")}
+        ${ametric("平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `${losses.length} 笔亏` : "")}
+        ${ametric("平均持仓",    avgHold !== null ? avgHold + " 天" : "—", "neu", avgHold !== null ? `最长 ${Math.max(...closed.map(h => h.days || 0))}d` : "")}
+      </div>
+
+      <div class="analytics-chart-row">
+        <div class="analytics-card" style="flex:2">
+          <div class="analytics-card-title">权益曲线 · Equity Curve</div>
+          <div class="analytics-card-sub">${total > 0 ? `累计 ${fmt.signed(Math.round(totalPnl))} · ${total} 笔交易` : "暂无已平仓数据"}</div>
+          <div style="margin-top:14px">${total > 0 ? equityCurveSVG(curvePoints, 140) : `<div style="height:140px;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:12px">暂无数据</div>`}</div>
+          <div class="curve-labels">${sortedC.map(h => `<span class="mono" style="font-size:9px;color:var(--fg-3)">${h.sym}</span>`).join("")}</div>
+        </div>
+        <div class="analytics-card" style="flex:1">
+          <div class="analytics-card-title">BX Bars 效能</div>
+          <div class="analytics-card-sub">胜率 · 平均盈亏</div>
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
+            ${Object.entries(bxBuckets).map(([b, pos]) => {
+              const cnt = pos.length;
+              const wn  = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
+              const avg = cnt > 0 ? Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0) / cnt) : 0;
+              const cls = b === "0-5" ? "bxbar-early" : b === "5-15" ? "bxbar-mid" : "bxbar-late";
+              const lbl = b === "0-5" ? "开始" : b === "5-15" ? "中间" : "延续";
+              const dc  = avg >= 0 ? "var(--up)" : "var(--down)";
+              return `<div style="display:flex;align-items:center;gap:10px">
+                <span class="bx-bar-chip ${cls}" style="flex-shrink:0">${b}<span class="bx-bar-sub">${lbl}</span></span>
+                <div style="flex:1">
+                  <div class="muted" style="font-size:10px;margin-bottom:2px">${cnt > 0 ? `${cnt}笔 · ${Math.round(wn/cnt*100)}% 胜` : "暂无数据"}</div>
+                  <div class="mono" style="font-size:13px;font-weight:700;color:${dc}">${cnt > 0 ? fmt.signed(avg) : "—"}</div>
+                </div>
+              </div>`;
+            }).join("")}
+          </div>
+        </div>
+      </div>
+
+      <div class="analytics-chart-row">
+        <div class="analytics-card" style="flex:1">
+          <div class="analytics-card-title">已平仓交易分布</div>
+          <div class="analytics-card-sub">按盈亏金额排序</div>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:5px">
+            ${analyticsTradeBar(closed)}
+          </div>
+        </div>
+        <div class="analytics-card" style="flex:1">
+          <div class="analytics-card-title">当前持仓风险</div>
+          <div class="analytics-card-sub">按仓位大小排序</div>
+          <div style="margin-top:12px">
+            <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+              <thead><tr style="color:var(--fg-2)">
+                <th style="text-align:left;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">代码</th>
+                <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">仓位%</th>
+                <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">浮盈亏</th>
+                <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">状态</th>
+              </tr></thead>
+              <tbody>
+                ${openSorted.slice(0, 9).map(h => {
+                  const bs = BUCKET_STATUS[progressBucket(h)];
+                  const ps = fmt.sign(h.pnlDollar);
+                  return `<tr style="border-bottom:1px solid color-mix(in oklch,var(--line) 45%,transparent)">
+                    <td style="padding:5px 0"><span class="mono" style="font-weight:600">${h.sym}</span></td>
+                    <td style="text-align:right;color:var(--fg-2);font-family:var(--f-mono);font-size:11px">${h.size.toFixed(1)}%</td>
+                    <td style="text-align:right" class="mono ${ps}">${fmt.signed(h.pnlDollar)}</td>
+                    <td style="text-align:right"><span class="status ${bs.cls}" style="font-size:9px;padding:2px 5px;white-space:nowrap"><span class="dot"></span>${bs.label.split("·")[0].trim()}</span></td>
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function ametric(label, value, colorCls, sub) {
+    return `<div class="analytics-metric">
+      <div class="analytics-metric-label">${label}</div>
+      <div class="analytics-metric-value ${colorCls || "neu"}">${value}</div>
+      ${sub ? `<div class="analytics-metric-sub">${sub}</div>` : ""}
+    </div>`;
+  }
+
+  function equityCurveSVG(points, h) {
+    if (points.length < 2) return "";
+    const W = 560;
+    const min = Math.min(0, ...points), max = Math.max(0, ...points);
+    const rng = max - min || 1;
+    const sx = i => ((i / (points.length - 1)) * (W - 4) + 2);
+    const sy = v => h - 4 - ((v - min) / rng) * (h - 10);
+    const zY = sy(0);
+    const pathD = points.map((v, i) => `${i ? "L" : "M"}${sx(i).toFixed(1)} ${sy(v).toFixed(1)}`).join(" ");
+    const areaD = `${pathD} L${sx(points.length-1).toFixed(1)} ${zY.toFixed(1)} L${sx(0).toFixed(1)} ${zY.toFixed(1)} Z`;
+    const lastUp = points[points.length - 1] >= 0;
+    const col = lastUp ? "var(--up)" : "var(--down)";
+    const gid = "ecg" + (Math.random() * 1e6 | 0);
+    return `<svg viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" style="display:block;width:100%;height:${h}px">
+      <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${col}" stop-opacity="0.28"/>
+        <stop offset="1" stop-color="${col}" stop-opacity="0.02"/>
+      </linearGradient></defs>
+      <line x1="2" y1="${zY.toFixed(1)}" x2="${W-2}" y2="${zY.toFixed(1)}" stroke="var(--line)" stroke-width="1" stroke-dasharray="4,3"/>
+      <path d="${areaD}" fill="url(#${gid})"/>
+      <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${points.map((v, i) => i > 0 ? `<circle cx="${sx(i).toFixed(1)}" cy="${sy(v).toFixed(1)}" r="3.5" fill="${v >= 0 ? "var(--up)" : "var(--down)"}" stroke="var(--bg-1)" stroke-width="2"/>` : "").join("")}
+    </svg>`;
+  }
+
+  function analyticsTradeBar(closed) {
+    if (!closed.length) return `<div style="color:var(--fg-3);font-size:12px;padding:16px 0;text-align:center">暂无已平仓数据</div>`;
+    const sorted = [...closed].sort((a, b) => (b.pnlFinal ?? 0) - (a.pnlFinal ?? 0));
+    const maxA = Math.max(1, ...sorted.map(h => Math.abs(h.pnlFinal ?? 0)));
+    return sorted.map(h => {
+      const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
+      const w = (Math.abs(pnl) / maxA * 100).toFixed(1);
+      const col = pnl >= 0 ? "var(--up)" : "var(--down)";
+      return `<div class="trade-bar-row">
+        <span class="mono trade-bar-sym">${h.sym}</span>
+        <div class="trade-bar-track"><div class="trade-bar-fill" style="width:${w}%;background:${col}"></div></div>
+        <span class="mono ${fmt.sign(pnl)} trade-bar-val">${fmt.signed(Math.round(pnl))}</span>
+      </div>`;
+    }).join("");
+  }
+
+  // ============ WATCHLIST ============
+  function renderWatchlist() {
+    const content = $("#watchlist-content");
+    if (!content) return;
+
+    content.innerHTML = WATCHLIST.length === 0
+      ? `<div style="text-align:center;padding:48px;color:var(--fg-3);font-size:13px">暂无观察标的</div>`
+      : WATCHLIST.map((item, idx) => watchlistCardHTML(item, idx)).join("");
+
+    $$(".wl-delete", content).forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        WATCHLIST.splice(parseInt(btn.dataset.idx), 1);
+        saveToStorage(); renderWatchlist();
+      });
+    });
+    $$(".wl-add-pos", content).forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const item = WATCHLIST[parseInt(btn.dataset.idx)];
+        if (!item) return;
+        switchPage("desk");
+        setTimeout(() => {
+          const ti = $("#form-ticker"); if (ti) ti.value = item.sym;
+          const ei = $("#form-entry");  if (ei && item.price) ei.value = item.price;
+          openModal("new-position-modal");
+        }, 80);
+      });
+    });
+    $$(".wl-note", content).forEach(ta => {
+      ta.addEventListener("blur", () => {
+        const item = WATCHLIST[parseInt(ta.dataset.idx)];
+        if (item) { item.note = ta.value; saveToStorage(); }
+      });
+    });
+  }
+
+  function watchlistCardHTML(item, idx) {
+    const bxScoreNum = parseFloat(item.bxScore) || 0;
+    const scoreColor = bxScoreNum >= 70 ? "var(--up)" : bxScoreNum >= 50 ? "var(--warn)" : "var(--down)";
+    const bxCls = slopeNumClass(item.bxSlope ?? 0);
+    return `<div class="wl-card">
+      <div class="wl-card-main">
+        <div class="jc-ticker" style="min-width:140px">
+          <div class="avatar">${item.sym.slice(0, 4)}</div>
+          <div>
+            <div class="mono" style="font-size:13px;font-weight:600">${item.sym}</div>
+            <div class="muted" style="font-size:10.5px">${item.name}</div>
+          </div>
+        </div>
+        <div class="wl-meta">
+          <span style="display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--fg-2)">
+            <span style="width:8px;height:8px;border-radius:50%;background:${item.color};display:inline-block;flex-shrink:0"></span>${item.sector}
+          </span>
+          ${item.setup ? `<span class="setup-chip" style="font-size:10px;padding:2px 6px">${item.setup}</span>` : ""}
+        </div>
+        <div class="wl-bx-score" style="color:${scoreColor}">
+          <span class="mono" style="font-size:20px;font-weight:700">${item.bxScore}</span>
+          <span class="muted" style="font-size:9.5px">/ 100</span>
+        </div>
+        <div class="wl-slope">
+          <span class="bx-chip-slope ${bxCls}" style="min-width:36px;text-align:center;font-size:12px">${slopeNumDisplay(item.bxSlope ?? 0)}</span>
+          <span class="muted" style="font-size:9.5px">Slope</span>
+        </div>
+        ${item.price ? `<div class="wl-price">
+          <span class="mono" style="font-size:13px;font-weight:600">$${price(item.price)}</span>
+          <span class="muted" style="font-size:9.5px">参考价</span>
+        </div>` : ""}
+        <div class="wl-actions">
+          <button class="btn primary wl-add-pos" data-idx="${idx}" style="font-size:11.5px;padding:6px 12px">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>入仓
+          </button>
+          <button class="btn wl-delete" data-idx="${idx}" style="color:var(--down);border-color:var(--down-dim);padding:6px 10px">✕</button>
+        </div>
+      </div>
+      <textarea class="wl-note journal-note-area" data-idx="${idx}" rows="2"
+                placeholder="观察笔记、入场条件、关键价位…">${item.note || ""}</textarea>
+    </div>`;
+  }
+
+  function wireWatchlistForm() {
+    const form       = $("#wl-add-form");
+    const toggleBtn  = $("#wl-toggle-form");
+    const formBody   = $("#wl-form-body");
+    if (!form) return;
+
+    if (toggleBtn && formBody) {
+      toggleBtn.addEventListener("click", () => {
+        const hidden = formBody.style.display === "none";
+        formBody.style.display = hidden ? "" : "none";
+        toggleBtn.textContent = hidden ? "取消" : "+ 添加标的";
+      });
+    }
+
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      const sym = ($("#wl-sym").value || "").toUpperCase().trim();
+      if (!sym) return;
+      if (WATCHLIST.find(w => w.sym === sym)) { alert("已在观察列表中"); return; }
+      WATCHLIST.push({
+        sym, name: $("#wl-name").value.trim() || sym,
+        sector: $("#wl-sector").value.trim() || "—",
+        color: "oklch(0.35 0.01 250)",
+        price: parseFloat($("#wl-price").value) || null,
+        setup: $("#wl-setup").value.trim() || "",
+        bxScore: parseInt($("#wl-bx-score").value) || 50,
+        bxSlope: parseInt($("#wl-bx-slope").value) || 0,
+        note: "", addedAt: new Date().toISOString().slice(0, 10),
+      });
+      saveToStorage();
+      form.reset();
+      if (formBody) formBody.style.display = "none";
+      if (toggleBtn) toggleBtn.textContent = "+ 添加标的";
+      renderWatchlist();
+    });
+  }
+
   // ============ TICKER TAPE ============
   function renderTape() {
     const track = document.getElementById("tape-track");
@@ -1363,6 +1647,7 @@
   wireEquityModal();
   wireClosePositionModal();
   wireDeleteModal();
+  wireWatchlistForm();
   tick(); setInterval(tick, 1000);
 
 })();

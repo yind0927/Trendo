@@ -1260,6 +1260,60 @@
   .jc-note-wrap textarea.journal-note-area:focus { border-color: var(--accent-line); }
   .jc-note-wrap textarea.journal-note-area::placeholder { color: var(--fg-3); }
 
+  /* ANALYTICS VIEW */
+  #analytics-view { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
+  #analytics-content {}
+  .analytics-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .analytics-metrics {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 18px;
+  }
+  @media (max-width: 900px) { .analytics-metrics { grid-template-columns: repeat(3, 1fr); } }
+  .analytics-metric {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .analytics-metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
+  .analytics-metric-value { font-size: 20px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.01em; }
+  .analytics-metric-value.up { color: var(--up); }
+  .analytics-metric-value.down { color: var(--down); }
+  .analytics-metric-value.neu { color: var(--fg-0); }
+  .analytics-metric-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .analytics-chart-row { display: flex; gap: 12px; margin-bottom: 14px; }
+  .analytics-card {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
+    min-width: 0;
+  }
+  .analytics-card-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-1); }
+  .analytics-card-sub { font-size: 10.5px; color: var(--fg-3); margin-top: 2px; font-family: var(--f-mono); }
+  .curve-labels { display: flex; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
+  .trade-bar-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  .trade-bar-sym { font-size: 10.5px; font-weight: 600; width: 42px; flex-shrink: 0; }
+  .trade-bar-track { flex: 1; height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+  .trade-bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  .trade-bar-val { font-size: 10.5px; width: 68px; text-align: right; flex-shrink: 0; }
+
+  /* WATCHLIST VIEW */
+  .watchlist-content { display: flex; flex-direction: column; gap: 10px; }
+  .wl-add-form { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .wl-form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .form-input {
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--fg-0); font-family: var(--f-mono); font-size: 12.5px;
+    padding: 7px 10px; outline: none; transition: border-color .15s;
+  }
+  .form-input:focus { border-color: var(--accent-line); }
+  .wl-card {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .wl-card-main { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .wl-meta { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+  .wl-bx-score { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 50px; }
+  .wl-slope { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 44px; }
+  .wl-price { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .wl-actions { display: flex; gap: 6px; margin-left: auto; align-items: center; }
+  .wl-note { width: 100% !important; box-sizing: border-box; resize: vertical; }
+
   /* EDITABLE POSITION FIELDS */
   .pos-edit {
     display: inline-block; cursor: text; outline: none;
@@ -1731,7 +1785,33 @@
   <div id="journal-feed" class="journal-feed"></div>
 </div>
 
-<!-- ============ DRAWER ============ -->
+<!-- ============ ANALYTICS VIEW ============ -->
+<div id="analytics-view" style="display:none">
+  <div id="analytics-content"></div>
+</div>
+
+<!-- ============ WATCHLIST VIEW ============ -->
+<div id="watchlist-view" style="display:none">
+  <div class="journal-topbar" style="max-width:960px;margin:0 auto;padding:24px 20px 0">
+    <div class="journal-title">Watchlist</div>
+    <button class="btn primary" id="wl-toggle-form">+ 添加标的</button>
+  </div>
+  <div id="wl-form-body" style="display:none;max-width:960px;margin:0 auto;padding:12px 20px 0">
+    <form id="wl-add-form" class="wl-add-form">
+      <div class="wl-form-row">
+        <input id="wl-sym"      class="form-input" placeholder="代码 e.g. TSLA" required style="width:90px"/>
+        <input id="wl-name"     class="form-input" placeholder="名称" style="flex:1"/>
+        <input id="wl-sector"   class="form-input" placeholder="Sector" style="width:130px"/>
+        <input id="wl-price"    class="form-input" type="number" placeholder="参考价" step="0.01" style="width:90px"/>
+        <input id="wl-setup"    class="form-input" placeholder="Setup 类型" style="width:110px"/>
+        <input id="wl-bx-score" class="form-input" type="number" placeholder="BX 0-100" min="0" max="100" style="width:90px"/>
+        <input id="wl-bx-slope" class="form-input" type="number" placeholder="Slope" style="width:80px"/>
+        <button type="submit" class="btn primary" style="flex-shrink:0">添加</button>
+      </div>
+    </form>
+  </div>
+  <div id="watchlist-content" class="watchlist-content" style="max-width:960px;margin:0 auto;padding:16px 20px 60px"></div>
+</div>
 <div class="drawer-backdrop" id="backdrop"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 

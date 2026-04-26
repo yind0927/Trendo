@@ -244,3 +244,12 @@ window.COLS = [
   { id: "target",     label: "止盈",    r: true,  on: true, closedHide: true },
   { id: "progstatus", label: "状态",    r: false, on: true, locked: true },
 ];
+
+// Default watchlist data
+window.WATCHLIST = [
+  { sym: "ARM",  name: "Arm Holdings",       sector: "Semi / AI",   color: "oklch(0.70 0.16 200)", price: 132.40, setup: "VCP",          note: "关注 base 完成后的 breakout 确认",  bxScore: 74, bxSlope: 5,  addedAt: "2026-04-20" },
+  { sym: "MRVL", name: "Marvell Technology",  sector: "Semi / AI",   color: "oklch(0.70 0.16 200)", price:  68.20, setup: "Base Breakout", note: "AI 推理芯片供应链，等待量能",        bxScore: 68, bxSlope: 3,  addedAt: "2026-04-19" },
+  { sym: "RDDT", name: "Reddit Inc",          sector: "Social Media", color: "oklch(0.72 0.14 280)", price: 154.80, setup: "EP Breakout",   note: "广告收入增速超预期，IPO 后首次盈利", bxScore: 65, bxSlope: 4,  addedAt: "2026-04-22" },
+  { sym: "ALAB", name: "Astera Labs",         sector: "Semi / AI",   color: "oklch(0.70 0.16 200)", price:  88.50, setup: "Pullback",      note: "数据中心互联，21EMA 附近关注",       bxScore: 70, bxSlope: 6,  addedAt: "2026-04-21" },
+  { sym: "XBI",  name: "SPDR Biotech ETF",    sector: "Healthcare",  color: "oklch(0.78 0.13 90)",  price:  82.30, setup: "Momentum",      note: "等待 FDA 催化事件，目前观望",         bxScore: 44, bxSlope: -2, addedAt: "2026-04-18" },
+];
