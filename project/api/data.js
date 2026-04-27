@@ -3,8 +3,8 @@
 // POST /api/data?key=xxxx  → { ok: true }  (body = data payload)
 
 export default async function handler(req, res) {
-  const url   = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url   = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
   if (!url || !token) return res.status(503).json({ error: "Storage not configured" });
 
   const syncKey = (req.query.key || "").trim();
