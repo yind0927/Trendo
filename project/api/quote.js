@@ -20,20 +20,23 @@ export default async function handler(req, res) {
   const results = {};
   const _debug  = {};
 
-  // ── Stocks + ETFs ──────────────────────────────────────────────
+  // ── Stocks + ETFs via snapshot ────────────────────────────────
   if (stocks.length) {
     try {
       const url = `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers` +
         `?tickers=${stocks.join(",")}&apiKey=${key}`;
       const r    = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      const data = await r.json();
+      const raw  = await r.text();
+      _debug.stocks_http = r.status;
 
-      _debug.stocks_status   = data.status;
-      _debug.stocks_count    = data.tickers?.length ?? 0;
-      _debug.stocks_sample   = data.tickers?.[0] ?? null;  // first ticker raw for inspection
+      let data;
+      try { data = JSON.parse(raw); } catch { _debug.stocks_parse_err = raw.slice(0, 200); data = {}; }
+
+      _debug.stocks_status  = data.status;
+      _debug.stocks_count   = data.tickers?.length ?? 0;
+      _debug.stocks_sample  = data.tickers?.[0] ?? null;
 
       (data.tickers || []).forEach(t => {
-        // Try fields from most-current to least: latest-minute close → day close → prev-day close → last trade
         const last = t.min?.c ?? t.day?.c ?? t.prevDay?.c ?? t.lastTrade?.p ?? null;
         results[t.ticker] = {
           last,
@@ -48,17 +51,30 @@ export default async function handler(req, res) {
 
   // ── Fallback: /v2/aggs/ticker/{sym}/prev for any stock with no price ──
   const missing = stocks.filter(s => results[s]?.last == null);
+  _debug.fallback_missing = missing;
+
   for (const sym of missing.slice(0, 8)) {
     try {
       const url  = `https://api.polygon.io/v2/aggs/ticker/${sym}/prev?adjusted=true&apiKey=${key}`;
       const r    = await fetch(url, { signal: AbortSignal.timeout(5000) });
-      const data = await r.json();
-      const bar  = data.results?.[0];
+      const raw  = await r.text();
+      _debug[`fallback_${sym}_http`] = r.status;
+
+      let data;
+      try { data = JSON.parse(raw); } catch { _debug[`fallback_${sym}_err`] = raw.slice(0, 200); continue; }
+
+      _debug[`fallback_${sym}_status`]       = data.status;
+      _debug[`fallback_${sym}_resultsCount`] = data.resultsCount;
+      _debug[`fallback_${sym}_sample`]       = data.results?.[0] ?? null;
+
+      const bar = data.results?.[0];
       if (bar?.c) {
         results[sym] = { last: bar.c, prevClose: bar.o, changePct: null };
-        _debug[`fallback_${sym}`] = "used prev aggs";
+        _debug[`fallback_${sym}_used`] = true;
       }
-    } catch (_) {}
+    } catch (e) {
+      _debug[`fallback_${sym}_catch`] = e.message;
+    }
   }
 
   // ── Crypto (Polygon format: X:BTCUSD) ──────────────────────────
