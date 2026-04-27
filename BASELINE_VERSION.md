@@ -1,83 +1,66 @@
-# Trendo v5.1 Baseline Version
+# Trendo v5.2 Baseline Version
 
 **记录时间**: 2026-04-27  
-**Git Commit**: `ae0ac7d`  
-**Git Tag**: `v5.1-baseline`  
-**状态**: ✅ 完全功能 + 已部署到 Vercel
+**Git Commit**: `48f3769`  
+**Git Tag**: `v5.2-baseline`  
+**状态**: ✅ 正式启用 · 实时行情 · 跨设备同步 · 已部署到 Vercel
 
-> **注意**: "回到版本" 指的是此版本 (v5.1-baseline)。
-
----
-
-## 功能清单（在 v5.0 基础上新增）
-
-### v5.1 新增
-
-- ✅ **Simulation 模拟仓页面** — 位于 Journal 和 Analytics 之间
-  - 深蓝色主题（`oklch(0.58 0.20 252)`），与真实持仓视觉区分
-  - 4 张总览卡：模拟 NAV / 浮盈亏 / 已实现盈亏 / 胜率
-  - 模拟本金可编辑（默认 $100,000），持久化到 localStorage
-  - 完整持仓表格：同列 / 同排序 / 同筛选 / 同搜索逻辑
-  - Open / Closed 双 Tab，完整抽屉（含编辑 + BX 编辑）
-  - 平仓弹窗 / 删除确认弹窗 — 上下文感知（区分真实 vs 模拟）
-  - New Sim Position 按钮 — 共用 New Position 弹窗，推入 SIM_HOLDINGS
-  - 所有模拟数据独立持久化（`trendo_v3_sim_*` localStorage 键）
+> **注意**: "回到版本" 指的是此版本 (v5.2-baseline)。
 
 ---
 
-## 功能清单（在 v3.0 基础上新增）
+## 相较 v5.1 新增功能
 
-### 新增功能
+### 实时行情
+- ✅ **Polygon.io 接入** — `/api/quote.js` Vercel 无服务器函数代理
+  - 免费套餐使用 `/v2/aggs/ticker/{sym}/prev` 端点（日线数据）
+  - 全仓并行请求，每 30 秒自动刷新
+  - 顶栏显示 `LIVE · HH:MM` 绿色状态指示
+- ✅ **实时行情播放条** — 显示持仓标的今日涨跌幅（vs 昨收），随价格更新刷新
 
-- ✅ **数据持久化** — localStorage 保存持仓/平仓/总资产/Watchlist，刷新不丢失
+### 跨设备同步
+- ✅ **Upstash Redis 同步** — `/api/data.js` GET/POST 端点
+  - 生成 `xxxx-xxxx-xxxx` 格式私密同步密钥
+  - 每次保存后 2 秒防抖推送到云端
+  - 页面加载时自动拉取云端数据
+  - 顶栏云图标显示同步状态（绿色已同步 / 橙色连接中 / 红色失败）
+  - 环境变量：`KV_REST_API_URL` + `KV_REST_API_TOKEN`
 
-- ✅ **编辑现有持仓** — 抽屉内 last / stop / target / size 可直接 contenteditable 编辑
-  - 修改后自动 recomputeHolding，实时更新 qty / PnL / rMult
+### 正式启用
+- ✅ **标签栏标题** — `Trendo - Swing Trading Concepts`
+- ✅ **SVG Favicon** — 与顶栏 logo 一致的浏览器标签页图标
+- ✅ **清空示例数据** — HOLDINGS / CLOSED_POSITIONS / WATCHLIST 全部清空
+- ✅ **总资产基准** — 默认 $60,000（原 $284,620）
+- ✅ **localStorage 升级** — `trendo_v3_*` → `trendo_v4_*`，旧示例数据不再加载
 
-- ✅ **已平仓抽屉布局** — 显示成本价、出场价、盈亏金额、盈亏%、R 倍数、持仓天数
-
-- ✅ **今日盈亏真实计算** — 基于 prevClose 数据，sum((last-prevClose)*qty)
-
-- ✅ **总资产与持仓联动** — portfolioValue = totalNotional + sum(unrealized PnL)
-
-- ✅ **已平仓列表优化** — 隐藏止盈/止损列，状态显示"盈利·Win / 亏损·Loss"
-
-- ✅ **复盘 BX Bars** — 平均收益从 R 改为实际 $ 金额显示
-
-- ✅ **平仓按钮主题色** — btn-exit-pos 使用 accent 主题色强调
-
-- ✅ **Journal 页面** — 持仓日志流，含 Thesis / BX 上下文 / Notes 编辑
-  - 支持 全部 / 持仓中 / 已平仓 筛选
-  - Notes 实时保存到 localStorage
-
-- ✅ **Analytics 页面** — 6个核心指标 + 总资产曲线 + BX Bars 效能 + 交易分布 + 持仓风险表
-  - 总资产曲线支持 日/周/月 周期选择器
-  - 曲线显示实际 totalNotional + unrealized PnL 为基准
-
-- ✅ **Watchlist 页面** — 观察标的卡片，含 BX Score / Slope / Setup / Notes
-  - 快速添加到 New Position 联动
-  - 添加表单支持 symbol / price / sector / setup / BX 评分
-
-- ✅ **仓位分布真实计算** — pieCard 基于 HOLDINGS 按 sector 分组真实聚合
-
-- ✅ **抽屉 R:R 比率** — §01 显示 (target-cost)/(cost-stop) 固定盈亏比，替代动态 R 倍数
+### 财报日历
+- ✅ **动态财报日历** — 自动从真实持仓 + 模拟仓读取 `earnings` 字段
+  - 过滤未来 14 天内有财报的标的
+  - 持仓来源徽章（持仓 / 模拟）
+  - 天数倒计时（≤2天红色 / ≤6天橙色）
+  - 按 `holdEarn` 字段显示计划决定（计划持有 / 计划减仓）
+  - 无事件时显示空状态提示
+- ✅ **移除最常见错误标签** — §03 REVIEW 中间面板清理
 
 ---
 
 ## 完整功能清单
 
-- ✅ Portfolio Overview — 4张总览卡 + 横向柱状图（真实仓位分布）
-- ✅ Holdings Table — Open / Closed 双 Tab，排序/筛选/搜索
-- ✅ 5级进度状态系统（近止损/初期/中期/进行中/接近止盈）
-- ✅ Open Position Modal — 新建持仓，支持美股/ETF/加密货币
+- ✅ Portfolio Overview — 4 张总览卡 + 横向柱状图
+- ✅ Holdings Table — Open / Closed 双 Tab，排序 / 筛选 / 搜索
+- ✅ 5 级进度状态系统
+- ✅ Open Position Modal — 新建持仓，支持美股 / ETF / 加密货币
 - ✅ Close Position Modal — 平仓价输入 + PnL 预览
-- ✅ Delete Confirm Modal — 自定义确认弹窗
+- ✅ Delete Confirm Modal
 - ✅ Position Drawer — 持仓详情，支持编辑 + 平仓
 - ✅ Journal 页 — 持仓日志流 + Notes 编辑
-- ✅ Analytics 页 — 总资产曲线 + 交易分析
+- ✅ Simulation 页 — 深蓝色主题，独立模拟仓，与真实仓完全相同逻辑
+- ✅ Analytics 页 — 总资产曲线（日/周/月）+ 交易分析 + 动态财报日历
 - ✅ Watchlist 页 — 观察标的管理
-- ✅ LIVE TAPE — 仅显示持仓代码，hover 暂停
-- ✅ localStorage 持久化
+- ✅ LIVE TAPE — 实时今日涨跌幅，hover 暂停
+- ✅ 实时行情 — Polygon.io 每 30 秒刷新
+- ✅ 跨设备同步 — Upstash Redis，密钥授权
+- ✅ localStorage 持久化 (`trendo_v4_*`)
 
 ---
 
@@ -87,38 +70,20 @@
 let sortKey = "pnl", sortDir = -1;
 let filter = "all", query = "";
 let selectedSym = null;
-let activeTab = "open";           // "open" | "closed"
-let totalNotional = 284620;
-let reviewPeriod = "week";        // "week" | "month" | "all"
+let activeTab = "open";
+let totalNotional = 60000;
+let reviewPeriod = "week";
 let pendingCloseSym = null;
 let pendingDeleteSym = null, pendingDeleteFrom = null;
-let currentPage = "desk";         // "desk" | "journal" | "analytics" | "watchlist"
+let currentPage = "desk";
 let journalFilter = "all";
-let equityPeriod = "week";        // "day" | "week" | "month"
-```
-
----
-
-## 数据结构
-
-```js
-// 持仓字段
-{
-  sym, name, cost, last, stop, target, size,
-  kind: "equity" | "etf" | "crypto",
-  prevClose,            // 昨收价，用于今日盈亏计算
-  qty, pnlDollar, pnlPct, risk1R, rMult,  // 自动计算
-  bx: { sector, dailyBars, score, bxSlope, vooSlope },
-  thesis, notes,
-  // 平仓后新增
-  closedAt, closePrice, pnlFinal, exitReason, days,
-}
-
-// Watchlist 字段
-{
-  sym, name, sector, color, price, setup,
-  note, bxScore, bxSlope, addedAt,
-}
+let equityPeriod = "week";
+let simActiveTab = "open";
+let simNotional = 100000;
+let newPositionContext = "desk";
+let pendingCloseCtx = "desk";
+let pendingDeleteCtx = "desk";
+let syncKey = localStorage.getItem("trendo_sync_key") || "";
 ```
 
 ---
@@ -127,34 +92,35 @@ let equityPeriod = "week";        // "day" | "week" | "month"
 
 ```
 project/
-├── index.html   # 主入口，含全部 CSS + 4个页面视图 + Modal HTML
-├── data.js      # 持仓数据 + PREV_CLOSE + WATCHLIST + BUCKET_STATUS + progressBucket
-└── desk.js      # 渲染逻辑 + 交互 + 4个页面渲染函数
+├── index.html        # 主入口，含全部 CSS + 5 个页面视图 + Modal HTML
+├── data.js           # 全局数组 + BUCKET_STATUS + progressBucket + COLS
+├── desk.js           # 渲染逻辑 + 交互 + 同步逻辑
+├── logo.svg          # 浏览器标签页图标
+└── api/
+    ├── quote.js      # Polygon.io 行情代理（Vercel 无服务器函数）
+    └── data.js       # Upstash Redis 同步接口（GET/POST）
 ```
+
+---
+
+## 环境变量（Vercel）
+
+| 变量名 | 用途 |
+|--------|------|
+| `POLYGON_API_KEY` | Polygon.io 行情 API 密钥 |
+| `KV_REST_API_URL` | Upstash Redis REST 地址 |
+| `KV_REST_API_TOKEN` | Upstash Redis 写入 Token |
 
 ---
 
 ## 回到此版本
 
 ```bash
-# 检出 v4.0 基线版本
-git checkout v4.0-baseline
-
-# 或直接用 commit hash
-git checkout c272fa1
-
-# 查看所有标签
-git tag -l
+git checkout v5.2-baseline
+# 或
+git checkout 48f3769
 ```
 
 ---
 
-## 已知限制
-
-1. **无后端** — 所有数据都是前端模拟
-2. **静态价格** — 持仓价格为硬编码，无实时行情接入
-3. **曲线数据模拟** — Analytics 权益曲线历史数据为插值生成
-
----
-
-**此版本标志**: 4页面布局(Desk/Journal/Analytics/Watchlist) + 总资产曲线日周月 + 持久化 + 编辑持仓 + 真实计算 ✅
+**此版本标志**: 正式启用 · 实时行情 · 跨设备同步 · 动态财报日历 ✅
