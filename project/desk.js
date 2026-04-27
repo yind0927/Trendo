@@ -488,6 +488,7 @@
       localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(SIM_HOLDINGS));
       localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
+      localStorage.setItem("trendo_v4_savedAt",      new Date().toISOString());
     } catch (e) { /* storage unavailable */ }
   }
 
@@ -2490,8 +2491,19 @@
   wireSimControls();
   wireSyncPanel();
   renderSyncStatus();
-  // Pull from cloud, then push current state (sets lastSyncAt on success)
-  if (syncKey) syncPull(syncKey).then(data => { if (data) applyCloudData(data); syncPush(); });
+  // Pull from cloud; only apply if cloud is newer than local, then push winner back up
+  if (syncKey) syncPull(syncKey).then(cloudData => {
+    if (cloudData) {
+      const cloudTime = cloudData.savedAt ? new Date(cloudData.savedAt) : null;
+      const localStr  = localStorage.getItem("trendo_v4_savedAt");
+      const localTime = localStr ? new Date(localStr) : null;
+      // Apply cloud data only when it is strictly newer than local
+      if (cloudTime && (!localTime || cloudTime > localTime)) {
+        applyCloudData(cloudData);
+      }
+    }
+    syncPush(); // always push current (winning) state to keep cloud up to date
+  });
   tick(); setInterval(tick, 1000);
 
 })();
