@@ -247,8 +247,7 @@
         }
         h[f] = v;
         const notional = currentPage === "sim" ? simNotional : totalNotional;
-        if (f === "size") h.qty = Math.round((v / 100 * notional) / h.cost);
-        recomputeHolding(h);
+        recomputeHolding(h, notional);
         saveToStorage();
         if (currentPage === "sim") { renderSimTable(); renderSimOverview(); }
         else { renderTable(); renderOverview(); }
@@ -446,11 +445,12 @@
   }
 
   // ============ DERIVED FIELD RECOMPUTE ============
-  function recomputeHolding(h) {
-    h.qty = Math.round((h.size / 100 * totalNotional) / h.cost);
+  function recomputeHolding(h, notional) {
+    const base = notional ?? totalNotional;
+    h.qty = Math.round((h.size / 100 * base) / h.cost);
     h.pnlDollar = Math.round((h.last - h.cost) * h.qty);
     h.pnlPct = h.cost > 0 ? (h.last - h.cost) / h.cost : 0;
-    h.risk1R = h.cost - h.stop;
+    h.risk1R = h.stop ? h.cost - h.stop : 0;
     h.rMult = h.risk1R !== 0 ? (h.last - h.cost) / h.risk1R : 0;
   }
 
@@ -1040,23 +1040,23 @@
 
     form.addEventListener("submit", e => {
       e.preventDefault();
-      const sym = $("#form-ticker").value.toUpperCase().trim();
-      const entry = parseFloat($("#form-entry").value);
-      const stop = parseFloat($("#form-stop").value);
-      const target = parseFloat($("#form-target").value);
-      const qty = parseInt($("#form-qty").value);
+      const sym    = $("#form-ticker").value.toUpperCase().trim();
+      const entry  = parseFloat($("#form-entry").value);
+      const stop   = parseFloat($("#form-stop").value)   || 0;
+      const target = parseFloat($("#form-target").value) || 0;
+      const qty    = parseInt($("#form-qty").value);
+      const isSim  = newPositionContext === "sim";
 
-      if (!sym || !entry || !stop || !target || !qty) {
-        alert("All fields required");
-        return;
-      }
-      const targetHoldings = newPositionContext === "sim" ? SIM_HOLDINGS : HOLDINGS;
-      const targetClosed   = newPositionContext === "sim" ? SIM_CLOSED   : CLOSED_POSITIONS;
+      if (!sym || !entry || !qty) { alert("请填写 Ticker、入场价、数量"); return; }
+      if (!isSim && (!stop || !target)) { alert("真实仓位必须填写止损和止盈"); return; }
+
+      const targetHoldings = isSim ? SIM_HOLDINGS : HOLDINGS;
+      const targetClosed   = isSim ? SIM_CLOSED   : CLOSED_POSITIONS;
       if (targetHoldings.find(h => h.sym === sym) || targetClosed.find(h => h.sym === sym)) {
         alert("Position already exists");
         return;
       }
-      if (stop >= entry || entry >= target) {
+      if (!isSim && (stop >= entry || entry >= target)) {
         alert("Invalid price levels: stop < entry < target");
         return;
       }
@@ -1064,19 +1064,21 @@
       const kindBtn = $("#form-kind-seg .active");
       const kind = kindBtn ? kindBtn.dataset.kind : "equity";
 
+      const base   = isSim ? simNotional : totalNotional;
+      const size   = base > 0 ? (qty * entry / base) * 100 : 2.5;
       const newPos = {
         sym, qty, name: sym,
         kind,
         entry: new Date().toISOString().slice(0, 10),
         cost: entry, last: entry,
-        size: 2.5,
+        size,
         stop, target,
         setup: "Manual Entry",
-        thesis: "Manually entered position",
+        thesis: "",
         earnings: null, holdEarn: false,
         status: "ok",
         pnlPct: 0, pnlDollar: 0,
-        risk1R: entry - stop,
+        risk1R: stop ? entry - stop : 0,
         rMult: 0,
         days: 1,
         spark: [entry],
@@ -1404,12 +1406,13 @@
       all.forEach(h => {
         const q = results[h.sym];
         if (!q) return;
-        if (q.last != null && Math.abs(q.last - h.last) > 0.0001) {
+        const notional = SIM_HOLDINGS.includes(h) ? simNotional : totalNotional;
+        if (q.prevClose != null) h.prevClose = q.prevClose;
+        if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
           changed = true;
+          recomputeHolding(h, notional);
         }
-        if (q.prevClose != null) h.prevClose = q.prevClose;
-        if (changed) recomputeHolding(h);
       });
 
       if (changed) {
@@ -1736,8 +1739,7 @@
         const v = parseFloat(el.textContent.trim().replace(/[^0-9.-]/g, ""));
         if (isNaN(v) || v <= 0) { el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`; return; }
         h[f] = v;
-        if (f === "size") h.qty = Math.round((v / 100 * simNotional) / h.cost);
-        recomputeHolding(h);
+        recomputeHolding(h, simNotional);
         saveToStorage();
         renderSimTable(); renderSimOverview();
         el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`;

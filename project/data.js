@@ -11,9 +11,11 @@ window.STATUS_LABEL = {
 
 // Progress bucket function for 5-stage position lifecycle
 window.progressBucket = h => {
-  const p = (h.last - h.stop) / (h.target - h.stop);
-  if ((h.target - h.last) / (h.target - h.stop) < 0.05) return "Near Stop";
+  if (!h.stop || !h.target || h.stop >= h.target) return "Early";
+  const range = h.target - h.stop;
+  const p = (h.last - h.stop) / range;
   if (p < 0) return "Near Stop";
+  if ((h.target - h.last) / range < 0.05) return "Near Target";
   if (p < 0.30) return "Early";
   if (p < 0.60) return "Midway";
   if (p < 0.95) return "On Track";
