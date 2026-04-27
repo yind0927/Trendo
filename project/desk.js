@@ -176,9 +176,17 @@
         <span class="bx-val">${o.label}</span>
         <span class="bx-sub">${o.sub}</span>
       </button>`).join("");
-    const slopeBtn = (field, val) => {
-      const cls = slopeClass(val);
-      return `<button class="bx-slope-btn slope-${cls}" data-bx-field="${field}" data-bx-val="cycle" title="点击切换: 绿↑橙—红↓"></button>`;
+    const slopeCell = (field, val) => {
+      const n = parseFloat(val) || 0;
+      const up = n > 0, dn = n < 0, fl = n === 0;
+      return `<div class="bx-slope-cell">
+        <input type="number" class="bx-slope-input" data-slope-field="${field}" value="${n}" step="0.1">
+        <div class="bx-slope-dots">
+          <button class="bx-dot up${up ? ' active' : ''}" data-slope-field="${field}" data-dot-val="1" title="上升"></button>
+          <button class="bx-dot flat${fl ? ' active' : ''}" data-slope-field="${field}" data-dot-val="0" title="中性"></button>
+          <button class="bx-dot down${dn ? ' active' : ''}" data-slope-field="${field}" data-dot-val="-1" title="下降"></button>
+        </div>
+      </div>`;
     };
     return `
       <div class="drawer-section">
@@ -218,7 +226,7 @@
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="sectorScore">${bx.sector.score}</span>
-            ${slopeBtn("sectorSlope", bx.sector.slope)}
+            ${slopeCell("sectorSlope", bx.sector.slope)}
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
@@ -226,7 +234,7 @@
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="overallScore">${bx.overall.score}</span>
-            ${slopeBtn("overallSlope", bx.overall.slope)}
+            ${slopeCell("overallSlope", bx.overall.slope)}
           </div>
         </div>
       </div>`;
@@ -276,8 +284,45 @@
 
   function wireBX(h) {
     const dr = $("#drawer");
-    const cycleSlope = cur => parseFloat(cur) > 0 ? 0 : parseFloat(cur) < 0 ? 1 : -1;
 
+    const setSlopeValue = (field, n) => {
+      if (field === "sectorSlope")  h.bx.sector.slope  = n;
+      else                          h.bx.overall.slope = n;
+    };
+    const syncDots = (field, n) => {
+      $$(`[data-slope-field="${field}"].bx-dot`, dr).forEach(dot => {
+        const dv = parseFloat(dot.dataset.dotVal);
+        dot.classList.toggle("active", (n > 0 && dv === 1) || (n === 0 && dv === 0) || (n < 0 && dv === -1));
+      });
+    };
+
+    // Slope: number input
+    $$(".bx-slope-input", dr).forEach(input => {
+      const commit = () => {
+        const field = input.dataset.slopeField;
+        const n = parseFloat(input.value) || 0;
+        setSlopeValue(field, n);
+        syncDots(field, n);
+        saveToStorage();
+      };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
+    });
+
+    // Slope: dot buttons
+    $$(".bx-dot[data-dot-val]", dr).forEach(dot => {
+      dot.addEventListener("click", () => {
+        const field = dot.dataset.slopeField;
+        const n = parseFloat(dot.dataset.dotVal);
+        setSlopeValue(field, n);
+        const inp = $(`.bx-slope-input[data-slope-field="${field}"]`, dr);
+        if (inp) inp.value = n;
+        syncDots(field, n);
+        saveToStorage();
+      });
+    });
+
+    // Score/color/bars buttons
     $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
       if (btn.tagName !== "BUTTON") return;
       btn.addEventListener("click", () => {
@@ -295,14 +340,6 @@
           const cur = SWATCH_COLORS.indexOf(h.bx.sector.color);
           h.bx.sector.color = SWATCH_COLORS[(cur + 1) % SWATCH_COLORS.length];
           btn.style.background = h.bx.sector.color;
-
-        } else if (field === "sectorSlope") {
-          h.bx.sector.slope = cycleSlope(h.bx.sector.slope);
-          btn.className = `bx-slope-btn slope-${slopeClass(h.bx.sector.slope)}`;
-
-        } else if (field === "overallSlope") {
-          h.bx.overall.slope = cycleSlope(h.bx.overall.slope);
-          btn.className = `bx-slope-btn slope-${slopeClass(h.bx.overall.slope)}`;
         }
 
         saveToStorage();
@@ -1032,7 +1069,13 @@
     const closeBtn = $("#new-pos-close");
     const cancelBtn = $("#new-pos-cancel");
 
-    openBtn.addEventListener("click", () => openModal("new-position-modal"));
+    const todayStr = () => new Date().toISOString().slice(0, 10);
+    const resetDateFields = () => {
+      const fd = $("#form-date"); if (fd) fd.value = todayStr();
+      const fe = $("#form-earnings"); if (fe) fe.value = "";
+    };
+
+    openBtn.addEventListener("click", () => { resetDateFields(); openModal("new-position-modal"); });
     closeBtn.addEventListener("click", () => closeModal("new-position-modal"));
     cancelBtn.addEventListener("click", () => closeModal("new-position-modal"));
 
@@ -1047,6 +1090,30 @@
       });
     }
 
+    // Wire earnings auto-fetch button
+    const fetchEarnBtn = $("#form-earnings-fetch");
+    if (fetchEarnBtn) {
+      fetchEarnBtn.addEventListener("click", async () => {
+        const sym = $("#form-ticker").value.toUpperCase().trim();
+        if (!sym) { alert("请先填写 Ticker Symbol"); return; }
+        fetchEarnBtn.disabled = true;
+        fetchEarnBtn.textContent = "获取中…";
+        try {
+          const r = await fetch(`/api/earnings?sym=${encodeURIComponent(sym)}`);
+          const data = await r.json();
+          if (data.date) {
+            const fe = $("#form-earnings"); if (fe) fe.value = data.date;
+            fetchEarnBtn.textContent = "✓ 已获取";
+          } else {
+            fetchEarnBtn.textContent = "未找到";
+          }
+        } catch {
+          fetchEarnBtn.textContent = "失败";
+        }
+        setTimeout(() => { fetchEarnBtn.disabled = false; fetchEarnBtn.textContent = "Auto-fetch"; }, 2000);
+      });
+    }
+
     form.addEventListener("submit", e => {
       e.preventDefault();
       const sym    = $("#form-ticker").value.toUpperCase().trim();
@@ -1055,6 +1122,12 @@
       const target = parseFloat($("#form-target").value) || 0;
       const qty    = parseInt($("#form-qty").value);
       const isSim  = newPositionContext === "sim";
+
+      const entryDateStr = ($("#form-date") && $("#form-date").value) || todayStr();
+      const entryDate    = new Date(entryDateStr + "T00:00:00");
+      const today        = new Date(); today.setHours(0, 0, 0, 0);
+      const daysHeld     = Math.max(1, Math.round((today - entryDate) / 86400000) + 1);
+      const earningsStr  = ($("#form-earnings") && $("#form-earnings").value) || null;
 
       if (!sym || !entry || !qty) { alert("请填写 Ticker、入场价、数量"); return; }
       if (!isSim && (!stop || !target)) { alert("真实仓位必须填写止损和止盈"); return; }
@@ -1078,20 +1151,20 @@
       const newPos = {
         sym, qty, name: sym,
         kind,
-        entry: new Date().toISOString().slice(0, 10),
+        entry: entryDateStr,
         cost: entry, last: entry,
         size,
         stop, target,
         setup: "Manual Entry",
         thesis: "",
-        earnings: null, holdEarn: false,
+        earnings: earningsStr, holdEarn: false,
         status: "ok",
         pnlPct: 0, pnlDollar: 0,
         risk1R: stop ? entry - stop : 0,
         rMult: 0,
-        days: 1,
+        days: daysHeld,
         spark: [entry],
-        bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: "flat" }, overall: { score: "50", slope: "flat" } }
+        bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: 0 }, overall: { score: "50", slope: 0 } }
       };
 
       targetHoldings.push(newPos);
@@ -1792,6 +1865,8 @@
     const simNewBtn = $("#sim-new-pos-btn");
     if (simNewBtn) simNewBtn.addEventListener("click", () => {
       newPositionContext = "sim";
+      const fd = $("#form-date"); if (fd) fd.value = new Date().toISOString().slice(0, 10);
+      const fe = $("#form-earnings"); if (fe) fe.value = "";
       openModal("new-position-modal");
     });
 
@@ -2181,6 +2256,8 @@
         setTimeout(() => {
           const ti = $("#form-ticker"); if (ti) ti.value = item.sym;
           const ei = $("#form-entry");  if (ei && item.price) ei.value = item.price;
+          const fd = $("#form-date"); if (fd) fd.value = new Date().toISOString().slice(0, 10);
+          const fe = $("#form-earnings"); if (fe) fe.value = "";
           openModal("new-position-modal");
         }, 80);
       });

@@ -1,46 +1,34 @@
-# Trendo v6.0 Baseline Version
+# Trendo v6.1 Baseline Version
 
 **记录时间**: 2026-04-27  
-**Git Commit**: `48f3769`  
-**Git Tag**: `v6.0-baseline`  
-**状态**: ✅ 正式启用 · 实时行情 · 跨设备同步 · 已部署到 Vercel
+**基于**: v6.0-baseline (`48f3769`)  
+**状态**: ✅ 财报日期自动获取 · 斜率输入优化 · 开仓日期选择
 
-> **注意**: "回到版本" 指的是此版本 (v6.0-baseline)。
+> **注意**: "回到版本" 指的是此版本 (v6.1-baseline)。
 
 ---
 
-## 相较 v5.1 新增功能
+## 相较 v6.0 新增功能
 
-### 实时行情
-- ✅ **Polygon.io 接入** — `/api/quote.js` Vercel 无服务器函数代理
-  - 免费套餐使用 `/v2/aggs/ticker/{sym}/prev` 端点（日线数据）
-  - 全仓并行请求，每 30 秒自动刷新
-  - 顶栏显示 `LIVE · HH:MM` 绿色状态指示
-- ✅ **实时行情播放条** — 显示持仓标的今日涨跌幅（vs 昨收），随价格更新刷新
+### BX 斜率编辑优化
+- ✅ **可输入数值** — 斜率字段现在支持直接输入任意数字（不再仅限点击切换）
+- ✅ **三色点选择** — 绿（上升）/ 橙（中性）/ 红（下降）三个颜色点可快速设置方向
+- ✅ **双向联动** — 数字输入与颜色点实时双向同步
 
-### 跨设备同步
-- ✅ **Upstash Redis 同步** — `/api/data.js` GET/POST 端点
-  - 生成 `xxxx-xxxx-xxxx` 格式私密同步密钥
-  - 每次保存后 2 秒防抖推送到云端
-  - 页面加载时自动拉取云端数据
-  - 顶栏云图标显示同步状态（绿色已同步 / 橙色连接中 / 红色失败）
-  - 环境变量：`KV_REST_API_URL` + `KV_REST_API_TOKEN`
+### 开仓弹窗新增日期字段
+- ✅ **入场日期选择器** — 默认今天，可回填历史日期；自动计算 `days`（持有天数）
+- ✅ **财报日期字段** — 可手动填写或点击 Auto-fetch 按钮自动获取
+- ✅ **Auto-fetch 按钮** — 调用 `/api/earnings` 从 Finnhub 获取下次财报日期
 
-### 正式启用
-- ✅ **标签栏标题** — `Trendo - Swing Trading Concepts`
-- ✅ **SVG Favicon** — 与顶栏 logo 一致的浏览器标签页图标
-- ✅ **清空示例数据** — HOLDINGS / CLOSED_POSITIONS / WATCHLIST 全部清空
-- ✅ **总资产基准** — 默认 $60,000（原 $284,620）
-- ✅ **localStorage 升级** — `trendo_v3_*` → `trendo_v4_*`，旧示例数据不再加载
+### 财报日期自动获取
+- ✅ **Finnhub 接入** — `/api/earnings.js` Vercel 无服务器函数
+  - 免费套餐使用 `/v1/calendar/earnings` 端点
+  - 获取未来 365 天内最近的财报日期
+  - 环境变量：`FINNHUB_API_KEY`
 
-### 财报日历
-- ✅ **动态财报日历** — 自动从真实持仓 + 模拟仓读取 `earnings` 字段
-  - 过滤未来 14 天内有财报的标的
-  - 持仓来源徽章（持仓 / 模拟）
-  - 天数倒计时（≤2天红色 / ≤6天橙色）
-  - 按 `holdEarn` 字段显示计划决定（计划持有 / 计划减仓）
-  - 无事件时显示空状态提示
-- ✅ **移除最常见错误标签** — §03 REVIEW 中间面板清理
+### 数据持久化确认
+- ✅ **部署不影响数据** — localStorage `trendo_v4_*` + Upstash Redis 均在部署后保持不变
+- ✅ **持仓和模拟仓数据安全** — 代码更新不会清空任何已有仓位
 
 ---
 
@@ -49,10 +37,11 @@
 - ✅ Portfolio Overview — 4 张总览卡 + 横向柱状图
 - ✅ Holdings Table — Open / Closed 双 Tab，排序 / 筛选 / 搜索
 - ✅ 5 级进度状态系统
-- ✅ Open Position Modal — 新建持仓，支持美股 / ETF / 加密货币
+- ✅ Open Position Modal — 新建持仓，支持美股 / ETF / 加密货币 + **入场日期 + 财报日期**
 - ✅ Close Position Modal — 平仓价输入 + PnL 预览
 - ✅ Delete Confirm Modal
 - ✅ Position Drawer — 持仓详情，支持编辑 + 平仓
+- ✅ BX Drawer — **斜率可输入数字 + 三色点双向联动**
 - ✅ Journal 页 — 持仓日志流 + Notes 编辑
 - ✅ Simulation 页 — 深蓝色主题，独立模拟仓，与真实仓完全相同逻辑
 - ✅ Analytics 页 — 总资产曲线（日/周/月）+ 交易分析 + 动态财报日历
@@ -61,30 +50,7 @@
 - ✅ 实时行情 — Polygon.io 每 30 秒刷新
 - ✅ 跨设备同步 — Upstash Redis，密钥授权
 - ✅ localStorage 持久化 (`trendo_v4_*`)
-
----
-
-## 全局状态
-
-```js
-let sortKey = "pnl", sortDir = -1;
-let filter = "all", query = "";
-let selectedSym = null;
-let activeTab = "open";
-let totalNotional = 60000;
-let reviewPeriod = "week";
-let pendingCloseSym = null;
-let pendingDeleteSym = null, pendingDeleteFrom = null;
-let currentPage = "desk";
-let journalFilter = "all";
-let equityPeriod = "week";
-let simActiveTab = "open";
-let simNotional = 100000;
-let newPositionContext = "desk";
-let pendingCloseCtx = "desk";
-let pendingDeleteCtx = "desk";
-let syncKey = localStorage.getItem("trendo_sync_key") || "";
-```
+- ✅ **财报日期自动获取** — Finnhub API (`/api/earnings`)
 
 ---
 
@@ -98,7 +64,8 @@ project/
 ├── logo.svg          # 浏览器标签页图标
 └── api/
     ├── quote.js      # Polygon.io 行情代理（Vercel 无服务器函数）
-    └── data.js       # Upstash Redis 同步接口（GET/POST）
+    ├── data.js       # Upstash Redis 同步接口（GET/POST）
+    └── earnings.js   # Finnhub 财报日期接口（GET）
 ```
 
 ---
@@ -110,17 +77,19 @@ project/
 | `POLYGON_API_KEY` | Polygon.io 行情 API 密钥 |
 | `KV_REST_API_URL` | Upstash Redis REST 地址 |
 | `KV_REST_API_TOKEN` | Upstash Redis 写入 Token |
+| `FINNHUB_API_KEY` | Finnhub 财报日期 API 密钥（新增） |
 
 ---
 
 ## 回到此版本
 
 ```bash
+git checkout v6.1-baseline
+# 或回到 v6.0
 git checkout v6.0-baseline
-# 或
 git checkout 48f3769
 ```
 
 ---
 
-**此版本标志**: 正式启用 · 实时行情 · 跨设备同步 · 动态财报日历 ✅
+**此版本标志**: 斜率可输入 · 开仓日期选择 · 财报自动获取 · 数据持久化确认 ✅
