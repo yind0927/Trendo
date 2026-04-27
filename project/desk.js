@@ -1515,7 +1515,10 @@
         const q = results[h.sym];
         if (!q) return;
         const notional = SIM_HOLDINGS.includes(h) ? simNotional : totalNotional;
-        if (q.prevClose != null) h.prevClose = q.prevClose;
+        if (q.prevClose != null && q.prevClose !== h.prevClose) {
+          h.prevClose = q.prevClose;
+          changed = true;
+        }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
           changed = true;
