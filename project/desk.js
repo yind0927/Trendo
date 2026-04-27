@@ -159,9 +159,10 @@
     { val:  2, label: "+2", sub: "Bullish",    cls: "bx-up"     },
   ];
   const SWATCH_COLORS = [
-    "oklch(0.70 0.16 200)", "oklch(0.72 0.16 40)",  "oklch(0.72 0.14 280)",
-    "oklch(0.75 0.14 140)", "oklch(0.78 0.13 90)",  "oklch(0.70 0.18 25)",
-    "oklch(0.72 0.14 320)", "oklch(0.35 0.01 250)",
+    "oklch(0.70 0.16 200)", "oklch(0.68 0.17 260)", "oklch(0.72 0.14 280)",
+    "oklch(0.72 0.14 320)", "oklch(0.70 0.16 340)", "oklch(0.70 0.18 25)",
+    "oklch(0.72 0.16 40)",  "oklch(0.78 0.13 90)",  "oklch(0.75 0.14 140)",
+    "oklch(0.74 0.15 170)", "oklch(0.72 0.16 60)",  "oklch(0.35 0.01 250)",
   ];
   const slopeNumClass   = v => { const n = parseFloat(v); return n > 0 ? "up" : n < 0 ? "down" : "flat"; };
   const slopeNumDisplay = v => { const n = parseFloat(v) || 0; return n > 0 ? `+${n}` : `${n}`; };
@@ -176,18 +177,32 @@
         <span class="bx-val">${o.label}</span>
         <span class="bx-sub">${o.sub}</span>
       </button>`).join("");
-    const slopeCell = (field, val) => {
+    const getSlopeDir = obj => {
+      if (obj.slopeDir !== undefined) return obj.slopeDir;
+      const n = parseFloat(obj.slope) || 0;
+      return n > 0 ? 1 : n < 0 ? -1 : 0;
+    };
+    const slopeCell = (field, val, dir) => {
       const n = parseFloat(val) || 0;
-      const up = n > 0, dn = n < 0, fl = n === 0;
+      const d = dir ?? 0;
       return `<div class="bx-slope-cell">
         <input type="number" class="bx-slope-input" data-slope-field="${field}" value="${n}" step="0.1">
         <div class="bx-slope-dots">
-          <button class="bx-dot up${up ? ' active' : ''}" data-slope-field="${field}" data-dot-val="1" title="上升"></button>
-          <button class="bx-dot flat${fl ? ' active' : ''}" data-slope-field="${field}" data-dot-val="0" title="中性"></button>
-          <button class="bx-dot down${dn ? ' active' : ''}" data-slope-field="${field}" data-dot-val="-1" title="下降"></button>
+          <button class="bx-dot up${d > 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="1" title="上升"></button>
+          <button class="bx-dot flat${d === 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="0" title="中性"></button>
+          <button class="bx-dot down${d < 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="-1" title="下降"></button>
         </div>
       </div>`;
     };
+    const swatchPicker = () => `
+      <div class="bx-swatch-wrap">
+        <button class="bx-swatch" style="background:${bx.sector.color}"
+                data-picker-toggle="sectorColor" title="选择板块颜色"></button>
+        <div class="bx-color-picker" data-picker-id="sectorColor">
+          ${SWATCH_COLORS.map(c => `<button class="bx-color-opt${bx.sector.color===c?' active':''}"
+            style="background:${c}" data-color-val="${c}"></button>`).join('')}
+        </div>
+      </div>`;
     return `
       <div class="drawer-section">
         <h4><span class="idx">02</span>BX Trend &amp; 市场背景</h4>
@@ -219,14 +234,13 @@
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
-              <button class="bx-swatch" style="background:${bx.sector.color}"
-                      data-bx-field="sectorColor" data-bx-val="cycle" title="点击切换颜色"></button>
+              ${swatchPicker()}
               <span class="bx-name" contenteditable="true"
                     data-bx-field="sectorName" spellcheck="false">${bx.sector.name}</span>
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="sectorScore">${bx.sector.score}</span>
-            ${slopeCell("sectorSlope", bx.sector.slope)}
+            ${slopeCell("sectorSlope", bx.sector.slope, getSlopeDir(bx.sector))}
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
@@ -234,7 +248,7 @@
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="overallScore">${bx.overall.score}</span>
-            ${slopeCell("overallSlope", bx.overall.slope)}
+            ${slopeCell("overallSlope", bx.overall.slope, getSlopeDir(bx.overall))}
           </div>
         </div>
       </div>`;
@@ -285,63 +299,75 @@
   function wireBX(h) {
     const dr = $("#drawer");
 
-    const setSlopeValue = (field, n) => {
-      if (field === "sectorSlope")  h.bx.sector.slope  = n;
-      else                          h.bx.overall.slope = n;
-    };
-    const syncDots = (field, n) => {
-      $$(`[data-slope-field="${field}"].bx-dot`, dr).forEach(dot => {
-        const dv = parseFloat(dot.dataset.dotVal);
-        dot.classList.toggle("active", (n > 0 && dv === 1) || (n === 0 && dv === 0) || (n < 0 && dv === -1));
-      });
-    };
-
-    // Slope: number input
+    // Slope number input — saves only the numeric value, no dot sync
     $$(".bx-slope-input", dr).forEach(input => {
       const commit = () => {
-        const field = input.dataset.slopeField;
         const n = parseFloat(input.value) || 0;
-        setSlopeValue(field, n);
-        syncDots(field, n);
+        if (input.dataset.slopeField === "sectorSlope") h.bx.sector.slope = n;
+        else h.bx.overall.slope = n;
         saveToStorage();
       };
       input.addEventListener("blur", commit);
       input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
     });
 
-    // Slope: dot buttons
-    $$(".bx-dot[data-dot-val]", dr).forEach(dot => {
+    // Slope color dots — saves only direction, independent of number
+    $$(".bx-dot[data-dir-field]", dr).forEach(dot => {
       dot.addEventListener("click", () => {
-        const field = dot.dataset.slopeField;
-        const n = parseFloat(dot.dataset.dotVal);
-        setSlopeValue(field, n);
-        const inp = $(`.bx-slope-input[data-slope-field="${field}"]`, dr);
-        if (inp) inp.value = n;
-        syncDots(field, n);
+        const field = dot.dataset.dirField;
+        const d = parseFloat(dot.dataset.dotVal);
+        if (field === "sectorSlope") h.bx.sector.slopeDir = d;
+        else h.bx.overall.slopeDir = d;
+        $$(`[data-dir-field="${field}"].bx-dot`, dr).forEach(b =>
+          b.classList.toggle("active", parseFloat(b.dataset.dotVal) === d)
+        );
         saveToStorage();
       });
     });
 
-    // Score/color/bars buttons
+    // Color picker: swatch toggle
+    $$("[data-picker-toggle]", dr).forEach(sw => {
+      sw.addEventListener("click", e => {
+        e.stopPropagation();
+        const picker = $(`[data-picker-id="${sw.dataset.pickerToggle}"]`, dr);
+        if (!picker) return;
+        const wasOpen = picker.classList.contains("open");
+        $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
+        if (!wasOpen) picker.classList.add("open");
+      });
+    });
+
+    // Color picker: color option selection
+    $$(".bx-color-opt", dr).forEach(opt => {
+      opt.addEventListener("click", e => {
+        e.stopPropagation();
+        const c = opt.dataset.colorVal;
+        h.bx.sector.color = c;
+        const sw = $("[data-picker-toggle='sectorColor']", dr);
+        if (sw) sw.style.background = c;
+        $$(".bx-color-opt", dr).forEach(o => o.classList.toggle("active", o.dataset.colorVal === c));
+        $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
+        saveToStorage();
+      });
+    });
+
+    // Click anywhere in drawer → close all pickers
+    dr.addEventListener("click", () => {
+      $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
+    });
+
+    // Score/bars buttons
     $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
       if (btn.tagName !== "BUTTON") return;
       btn.addEventListener("click", () => {
         const field = btn.dataset.bxField;
-
         if (field === "dailyBars") {
           h.bx.dailyBars = btn.dataset.bxVal;
           $$(`[data-bx-field="dailyBars"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === h.bx.dailyBars));
-
         } else if (field === "weekly" || field === "monthly") {
           h.bx[field] = +btn.dataset.bxVal;
           $$(`[data-bx-field="${field}"]`, dr).forEach(b => b.classList.toggle("active", +b.dataset.bxVal === h.bx[field]));
-
-        } else if (field === "sectorColor") {
-          const cur = SWATCH_COLORS.indexOf(h.bx.sector.color);
-          h.bx.sector.color = SWATCH_COLORS[(cur + 1) % SWATCH_COLORS.length];
-          btn.style.background = h.bx.sector.color;
         }
-
         saveToStorage();
       });
     });
@@ -1164,7 +1190,7 @@
         rMult: 0,
         days: daysHeld,
         spark: [entry],
-        bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: 0 }, overall: { score: "50", slope: 0 } }
+        bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: 0, slopeDir: 0 }, overall: { score: "50", slope: 0, slopeDir: 0 } }
       };
 
       targetHoldings.push(newPos);
