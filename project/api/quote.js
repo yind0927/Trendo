@@ -1,9 +1,9 @@
 // Vercel serverless function — real-time market data
-// Stocks/ETFs : Finnhub /api/v1/quote (real-time)  OR  Polygon last-trade + prev-close
-// Crypto      : Polygon snapshot
-//
-// GET /api/quote?stocks=NVDA,TSLA&crypto=BTC
-// Returns: { results: { SYM: { last, prevClose, changePct } } }
+// Stocks/ETFs priority:
+//   1. Finnhub /api/v1/quote       (real-time, needs FINNHUB_API_KEY)
+//   2. Yahoo Finance chart API     (today's price, no key required)
+//   3. Polygon /prev               (yesterday's close, last resort)
+// Crypto: Polygon snapshot (POLYGON_API_KEY)
 
 export default async function handler(req, res) {
   const finnhubKey = process.env.FINNHUB_API_KEY;
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   if (stocks.length) {
     await Promise.all(stocks.slice(0, 12).map(async sym => {
 
-      // Priority 1: Finnhub — single call, real-time current + true prevClose
+      // 1) Finnhub — real-time, single call (needs FINNHUB_API_KEY)
       if (finnhubKey) {
         try {
           const r = await fetch(
@@ -36,34 +36,45 @@ export default async function handler(req, res) {
               prevClose: d.pc || null,
               changePct: d.pc > 0 ? ((d.c - d.pc) / d.pc) * 100 : (d.dp ?? null),
             };
-            return; // done for this symbol
+            return;
           }
         } catch (_) {}
       }
 
-      // Priority 2: Polygon — last trade (today's price) + prev-day (true prevClose)
-      // last/trade gives 15-min delayed price on free tier but IS today's price
-      if (!polygonKey) return;
+      // 2) Yahoo Finance — today's price, no API key needed
       try {
-        const [tradeR, prevR] = await Promise.all([
-          fetch(`https://api.polygon.io/v2/last/trade/${sym}?apiKey=${polygonKey}`,
-            { signal: AbortSignal.timeout(5000) }),
-          fetch(`https://api.polygon.io/v2/aggs/ticker/${sym}/prev?adjusted=true&apiKey=${polygonKey}`,
-            { signal: AbortSignal.timeout(5000) }),
-        ]);
-        const [tradeD, prevD] = await Promise.all([tradeR.json(), prevR.json()]);
-
-        const last      = tradeD.results?.p ?? null;          // last traded price
-        const prevClose = prevD.results?.[0]?.c ?? null;      // previous day close
-
-        if (last || prevClose) {
+        const r = await fetch(
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`,
+          { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
+        );
+        const d    = await r.json();
+        const meta = d.chart?.result?.[0]?.meta;
+        if (meta?.regularMarketPrice > 0) {
+          const last = meta.regularMarketPrice;
+          const pc   = meta.previousClose ?? meta.chartPreviousClose ?? null;
           results[sym] = {
-            last:      last ?? prevClose,
-            prevClose: prevClose,
-            changePct: (last && prevClose) ? ((last - prevClose) / prevClose) * 100 : null,
+            last,
+            prevClose: pc,
+            changePct: pc ? ((last - pc) / pc) * 100 : null,
           };
+          return;
         }
       } catch (_) {}
+
+      // 3) Polygon prev-day — yesterday's close only (last resort)
+      if (polygonKey) {
+        try {
+          const r = await fetch(
+            `https://api.polygon.io/v2/aggs/ticker/${sym}/prev?adjusted=true&apiKey=${polygonKey}`,
+            { signal: AbortSignal.timeout(5000) }
+          );
+          const d   = await r.json();
+          const bar = d.results?.[0];
+          if (bar?.c) {
+            results[sym] = { last: bar.c, prevClose: bar.c, changePct: null };
+          }
+        } catch (_) {}
+      }
     }));
   }
 
