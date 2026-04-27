@@ -531,6 +531,12 @@
 
   /* event calendar */
   .events{ padding: 4px 0 6px; }
+  .events-empty{ padding: 24px 18px; font-size: 11px; color: var(--fg-3); text-align: center; letter-spacing: .04em; }
+  .evt-sym-col{ display: flex; align-items: center; gap: 5px; }
+  .evt-src{ font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; letter-spacing: .05em; }
+  .evt-src.real{ background: var(--accent-dim); color: var(--accent); }
+  .evt-src.sim{ background: oklch(0.58 0.20 252 / .15); color: oklch(0.72 0.18 252); }
+  .evt-days{ font-size: 10px; font-family: var(--f-mono); margin-left: auto; white-space: nowrap; }
   .event{
     display: flex; align-items: center; gap: 12px;
     padding: 10px 18px; border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent);
@@ -917,6 +923,7 @@
   }
   #sync-status[data-state="ok"]      { color: var(--up); }
   #sync-status[data-state="pending"] { color: var(--warn); }
+  #sync-status[data-state="error"]   { color: var(--down); }
   #sync-status[data-state="off"]     { display: none; }
 
   .sync-panel {
@@ -960,6 +967,7 @@
   }
   .sp-status[data-state="ok"]      { color: var(--up); }
   .sp-status[data-state="pending"] { color: var(--warn); }
+  .sp-status[data-state="error"]   { color: var(--down); }
 
   .avatar-btn{
     all: unset; cursor: pointer;
@@ -1842,66 +1850,13 @@
     <!-- left: period review — rendered by renderBottom() -->
     <div class="panel" id="review-panel"></div>
 
-    <!-- middle: error flags + events -->
+    <!-- middle: earnings calendar — rendered by renderEvents() -->
     <div class="panel">
       <div class="panel-head">
-        <div class="panel-title">最常见错误标签</div>
-        <span class="muted" style="font-size:11px; margin-left:auto">最近 30 天</span>
+        <div class="panel-title">财报日历</div>
+        <span class="muted" style="font-size:11px; margin-left:auto">未来两周 · 持仓 + 模拟仓</span>
       </div>
-      <div class="err-cloud" id="err-cloud">
-      <span class="tag hot">过早追高<span class="c">7</span></span>
-    
-      <span class="tag hot">忽略大盘背景<span class="c">5</span></span>
-    
-      <span class="tag ">止损过紧<span class="c">4</span></span>
-    
-      <span class="tag ">未执行止盈<span class="c">3</span></span>
-    
-      <span class="tag hot">财报硬抗<span class="c">3</span></span>
-    
-      <span class="tag ">尺寸过大<span class="c">2</span></span>
-    
-      <span class="tag ">setup 不符<span class="c">2</span></span>
-    
-      <span class="tag ">情绪交易<span class="c">2</span></span>
-    
-      <span class="tag ">过度交易<span class="c">1</span></span>
-    </div>
-      <div class="panel-head" style="border-top:1px solid var(--line)">
-        <div class="panel-title">事件日历</div>
-        <span class="muted" style="font-size:11px; margin-left:auto">仅持仓相关</span>
-      </div>
-      <div class="events" id="events"><div class="event">
-        <div class="when"><span class="d">23</span>Apr · Thu</div>
-        <div class="sym">TSLA</div>
-        <div class="kind">财报 · After close</div>
-        <span class="alert" style="color:var(--down);background:color-mix(in oklch, var(--down) 15%, transparent)">财报前清仓</span>
-      </div><div class="event">
-        <div class="when"><span class="d">28</span>Apr · Mon</div>
-        <div class="sym">GOOGL</div>
-        <div class="kind">财报 · After close</div>
-        <span class="alert" style="color:var(--warn);background:color-mix(in oklch, var(--warn) 15%, transparent)">减仓</span>
-      </div><div class="event">
-        <div class="when"><span class="d">30</span>Apr · Wed</div>
-        <div class="sym">META</div>
-        <div class="kind">财报 · After close</div>
-        <span class="alert" style="color:var(--warn);background:color-mix(in oklch, var(--warn) 15%, transparent)">减仓</span>
-      </div><div class="event">
-        <div class="when"><span class="d">01</span>May · Thu</div>
-        <div class="sym">FOMC</div>
-        <div class="kind">FOMC 利率决议</div>
-        <span class="alert muted" style="background:var(--bg-3)">宏观</span>
-      </div><div class="event">
-        <div class="when"><span class="d">05</span>May · Mon</div>
-        <div class="sym">AMD</div>
-        <div class="kind">财报 · After close</div>
-        <span class="alert" style="color:var(--up);background:color-mix(in oklch, var(--up) 15%, transparent)">计划持有</span>
-      </div><div class="event">
-        <div class="when"><span class="d">07</span>May · Wed</div>
-        <div class="sym">HOOD</div>
-        <div class="kind">财报 · After close</div>
-        <span class="alert" style="color:var(--up);background:color-mix(in oklch, var(--up) 15%, transparent)">计划持有</span>
-      </div></div>
+      <div class="events" id="events"></div>
     </div>
 
   </section>

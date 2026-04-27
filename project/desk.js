@@ -360,7 +360,8 @@
         body: JSON.stringify(payload)
       });
       if (r.ok) { lastSyncAt = new Date(); renderSyncStatus(); }
-    } catch (_) {}
+      else       { renderSyncStatus("error"); }
+    } catch (_) { renderSyncStatus("error"); }
   }
 
   async function syncPull(key) {
@@ -390,17 +391,18 @@
     if (currentPage === "watchlist") renderWatchlist();
   }
 
-  function renderSyncStatus() {
+  function renderSyncStatus(state) {
     const el = document.getElementById("sync-status");
     if (!el) return;
-    if (!syncKey) { el.textContent = "未同步"; el.dataset.state = "off"; return; }
+    if (!syncKey) { el.textContent = ""; el.dataset.state = "off"; return; }
+    if (state === "error") { el.textContent = "同步失败"; el.dataset.state = "error"; return; }
     if (lastSyncAt) {
       const hh = String(lastSyncAt.getHours()).padStart(2, "0");
       const mm = String(lastSyncAt.getMinutes()).padStart(2, "0");
       el.textContent = `已同步 ${hh}:${mm}`;
       el.dataset.state = "ok";
     } else {
-      el.textContent = "同步中…";
+      el.textContent = "连接中";
       el.dataset.state = "pending";
     }
   }
@@ -868,6 +870,50 @@
     });
   }
 
+  // ============ EVENTS CALENDAR ============
+  function renderEvents() {
+    const el = document.getElementById("events");
+    if (!el) return;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() + 14);
+    const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    const entries = [];
+    const addFrom = (arr, src) => arr.forEach(h => {
+      if (!h.earnings) return;
+      const d = new Date(h.earnings); d.setHours(0, 0, 0, 0);
+      if (d >= today && d <= cutoff) entries.push({ h, date: d, src });
+    });
+    addFrom(HOLDINGS, "real");
+    addFrom(SIM_HOLDINGS, "sim");
+    entries.sort((a, b) => a.date - b.date);
+
+    if (!entries.length) {
+      el.innerHTML = `<div class="events-empty">未来两周内无财报事件</div>`;
+      return;
+    }
+
+    el.innerHTML = entries.map(({ h, date, src }) => {
+      const days = Math.round((date - today) / 86400000);
+      const urgColor = days <= 2 ? "var(--down)" : days <= 6 ? "var(--warn)" : "var(--fg-2)";
+      const daysLabel = days === 0 ? "今天" : days === 1 ? "明天" : `${days}天后`;
+      const holdColor = h.holdEarn ? "var(--up)" : "var(--warn)";
+      const holdText  = h.holdEarn ? "计划持有" : "计划减仓";
+      const srcBadge  = src === "sim"
+        ? `<span class="evt-src sim">模拟</span>`
+        : `<span class="evt-src real">持仓</span>`;
+      return `
+        <div class="event">
+          <div class="when"><span class="d">${String(date.getDate()).padStart(2,"0")}</span>${MO[date.getMonth()]} · ${WD[date.getDay()]}</div>
+          <div class="evt-sym-col"><span class="sym">${h.sym}</span>${srcBadge}</div>
+          <div class="evt-days" style="color:${urgColor}">${daysLabel}</div>
+          <span class="alert" style="color:${holdColor};background:color-mix(in oklch,${holdColor} 15%,transparent)">${holdText}</span>
+        </div>`;
+    }).join("");
+  }
+
   function renderBottom() {
     const data = getReviewData();
     const total = data.length;
@@ -954,22 +1000,7 @@
       btn.addEventListener("click", () => { reviewPeriod = btn.dataset.period; renderBottom(); });
     });
 
-    // Error tags (unchanged)
-    $("#err-cloud").innerHTML = ERROR_TAGS.map(t =>
-      `<span class="tag ${t.hot ? "hot" : ""}">${t.name}<span class="c">${t.c}</span></span>`
-    ).join("");
-
-    // Events (unchanged)
-    $("#events").innerHTML = EVENTS.map(e => {
-      const txt   = e.severity === "danger" ? "财报前清仓" : (e.severity === "warn" ? "减仓" : "计划持有");
-      const color = e.severity === "danger" ? "var(--down)" : (e.severity === "warn" ? "var(--warn)" : "var(--up)");
-      return `<div class="event">
-        <div class="when"><span class="d">${e.date.split(" ")[1]}</span>${e.date.split(" ")[0]} · ${e.weekday}</div>
-        <div class="sym">${e.sym}</div>
-        <div class="kind">${e.kind}</div>
-        ${e.inPos ? `<span class="alert" style="color:${color};background:color-mix(in oklch, ${color} 15%, transparent)">${txt}</span>` : `<span class="alert muted" style="background:var(--bg-3)">宏观</span>`}
-      </div>`;
-    }).join("");
+    renderEvents();
   }
 
   // ============ TAB SWITCHING ============
@@ -2342,8 +2373,8 @@
   wireSimControls();
   wireSyncPanel();
   renderSyncStatus();
-  // Pull from cloud on load (non-blocking — updates UI when ready)
-  if (syncKey) syncPull(syncKey).then(data => { if (data) { applyCloudData(data); lastSyncAt = new Date(); renderSyncStatus(); } });
+  // Pull from cloud, then push current state (sets lastSyncAt on success)
+  if (syncKey) syncPull(syncKey).then(data => { if (data) applyCloudData(data); syncPush(); });
   tick(); setInterval(tick, 1000);
 
 })();
