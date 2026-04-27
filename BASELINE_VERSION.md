@@ -1,11 +1,11 @@
-# Trendo v5.2 Baseline Version
+# Trendo v6.0 Baseline Version
 
 **记录时间**: 2026-04-27  
 **Git Commit**: `48f3769`  
-**Git Tag**: `v5.2-baseline`  
+**Git Tag**: `v6.0-baseline`  
 **状态**: ✅ 正式启用 · 实时行情 · 跨设备同步 · 已部署到 Vercel
 
-> **注意**: "回到版本" 指的是此版本 (v5.2-baseline)。
+> **注意**: "回到版本" 指的是此版本 (v6.0-baseline)。
 
 ---
 
@@ -116,7 +116,7 @@ project/
 ## 回到此版本
 
 ```bash
-git checkout v5.2-baseline
+git checkout v6.0-baseline
 # 或
 git checkout 48f3769
 ```
