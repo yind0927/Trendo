@@ -334,10 +334,79 @@
   let pendingCloseCtx = "desk";
   let pendingDeleteCtx = "desk";
   let lastPriceFetch = 0;
-  const PRICE_INTERVAL_MS = 30000; // fetch every 30s
+  const PRICE_INTERVAL_MS = 30000;
+
+  // ============ CLOUD SYNC (Upstash) ============
+  let syncKey    = localStorage.getItem("trendo_sync_key") || "";
+  let syncTimer  = null;
+  let lastSyncAt = null;
+
+  function generateSyncKey() {
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    return `${seg()}-${seg()}-${seg()}`;
+  }
+
+  async function syncPush() {
+    if (!syncKey) return;
+    const payload = {
+      holdings: HOLDINGS, closed: CLOSED_POSITIONS, notional: totalNotional,
+      watchlist: WATCHLIST, simHoldings: SIM_HOLDINGS, simClosed: SIM_CLOSED,
+      simNotional, savedAt: new Date().toISOString()
+    };
+    try {
+      const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (r.ok) { lastSyncAt = new Date(); renderSyncStatus(); }
+    } catch (_) {}
+  }
+
+  async function syncPull(key) {
+    try {
+      const r = await fetch(`/api/data?key=${encodeURIComponent(key)}`);
+      if (!r.ok) return null;
+      const { data } = await r.json();
+      return data;
+    } catch (_) { return null; }
+  }
+
+  function applyCloudData(data) {
+    if (!data) return;
+    if (data.holdings)    HOLDINGS.splice(0, HOLDINGS.length, ...data.holdings);
+    if (data.closed)      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
+    if (data.notional)    totalNotional = data.notional;
+    if (data.watchlist)   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);
+    if (data.simHoldings) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
+    if (data.simClosed)   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
+    if (data.simNotional) simNotional = data.simNotional;
+    // Persist locally then re-render
+    saveLocalOnly();
+    renderOverview(); renderTable(); renderTape();
+    if (currentPage === "journal")   renderJournal();
+    if (currentPage === "sim")       renderSim();
+    if (currentPage === "analytics") renderAnalytics();
+    if (currentPage === "watchlist") renderWatchlist();
+  }
+
+  function renderSyncStatus() {
+    const el = document.getElementById("sync-status");
+    if (!el) return;
+    if (!syncKey) { el.textContent = "未同步"; el.dataset.state = "off"; return; }
+    if (lastSyncAt) {
+      const hh = String(lastSyncAt.getHours()).padStart(2, "0");
+      const mm = String(lastSyncAt.getMinutes()).padStart(2, "0");
+      el.textContent = `已同步 ${hh}:${mm}`;
+      el.dataset.state = "ok";
+    } else {
+      el.textContent = "同步中…";
+      el.dataset.state = "pending";
+    }
+  }
 
   // ============ PERSISTENCE ============
-  function saveToStorage() {
+  function saveLocalOnly() {
     try {
       localStorage.setItem("trendo_v4_holdings",     JSON.stringify(HOLDINGS));
       localStorage.setItem("trendo_v4_closed",       JSON.stringify(CLOSED_POSITIONS));
@@ -347,6 +416,12 @@
       localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
     } catch (e) { /* storage unavailable */ }
+  }
+
+  function saveToStorage() {
+    saveLocalOnly();
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncPush, 2000);
   }
 
   function loadFromStorage() {
@@ -2156,6 +2231,79 @@
     });
   }
 
+  // ============ SYNC PANEL ============
+  function wireSyncPanel() {
+    const btn   = document.getElementById("sync-btn");
+    const panel = document.getElementById("sync-panel");
+    if (!btn || !panel) return;
+
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      panel.classList.toggle("open");
+      if (panel.classList.contains("open")) renderSyncPanel();
+    });
+    document.addEventListener("click", e => {
+      if (!panel.contains(e.target) && e.target !== btn) panel.classList.remove("open");
+    });
+  }
+
+  function renderSyncPanel() {
+    const panel = document.getElementById("sync-panel");
+    if (!panel) return;
+    const keyDisplay = syncKey || "(未生成)";
+    panel.innerHTML = `
+      <div class="sp-title">跨设备同步</div>
+      <div class="sp-section">
+        <div class="sp-label">你的同步密钥</div>
+        <div class="sp-key-row">
+          <code class="sp-key">${keyDisplay}</code>
+          ${syncKey ? `<button class="sp-copy" onclick="navigator.clipboard.writeText('${syncKey}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='复制',1500)})">复制</button>` : ""}
+        </div>
+        ${syncKey ? `<div class="sp-hint">在其他设备上输入此密钥即可同步数据</div>` : ""}
+        ${!syncKey ? `<button class="sp-action" id="sp-gen">生成密钥</button>` : ""}
+      </div>
+      <div class="sp-sep"></div>
+      <div class="sp-section">
+        <div class="sp-label">在此设备使用已有密钥</div>
+        <div class="sp-input-row">
+          <input class="sp-input" id="sp-key-input" placeholder="xxxx-xxxx-xxxx" value="">
+          <button class="sp-action" id="sp-apply">载入</button>
+        </div>
+      </div>
+      <div id="sync-status" class="sp-status" data-state="${syncKey ? 'pending' : 'off'}">
+        ${syncKey ? (lastSyncAt ? `已同步 ${String(lastSyncAt.getHours()).padStart(2,"0")}:${String(lastSyncAt.getMinutes()).padStart(2,"0")}` : "同步中…") : "未同步"}
+      </div>
+    `;
+
+    document.getElementById("sp-gen")?.addEventListener("click", async () => {
+      syncKey = generateSyncKey();
+      localStorage.setItem("trendo_sync_key", syncKey);
+      renderSyncPanel();
+      renderSyncStatus();
+      await syncPush();
+    });
+
+    document.getElementById("sp-apply")?.addEventListener("click", async () => {
+      const input = document.getElementById("sp-key-input");
+      const key = (input?.value || "").trim();
+      if (key.length < 8) return;
+      const btn = document.getElementById("sp-apply");
+      btn.textContent = "载入中…"; btn.disabled = true;
+      const data = await syncPull(key);
+      if (data) {
+        syncKey = key;
+        localStorage.setItem("trendo_sync_key", syncKey);
+        applyCloudData(data);
+        lastSyncAt = new Date();
+        renderSyncPanel();
+        renderSyncStatus();
+      } else {
+        btn.textContent = "未找到数据"; btn.disabled = false;
+        setTimeout(() => { btn.textContent = "载入"; btn.disabled = false; }, 2000);
+      }
+    });
+  }
+
   // ============ TICKER TAPE ============
   function renderTape() {
     const track = document.getElementById("tape-track");
@@ -2192,6 +2340,10 @@
   wireDeleteModal();
   wireWatchlistForm();
   wireSimControls();
+  wireSyncPanel();
+  renderSyncStatus();
+  // Pull from cloud on load (non-blocking — updates UI when ready)
+  if (syncKey) syncPull(syncKey).then(data => { if (data) { applyCloudData(data); lastSyncAt = new Date(); renderSyncStatus(); } });
   tick(); setInterval(tick, 1000);
 
 })();

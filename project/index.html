@@ -908,6 +908,59 @@
   #price-status[data-live="true"] { color: var(--up); }
   #price-status:not([data-live]) { color: var(--fg-3); }
 
+  /* ── Sync panel ── */
+  .sync-wrap { position: relative; }
+  #sync-btn { position: relative; gap: 5px; }
+  #sync-status {
+    font-size: 9px; font-family: var(--f-mono); letter-spacing: .02em;
+    color: var(--fg-3); white-space: nowrap; line-height: 1;
+  }
+  #sync-status[data-state="ok"]      { color: var(--up); }
+  #sync-status[data-state="pending"] { color: var(--warn); }
+  #sync-status[data-state="off"]     { display: none; }
+
+  .sync-panel {
+    display: none; position: absolute; top: calc(100% + 8px); right: 0;
+    width: 300px; background: var(--bg-1); border: 1px solid var(--line-strong);
+    border-radius: 12px; padding: 16px; z-index: 200;
+    box-shadow: 0 12px 40px -8px oklch(0 0 0 / .5);
+  }
+  .sync-panel.open { display: block; }
+  .sp-title { font-size: 13px; font-weight: 600; color: var(--fg-0); margin-bottom: 12px; }
+  .sp-section { margin-bottom: 12px; }
+  .sp-label { font-size: 10.5px; color: var(--fg-2); margin-bottom: 6px; letter-spacing: .04em; text-transform: uppercase; }
+  .sp-key-row { display: flex; align-items: center; gap: 8px; }
+  .sp-key {
+    font-family: var(--f-mono); font-size: 13px; color: var(--accent);
+    background: var(--bg-2); border-radius: 6px; padding: 5px 9px;
+    letter-spacing: .08em; flex: 1;
+  }
+  .sp-copy {
+    font-size: 11px; padding: 5px 9px; border-radius: 6px; cursor: pointer;
+    background: var(--bg-3); border: 1px solid var(--line); color: var(--fg-1);
+  }
+  .sp-hint { font-size: 10.5px; color: var(--fg-3); margin-top: 6px; }
+  .sp-sep { height: 1px; background: var(--line); margin: 12px 0; }
+  .sp-input-row { display: flex; gap: 6px; }
+  .sp-input {
+    flex: 1; background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 6px 10px; color: var(--fg-0);
+    font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em;
+  }
+  .sp-input:focus { outline: none; border-color: var(--accent); }
+  .sp-action {
+    padding: 6px 12px; border-radius: 7px; cursor: pointer; font-size: 12px;
+    background: var(--accent-dim); border: 1px solid var(--accent);
+    color: var(--accent); white-space: nowrap;
+  }
+  .sp-action:disabled { opacity: .5; cursor: not-allowed; }
+  .sp-status {
+    font-size: 10.5px; color: var(--fg-3); margin-top: 10px;
+    font-family: var(--f-mono); text-align: right;
+  }
+  .sp-status[data-state="ok"]      { color: var(--up); }
+  .sp-status[data-state="pending"] { color: var(--warn); }
+
   .avatar-btn{
     all: unset; cursor: pointer;
     width: 32px; height: 32px; border-radius: 50%;
@@ -1525,6 +1578,13 @@
     <button class="btn icon" title="刷新">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"></path><path d="M3 3v5h5"></path></svg>
     </button>
+    <div class="sync-wrap">
+      <button class="btn icon" id="sync-btn" title="跨设备同步">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+        <span id="sync-status" data-state="off"></span>
+      </button>
+      <div class="sync-panel" id="sync-panel"></div>
+    </div>
     <button class="btn" id="tweaks-toggle" title="Tweaks">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h8"/><circle cx="18" cy="6" r="2.3"/><circle cx="8" cy="18" r="2.3"/></svg>
       Tweaks
