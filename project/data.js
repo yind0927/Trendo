@@ -253,3 +253,6 @@ window.WATCHLIST = [
   { sym: "ALAB", name: "Astera Labs",         sector: "Semi / AI",   color: "oklch(0.70 0.16 200)", price:  88.50, setup: "Pullback",      note: "数据中心互联，21EMA 附近关注",       bxScore: 70, bxSlope: 6,  addedAt: "2026-04-21" },
   { sym: "XBI",  name: "SPDR Biotech ETF",    sector: "Healthcare",  color: "oklch(0.78 0.13 90)",  price:  82.30, setup: "Momentum",      note: "等待 FDA 催化事件，目前观望",         bxScore: 44, bxSlope: -2, addedAt: "2026-04-18" },
 ];
+
+window.SIM_HOLDINGS = [];
+window.SIM_CLOSED   = [];

@@ -1229,6 +1229,60 @@
   }
   .btn-exit-pos:active { transform: translateY(0); }
 
+  /* SIMULATION VIEW */
+  #sim-view {
+    --accent: oklch(0.58 0.20 252);
+    --accent-dim: oklch(0.58 0.20 252 / 0.12);
+    --accent-line: oklch(0.58 0.20 252 / 0.30);
+    max-width: 1080px; margin: 0 auto; padding: 24px 20px 60px;
+  }
+  .sim-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .sim-title-group { display: flex; align-items: center; gap: 10px; }
+  .sim-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    padding: 3px 8px; border-radius: 5px;
+    background: var(--accent-dim); color: var(--accent);
+    border: 1px solid var(--accent-line);
+  }
+  .sim-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .sim-sub { font-size: 11.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  #sim-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  @media (max-width: 700px) { #sim-overview { grid-template-columns: repeat(2, 1fr); } }
+  .sim-card {
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .sim-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
+  .sim-card-value { font-size: 22px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.02em; }
+  .sim-card-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .sim-table-controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+  }
+  .sim-tabs { display: flex; gap: 4px; }
+  .sim-tab {
+    padding: 5px 14px; border-radius: 7px; border: 1px solid transparent;
+    background: none; cursor: pointer; font-size: 12.5px; color: var(--fg-2);
+    font-family: var(--f-sans); font-weight: 500; transition: all .15s;
+  }
+  .sim-tab.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent-line); font-weight: 600; }
+  .sim-search { display: flex; align-items: center; gap: 6px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; }
+  .sim-search input { background: none; border: none; outline: none; color: var(--fg-0); font-family: var(--f-sans); font-size: 12.5px; width: 140px; }
+  .sim-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  table.sim-holdings { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.sim-holdings th { padding: 6px 10px; text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; color: var(--fg-2); border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; white-space: nowrap; }
+  table.sim-holdings th.right { text-align: right; }
+  table.sim-holdings th.sorted { color: var(--accent); }
+  table.sim-holdings td { padding: 7px 10px; border-bottom: 1px solid color-mix(in oklch,var(--line) 50%,transparent); vertical-align: middle; }
+  table.sim-holdings tbody tr { cursor: pointer; transition: background .12s; position: relative; }
+  table.sim-holdings tbody tr::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; border-radius: 2px; transition: background .15s; }
+  table.sim-holdings tbody tr:hover::before { background: var(--accent); }
+  table.sim-holdings tbody tr:hover { background: color-mix(in oklch,var(--bg-2) 70%,transparent); }
+  table.sim-holdings tbody tr.selected { background: var(--accent-dim); }
+  table.sim-holdings tbody tr.selected::before { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+  table.sim-holdings tbody tr:hover .close-pos-btn,
+  table.sim-holdings tbody tr:hover .delete-btn { opacity: 1; }
+
   /* JOURNAL VIEW */
   #journal-view { max-width: 860px; margin: 0 auto; padding: 24px 20px 60px; }
   .journal-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
@@ -1445,6 +1499,7 @@
   <nav class="navbar" aria-label="primary">
     <a class="navlink active" href="#" data-page="desk">Dashboard</a>
     <a class="navlink" href="#" data-page="journal">Journal</a>
+    <a class="navlink" href="#" data-page="sim">Simulation</a>
     <a class="navlink" href="#" data-page="analytics">Analytics</a>
     <a class="navlink" href="#" data-page="watchlist">Watchlist</a>
   </nav>
@@ -1804,6 +1859,45 @@
     </div>
   </div>
   <div id="journal-feed" class="journal-feed"></div>
+</div>
+
+<!-- ============ SIMULATION VIEW ============ -->
+<div id="sim-view" style="display:none">
+  <div class="sim-topbar">
+    <div class="sim-title-group">
+      <span class="sim-badge">SIM</span>
+      <span class="sim-title">模拟仓 · Simulation</span>
+      <span class="sim-sub" id="sim-subtitle">— 笔持仓</span>
+    </div>
+    <button class="btn primary" id="sim-new-pos-btn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
+      New Sim Position
+    </button>
+  </div>
+
+  <div id="sim-overview"></div>
+
+  <div class="sim-table-controls">
+    <div class="sim-tabs">
+      <button class="sim-tab active" id="sim-tab-open">Open <span id="sim-c-open">0</span></button>
+      <button class="sim-tab" id="sim-tab-closed">Closed <span id="sim-c-closed">0</span></button>
+    </div>
+    <div class="sim-search">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      <input id="sim-search-input" placeholder="搜索…">
+    </div>
+    <div class="sim-chips">
+      <button class="filter-chip active" data-simfilter="all">All <span id="sim-c-all">0</span></button>
+      <button class="filter-chip" data-simfilter="equity">股票 <span id="sim-c-eq">0</span></button>
+      <button class="filter-chip" data-simfilter="crypto">Crypto <span id="sim-c-cr">0</span></button>
+      <button class="filter-chip" data-simfilter="risk">风险 <span id="sim-c-rk">0</span></button>
+    </div>
+  </div>
+
+  <table class="sim-holdings">
+    <thead><tr id="sim-thead-row"></tr></thead>
+    <tbody id="sim-tbody"></tbody>
+  </table>
 </div>
 
 <!-- ============ ANALYTICS VIEW ============ -->

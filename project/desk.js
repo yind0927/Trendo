@@ -246,11 +246,12 @@
           return;
         }
         h[f] = v;
-        if (f === "size") h.qty = Math.round((v / 100 * totalNotional) / h.cost);
+        const notional = currentPage === "sim" ? simNotional : totalNotional;
+        if (f === "size") h.qty = Math.round((v / 100 * notional) / h.cost);
         recomputeHolding(h);
         saveToStorage();
-        renderTable();
-        renderOverview();
+        if (currentPage === "sim") { renderSimTable(); renderSimOverview(); }
+        else { renderTable(); renderOverview(); }
         // Restore display format
         el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`;
         // Update hero price / pnl
@@ -323,26 +324,45 @@
   let journalFilter = "all";
   let equityPeriod = "week";
 
+  // Simulation state
+  let simActiveTab = "open";
+  let simSortKey = "pnl", simSortDir = -1;
+  let simFilter = "all", simQuery = "";
+  let simSelectedSym = null;
+  let simNotional = 100000;
+  let newPositionContext = "desk"; // "desk" | "sim"
+  let pendingCloseCtx = "desk";
+  let pendingDeleteCtx = "desk";
+
   // ============ PERSISTENCE ============
   function saveToStorage() {
     try {
-      localStorage.setItem("trendo_v3_holdings",  JSON.stringify(HOLDINGS));
-      localStorage.setItem("trendo_v3_closed",    JSON.stringify(CLOSED_POSITIONS));
-      localStorage.setItem("trendo_v3_notional",  String(totalNotional));
-      localStorage.setItem("trendo_v3_watchlist", JSON.stringify(WATCHLIST));
+      localStorage.setItem("trendo_v3_holdings",     JSON.stringify(HOLDINGS));
+      localStorage.setItem("trendo_v3_closed",       JSON.stringify(CLOSED_POSITIONS));
+      localStorage.setItem("trendo_v3_notional",     String(totalNotional));
+      localStorage.setItem("trendo_v3_watchlist",    JSON.stringify(WATCHLIST));
+      localStorage.setItem("trendo_v3_sim_holdings", JSON.stringify(SIM_HOLDINGS));
+      localStorage.setItem("trendo_v3_sim_closed",   JSON.stringify(SIM_CLOSED));
+      localStorage.setItem("trendo_v3_sim_notional", String(simNotional));
     } catch (e) { /* storage unavailable */ }
   }
 
   function loadFromStorage() {
     try {
-      const h = localStorage.getItem("trendo_v3_holdings");
-      const c = localStorage.getItem("trendo_v3_closed");
-      const n = localStorage.getItem("trendo_v3_notional");
-      const w = localStorage.getItem("trendo_v3_watchlist");
-      if (h) { const parsed = JSON.parse(h); HOLDINGS.splice(0, HOLDINGS.length, ...parsed); }
-      if (c) { const parsed = JSON.parse(c); CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...parsed); }
-      if (n) totalNotional = parseFloat(n) || totalNotional;
-      if (w) { const parsed = JSON.parse(w); WATCHLIST.splice(0, WATCHLIST.length, ...parsed); }
+      const h  = localStorage.getItem("trendo_v3_holdings");
+      const c  = localStorage.getItem("trendo_v3_closed");
+      const n  = localStorage.getItem("trendo_v3_notional");
+      const w  = localStorage.getItem("trendo_v3_watchlist");
+      const sh = localStorage.getItem("trendo_v3_sim_holdings");
+      const sc = localStorage.getItem("trendo_v3_sim_closed");
+      const sn = localStorage.getItem("trendo_v3_sim_notional");
+      if (h)  { const parsed = JSON.parse(h);  HOLDINGS.splice(0, HOLDINGS.length, ...parsed); }
+      if (c)  { const parsed = JSON.parse(c);  CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...parsed); }
+      if (n)  totalNotional = parseFloat(n) || totalNotional;
+      if (w)  { const parsed = JSON.parse(w);  WATCHLIST.splice(0, WATCHLIST.length, ...parsed); }
+      if (sh) { const parsed = JSON.parse(sh); SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...parsed); }
+      if (sc) { const parsed = JSON.parse(sc); SIM_CLOSED.splice(0, SIM_CLOSED.length, ...parsed); }
+      if (sn) simNotional = parseFloat(sn) || simNotional;
     } catch (e) { /* corrupted storage, use defaults */ }
   }
 
@@ -922,7 +942,9 @@
         alert("All fields required");
         return;
       }
-      if (HOLDINGS.find(h => h.sym === sym) || CLOSED_POSITIONS.find(h => h.sym === sym)) {
+      const targetHoldings = newPositionContext === "sim" ? SIM_HOLDINGS : HOLDINGS;
+      const targetClosed   = newPositionContext === "sim" ? SIM_CLOSED   : CLOSED_POSITIONS;
+      if (targetHoldings.find(h => h.sym === sym) || targetClosed.find(h => h.sym === sym)) {
         alert("Position already exists");
         return;
       }
@@ -953,11 +975,13 @@
         bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: "flat" }, overall: { score: "50", slope: "flat" } }
       };
 
-      HOLDINGS.push(newPos);
+      targetHoldings.push(newPos);
+      saveToStorage();
       form.reset();
       closeModal("new-position-modal");
-      renderTable();
-      renderOverview();
+      if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); }
+      else { renderTable(); renderOverview(); }
+      newPositionContext = "desk";
     });
   }
 
@@ -988,9 +1012,11 @@
   // ============ POSITION CLOSING ============
 
   function openCloseModal(sym) {
-    const pos = HOLDINGS.find(h => h.sym === sym);
+    const holdings = currentPage === "sim" ? SIM_HOLDINGS : HOLDINGS;
+    const pos = holdings.find(h => h.sym === sym);
     if (!pos) return;
     pendingCloseSym = sym;
+    pendingCloseCtx = currentPage === "sim" ? "sim" : "desk";
     const input = $("#close-pos-price-input");
     input.value = pos.last;
     $("#close-pos-sym-label").textContent = sym;
@@ -1014,7 +1040,8 @@
     const input = $("#close-pos-price-input");
     input.addEventListener("input", () => {
       if (!pendingCloseSym) return;
-      const pos = HOLDINGS.find(h => h.sym === pendingCloseSym);
+      const holdings = pendingCloseCtx === "sim" ? SIM_HOLDINGS : HOLDINGS;
+      const pos = holdings.find(h => h.sym === pendingCloseSym);
       if (!pos) return;
       const val = parseFloat(input.value);
       if (!isNaN(val) && val > 0) updateClosePnlPreview(pos, val);
@@ -1037,9 +1064,12 @@
     });
   }
 
-  // closePosition → archives to CLOSED_POSITIONS (accessible in Closed tab)
+  // closePosition — archives to closed array (real or sim based on ctx)
   function closePosition(sym, closePrice) {
-    const pos = HOLDINGS.find(h => h.sym === sym);
+    const isSim = pendingCloseCtx === "sim";
+    const holdings = isSim ? SIM_HOLDINGS : HOLDINGS;
+    const closed   = isSim ? SIM_CLOSED   : CLOSED_POSITIONS;
+    const pos = holdings.find(h => h.sym === sym);
     if (!pos) return;
 
     const cp = (closePrice != null && closePrice > 0) ? closePrice : pos.last;
@@ -1051,18 +1081,23 @@
     pos.pnlFinal = pos.pnlDollar;
     pos.exitReason = "manual";
 
-    HOLDINGS.splice(HOLDINGS.indexOf(pos), 1);
-    CLOSED_POSITIONS.push(pos);
+    holdings.splice(holdings.indexOf(pos), 1);
+    closed.push(pos);
 
     saveToStorage();
-    if (selectedSym === sym) closeDrawer();
-    renderTable();
-    renderOverview();
+    if (isSim) {
+      if (simSelectedSym === sym) closeSimDrawer();
+      renderSimTable(); renderSimOverview();
+    } else {
+      if (selectedSym === sym) closeDrawer();
+      renderTable(); renderOverview();
+    }
   }
 
   function openDeleteModal(sym, from) {
     pendingDeleteSym = sym;
     pendingDeleteFrom = from || "open";
+    pendingDeleteCtx = currentPage === "sim" ? "sim" : "desk";
     const msg = $("#delete-confirm-msg");
     if (msg) msg.textContent = `永久删除 ${sym}？此操作不可撤销。`;
     openModal("delete-confirm-modal");
@@ -1083,12 +1118,14 @@
 
     $("#delete-confirm-btn").addEventListener("click", () => {
       if (!pendingDeleteSym) return;
-      if (pendingDeleteFrom === "closed") {
-        deleteClosedPosition(pendingDeleteSym);
+      if (pendingDeleteCtx === "sim") {
+        if (pendingDeleteFrom === "closed") simDeleteClosedPosition(pendingDeleteSym);
+        else simDeletePosition(pendingDeleteSym);
       } else {
-        deletePosition(pendingDeleteSym);
+        if (pendingDeleteFrom === "closed") deleteClosedPosition(pendingDeleteSym);
+        else deletePosition(pendingDeleteSym);
       }
-      pendingDeleteSym = null; pendingDeleteFrom = null;
+      pendingDeleteSym = null; pendingDeleteFrom = null; pendingDeleteCtx = "desk";
       closeModal("delete-confirm-modal");
     });
   }
@@ -1128,12 +1165,19 @@
       filter = b.dataset.filter;
       renderTable();
     }));
-    $("#backdrop").addEventListener("click", closeDrawer);
+    $("#backdrop").addEventListener("click", () => {
+      if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
+    });
     document.addEventListener("click", e => {
-      if (e.target && e.target.id === "drawer-close") closeDrawer();
+      if (e.target && e.target.id === "drawer-close") {
+        if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
+      }
     });
     document.addEventListener("keydown", e => {
-      if (e.key === "Escape") { closeDrawer(); $("#tweaks").classList.remove("open"); }
+      if (e.key === "Escape") {
+        if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
+        $("#tweaks").classList.remove("open");
+      }
       if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("#search-input").focus(); }
     });
   }
@@ -1228,13 +1272,14 @@
   // ============ PAGE SWITCHING ============
   function switchPage(page) {
     currentPage = page;
-    const VIEWS = { desk: "desk-view", journal: "journal-view", analytics: "analytics-view", watchlist: "watchlist-view" };
+    const VIEWS = { desk: "desk-view", journal: "journal-view", sim: "sim-view", analytics: "analytics-view", watchlist: "watchlist-view" };
     Object.entries(VIEWS).forEach(([p, id]) => {
       const el = document.getElementById(id);
       if (el) el.style.display = p === page ? "" : "none";
     });
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
     if (page === "journal")   renderJournal();
+    if (page === "sim")       renderSim();
     if (page === "analytics") renderAnalytics();
     if (page === "watchlist") renderWatchlist();
   }
@@ -1340,6 +1385,265 @@
   }
 
   // ============ ANALYTICS ============
+  // ============ SIMULATION PAGE ============
+
+  function renderSim() {
+    renderSimOverview();
+    renderSimTable();
+  }
+
+  function renderSimOverview() {
+    const el = $("#sim-overview");
+    if (!el) return;
+    const pnl = SIM_HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
+    const nav = simNotional + pnl;
+    const open = SIM_HOLDINGS.length;
+    const closedTotal = SIM_CLOSED.length;
+    const wins = SIM_CLOSED.filter(h => (h.pnlFinal || 0) > 0).length;
+    const realizedPnl = SIM_CLOSED.reduce((s, h) => s + (h.pnlFinal || 0), 0);
+    const winRate = closedTotal > 0 ? (wins / closedTotal * 100).toFixed(0) + "%" : "—";
+    const navSign = fmt.sign(pnl);
+    el.innerHTML = `
+      <div class="sim-card">
+        <div class="sim-card-label">模拟 NAV</div>
+        <div class="sim-card-value ${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</div>
+        <div class="sim-card-sub" id="sim-notional-edit" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+          本金 ${fmt.usd(simNotional)}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </div>
+      </div>
+      <div class="sim-card">
+        <div class="sim-card-label">模拟浮盈亏</div>
+        <div class="sim-card-value ${navSign}">${fmt.signed(Math.round(pnl))}</div>
+        <div class="sim-card-sub">${open} 笔持仓中</div>
+      </div>
+      <div class="sim-card">
+        <div class="sim-card-label">已实现盈亏</div>
+        <div class="sim-card-value ${fmt.sign(realizedPnl)}">${closedTotal ? fmt.signed(Math.round(realizedPnl)) : "—"}</div>
+        <div class="sim-card-sub">${closedTotal} 笔已平仓</div>
+      </div>
+      <div class="sim-card">
+        <div class="sim-card-label">模拟胜率</div>
+        <div class="sim-card-value ${wins > closedTotal / 2 ? 'up' : closedTotal ? 'down' : 'neu'}">${winRate}</div>
+        <div class="sim-card-sub">${closedTotal ? `${wins}胜 / ${closedTotal - wins}负` : "暂无数据"}</div>
+      </div>`;
+
+    // Sim notional edit
+    const editBtn = $("#sim-notional-edit");
+    if (editBtn) {
+      editBtn.addEventListener("click", () => {
+        const v = parseFloat(prompt("设置模拟本金 ($)", simNotional));
+        if (v > 0) { simNotional = v; saveToStorage(); renderSimOverview(); }
+      });
+    }
+
+    // Update subtitle
+    const sub = $("#sim-subtitle");
+    if (sub) sub.textContent = `${open} 笔持仓 · ${closedTotal} 笔已平仓`;
+  }
+
+  function renderSimTable() {
+    const thead = $("#sim-thead-row");
+    const tbody = $("#sim-tbody");
+    if (!thead || !tbody) return;
+
+    const data = simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED;
+
+    // Header
+    thead.innerHTML = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide)).map(c => {
+      const sorted = simSortKey === c.id ? "sorted" : "";
+      const label = (simActiveTab === "closed" && c.id === "last") ? "平仓价" : c.label;
+      return `<th class="${c.r ? "right" : ""} ${sorted}" data-simcol="${c.id}">${label}</th>`;
+    }).join("");
+    $$("[data-simcol]", thead).forEach(th => th.addEventListener("click", () => {
+      const col = th.dataset.simcol;
+      if (simSortKey === col) simSortDir *= -1; else { simSortKey = col; simSortDir = -1; }
+      renderSimTable();
+    }));
+
+    // Filter + sort
+    let rows = data.filter(h => {
+      if (simFilter === "equity" && !["equity", "etf"].includes(h.kind)) return false;
+      if (simFilter === "crypto" && h.kind !== "crypto") return false;
+      if (simFilter === "risk") { if (!["Early", "Near Stop"].includes(progressBucket(h))) return false; }
+      if (simQuery) {
+        const q = simQuery.toLowerCase();
+        if (!(h.sym.toLowerCase().includes(q) || (h.name || "").toLowerCase().includes(q))) return false;
+      }
+      return true;
+    });
+
+    const keyFn = {
+      tk: h => h.sym, bxbars: h => h.bx?.dailyBars, cost: h => h.cost, last: h => h.last,
+      qty: h => h.qty, pnl: h => h.pnlDollar, stop: h => h.stop, target: h => h.target,
+      progstatus: h => progressBucket(h),
+    }[simSortKey] || (h => h.pnlDollar);
+    rows.sort((a, b) => {
+      const va = keyFn(a), vb = keyFn(b);
+      return va < vb ? -simSortDir : va > vb ? simSortDir : 0;
+    });
+
+    // Body
+    const cols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
+    tbody.innerHTML = rows.map(h => {
+      const isSel = simSelectedSym === h.sym ? "selected" : "";
+      const cells = cols.map(c => renderCell(h, c.id)).join("");
+      const actions = simActiveTab === "open"
+        ? `<td style="width:60px;padding:6px 4px"><div class="row-actions">
+             <button class="close-pos-btn" data-sym="${h.sym}" title="平仓">⊟</button>
+             <button class="delete-btn" data-sym="${h.sym}" title="删除">✕</button>
+           </div></td>`
+        : `<td style="width:40px;padding:6px 4px"><div class="row-actions">
+             <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除">✕</button>
+           </div></td>`;
+      return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
+    }).join("");
+
+    $$("tr", tbody).forEach(tr => {
+      tr.addEventListener("click", e => {
+        if (e.target.closest(".close-pos-btn, .delete-btn")) return;
+        openSimDrawer(tr.dataset.sym);
+      });
+    });
+    $$(".close-pos-btn", tbody).forEach(btn => {
+      btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); });
+    });
+    $$(".delete-btn", tbody).forEach(btn => {
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); });
+    });
+
+    // Counts
+    const allData = simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED;
+    const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setCount("sim-c-open",   SIM_HOLDINGS.length);
+    setCount("sim-c-closed", SIM_CLOSED.length);
+    setCount("sim-c-all",    allData.length);
+    setCount("sim-c-eq",     allData.filter(h => ["equity","etf"].includes(h.kind)).length);
+    setCount("sim-c-cr",     allData.filter(h => h.kind === "crypto").length);
+    setCount("sim-c-rk",     allData.filter(h => ["Early","Near Stop"].includes(progressBucket(h))).length);
+  }
+
+  function openSimDrawer(sym) {
+    const data = simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED;
+    const h = data.find(x => x.sym === sym);
+    if (!h) return;
+    simSelectedSym = sym;
+    renderSimTable();
+    // Temporarily set activeTab to simActiveTab so drawerHTML reads the right tab
+    const prevTab = activeTab;
+    activeTab = simActiveTab;
+    $("#drawer").innerHTML = drawerHTML(h);
+    activeTab = prevTab;
+    wireBX(h);
+    if (simActiveTab === "open") {
+      wireSimDrawerEdits(h);
+      wireSimDrawerCloseButton();
+    }
+    $("#drawer").classList.add("open");
+    $("#backdrop").classList.add("open");
+    $("#drawer").setAttribute("aria-hidden", "false");
+  }
+
+  function closeSimDrawer() {
+    simSelectedSym = null;
+    $("#drawer").classList.remove("open");
+    $("#backdrop").classList.remove("open");
+    $("#drawer").setAttribute("aria-hidden", "true");
+    renderSimTable();
+  }
+
+  function wireSimDrawerCloseButton() {
+    const closeBtn = $("#drawer-close-position");
+    if (!closeBtn) return;
+    closeBtn.addEventListener("click", () => openCloseModal(simSelectedSym));
+  }
+
+  function wireSimDrawerEdits(h) {
+    const dr = $("#drawer");
+    $$("[data-pos-field]", dr).forEach(el => {
+      el.addEventListener("focus", () => {
+        el.textContent = el.textContent.replace(/^\$/, "");
+        document.execCommand("selectAll", false, null);
+      });
+      el.addEventListener("blur", () => {
+        const f = el.dataset.posField;
+        const v = parseFloat(el.textContent.trim().replace(/[^0-9.-]/g, ""));
+        if (isNaN(v) || v <= 0) { el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`; return; }
+        h[f] = v;
+        if (f === "size") h.qty = Math.round((v / 100 * simNotional) / h.cost);
+        recomputeHolding(h);
+        saveToStorage();
+        renderSimTable(); renderSimOverview();
+        el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`;
+        const pnlSign = fmt.sign(h.pnlDollar);
+        const heroP = $(".hero-price .p", dr); const heroPct = $(".hero-price .pct", dr); const heroPnl = $(".hero-price .pnl", dr);
+        if (heroP) heroP.textContent = `$${price(h.last)}`;
+        if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct); heroPct.className = `pct ${pnlSign}`; }
+        if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlDollar); heroPnl.className = `pnl ${pnlSign}`; }
+        const lb = $(".levelbar", dr);
+        if (lb) { const tmp = document.createElement("div"); tmp.innerHTML = levelBar(h); lb.replaceWith(tmp.firstElementChild); }
+        const rCell = $(".kv-grid .v.big", dr);
+        if (rCell) { rCell.textContent = fmt.rMult(h.rMult); rCell.className = `v big ${fmt.sign(h.rMult)}`; }
+      });
+      el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
+    });
+    // Journal note save (sim)
+    $$("[data-pos-note]", dr).forEach(ta => {
+      ta.addEventListener("input", () => { h.notes = ta.value; saveToStorage(); });
+    });
+  }
+
+  function simDeletePosition(sym) {
+    const idx = SIM_HOLDINGS.findIndex(h => h.sym === sym);
+    if (idx === -1) return;
+    SIM_HOLDINGS.splice(idx, 1);
+    saveToStorage();
+    if (simSelectedSym === sym) closeSimDrawer();
+    renderSimTable(); renderSimOverview();
+  }
+
+  function simDeleteClosedPosition(sym) {
+    const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
+    if (idx === -1) return;
+    SIM_CLOSED.splice(idx, 1);
+    saveToStorage();
+    if (simSelectedSym === sym) closeSimDrawer();
+    renderSimTable(); renderSimOverview();
+  }
+
+  function wireSimControls() {
+    const simNewBtn = $("#sim-new-pos-btn");
+    if (simNewBtn) simNewBtn.addEventListener("click", () => {
+      newPositionContext = "sim";
+      openModal("new-position-modal");
+    });
+
+    const tabOpen   = $("#sim-tab-open");
+    const tabClosed = $("#sim-tab-closed");
+    if (tabOpen) tabOpen.addEventListener("click", () => {
+      simActiveTab = "open";
+      tabOpen.classList.add("active"); if (tabClosed) tabClosed.classList.remove("active");
+      renderSimTable();
+    });
+    if (tabClosed) tabClosed.addEventListener("click", () => {
+      simActiveTab = "closed";
+      tabClosed.classList.add("active"); if (tabOpen) tabOpen.classList.remove("active");
+      renderSimTable();
+    });
+
+    const simSearch = $("#sim-search-input");
+    if (simSearch) simSearch.addEventListener("input", e => { simQuery = e.target.value; renderSimTable(); });
+
+    document.addEventListener("click", e => {
+      const chip = e.target.closest("[data-simfilter]");
+      if (!chip) return;
+      simFilter = chip.dataset.simfilter;
+      $$("[data-simfilter]").forEach(c => c.classList.toggle("active", c.dataset.simfilter === simFilter));
+      renderSimTable();
+    });
+
+  }
+
   function generatePortfolioCurve(period) {
     const totalPnlDollar = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
     const currentValue = totalNotional + totalPnlDollar;
@@ -1822,6 +2126,7 @@
   wireClosePositionModal();
   wireDeleteModal();
   wireWatchlistForm();
+  wireSimControls();
   tick(); setInterval(tick, 1000);
 
 })();
