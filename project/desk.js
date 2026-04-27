@@ -333,6 +333,8 @@
   let newPositionContext = "desk"; // "desk" | "sim"
   let pendingCloseCtx = "desk";
   let pendingDeleteCtx = "desk";
+  let lastPriceFetch = 0;
+  const PRICE_INTERVAL_MS = 30000; // fetch every 30s
 
   // ============ PERSISTENCE ============
   function saveToStorage() {
@@ -1267,6 +1269,63 @@
     $("#clock-txt").textContent = `${hh}:${mm}:${ss}`;
     const lu = $("#last-updated");
     if (lu) lu.textContent = "更新于 " + hh + ":" + mm + ":" + ss;
+
+    const now = Date.now();
+    if (now - lastPriceFetch >= PRICE_INTERVAL_MS) {
+      lastPriceFetch = now;
+      fetchPrices();
+    }
+  }
+
+  async function fetchPrices() {
+    const all = [...HOLDINGS, ...SIM_HOLDINGS];
+    if (!all.length) return;
+
+    const stocks  = [...new Set(all.filter(h => h.kind !== "crypto").map(h => h.sym))];
+    const cryptos = [...new Set(all.filter(h => h.kind === "crypto").map(h => h.sym))];
+
+    const params = new URLSearchParams();
+    if (stocks.length)  params.set("stocks",  stocks.join(","));
+    if (cryptos.length) params.set("crypto",  cryptos.join(","));
+
+    try {
+      const res = await fetch(`/api/quote?${params}`);
+      if (!res.ok) return;
+      const { results } = await res.json();
+      if (!results) return;
+
+      let changed = false;
+      all.forEach(h => {
+        const q = results[h.sym];
+        if (!q) return;
+        if (q.last != null && Math.abs(q.last - h.last) > 0.0001) {
+          h.last = q.last;
+          changed = true;
+        }
+        if (q.prevClose != null) h.prevClose = q.prevClose;
+        if (changed) recomputeHolding(h);
+      });
+
+      if (changed) {
+        saveToStorage();
+        renderOverview();
+        renderTable();
+        if (currentPage === "sim")       { renderSimOverview();   renderSimTable();   }
+        if (currentPage === "analytics") renderAnalytics();
+      }
+
+      // Update live price indicator
+      const statusEl = $("#price-status");
+      if (statusEl) {
+        const d = new Date();
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        statusEl.textContent = `LIVE · ${hh}:${mm}`;
+        statusEl.dataset.live = "true";
+      }
+    } catch (_) {
+      // Network error or API key not set — keep static prices silently
+    }
   }
 
   // ============ PAGE SWITCHING ============

@@ -901,8 +901,10 @@
   }
   .clock .clock-text .clock-sub{
     font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.1em;
-    color: var(--up); font-weight: 600;
+    color: var(--up); font-weight: 600; transition: color .4s;
   }
+  #price-status[data-live="true"] { color: var(--up); }
+  #price-status:not([data-live]) { color: var(--fg-3); }
 
   .avatar-btn{
     all: unset; cursor: pointer;
@@ -1515,7 +1517,7 @@
       <span class="live-dot"></span>
       <div class="clock-text">
         <span id="clock-txt">13:51:43</span>
-        <span class="clock-sub">MKT OPEN · NY</span>
+        <span class="clock-sub" id="price-status">MKT OPEN · NY</span>
       </div>
     </div>
     <button class="btn icon" title="刷新">
