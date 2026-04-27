@@ -316,7 +316,7 @@
   // ============ GLOBAL STATE ============
   let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
   let activeTab = "open";
-  let totalNotional = 284620;
+  let totalNotional = 60000;
   let reviewPeriod = "week";
   let pendingCloseSym = null;
   let pendingDeleteSym = null, pendingDeleteFrom = null;
@@ -339,25 +339,25 @@
   // ============ PERSISTENCE ============
   function saveToStorage() {
     try {
-      localStorage.setItem("trendo_v3_holdings",     JSON.stringify(HOLDINGS));
-      localStorage.setItem("trendo_v3_closed",       JSON.stringify(CLOSED_POSITIONS));
-      localStorage.setItem("trendo_v3_notional",     String(totalNotional));
-      localStorage.setItem("trendo_v3_watchlist",    JSON.stringify(WATCHLIST));
-      localStorage.setItem("trendo_v3_sim_holdings", JSON.stringify(SIM_HOLDINGS));
-      localStorage.setItem("trendo_v3_sim_closed",   JSON.stringify(SIM_CLOSED));
-      localStorage.setItem("trendo_v3_sim_notional", String(simNotional));
+      localStorage.setItem("trendo_v4_holdings",     JSON.stringify(HOLDINGS));
+      localStorage.setItem("trendo_v4_closed",       JSON.stringify(CLOSED_POSITIONS));
+      localStorage.setItem("trendo_v4_notional",     String(totalNotional));
+      localStorage.setItem("trendo_v4_watchlist",    JSON.stringify(WATCHLIST));
+      localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(SIM_HOLDINGS));
+      localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
+      localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
     } catch (e) { /* storage unavailable */ }
   }
 
   function loadFromStorage() {
     try {
-      const h  = localStorage.getItem("trendo_v3_holdings");
-      const c  = localStorage.getItem("trendo_v3_closed");
-      const n  = localStorage.getItem("trendo_v3_notional");
-      const w  = localStorage.getItem("trendo_v3_watchlist");
-      const sh = localStorage.getItem("trendo_v3_sim_holdings");
-      const sc = localStorage.getItem("trendo_v3_sim_closed");
-      const sn = localStorage.getItem("trendo_v3_sim_notional");
+      const h  = localStorage.getItem("trendo_v4_holdings");
+      const c  = localStorage.getItem("trendo_v4_closed");
+      const n  = localStorage.getItem("trendo_v4_notional");
+      const w  = localStorage.getItem("trendo_v4_watchlist");
+      const sh = localStorage.getItem("trendo_v4_sim_holdings");
+      const sc = localStorage.getItem("trendo_v4_sim_closed");
+      const sn = localStorage.getItem("trendo_v4_sim_notional");
       if (h)  { const parsed = JSON.parse(h);  HOLDINGS.splice(0, HOLDINGS.length, ...parsed); }
       if (c)  { const parsed = JSON.parse(c);  CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...parsed); }
       if (n)  totalNotional = parseFloat(n) || totalNotional;
@@ -1308,6 +1308,7 @@
 
       if (changed) {
         saveToStorage();
+        renderTape();
         renderOverview();
         renderTable();
         if (currentPage === "sim")       { renderSimOverview();   renderSimTable();   }
@@ -2159,16 +2160,21 @@
   function renderTape() {
     const track = document.getElementById("tape-track");
     if (!track) return;
-    const holdings = HOLDINGS.slice(0, 15).map(h => ({
-      s: h.sym, p: h.last >= 1000 ? h.last.toLocaleString("en-US",{maximumFractionDigits:0}) : h.last.toFixed(2),
-      c: +(h.pnlPct * 100).toFixed(2)
-    }));
-    const html = holdings.map(i => {
+    if (!HOLDINGS.length) return;
+    const items = HOLDINGS.slice(0, 20).map(h => {
+      const p = h.last >= 1000
+        ? h.last.toLocaleString("en-US", { maximumFractionDigits: 0 })
+        : h.last.toFixed(2);
+      // daily change vs prevClose; fall back to position P&L if prevClose unavailable
+      const base = h.prevClose > 0 ? h.prevClose : h.cost;
+      const c = +((h.last - base) / base * 100).toFixed(2);
+      return { s: h.sym, p, c };
+    });
+    const html = items.map(i => {
       const cls = i.c >= 0 ? "up" : "down";
       const sign = i.c >= 0 ? "+" : "−";
       return `<span class="ti"><span class="s">${i.s}</span><span class="p">${i.p}</span><span class="c ${cls}">${sign}${Math.abs(i.c).toFixed(2)}%</span></span>`;
     }).join("");
-    // duplicate for seamless loop
     track.innerHTML = html + html;
   }
   loadFromStorage();
