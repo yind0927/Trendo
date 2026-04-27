@@ -1,22 +1,27 @@
-# Trendo v5.0 Baseline Version
+# Trendo v5.1 Baseline Version
 
-**记录时间**: 2026-04-26  
-**Git Commit**: `aef70af`  
-**Git Tag**: `v5.0-baseline`  
+**记录时间**: 2026-04-27  
+**Git Commit**: `ae0ac7d`  
+**Git Tag**: `v5.1-baseline`  
 **状态**: ✅ 完全功能 + 已部署到 Vercel
 
-> **注意**: "回到版本" 指的是此版本 (v5.0-baseline)。
+> **注意**: "回到版本" 指的是此版本 (v5.1-baseline)。
 
 ---
 
-## 功能清单（在 v4.0 基础上新增）
+## 功能清单（在 v5.0 基础上新增）
 
-### v4.1 新增
+### v5.1 新增
 
-- ✅ **权益曲线增强** — 水平网格线 + $k 价值标注
-  - 起始点和当前点圆点标记（终点高亮）
-  - 鼠标悬浮：竖向十字准线跟随数据点吸附
-  - Tooltip 显示：时间标签 / 总资产金额 / 相对起点的 $ 和 % 变化
+- ✅ **Simulation 模拟仓页面** — 位于 Journal 和 Analytics 之间
+  - 深蓝色主题（`oklch(0.58 0.20 252)`），与真实持仓视觉区分
+  - 4 张总览卡：模拟 NAV / 浮盈亏 / 已实现盈亏 / 胜率
+  - 模拟本金可编辑（默认 $100,000），持久化到 localStorage
+  - 完整持仓表格：同列 / 同排序 / 同筛选 / 同搜索逻辑
+  - Open / Closed 双 Tab，完整抽屉（含编辑 + BX 编辑）
+  - 平仓弹窗 / 删除确认弹窗 — 上下文感知（区分真实 vs 模拟）
+  - New Sim Position 按钮 — 共用 New Position 弹窗，推入 SIM_HOLDINGS
+  - 所有模拟数据独立持久化（`trendo_v3_sim_*` localStorage 键）
 
 ---
 
