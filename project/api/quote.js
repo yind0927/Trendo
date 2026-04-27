@@ -1,6 +1,6 @@
 // Vercel serverless function — real-time market data
-// Stocks/ETFs : Finnhub /api/v1/quote  (real-time; uses FINNHUB_API_KEY)
-// Crypto      : Polygon snapshot        (uses POLYGON_API_KEY)
+// Stocks/ETFs : Finnhub /api/v1/quote (real-time)  OR  Polygon last-trade + prev-close
+// Crypto      : Polygon snapshot
 //
 // GET /api/quote?stocks=NVDA,TSLA&crypto=BTC
 // Returns: { results: { SYM: { last, prevClose, changePct } } }
@@ -18,56 +18,62 @@ export default async function handler(req, res) {
 
   const results = {};
 
-  // ── Stocks + ETFs: Finnhub real-time quote ────────────────────────
-  // Returns c=current, pc=prevClose, dp=daily% — free tier, real-time
-  if (stocks.length && finnhubKey) {
+  // ── Stocks + ETFs ─────────────────────────────────────────────────
+  if (stocks.length) {
     await Promise.all(stocks.slice(0, 12).map(async sym => {
+
+      // Priority 1: Finnhub — single call, real-time current + true prevClose
+      if (finnhubKey) {
+        try {
+          const r = await fetch(
+            `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${finnhubKey}`,
+            { signal: AbortSignal.timeout(5000) }
+          );
+          const d = await r.json();
+          if (d.c > 0) {
+            results[sym] = {
+              last:      d.c,
+              prevClose: d.pc || null,
+              changePct: d.pc > 0 ? ((d.c - d.pc) / d.pc) * 100 : (d.dp ?? null),
+            };
+            return; // done for this symbol
+          }
+        } catch (_) {}
+      }
+
+      // Priority 2: Polygon — last trade (today's price) + prev-day (true prevClose)
+      // last/trade gives 15-min delayed price on free tier but IS today's price
+      if (!polygonKey) return;
       try {
-        const r = await fetch(
-          `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${finnhubKey}`,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        const d = await r.json();
-        if (d.c > 0) {
+        const [tradeR, prevR] = await Promise.all([
+          fetch(`https://api.polygon.io/v2/last/trade/${sym}?apiKey=${polygonKey}`,
+            { signal: AbortSignal.timeout(5000) }),
+          fetch(`https://api.polygon.io/v2/aggs/ticker/${sym}/prev?adjusted=true&apiKey=${polygonKey}`,
+            { signal: AbortSignal.timeout(5000) }),
+        ]);
+        const [tradeD, prevD] = await Promise.all([tradeR.json(), prevR.json()]);
+
+        const last      = tradeD.results?.p ?? null;          // last traded price
+        const prevClose = prevD.results?.[0]?.c ?? null;      // previous day close
+
+        if (last || prevClose) {
           results[sym] = {
-            last:      d.c,
-            prevClose: d.pc || null,
-            changePct: d.pc > 0 ? ((d.c - d.pc) / d.pc) * 100 : (d.dp ?? null),
+            last:      last ?? prevClose,
+            prevClose: prevClose,
+            changePct: (last && prevClose) ? ((last - prevClose) / prevClose) * 100 : null,
           };
         }
       } catch (_) {}
     }));
   }
 
-  // ── Stocks fallback: Polygon prev-day (if Finnhub not configured) ─
-  if (stocks.length && !finnhubKey && polygonKey) {
-    await Promise.all(stocks.slice(0, 12).map(async sym => {
-      if (results[sym]) return;
-      try {
-        const r = await fetch(
-          `https://api.polygon.io/v2/aggs/ticker/${sym}/prev?adjusted=true&apiKey=${polygonKey}`,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        const d    = await r.json();
-        const bar  = d.results?.[0];
-        if (bar?.c) {
-          results[sym] = {
-            last:      bar.c,
-            prevClose: bar.c,
-            changePct: null,
-          };
-        }
-      } catch (_) {}
-    }));
-  }
-
-  // ── Crypto: Polygon snapshot (works on free tier for global markets) ─
+  // ── Crypto: Polygon snapshot ──────────────────────────────────────
   if (cryptos.length && polygonKey) {
     try {
-      const polyTickers = cryptos.map(s => `X:${s}USD`).join(",");
+      const tickers = cryptos.map(s => `X:${s}USD`).join(",");
       const r = await fetch(
         `https://api.polygon.io/v2/snapshot/locale/global/markets/crypto/tickers` +
-        `?tickers=${polyTickers}&apiKey=${polygonKey}`,
+        `?tickers=${tickers}&apiKey=${polygonKey}`,
         { signal: AbortSignal.timeout(8000) }
       );
       const d = await r.json();
