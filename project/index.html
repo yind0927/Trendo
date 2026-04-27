@@ -1110,6 +1110,12 @@
   .bx-chip-slope.flat { background: var(--bg-3);      border-color: var(--line); color: var(--fg-2); }
   .bx-chip-slope.down { background: var(--down-dim);  border-color: oklch(0.70 0.19 25 / .3); color: var(--down); }
   .bx-chip-slope:focus { box-shadow: 0 0 0 1.5px currentColor; }
+  /* 3-state slope click button */
+  .bx-slope-btn { all: unset; width: 100%; height: 26px; border-radius: 5px; cursor: pointer; border: 1.5px solid transparent; transition: transform .12s, box-shadow .12s; display: block; }
+  .bx-slope-btn:hover { transform: scale(1.06); box-shadow: 0 0 0 1.5px currentColor; }
+  .bx-slope-btn.slope-up   { background: var(--up-dim);   border-color: oklch(0.78 0.17 145 / .4); color: var(--up); }
+  .bx-slope-btn.slope-flat { background: var(--bg-3);      border-color: var(--line); color: var(--fg-2); }
+  .bx-slope-btn.slope-down { background: var(--down-dim);  border-color: oklch(0.70 0.19 25 / .4); color: var(--down); }
 
   /* BX Bars table chip */
   .bx-bar-chip { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 9px; border-radius: 5px; font-family: var(--f-mono); font-weight: 700; font-size: 11px; border: 1px solid transparent; line-height: 1.2; }

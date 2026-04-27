@@ -166,6 +166,8 @@
   const slopeNumClass   = v => { const n = parseFloat(v); return n > 0 ? "up" : n < 0 ? "down" : "flat"; };
   const slopeNumDisplay = v => { const n = parseFloat(v) || 0; return n > 0 ? `+${n}` : `${n}`; };
 
+  const slopeClass = v => parseFloat(v) > 0 ? "up" : parseFloat(v) < 0 ? "down" : "flat";
+
   function bxSectionHTML(h) {
     const bx = h.bx;
     const scoreButtons = field => BX_SCORE_OPTS.map(o => `
@@ -174,6 +176,10 @@
         <span class="bx-val">${o.label}</span>
         <span class="bx-sub">${o.sub}</span>
       </button>`).join("");
+    const slopeBtn = (field, val) => {
+      const cls = slopeClass(val);
+      return `<button class="bx-slope-btn slope-${cls}" data-bx-field="${field}" data-bx-val="cycle" title="点击切换: 绿↑橙—红↓"></button>`;
+    };
     return `
       <div class="drawer-section">
         <h4><span class="idx">02</span>BX Trend &amp; 市场背景</h4>
@@ -206,15 +212,13 @@
           <div class="bx-align-row">
             <div class="bx-align-label">
               <button class="bx-swatch" style="background:${bx.sector.color}"
-                      data-bx-field="sectorColor" title="点击切换颜色"></button>
+                      data-bx-field="sectorColor" data-bx-val="cycle" title="点击切换颜色"></button>
               <span class="bx-name" contenteditable="true"
                     data-bx-field="sectorName" spellcheck="false">${bx.sector.name}</span>
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="sectorScore">${bx.sector.score}</span>
-            <span class="bx-chip-slope ${slopeNumClass(bx.sector.slope)}"
-                  contenteditable="true" data-bx-field="sectorSlope"
-                  spellcheck="false">${slopeNumDisplay(bx.sector.slope)}</span>
+            ${slopeBtn("sectorSlope", bx.sector.slope)}
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
@@ -222,9 +226,7 @@
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="overallScore">${bx.overall.score}</span>
-            <span class="bx-chip-slope ${slopeNumClass(bx.overall.slope)}"
-                  contenteditable="true" data-bx-field="overallSlope"
-                  spellcheck="false">${slopeNumDisplay(bx.overall.slope)}</span>
+            ${slopeBtn("overallSlope", bx.overall.slope)}
           </div>
         </div>
       </div>`;
@@ -274,39 +276,46 @@
 
   function wireBX(h) {
     const dr = $("#drawer");
+    const cycleSlope = cur => parseFloat(cur) > 0 ? 0 : parseFloat(cur) < 0 ? 1 : -1;
+
     $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
       if (btn.tagName !== "BUTTON") return;
       btn.addEventListener("click", () => {
-        const field = btn.dataset.bxField, val = btn.dataset.bxVal;
+        const field = btn.dataset.bxField;
+
         if (field === "dailyBars") {
-          h.bx.dailyBars = val;
-          $$(`[data-bx-field="dailyBars"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === val));
+          h.bx.dailyBars = btn.dataset.bxVal;
+          $$(`[data-bx-field="dailyBars"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === h.bx.dailyBars));
+
         } else if (field === "weekly" || field === "monthly") {
-          h.bx[field] = +val;
-          $$(`[data-bx-field="${field}"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === val));
+          h.bx[field] = +btn.dataset.bxVal;
+          $$(`[data-bx-field="${field}"]`, dr).forEach(b => b.classList.toggle("active", +b.dataset.bxVal === h.bx[field]));
+
         } else if (field === "sectorColor") {
           const cur = SWATCH_COLORS.indexOf(h.bx.sector.color);
           h.bx.sector.color = SWATCH_COLORS[(cur + 1) % SWATCH_COLORS.length];
           btn.style.background = h.bx.sector.color;
+
+        } else if (field === "sectorSlope") {
+          h.bx.sector.slope = cycleSlope(h.bx.sector.slope);
+          btn.className = `bx-slope-btn slope-${slopeClass(h.bx.sector.slope)}`;
+
+        } else if (field === "overallSlope") {
+          h.bx.overall.slope = cycleSlope(h.bx.overall.slope);
+          btn.className = `bx-slope-btn slope-${slopeClass(h.bx.overall.slope)}`;
         }
+
+        saveToStorage();
       });
     });
+
     $$("[contenteditable][data-bx-field]", dr).forEach(el => {
       el.addEventListener("blur", () => {
         const v = el.textContent.trim(), f = el.dataset.bxField;
-        if (f === "sectorName")  { h.bx.sector.name  = v; }
-        if (f === "sectorScore") { h.bx.sector.score = v; }
-        if (f === "overallScore") { h.bx.overall.score = v; }
-        if (f === "sectorSlope") {
-          h.bx.sector.slope = parseFloat(v) || 0;
-          el.className = `bx-chip-slope ${slopeNumClass(h.bx.sector.slope)}`;
-          el.textContent = slopeNumDisplay(h.bx.sector.slope);
-        }
-        if (f === "overallSlope") {
-          h.bx.overall.slope = parseFloat(v) || 0;
-          el.className = `bx-chip-slope ${slopeNumClass(h.bx.overall.slope)}`;
-          el.textContent = slopeNumDisplay(h.bx.overall.slope);
-        }
+        if (f === "sectorName")   h.bx.sector.name   = v;
+        if (f === "sectorScore")  h.bx.sector.score  = v;
+        if (f === "overallScore") h.bx.overall.score = v;
+        saveToStorage();
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
     });
