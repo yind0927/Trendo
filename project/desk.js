@@ -446,13 +446,14 @@
 
   function applyCloudData(data) {
     if (!data) return;
-    if (data.holdings)    HOLDINGS.splice(0, HOLDINGS.length, ...data.holdings);
-    if (data.closed)      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
-    if (data.notional)    totalNotional = data.notional;
-    if (data.watchlist)   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);
-    if (data.simHoldings) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
-    if (data.simClosed)   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
-    if (data.simNotional) simNotional = data.simNotional;
+    // Use Array.isArray checks — plain `if ([])` is always truthy, even for empty arrays
+    if (Array.isArray(data.holdings))    HOLDINGS.splice(0, HOLDINGS.length, ...data.holdings);
+    if (Array.isArray(data.closed))      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
+    if (data.notional != null)           totalNotional = data.notional;
+    if (Array.isArray(data.watchlist))   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);
+    if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
+    if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
+    if (data.simNotional != null)        simNotional = data.simNotional;
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
@@ -2498,23 +2499,10 @@
   wireSimControls();
   wireSyncPanel();
   renderSyncStatus();
-  // Sync strategy: local data is always the source of truth.
-  // Only pull from cloud when local is completely empty (fresh device/browser).
-  // This prevents cloud data (even stale/empty) from ever overwriting local positions.
-  if (syncKey) {
-    const localCount = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length;
-    if (localCount === 0) {
-      // Fresh device — pull from cloud, apply only if cloud has actual data
-      syncPull(syncKey).then(cloudData => {
-        const cloudCount = (cloudData?.holdings?.length || 0) + (cloudData?.simHoldings?.length || 0);
-        if (cloudCount > 0) applyCloudData(cloudData);
-        else syncPush();
-      });
-    } else {
-      // Local has data — push to cloud to keep it up to date, never pull
-      syncPush();
-    }
-  }
+  // Sync strategy: local localStorage is ALWAYS the source of truth.
+  // On startup we only PUSH local data to cloud — never pull.
+  // Cross-device sync only happens when the user explicitly enters a key in the sync panel.
+  if (syncKey) syncPush();
   tick(); setInterval(tick, 1000);
 
 })();
