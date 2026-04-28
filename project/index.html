@@ -1099,11 +1099,6 @@
   .bx-subhead { font-family: var(--f-mono); font-size: 9.5px; letter-spacing: 0.18em; font-weight: 700; color: var(--fg-3); text-transform: uppercase; margin: 16px 0 8px; display: flex; align-items: center; gap: 8px; }
   .bx-subhead::after { content: ''; flex: 1; height: 1px; background: var(--line); }
   .bx-context-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 11px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; }
-  .bx-swatch-wrap { position: relative; flex-shrink: 0; }
-  .bx-swatch { all: unset; display: block; width: 20px; height: 20px; border-radius: 5px; cursor: pointer; box-shadow: inset 0 1px 0 oklch(1 0 0 / .18), 0 1px 3px oklch(0 0 0 / .3); transition: transform .15s; }
-  .bx-swatch:hover { transform: scale(1.12); }
-  .bx-color-picker { display: none; position: fixed; z-index: 9999; background: var(--bg-2); border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px; grid-template-columns: repeat(4, 1fr); gap: 5px; box-shadow: 0 8px 24px oklch(0 0 0 / .5); }
-  .bx-color-picker.open { display: grid; }
   .bx-color-opt { all: unset; display: block; width: 18px; height: 18px; border-radius: 4px; cursor: pointer; border: 1.5px solid transparent; transition: transform .12s; }
   .bx-color-opt:hover { transform: scale(1.2); }
   .bx-color-opt.active { border-color: oklch(1 0 0 / .7); box-shadow: 0 0 0 1px oklch(1 0 0 / .4); }
@@ -1318,6 +1313,37 @@
     transform: translateY(-1px);
   }
   .btn-exit-pos:active { transform: translateY(0); }
+  .btn-add-pos {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
+    background: color-mix(in oklch, var(--up) 12%, transparent);
+    color: var(--up); border-color: color-mix(in oklch, var(--up) 30%, transparent);
+    padding: 10px 0; transition: background .15s, transform .1s;
+  }
+  .btn-add-pos:hover { background: color-mix(in oklch, var(--up) 22%, transparent); transform: translateY(-1px); }
+  .btn-add-pos:active { transform: translateY(0); }
+
+  /* Section 03 — Trading Plan */
+  .plan-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .plan-price-item { background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px; }
+  .plan-price-item .k { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 4px; }
+  .plan-price-item .v { font-size: 14px; font-weight: 700; }
+  .plan-price-item .sub { font-size: 10.5px; color: var(--fg-2); margin-top: 2px; }
+  .plan-subhead { font-family: var(--f-mono); font-size: 9.5px; letter-spacing: 0.18em; font-weight: 700; color: var(--fg-3); text-transform: uppercase; margin: 14px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .plan-subhead::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+  .exec-list { display: flex; flex-direction: column; gap: 5px; }
+  .exec-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--bg-2); border-radius: 6px; font-size: 12px; }
+  .exec-type { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 4px; flex-shrink: 0; }
+  .exec-type.open { background: color-mix(in oklch, var(--accent) 15%, transparent); color: var(--accent); }
+  .exec-type.add  { background: color-mix(in oklch, var(--up) 15%, transparent); color: var(--up); }
+  .exec-date  { color: var(--fg-2); font-size: 11px; flex: 1; }
+  .exec-price { font-size: 12.5px; font-weight: 600; }
+  .exec-qty   { font-size: 11px; }
+  .drawer-journal-note { width: 100%; box-sizing: border-box; background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; color: var(--fg-0); font-family: var(--f-sans); font-size: 12.5px; line-height: 1.6; padding: 10px 12px; resize: vertical; outline: none; transition: border-color .15s; }
+  .drawer-journal-note:focus { border-color: var(--accent-line); }
+
+  /* BX inline color strip */
+  .bx-color-inline { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
 
   /* SIMULATION VIEW */
   #sim-view {
@@ -2147,6 +2173,33 @@
       <div class="form-actions">
         <button type="submit" class="btn primary">Update</button>
         <button type="button" id="equity-cancel" class="btn">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="add-to-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="add-to-title">加仓</h2>
+      <button class="modal-close" id="add-to-close">✕</button>
+    </div>
+    <form id="add-to-form">
+      <div class="form-row">
+        <label>加仓价格</label>
+        <input type="number" id="add-price" step="0.01" required placeholder="0.00" class="form-input"/>
+      </div>
+      <div class="form-row">
+        <label>加仓数量 (股)</label>
+        <input type="number" id="add-qty" step="1" min="1" required placeholder="0" class="form-input"/>
+      </div>
+      <div class="form-row">
+        <label>加仓日期</label>
+        <input type="date" id="add-date" class="form-input"/>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="add-to-cancel" class="btn">取消</button>
+        <button type="submit" class="btn primary">确认加仓</button>
       </div>
     </form>
   </div>

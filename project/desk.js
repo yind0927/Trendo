@@ -185,8 +185,10 @@
     const slopeCell = (field, val, dir) => {
       const n = parseFloat(val) || 0;
       const d = dir ?? 0;
+      const dotColor = d > 0 ? "var(--up)" : d < 0 ? "var(--down)" : "var(--warn)";
       return `<div class="bx-slope-cell">
-        <input type="number" class="bx-slope-input" data-slope-field="${field}" value="${n}" step="0.1">
+        <input type="number" class="bx-slope-input" data-slope-field="${field}" value="${n}" step="0.1"
+               style="background:color-mix(in oklch,${dotColor} 22%,var(--bg-3))">
         <div class="bx-slope-dots">
           <button class="bx-dot up${d > 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="1" title="上升"></button>
           <button class="bx-dot flat${d === 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="0" title="中性"></button>
@@ -194,14 +196,10 @@
         </div>
       </div>`;
     };
-    const swatchPicker = () => `
-      <div class="bx-swatch-wrap">
-        <button class="bx-swatch" style="background:${bx.sector.color}"
-                data-picker-toggle="sectorColor" title="选择板块颜色"></button>
-      </div>
-      <div class="bx-color-picker" data-picker-id="sectorColor">
+    const colorStrip = () => `
+      <div class="bx-color-inline">
         ${SWATCH_COLORS.map(c => `<button class="bx-color-opt${bx.sector.color===c?' active':''}"
-          style="background:${c}" data-color-val="${c}"></button>`).join('')}
+          style="background:${c}" data-color-val="${c}" title="${c}"></button>`).join('')}
       </div>`;
     return `
       <div class="drawer-section">
@@ -228,13 +226,13 @@
           <div class="bx-score-seg">${scoreButtons("monthly")}</div>
         </div>
 
+        ${colorStrip()}
         <div class="bx-align-grid">
           <div class="bx-align-hdr">
             <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
-              ${swatchPicker()}
               <span class="bx-name" contenteditable="true"
                     data-bx-field="sectorName" spellcheck="false"
                     style="background:${bx.sector.color}">${bx.sector.name}</span>
@@ -295,6 +293,11 @@
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
     });
+    // Wire drawer Journal note — same field as journalNote in Journal page
+    const drawerNote = $(".drawer-journal-note", dr);
+    if (drawerNote) {
+      drawerNote.addEventListener("blur", () => { h.journalNote = drawerNote.value; saveToStorage(); });
+    }
   }
 
   function wireBX(h) {
@@ -312,7 +315,7 @@
       input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
     });
 
-    // Slope color dots — saves only direction, independent of number
+    // Slope color dots — saves only direction, independent of number; also tints input
     $$(".bx-dot[data-dir-field]", dr).forEach(dot => {
       dot.addEventListener("click", () => {
         const field = dot.dataset.dirField;
@@ -322,48 +325,24 @@
         $$(`[data-dir-field="${field}"].bx-dot`, dr).forEach(b =>
           b.classList.toggle("active", parseFloat(b.dataset.dotVal) === d)
         );
+        const dotColor = d > 0 ? "var(--up)" : d < 0 ? "var(--down)" : "var(--warn)";
+        const inp = $(`[data-slope-field="${field}"].bx-slope-input`, dr);
+        if (inp) inp.style.background = `color-mix(in oklch,${dotColor} 22%,var(--bg-3))`;
         saveToStorage();
       });
     });
 
-    const closeAllPickers = () => $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
-
-    // Color picker: swatch toggle — position:fixed relative to viewport so overflow:hidden can't clip it
-    $$("[data-picker-toggle]", dr).forEach(sw => {
-      sw.addEventListener("click", e => {
-        e.stopPropagation();
-        const picker = $(`[data-picker-id="${sw.dataset.pickerToggle}"]`, dr);
-        if (!picker) return;
-        const wasOpen = picker.classList.contains("open");
-        closeAllPickers();
-        if (!wasOpen) {
-          const rect = sw.getBoundingClientRect();
-          picker.style.top  = `${rect.bottom + 6}px`;
-          picker.style.left = `${rect.left}px`;
-          picker.classList.add("open");
-        }
-      });
-    });
-
-    // Color picker: color option selection
+    // Inline color strip — click a color to immediately apply it
     $$(".bx-color-opt", dr).forEach(opt => {
-      opt.addEventListener("click", e => {
-        e.stopPropagation();
+      opt.addEventListener("click", () => {
         const c = opt.dataset.colorVal;
         h.bx.sector.color = c;
-        const sw = $("[data-picker-toggle='sectorColor']", dr);
-        if (sw) sw.style.background = c;
         const nameEl = $("[data-bx-field='sectorName']", dr);
         if (nameEl) nameEl.style.background = c;
         $$(".bx-color-opt", dr).forEach(o => o.classList.toggle("active", o.dataset.colorVal === c));
-        closeAllPickers();
         saveToStorage();
       });
     });
-
-    // Click anywhere in drawer or scroll → close all pickers
-    dr.addEventListener("click", closeAllPickers);
-    dr.addEventListener("scroll", closeAllPickers, { passive: true });
 
     // Score/bars buttons
     $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
@@ -747,10 +726,63 @@
     if (activeTab === "open") {
       wireDrawerEdits(h);
       wireDrawerCloseButton();
+      wireAddToPosition(h, HOLDINGS, totalNotional, () => { renderTable(); renderOverview(); });
     }
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
+  }
+
+  function wireAddToPosition(h, holdings, notional, onDone) {
+    const btn = $("#drawer-add-btn");
+    if (!btn) return;
+    btn.onclick = () => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      $("#add-to-title").textContent = `加仓 · ${h.sym}`;
+      $("#add-price").value = h.last || h.cost;
+      $("#add-qty").value = "";
+      $("#add-date").value = todayStr;
+      openModal("add-to-modal");
+    };
+    // Use onclick so re-wiring on each drawer open replaces the old handler
+    $("#add-to-form").onsubmit = e => {
+      e.preventDefault();
+      const addPrice = parseFloat($("#add-price").value);
+      const addQty   = parseInt($("#add-qty").value);
+      const addDate  = $("#add-date").value || new Date().toISOString().slice(0, 10);
+      if (!addPrice || !addQty) { alert("请填写加仓价格和数量"); return; }
+
+      const oldQty  = h.qty;
+      const oldCost = h.cost;
+      const newQty  = oldQty + addQty;
+      const newCost = (oldCost * oldQty + addPrice * addQty) / newQty;
+
+      h.qty  = newQty;
+      h.cost = parseFloat(newCost.toFixed(4));
+      h.size = notional > 0 ? (newQty * h.cost / notional) * 100 : h.size;
+      h.risk1R = h.stop ? h.cost - h.stop : 0;
+
+      if (!Array.isArray(h.entries)) {
+        h.entries = [{ type: "open", date: h.entry, price: oldCost, qty: oldQty }];
+      }
+      h.entries.push({ type: "add", date: addDate, price: addPrice, qty: addQty });
+
+      recomputeHolding(h, notional);
+      saveToStorage();
+      closeModal("add-to-modal");
+      onDone();
+
+      const execList = $(".exec-list", $("#drawer"));
+      if (execList) {
+        execList.innerHTML = h.entries.map(ex => `
+          <div class="exec-item">
+            <span class="exec-type ${ex.type === 'open' ? 'open' : 'add'}">${ex.type === "open" ? "开仓" : "加仓"}</span>
+            <span class="exec-date">${fmt.date(ex.date)}</span>
+            <span class="exec-price mono">$${price(ex.price)}</span>
+            <span class="exec-qty muted">${ex.qty} 股</span>
+          </div>`).join("");
+      }
+    };
   }
 
   function wireDrawerCloseButton() {
@@ -809,6 +841,10 @@
         </div>
         ${levelBar(h)}
         ${!isClosed ? `<div class="drawer-actions">
+          <button class="btn btn-add-pos" id="drawer-add-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            加仓
+          </button>
           <button class="btn btn-exit-pos" id="drawer-close-position">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             平仓出场
@@ -842,29 +878,46 @@
         <!-- 2. BX Trend -->
         ${bxSectionHTML(h)}
 
-        <!-- 3. 交易计划 -->
+        <!-- 3. 交易计划 + 执行记录 + Journal -->
         <div class="drawer-section">
           <h4><span class="idx">03</span>交易计划</h4>
-          <div class="kv-grid" style="margin-bottom:12px">
-            <div><div class="k">原始止损</div><div class="v">$${price(h.stop)} <span class="sub">(-${((h.cost - h.stop) / h.cost * 100).toFixed(1)}%)</span></div></div>
-            <div><div class="k">目标位</div><div class="v">$${price(h.target)} <span class="sub">(${((h.target - h.cost) / (h.cost - h.stop)).toFixed(1)}R)</span></div></div>
-            <div><div class="k">风险比</div><div class="v">${((h.target - h.cost) / (h.cost - h.stop)).toFixed(2)}<span class="sub">R reward/risk</span></div></div>
-            <div><div class="k">过财报</div><div class="v" style="font-family:var(--f-sans);font-size:13px">${h.earnings ? (h.holdEarn ? "✓ 允许" : "✗ 财报前清仓") : "—"}</div></div>
+          <div class="plan-prices">
+            <div class="plan-price-item">
+              <div class="k">止损价格</div>
+              <div class="v mono down">$${price(h.stop)}</div>
+              <div class="sub">${h.cost > h.stop ? `-${((h.cost - h.stop) / h.cost * 100).toFixed(1)}%` : "—"}</div>
+            </div>
+            <div class="plan-price-item">
+              <div class="k">止盈价格</div>
+              <div class="v mono up">$${price(h.target)}</div>
+              <div class="sub">${h.target > h.cost ? `+${((h.target - h.cost) / h.cost * 100).toFixed(1)}%` : "—"}</div>
+            </div>
+            <div class="plan-price-item">
+              <div class="k">盈亏比</div>
+              <div class="v big ${(h.target - h.cost) > (h.cost - h.stop) ? 'up' : 'down'}">${h.cost > h.stop && h.target > h.cost ? ((h.target - h.cost) / (h.cost - h.stop)).toFixed(2) : "—"}<span class="sub"> R</span></div>
+            </div>
           </div>
-          <div class="k" style="margin-bottom:6px">入场逻辑 / Thesis</div>
-          <div class="thesis">${h.thesis}</div>
-        </div>
 
-        <!-- 4. 时间轴 -->
-        <div class="drawer-section">
-          <h4><span class="idx">04</span>执行记录</h4>
-          ${timeline(h)}
-        </div>
+          <div class="plan-subhead">执行记录</div>
+          <div class="exec-list">
+            ${(h.entries || []).map(e => `
+              <div class="exec-item">
+                <span class="exec-type ${e.type === 'open' ? 'open' : 'add'}">${e.type === "open" ? "开仓" : "加仓"}</span>
+                <span class="exec-date">${fmt.date(e.date)}</span>
+                <span class="exec-price mono">$${price(e.price)}</span>
+                <span class="exec-qty muted">${e.qty} 股</span>
+              </div>`).join("") || `
+              <div class="exec-item">
+                <span class="exec-type open">开仓</span>
+                <span class="exec-date">${fmt.date(h.entry)}</span>
+                <span class="exec-price mono">$${price(h.cost)}</span>
+                <span class="exec-qty muted">${h.qty} 股</span>
+              </div>`}
+          </div>
 
-        <!-- 5. 复盘笔记 -->
-        <div class="drawer-section">
-          <h4><span class="idx">05</span>复盘笔记<span class="mono muted" style="margin-left:auto;font-size:10px;letter-spacing:0">平仓后自动填充</span></h4>
-          ${reviewHTML(h)}
+          <div class="plan-subhead">Journal 笔记</div>
+          <textarea class="journal-note-area drawer-journal-note" data-sym="${h.sym}"
+            placeholder="记录入场思路、心态、执行情况…" rows="4">${h.journalNote || ""}</textarea>
         </div>
       </div>
     `;
@@ -896,58 +949,6 @@
       </div>`;
   }
 
-  function timeline(h) {
-    // generate plausible events based on position
-    const events = [
-      { type: "open", dt: fmt.date(h.entry), act: "建仓", detail: `${h.size.toFixed(1)}% @ $${price(h.cost)}`, note: `${h.setup} · 符合 checklist 4/5` },
-    ];
-    if (h.rMult > 1.5) events.push({ type: "add", dt: fmt.date(addDays(h.entry, 3)), act: "加仓", detail: `+1.5% @ $${price(h.cost * 1.04)}`, note: "follow-through 日确认" });
-    if (h.rMult > 1.2) events.push({ type: "stop", dt: fmt.date(addDays(h.entry, 5)), act: "止损上移", detail: `$${price(h.stop * 0.94)} → $${price(h.stop)}`, note: "盈利 1R 后 trail 到 21EMA" });
-    if (h.status === "target") events.push({ type: "trim", dt: fmt.date(addDays(h.entry, 8)), act: "减仓", detail: `-30% @ $${price(h.last * 0.98)}`, note: "接近目标，锁定部分利润" });
-    if (h.status === "warn") events.push({ type: "stop", dt: "Today", act: "接近止损", detail: `现价距离止损 ${((h.last - h.stop) / h.last * 100).toFixed(1)}%`, note: "若日线跌破即清仓" });
-    if (h.status === "danger") events.push({ type: "stop", dt: "Today", act: "计划失效", detail: `现价 $${price(h.last)} 贴近/跌破止损`, note: "待盘口确认后执行清仓" });
-
-    return `<div class="timeline">
-      ${events.map(e => `
-        <div class="tl-item ${e.type}">
-          <div class="row"><span class="act">${e.act}</span><span class="dt">${e.dt}</span><span class="detail">${e.detail}</span></div>
-          <div class="note">${e.note}</div>
-        </div>
-      `).join("")}
-    </div>`;
-  }
-
-  function addDays(iso, n) { const d = new Date(iso); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
-
-  function reviewHTML(h) {
-    const closed = false; // open positions — pre-fill prompts
-    if (!closed) {
-      return `
-        <div class="review-flags">
-          <span class="flag yes">✓ 按 setup 入场</span>
-          <span class="flag yes">✓ 尺寸符合 1R 风控</span>
-          <span class="flag ${h.status === "danger" ? "no" : ""}">${h.status === "danger" ? "✗" : "·"} 止损纪律</span>
-          <span class="flag ${h.rMult > 1 ? "yes" : ""}">${h.rMult > 1 ? "✓" : "·"} 达到 1R 后调整</span>
-        </div>
-        <div class="review-grid" style="margin-top:12px">
-          <div class="review-card win">
-            <h5>▲ 做对了</h5>
-            <p>${h.rMult > 1 ? "在 breakout 当天确认后按计划进场，follow-through 日及时加仓。" : "尺寸控制在 1R 预算内，避免情绪性加仓。"}</p>
-          </div>
-          <div class="review-card loss">
-            <h5>▼ 待优化</h5>
-            <p>${h.status === "danger" ? "入场前未等待成交量确认，过早进入。" : (h.status === "warn" ? "止损设置偏紧；建议放宽到结构性 low 下方。" : "若能在 +2R 时锁定一半仓位，R 曲线会更平滑。")}</p>
-          </div>
-        </div>
-        <div style="margin-top:10px;font-size:11px;color:var(--fg-2);display:flex;align-items:center;gap:8px">
-          <span>下次继续做同类 setup？</span>
-          <span class="flag yes">✓ 是</span>
-          <span class="flag">条件性</span>
-          <span class="flag">否</span>
-        </div>
-      `;
-    }
-  }
 
   // ============ BOTTOM: review / errors / events ============
   function getReviewData() {
@@ -1841,6 +1842,7 @@
     if (simActiveTab === "open") {
       wireSimDrawerEdits(h);
       wireSimDrawerCloseButton();
+      wireAddToPosition(h, SIM_HOLDINGS, simNotional, () => { renderSimTable(); renderSimOverview(); });
     }
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
@@ -2513,6 +2515,8 @@
   wireTweaks();
   wireTableTabs();
   wireNewPositionModal();
+  $("#add-to-close")?.addEventListener("click",  () => closeModal("add-to-modal"));
+  $("#add-to-cancel")?.addEventListener("click", () => closeModal("add-to-modal"));
   wireEquityModal();
   wireClosePositionModal();
   wireDeleteModal();
