@@ -2475,6 +2475,13 @@
     track.innerHTML = html + html;
   }
   loadFromStorage();
+
+  // Retroactively stamp existing data saved before savedAt tracking was added.
+  // Without this, localTime = null and any cloud data (even empty) would win.
+  if (!localStorage.getItem("trendo_v4_savedAt")) {
+    const localTotal = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length;
+    if (localTotal > 0) localStorage.setItem("trendo_v4_savedAt", new Date().toISOString());
+  }
   renderTape();
   wireHost();
   renderOverview();
@@ -2494,15 +2501,17 @@
   // Pull from cloud; only apply if cloud is newer than local, then push winner back up
   if (syncKey) syncPull(syncKey).then(cloudData => {
     if (cloudData) {
-      const cloudTime = cloudData.savedAt ? new Date(cloudData.savedAt) : null;
-      const localStr  = localStorage.getItem("trendo_v4_savedAt");
-      const localTime = localStr ? new Date(localStr) : null;
-      // Apply cloud data only when it is strictly newer than local
-      if (cloudTime && (!localTime || cloudTime > localTime)) {
+      const cloudTime  = cloudData.savedAt ? new Date(cloudData.savedAt) : null;
+      const localStr   = localStorage.getItem("trendo_v4_savedAt");
+      const localTime  = localStr ? new Date(localStr) : null;
+      const cloudCount = (cloudData.holdings?.length || 0) + (cloudData.simHoldings?.length || 0);
+      const localCount = HOLDINGS.length + SIM_HOLDINGS.length;
+      // Cloud wins only when strictly newer AND (cloud has data OR local is also empty)
+      if (cloudTime && (!localTime || cloudTime > localTime) && (cloudCount > 0 || localCount === 0)) {
         applyCloudData(cloudData);
       }
     }
-    syncPush(); // always push current (winning) state to keep cloud up to date
+    syncPush();
   });
   tick(); setInterval(tick, 1000);
 
