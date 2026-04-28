@@ -2498,21 +2498,23 @@
   wireSimControls();
   wireSyncPanel();
   renderSyncStatus();
-  // Pull from cloud; only apply if cloud is newer than local, then push winner back up
-  if (syncKey) syncPull(syncKey).then(cloudData => {
-    if (cloudData) {
-      const cloudTime  = cloudData.savedAt ? new Date(cloudData.savedAt) : null;
-      const localStr   = localStorage.getItem("trendo_v4_savedAt");
-      const localTime  = localStr ? new Date(localStr) : null;
-      const cloudCount = (cloudData.holdings?.length || 0) + (cloudData.simHoldings?.length || 0);
-      const localCount = HOLDINGS.length + SIM_HOLDINGS.length;
-      // Cloud wins only when strictly newer AND (cloud has data OR local is also empty)
-      if (cloudTime && (!localTime || cloudTime > localTime) && (cloudCount > 0 || localCount === 0)) {
-        applyCloudData(cloudData);
-      }
+  // Sync strategy: local data is always the source of truth.
+  // Only pull from cloud when local is completely empty (fresh device/browser).
+  // This prevents cloud data (even stale/empty) from ever overwriting local positions.
+  if (syncKey) {
+    const localCount = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length;
+    if (localCount === 0) {
+      // Fresh device — pull from cloud, apply only if cloud has actual data
+      syncPull(syncKey).then(cloudData => {
+        const cloudCount = (cloudData?.holdings?.length || 0) + (cloudData?.simHoldings?.length || 0);
+        if (cloudCount > 0) applyCloudData(cloudData);
+        else syncPush();
+      });
+    } else {
+      // Local has data — push to cloud to keep it up to date, never pull
+      syncPush();
     }
-    syncPush();
-  });
+  }
   tick(); setInterval(tick, 1000);
 
 })();
