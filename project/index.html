@@ -1115,9 +1115,12 @@
   .bx-chip-slope:focus { box-shadow: 0 0 0 1.5px currentColor; }
   /* Slope cell: number input + 3 color dots */
   .bx-slope-cell { display: flex; align-items: center; gap: 6px; }
-  .bx-slope-input { width: 50px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px; color: var(--fg-0); font-family: var(--f-mono); font-size: 11px; font-weight: 600; padding: 4px 5px; text-align: center; outline: none; -moz-appearance: textfield; }
+  .bx-slope-input { width: 50px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px; color: var(--fg-0); font-family: var(--f-mono); font-size: 11px; font-weight: 600; padding: 4px 5px; text-align: center; outline: none; -moz-appearance: textfield; transition: background .15s, border-color .15s; }
   .bx-slope-input::-webkit-outer-spin-button, .bx-slope-input::-webkit-inner-spin-button { -webkit-appearance: none; }
   .bx-slope-input:focus { border-color: var(--accent-line); background: var(--bg-2); }
+  .bx-slope-input.tint-up   { background: oklch(0.24 0.05 140); border-color: oklch(0.50 0.14 140 / 0.5); }
+  .bx-slope-input.tint-flat { background: oklch(0.26 0.04 60);  border-color: oklch(0.55 0.12 60  / 0.5); }
+  .bx-slope-input.tint-down { background: oklch(0.24 0.05 25);  border-color: oklch(0.50 0.14 25  / 0.5); }
   .bx-slope-dots { display: flex; gap: 5px; }
   .bx-dot { all: unset; width: 13px; height: 13px; border-radius: 50%; cursor: pointer; opacity: 0.3; transition: opacity .12s, transform .12s; display: block; }
   .bx-dot:hover { opacity: 0.65; transform: scale(1.18); }

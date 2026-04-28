@@ -185,10 +185,9 @@
     const slopeCell = (field, val, dir) => {
       const n = parseFloat(val) || 0;
       const d = dir ?? 0;
-      const dotColor = d > 0 ? "var(--up)" : d < 0 ? "var(--down)" : "var(--warn)";
+      const tint = d > 0 ? "tint-up" : d < 0 ? "tint-down" : "tint-flat";
       return `<div class="bx-slope-cell">
-        <input type="number" class="bx-slope-input" data-slope-field="${field}" value="${n}" step="0.1"
-               style="background:color-mix(in oklch,${dotColor} 22%,var(--bg-3))">
+        <input type="number" class="bx-slope-input ${tint}" data-slope-field="${field}" value="${n}" step="0.1">
         <div class="bx-slope-dots">
           <button class="bx-dot up${d > 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="1" title="上升"></button>
           <button class="bx-dot flat${d === 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="0" title="中性"></button>
@@ -325,9 +324,9 @@
         $$(`[data-dir-field="${field}"].bx-dot`, dr).forEach(b =>
           b.classList.toggle("active", parseFloat(b.dataset.dotVal) === d)
         );
-        const dotColor = d > 0 ? "var(--up)" : d < 0 ? "var(--down)" : "var(--warn)";
+        const tint = d > 0 ? "tint-up" : d < 0 ? "tint-down" : "tint-flat";
         const inp = $(`[data-slope-field="${field}"].bx-slope-input`, dr);
-        if (inp) inp.style.background = `color-mix(in oklch,${dotColor} 22%,var(--bg-3))`;
+        if (inp) { inp.classList.remove("tint-up", "tint-flat", "tint-down"); inp.classList.add(tint); }
         saveToStorage();
       });
     });
