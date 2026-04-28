@@ -198,10 +198,10 @@
       <div class="bx-swatch-wrap">
         <button class="bx-swatch" style="background:${bx.sector.color}"
                 data-picker-toggle="sectorColor" title="选择板块颜色"></button>
-        <div class="bx-color-picker" data-picker-id="sectorColor">
-          ${SWATCH_COLORS.map(c => `<button class="bx-color-opt${bx.sector.color===c?' active':''}"
-            style="background:${c}" data-color-val="${c}"></button>`).join('')}
-        </div>
+      </div>
+      <div class="bx-color-picker" data-picker-id="sectorColor">
+        ${SWATCH_COLORS.map(c => `<button class="bx-color-opt${bx.sector.color===c?' active':''}"
+          style="background:${c}" data-color-val="${c}"></button>`).join('')}
       </div>`;
     return `
       <div class="drawer-section">
@@ -236,7 +236,8 @@
             <div class="bx-align-label">
               ${swatchPicker()}
               <span class="bx-name" contenteditable="true"
-                    data-bx-field="sectorName" spellcheck="false">${bx.sector.name}</span>
+                    data-bx-field="sectorName" spellcheck="false"
+                    style="background:${bx.sector.color}">${bx.sector.name}</span>
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="sectorScore">${bx.sector.score}</span>
@@ -325,15 +326,22 @@
       });
     });
 
-    // Color picker: swatch toggle
+    const closeAllPickers = () => $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
+
+    // Color picker: swatch toggle — position:fixed relative to viewport so overflow:hidden can't clip it
     $$("[data-picker-toggle]", dr).forEach(sw => {
       sw.addEventListener("click", e => {
         e.stopPropagation();
         const picker = $(`[data-picker-id="${sw.dataset.pickerToggle}"]`, dr);
         if (!picker) return;
         const wasOpen = picker.classList.contains("open");
-        $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
-        if (!wasOpen) picker.classList.add("open");
+        closeAllPickers();
+        if (!wasOpen) {
+          const rect = sw.getBoundingClientRect();
+          picker.style.top  = `${rect.bottom + 6}px`;
+          picker.style.left = `${rect.left}px`;
+          picker.classList.add("open");
+        }
       });
     });
 
@@ -345,16 +353,17 @@
         h.bx.sector.color = c;
         const sw = $("[data-picker-toggle='sectorColor']", dr);
         if (sw) sw.style.background = c;
+        const nameEl = $("[data-bx-field='sectorName']", dr);
+        if (nameEl) nameEl.style.background = c;
         $$(".bx-color-opt", dr).forEach(o => o.classList.toggle("active", o.dataset.colorVal === c));
-        $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
+        closeAllPickers();
         saveToStorage();
       });
     });
 
-    // Click anywhere in drawer → close all pickers
-    dr.addEventListener("click", () => {
-      $$(".bx-color-picker.open", dr).forEach(p => p.classList.remove("open"));
-    });
+    // Click anywhere in drawer or scroll → close all pickers
+    dr.addEventListener("click", closeAllPickers);
+    dr.addEventListener("scroll", closeAllPickers, { passive: true });
 
     // Score/bars buttons
     $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
@@ -644,10 +653,19 @@
 
   function renderCell(h, id) {
     switch (id) {
-      case "tk": return `<td class="ticker"><div class="tk">
-          <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}</div>
-          <div class="meta"><div class="sym">${h.sym}</div><div class="nm">${h.name}</div></div>
-        </div></td>`;
+      case "tk": {
+        const logoSrc = h.kind === "crypto"
+          ? `https://assets.coincap.io/assets/icons/${h.sym.toLowerCase()}@2x.png`
+          : `https://financialmodelingprep.com/image-stock/${h.sym}.png`;
+        const initials = h.sym.slice(0, h.kind === "crypto" ? 3 : 4);
+        return `<td class="ticker"><div class="tk">
+            <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">
+              <img src="${logoSrc}" loading="lazy" onerror="this.style.display='none'">
+              ${initials}
+            </div>
+            <div class="meta"><div class="sym">${h.sym}</div><div class="nm">${h.name}</div></div>
+          </div></td>`;
+      }
       case "bxbars": {
         const v = h.bx.dailyBars;
         const cls = v === "0-5" ? "bxbar-early" : (v === "5-15" ? "bxbar-mid" : "bxbar-late");
@@ -768,7 +786,10 @@
       <div class="drawer-head">
         <div class="drawer-top">
           <div class="tk">
-            <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}</div>
+            <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">
+              <img src="${h.kind === "crypto" ? `https://assets.coincap.io/assets/icons/${h.sym.toLowerCase()}@2x.png` : `https://financialmodelingprep.com/image-stock/${h.sym}.png`}" loading="lazy" onerror="this.style.display='none'">
+              ${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}
+            </div>
           </div>
           <div>
             <div class="mono" style="font-size:17px;font-weight:600">${h.sym}</div>
