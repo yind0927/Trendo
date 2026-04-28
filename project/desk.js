@@ -2427,9 +2427,15 @@
       <div class="sp-title">跨设备同步</div>
       <div class="sp-section">
         <div class="sp-label">你的同步密钥</div>
-        <div class="sp-key-row">
+        <div class="sp-key-row" id="sp-key-view">
           <code class="sp-key">${keyDisplay}</code>
-          ${syncKey ? `<button class="sp-copy" onclick="navigator.clipboard.writeText('${syncKey}').then(()=>{this.textContent='✓';setTimeout(()=>this.textContent='复制',1500)})">复制</button>` : ""}
+          ${syncKey ? `<button class="sp-copy" id="sp-copy-btn">复制</button>` : ""}
+          ${syncKey ? `<button class="sp-edit-btn" id="sp-edit-btn">编辑</button>` : ""}
+        </div>
+        <div class="sp-key-row sp-key-edit-row" id="sp-key-edit" style="display:none">
+          <input class="sp-input sp-key-edit-input" id="sp-key-edit-input" value="${syncKey}" placeholder="自定义密钥（最少8位）" maxlength="40">
+          <button class="sp-action" id="sp-save-key">保存</button>
+          <button class="sp-action sp-cancel-btn" id="sp-cancel-edit">取消</button>
         </div>
         ${syncKey ? `<div class="sp-hint">在其他设备上输入此密钥即可同步数据</div>` : ""}
         ${!syncKey ? `<button class="sp-action" id="sp-gen">生成密钥</button>` : ""}
@@ -2446,6 +2452,45 @@
         ${syncKey ? (lastSyncAt ? `已同步 ${String(lastSyncAt.getHours()).padStart(2,"0")}:${String(lastSyncAt.getMinutes()).padStart(2,"0")}` : "同步中…") : "未同步"}
       </div>
     `;
+
+    // Copy button
+    document.getElementById("sp-copy-btn")?.addEventListener("click", function() {
+      navigator.clipboard.writeText(syncKey).then(() => {
+        this.textContent = "✓"; setTimeout(() => this.textContent = "复制", 1500);
+      });
+    });
+
+    // Toggle to edit mode
+    document.getElementById("sp-edit-btn")?.addEventListener("click", () => {
+      document.getElementById("sp-key-view").style.display = "none";
+      document.getElementById("sp-key-edit").style.display = "flex";
+      document.getElementById("sp-key-edit-input").focus();
+      document.getElementById("sp-key-edit-input").select();
+    });
+
+    // Cancel edit
+    document.getElementById("sp-cancel-edit")?.addEventListener("click", () => {
+      document.getElementById("sp-key-view").style.display = "flex";
+      document.getElementById("sp-key-edit").style.display = "none";
+    });
+
+    // Save custom key
+    const saveKey = async () => {
+      const newKey = (document.getElementById("sp-key-edit-input")?.value || "").trim();
+      if (newKey.length < 8) { alert("密钥至少需要 8 位字符"); return; }
+      const btn = document.getElementById("sp-save-key");
+      btn.textContent = "保存中…"; btn.disabled = true;
+      syncKey = newKey;
+      localStorage.setItem("trendo_sync_key", syncKey);
+      await syncPush();
+      renderSyncPanel();
+      renderSyncStatus();
+    };
+    document.getElementById("sp-save-key")?.addEventListener("click", saveKey);
+    document.getElementById("sp-key-edit-input")?.addEventListener("keydown", e => {
+      if (e.key === "Enter") saveKey();
+      if (e.key === "Escape") document.getElementById("sp-cancel-edit")?.click();
+    });
 
     document.getElementById("sp-gen")?.addEventListener("click", async () => {
       syncKey = generateSyncKey();

@@ -949,6 +949,16 @@
     font-size: 11px; padding: 5px 9px; border-radius: 6px; cursor: pointer;
     background: var(--bg-3); border: 1px solid var(--line); color: var(--fg-1);
   }
+  .sp-edit-btn {
+    font-size: 11px; padding: 5px 9px; border-radius: 6px; cursor: pointer;
+    background: transparent; border: 1px solid var(--line); color: var(--fg-2);
+    transition: color .15s, border-color .15s;
+  }
+  .sp-edit-btn:hover { color: var(--fg-0); border-color: var(--fg-2); }
+  .sp-cancel-btn { background: transparent; border-color: var(--line); color: var(--fg-2); }
+  .sp-cancel-btn:hover { color: var(--fg-0); }
+  .sp-key-edit-row { flex-wrap: nowrap; }
+  .sp-key-edit-input { flex: 1; min-width: 0; }
   .sp-hint { font-size: 10.5px; color: var(--fg-3); margin-top: 6px; }
   .sp-sep { height: 1px; background: var(--line); margin: 12px 0; }
   .sp-input-row { display: flex; gap: 6px; }
