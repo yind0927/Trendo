@@ -1,35 +1,21 @@
-# Trendo v6.4 Baseline Version
+# Trendo v6.5 Baseline Version
 
 **记录时间**: 2026-04-29  
-**基于**: v6.3-baseline (`7c27bd2`)  
-**当前 commit**: `35607f9`  
-**状态**: ✅ 手机端响应式布局 · Logo 双源兜底 · 同步密钥可编辑
+**基于**: v6.4-baseline (`35607f9`)  
+**当前 commit**: `1fac508`  
+**状态**: ✅ 手机端 FAB 开仓按钮 · 手机端响应式布局 · Logo 双源兜底 · 同步密钥可编辑
 
-> **注意**: "回到版本" 指的是此版本 (commit `35607f9`)。
+> **注意**: "回到版本" 指的是此版本 (commit `1fac508`)。
 
 ---
 
-## 相较 v6.3 新增 / 修复
+## 相较 v6.4 新增
 
-### 手机端响应式布局
-- ✅ **Viewport 修复** — 从 `width=1440` 改为 `width=device-width`，手机不再缩小渲染桌面版
-- ✅ **底部 Tab 栏** — navbar 移到页面底部固定，图标 + 文字（📊📓🧪📈👁），iOS Safari 兼容
-- ✅ **iOS Safari 定位 Bug 修复** — JS 在手机端将 `<nav>` 移至 `<body>` 直接子元素，避免 sticky 父元素干扰 fixed 定位
-- ✅ **Overview 2 列网格** — `!important` 覆盖桌面端强制 5 列规则，手机显示 2×2
-- ✅ **抽屉全屏宽** — 手机端抽屉占满屏宽
-- ✅ **Modal 底部弹出** — 模态框从底部滑入，圆角顶部
-- ✅ **表格横向滚动** — Ticker 列 sticky 固定，其余列可横向滑动
-- ✅ **所有视图底部留白** — Journal / Sim / Analytics / Watchlist 均预留 76px 给底部 Tab 栏
-
-### Logo 加载优化
-- ✅ **两级 fallback 链** — 股票：FMP → TradingView SVG；加密货币：CoinCap → TradingView crypto SVG → 文字缩写
-- ✅ **`logoImg()` 统一函数** — 所有 Avatar（表格、抽屉、Journal、Watchlist）共用同一逻辑
-- ✅ **Journal / Watchlist 新增 Logo** — 之前仅显示文字缩写，现在也加载 Logo
-- ✅ **`decoding="async"`** — 异步解码，不阻塞页面渲染
-
-### 同步密钥可编辑
-- ✅ **编辑已生成密钥** — Sync 面板新增编辑按钮，可自定义密钥（最少 8 位）
-- ✅ **保存后立即推送** — 修改密钥后自动 syncPush，跨设备立即生效
+### 手机端 FAB 开仓按钮
+- ✅ **浮动圆形 ＋ 按钮** — 固定在底部 Tab 栏上方（bottom: 86px / right: 20px）
+- ✅ **点击打开新建持仓弹窗** — 与桌面端 "Open Position" 按钮功能完全一致
+- ✅ **桌面端自动隐藏** — `@media (min-width: 769px)` 强制不显示
+- ✅ **点击缩放反馈** — `:active` 缩至 90%，有触觉感
 
 ---
 
@@ -54,7 +40,7 @@
 - ✅ 跨设备同步 — Upstash Redis，密钥手动触发 / 可编辑，本地优先
 - ✅ localStorage 持久化 (`trendo_v4_*`)
 - ✅ 财报日期自动获取 — Finnhub + Yahoo Finance 双源
-- ✅ **手机端响应式** — 底部 Tab 栏 · Modal 底部弹出 · 表格横向滚动 · 2 列概览
+- ✅ 手机端响应式 — 底部 Tab 栏 · FAB 开仓按钮 · Modal 底部弹出 · 表格横向滚动 · 2 列概览
 
 ---
 
@@ -88,13 +74,13 @@ project/
 ## 回到此版本
 
 ```bash
+git checkout 1fac508
+# 或回到 v6.4
 git checkout 35607f9
 # 或回到 v6.3
 git checkout 7c27bd2
-# 或回到 v6.2
-git checkout d027a7c
 ```
 
 ---
 
-**此版本标志**: 手机端完整响应式 · Logo 双源兜底 · 同步密钥可编辑 · 数据零丢失 ✅
+**此版本标志**: 手机端 FAB 开仓 · 响应式布局 · Logo 双源兜底 · 数据零丢失 ✅
