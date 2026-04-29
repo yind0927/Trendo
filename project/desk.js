@@ -747,39 +747,9 @@
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
-    wireDrawerSwipe();
   }
 
-  function wireDrawerSwipe() {
-    if (window.innerWidth > 768) return;
-    const dr = $("#drawer");
-    let startY = 0, curY = 0, dragging = false;
-    const handle = dr.querySelector(".drawer-handle");
-    const zone = handle || dr.querySelector(".drawer-head");
-    if (!zone) return;
-    zone.addEventListener("touchstart", e => {
-      startY = e.touches[0].clientY;
-      curY = startY;
-      dragging = true;
-      dr.style.transition = "none";
-    }, { passive: true });
-    zone.addEventListener("touchmove", e => {
-      if (!dragging) return;
-      curY = e.touches[0].clientY;
-      const delta = Math.max(0, curY - startY);
-      dr.style.transform = `translateY(${delta}px)`;
-    }, { passive: true });
-    zone.addEventListener("touchend", () => {
-      if (!dragging) return;
-      dragging = false;
-      dr.style.transition = "";
-      if (curY - startY > 90) {
-        if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
-      } else {
-        dr.style.transform = "";
-      }
-    });
-  }(h, holdings, notional, onDone) {
+  function wireAddToPosition(h, holdings, notional, onDone) {
     const btn = $("#drawer-add-btn");
     if (!btn) return;
     btn.onclick = () => {
@@ -861,7 +831,6 @@
     const pnlPct = isClosed ? h.pnlPct : h.pnlPct;
     const pnlSign = fmt.sign(pnlAmt);
     return `
-      <div class="drawer-handle"></div>
       <div class="drawer-head">
         <div class="drawer-top">
           <div class="tk">
@@ -1173,9 +1142,6 @@
     };
 
     openBtn.addEventListener("click", () => { resetDateFields(); openModal("new-position-modal"); });
-
-    // Mobile FAB → same action
-    $("#mobile-fab")?.addEventListener("click", () => { resetDateFields(); openModal("new-position-modal"); });
     closeBtn.addEventListener("click", () => closeModal("new-position-modal"));
     cancelBtn.addEventListener("click", () => closeModal("new-position-modal"));
 
@@ -1897,7 +1863,6 @@
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
-    wireDrawerSwipe();
   }
 
   function closeSimDrawer() {
