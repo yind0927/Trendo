@@ -7,7 +7,7 @@
 <title>Trendo - Swing Trading Concepts</title>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <link rel="apple-touch-icon" href="/logo.svg">
-<meta name="viewport" content="width=1440">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
@@ -1542,6 +1542,99 @@
   .bx-review-fill { height: 100%; border-radius: 3px; transition: width .4s; min-width: 3px; }
   .bx-review-meta { display: flex; justify-content: space-between; }
 
+  /* ============ MOBILE (@media max-width: 768px) ============ */
+  @media (max-width: 768px) {
+    body { min-width: 0; }
+
+    /* ---- Topbar ---- */
+    .topbar { padding: 10px 14px; gap: 10px; }
+    .brand .name { font-size: 13px; }
+    .topbar .divider { display: none; }
+    .topbar .search { display: none; }
+    .clock { display: none; }
+    .top-actions { gap: 6px; }
+    .top-actions .btn:not(.icon) { display: none; }
+
+    /* ---- Navbar → fixed bottom tab bar ---- */
+    .navbar {
+      position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+      margin: 0; padding: 0 0 env(safe-area-inset-bottom);
+      border-left: none; border-top: 1px solid var(--line);
+      background: color-mix(in oklch, var(--bg-1) 96%, transparent);
+      backdrop-filter: blur(12px);
+      height: auto; gap: 0;
+      justify-content: space-around;
+      z-index: 50;
+    }
+    .navlink {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 8px 4px 6px;
+      border-radius: 0; font-size: 10px; letter-spacing: 0;
+    }
+    .navlink::before {
+      content: attr(data-icon); font-size: 18px; line-height: 1;
+      margin-bottom: 3px; display: block;
+    }
+    .navlink.active { background: transparent; box-shadow: none; color: var(--accent); }
+    .navlink.active::after { display: none; }
+    .navlink.active::before { filter: drop-shadow(0 0 4px var(--accent)); }
+
+    /* ---- Main layout ---- */
+    main { padding: 12px 12px 76px; gap: 10px; }
+
+    /* ---- Overview strip ---- */
+    .overview { grid-template-columns: repeat(2, 1fr); }
+    .overview > *:last-child { display: none; } /* hide bar chart on mobile */
+    .ov-card { min-height: 90px; padding: 12px; }
+
+    /* ---- Tape ---- */
+    .tape { top: 48px; }
+
+    /* ---- Panel / table ---- */
+    .panel-head { padding: 10px 12px 8px; flex-wrap: wrap; gap: 6px; }
+    .panel-head .filters { flex-wrap: wrap; gap: 5px; }
+    .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.holdings td, table.holdings th { padding: 7px 8px; font-size: 12px; }
+    table.holdings td:first-child,
+    table.holdings th:first-child { padding-left: 12px; position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
+    table.holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
+
+    /* ---- Drawer ---- */
+    .drawer { width: 100vw; border-left: none; }
+    .drawer-head { padding: 14px 14px 12px; }
+    .drawer-section { padding: 14px; }
+    .plan-prices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .plan-price-item { padding: 7px 8px; }
+    .bx-align-grid .bx-align-hdr,
+    .bx-align-grid .bx-align-row { grid-template-columns: 1fr 60px 100px; }
+
+    /* ---- Modals ---- */
+    .modal-backdrop { align-items: flex-end; }
+    .modal {
+      width: 100%; max-width: 100%;
+      border-radius: 16px 16px 0 0;
+      padding: 20px 16px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+      max-height: 92vh; overflow-y: auto;
+    }
+
+    /* ---- Sim view ---- */
+    #sim-view { padding: 12px 12px 76px; }
+    #sim-overview { grid-template-columns: repeat(2, 1fr); }
+    .sim-topbar { flex-wrap: wrap; }
+    .panel-wrap.sim-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* ---- Journal ---- */
+    #journal-view { padding: 12px 12px 76px; }
+
+    /* ---- Analytics ---- */
+    #analytics-view { padding: 12px 12px 76px; }
+    .analytics-metrics { grid-template-columns: repeat(2, 1fr) !important; }
+
+    /* ---- Watchlist ---- */
+    #watchlist-view { padding: 12px 12px 76px; }
+  }
+
 </style>
 </head>
 <body data-density="medium" data-font="sans" data-theme="dark">
@@ -1626,11 +1719,11 @@
   </a>
 
   <nav class="navbar" aria-label="primary">
-    <a class="navlink active" href="#" data-page="desk">Dashboard</a>
-    <a class="navlink" href="#" data-page="journal">Journal</a>
-    <a class="navlink" href="#" data-page="sim">Simulation</a>
-    <a class="navlink" href="#" data-page="analytics">Analytics</a>
-    <a class="navlink" href="#" data-page="watchlist">Watchlist</a>
+    <a class="navlink active" href="#" data-page="desk" data-icon="📊">Dashboard</a>
+    <a class="navlink" href="#" data-page="journal" data-icon="📓">Journal</a>
+    <a class="navlink" href="#" data-page="sim" data-icon="🧪">Simulation</a>
+    <a class="navlink" href="#" data-page="analytics" data-icon="📈">Analytics</a>
+    <a class="navlink" href="#" data-page="watchlist" data-icon="👁">Watchlist</a>
   </nav>
 
   <div class="search" role="search">
