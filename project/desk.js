@@ -492,7 +492,7 @@
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
     if (currentPage === "journal")   renderJournal();
-    if (currentPage === "sim")       renderSim();
+    renderSim();
     if (currentPage === "analytics") renderAnalytics();
     if (currentPage === "watchlist") renderWatchlist();
   }
@@ -2590,10 +2590,9 @@
   loadFromStorage();
 
   // Retroactively stamp existing data saved before savedAt tracking was added.
-  // Without this, localTime = null and any cloud data (even empty) would win.
+  // Use epoch 0 so cloud always wins on first sync — prevents mobile from pushing stale data.
   if (!localStorage.getItem("trendo_v4_savedAt")) {
-    const localTotal = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length;
-    if (localTotal > 0) localStorage.setItem("trendo_v4_savedAt", new Date().toISOString());
+    localStorage.setItem("trendo_v4_savedAt", "1970-01-01T00:00:00.000Z");
   }
   // iOS Safari: position:fixed inside position:sticky fails to anchor to viewport.
   // Move navbar to <body> so it correctly pins to the bottom on mobile.
