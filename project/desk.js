@@ -1142,6 +1142,7 @@
     };
 
     openBtn.addEventListener("click", () => { resetDateFields(); openModal("new-position-modal"); });
+    $("#mobile-fab")?.addEventListener("click", () => { resetDateFields(); openModal("new-position-modal"); });
     closeBtn.addEventListener("click", () => closeModal("new-position-modal"));
     cancelBtn.addEventListener("click", () => closeModal("new-position-modal"));
 

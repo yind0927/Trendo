@@ -1633,7 +1633,23 @@
 
     /* ---- Watchlist ---- */
     #watchlist-view { padding: 12px 12px 76px; }
+
+    /* ---- FAB 开仓按钮 ---- */
+    .mobile-fab {
+      position: fixed; bottom: 86px; right: 20px; z-index: 55;
+      width: 54px; height: 54px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      font-size: 28px; line-height: 1;
+      display: grid; place-items: center;
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 20px -4px oklch(0.78 0.12 var(--accent-h) / .75),
+                  0 0 0 1px oklch(1 0 0 / .1) inset;
+      transition: transform .12s, box-shadow .12s;
+    }
+    .mobile-fab:active { transform: scale(.9); }
   }
+
+  @media (min-width: 769px) { .mobile-fab { display: none !important; } }
 
 </style>
 </head>
@@ -2103,6 +2119,9 @@
   </div>
   <div id="watchlist-content" class="watchlist-content" style="max-width:960px;margin:0 auto;padding:16px 20px 60px"></div>
 </div>
+<!-- Mobile FAB -->
+<button class="mobile-fab" id="mobile-fab" aria-label="新建持仓">＋</button>
+
 <div class="drawer-backdrop" id="backdrop"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 
