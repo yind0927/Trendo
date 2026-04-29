@@ -2567,6 +2567,13 @@
     const localTotal = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length;
     if (localTotal > 0) localStorage.setItem("trendo_v4_savedAt", new Date().toISOString());
   }
+  // iOS Safari: position:fixed inside position:sticky fails to anchor to viewport.
+  // Move navbar to <body> so it correctly pins to the bottom on mobile.
+  if (window.innerWidth <= 768) {
+    const nav = document.querySelector(".navbar");
+    if (nav) document.body.appendChild(nav);
+  }
+
   renderTape();
   wireHost();
   renderOverview();
