@@ -451,6 +451,33 @@
     } catch (_) { return null; }
   }
 
+  async function syncOnStartup() {
+    if (!syncKey) return;
+    renderSyncStatus(); // show "connecting"
+    const cloudData = await syncPull(syncKey);
+
+    if (!cloudData) {
+      // Cloud empty or unreachable — push local data up
+      syncPush();
+      return;
+    }
+
+    const localSavedAt = localStorage.getItem("trendo_v4_savedAt");
+    const localTotal   = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length;
+    const cloudTime    = cloudData.savedAt ? new Date(cloudData.savedAt).getTime() : 0;
+    const localTime    = localSavedAt      ? new Date(localSavedAt).getTime()      : 0;
+
+    // Pull if cloud is strictly newer, OR if local has nothing at all
+    if (cloudTime > localTime || (localTotal === 0 && cloudTime > 0)) {
+      applyCloudData(cloudData);
+      lastSyncAt = new Date();
+      renderSyncStatus();
+    } else {
+      // Local is newer or same — push to keep cloud in sync
+      syncPush();
+    }
+  }
+
   function applyCloudData(data) {
     if (!data) return;
     // Use Array.isArray checks — plain `if ([])` is always truthy, even for empty arrays
@@ -2593,10 +2620,10 @@
   wireSimControls();
   wireSyncPanel();
   renderSyncStatus();
-  // Sync strategy: local localStorage is ALWAYS the source of truth.
-  // On startup we only PUSH local data to cloud — never pull.
-  // Cross-device sync only happens when the user explicitly enters a key in the sync panel.
-  if (syncKey) syncPush();
+  // Sync strategy: last-write-wins based on savedAt timestamp.
+  // On startup: fetch cloud, compare timestamps, pull if cloud is newer else push.
+  // This ensures cross-device changes (e.g. desktop → mobile) propagate automatically.
+  if (syncKey) syncOnStartup();
   tick(); setInterval(tick, 1000);
 
 })();
