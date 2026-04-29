@@ -372,6 +372,26 @@
   }
 
   // ============ GLOBAL STATE ============
+
+  // Logo fallback: primary source → TradingView → hide (show text initials)
+  window._trLogoErr = function(img, sym, kind) {
+    if (!img.dataset.tried) {
+      img.dataset.tried = "1";
+      img.src = kind === "crypto"
+        ? `https://s3-symbol-logo.tradingview.com/crypto/XTVC${sym.toUpperCase()}--big.svg`
+        : `https://s3-symbol-logo.tradingview.com/${sym.toUpperCase()}--big.svg`;
+    } else {
+      img.style.display = "none";
+    }
+  };
+
+  function logoImg(h) {
+    const src = h.kind === "crypto"
+      ? `https://assets.coincap.io/assets/icons/${h.sym.toLowerCase()}@2x.png`
+      : `https://financialmodelingprep.com/image-stock/${h.sym}.png`;
+    return `<img src="${src}" loading="lazy" decoding="async" onerror="_trLogoErr(this,'${h.sym}','${h.kind || ""}')">`;
+  }
+
   let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
   let activeTab = "open";
   let totalNotional = 60000;
@@ -632,13 +652,10 @@
   function renderCell(h, id) {
     switch (id) {
       case "tk": {
-        const logoSrc = h.kind === "crypto"
-          ? `https://assets.coincap.io/assets/icons/${h.sym.toLowerCase()}@2x.png`
-          : `https://financialmodelingprep.com/image-stock/${h.sym}.png`;
         const initials = h.sym.slice(0, h.kind === "crypto" ? 3 : 4);
         return `<td class="ticker"><div class="tk">
             <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">
-              <img src="${logoSrc}" loading="lazy" onerror="this.style.display='none'">
+              ${logoImg(h)}
               ${initials}
             </div>
             <div class="meta"><div class="sym">${h.sym}</div><div class="nm">${h.name}</div></div>
@@ -818,7 +835,7 @@
         <div class="drawer-top">
           <div class="tk">
             <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">
-              <img src="${h.kind === "crypto" ? `https://assets.coincap.io/assets/icons/${h.sym.toLowerCase()}@2x.png` : `https://financialmodelingprep.com/image-stock/${h.sym}.png`}" loading="lazy" onerror="this.style.display='none'">
+              ${logoImg(h)}
               ${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}
             </div>
           </div>
@@ -1646,7 +1663,7 @@
       <div class="journal-card">
         <div class="journal-card-head">
           <div class="jc-ticker">
-            <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}</div>
+            <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">${logoImg(h)}${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}</div>
             <div>
               <div class="mono" style="font-size:14px;font-weight:600">${h.sym}</div>
               <div class="muted" style="font-size:11px">${h.name}</div>
@@ -2330,7 +2347,7 @@
     return `<div class="wl-card">
       <div class="wl-card-main">
         <div class="jc-ticker" style="min-width:140px">
-          <div class="avatar">${item.sym.slice(0, 4)}</div>
+          <div class="avatar">${logoImg(item)}${item.sym.slice(0, 4)}</div>
           <div>
             <div class="mono" style="font-size:13px;font-weight:600">${item.sym}</div>
             <div class="muted" style="font-size:10.5px">${item.name}</div>
