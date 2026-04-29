@@ -592,79 +592,6 @@
   /* minor */
   .sr-only{ position:absolute; left:-9999px; }
 
-  /* ============ PROFILE PANEL ============ */
-  .avatar-wrap{ position: relative; }
-  .profile-panel{
-    position: fixed; top: 56px; right: 16px; z-index: 200;
-    width: 288px;
-    background: var(--bg-1); border: 1px solid var(--line);
-    border-radius: 14px; overflow: hidden;
-    box-shadow: 0 24px 60px -12px oklch(0 0 0 / .55), 0 0 0 1px oklch(1 0 0 / .04) inset;
-    display: none;
-    transform-origin: top right;
-  }
-  .profile-panel.open{ display: block; animation: ppIn .14s ease; }
-  @keyframes ppIn{
-    from{ opacity:0; transform: scale(.96) translateY(-4px); }
-    to  { opacity:1; transform: scale(1)  translateY(0); }
-  }
-  .pp-head{
-    display: flex; align-items: center; gap: 12px;
-    padding: 16px 16px 14px;
-    background: linear-gradient(135deg, oklch(0.22 0.045 calc(var(--accent-h) + 30)), oklch(0.17 0.025 var(--accent-h)));
-    border-bottom: 1px solid var(--line);
-  }
-  .pp-avatar-lg{
-    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-    display: grid; place-items: center;
-    font-family: var(--f-mono); font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 0.03em;
-    background: linear-gradient(135deg, oklch(0.48 0.1 calc(var(--accent-h) + 30)), oklch(0.32 0.07 var(--accent-h)));
-    box-shadow: 0 0 0 2px oklch(1 0 0 / .14);
-  }
-  .pp-info{ flex: 1; min-width: 0; }
-  .pp-name-input{
-    all: unset; display: block; width: 100%; box-sizing: border-box;
-    font-size: 14px; font-weight: 600; color: var(--fg-0);
-    border-bottom: 1px solid transparent;
-    padding-bottom: 1px; margin-bottom: 3px;
-    transition: border-color .15s;
-  }
-  .pp-name-input:focus{ border-bottom-color: var(--accent-line); }
-  .pp-name-hint{ font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); letter-spacing: 0.06em; }
-  .pp-body{ padding: 12px 14px 14px; }
-  .pp-section-label{
-    font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-    color: var(--fg-3); margin: 12px 0 7px;
-  }
-  .pp-section-label:first-child{ margin-top: 0; }
-  .pp-row{ display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-  .pp-row-lbl{ font-size: 11px; color: var(--fg-2); width: 48px; flex-shrink: 0; }
-  .pp-row .seg{ flex: 1; }
-  .pp-hue-row{ display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .pp-hue-lbl{ font-size: 11px; color: var(--fg-2); flex: 1; }
-  .pp-hue-lbl span{ font-family: var(--f-mono); color: var(--fg-3); }
-  .pp-hue-row input[type="range"]{ width: 84px; accent-color: var(--accent); }
-  .pp-hue-swatch{ width: 17px; height: 17px; border-radius: 5px; background: var(--accent); box-shadow: 0 0 0 1px var(--line) inset; flex-shrink: 0; }
-  .pp-divider{ height: 1px; background: var(--line); margin: 10px 0; }
-  .pp-action{
-    all: unset; cursor: pointer; width: 100%; box-sizing: border-box;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 10px; border-radius: 8px;
-    background: var(--bg-2); border: 1px solid var(--line);
-    font-size: 11.5px; color: var(--fg-1);
-    transition: border-color .15s, color .15s;
-    margin-bottom: 6px;
-  }
-  .pp-action:last-child{ margin-bottom: 0; }
-  .pp-action:hover{ border-color: var(--accent-line); color: var(--fg-0); }
-  .pp-action-caret{ font-size: 12px; color: var(--fg-3); }
-  .pp-sync-dot{
-    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
-    background: var(--fg-3); margin-right: 4px;
-  }
-  .pp-sync-dot.on { background: var(--up); box-shadow: 0 0 0 3px color-mix(in oklch, var(--up) 18%, transparent); }
-  .pp-sync-dot.err{ background: var(--down); }
-
   /* ============ STYLE UPGRADE: editorial / terminal vibe ============ */
 
   /* subtle scan-grid on dark */
@@ -1706,25 +1633,10 @@
 
     /* ---- Watchlist ---- */
     #watchlist-view { padding: 12px 12px 76px; }
-
-    /* ---- Profile panel on mobile ---- */
-    .profile-panel { right: 8px; left: 8px; width: auto; top: 52px; }
   }
 
 </style>
 </head>
-<script>
-  /* Apply saved appearance before first paint to avoid flash */
-  (function(){
-    try {
-      const a = JSON.parse(localStorage.getItem("trendo_appearance") || "{}");
-      if (a.density) document.documentElement.dataset.pendingDensity = a.density;
-      if (a.font)    document.documentElement.dataset.pendingFont    = a.font;
-      if (a.theme)   document.documentElement.dataset.pendingTheme   = a.theme;
-      if (a.accentHue != null) document.documentElement.style.setProperty("--accent-h", a.accentHue);
-    } catch(e){}
-  })();
-</script>
 <body data-density="medium" data-font="sans" data-theme="dark">
 
 <!-- persistent tweak defaults for host-side rewriting -->
@@ -1838,67 +1750,15 @@
       </button>
       <div class="sync-panel" id="sync-panel"></div>
     </div>
+    <button class="btn" id="tweaks-toggle" title="Tweaks">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h8"/><circle cx="18" cy="6" r="2.3"/><circle cx="8" cy="18" r="2.3"/></svg>
+      Tweaks
+    </button>
     <button class="btn primary" id="new-pos-btn">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
       Open Position
     </button>
-    <div class="avatar-wrap">
-      <button class="avatar-btn" id="avatar-btn" title="个人设置">YZ</button>
-      <div class="profile-panel" id="profile-panel">
-        <div class="pp-head">
-          <div class="pp-avatar-lg" id="pp-avatar-lg">YZ</div>
-          <div class="pp-info">
-            <input class="pp-name-input" id="pp-name" placeholder="输入名称" value="Trader">
-            <div class="pp-name-hint" id="pp-name-hint">缩写 · YZ</div>
-          </div>
-        </div>
-        <div class="pp-body">
-          <div class="pp-section-label">外观</div>
-          <div class="pp-row">
-            <div class="pp-row-lbl">主题</div>
-            <div class="seg" data-seg="theme">
-              <button data-val="dark">深色</button>
-              <button data-val="light">浅色</button>
-            </div>
-          </div>
-          <div class="pp-row">
-            <div class="pp-row-lbl">密度</div>
-            <div class="seg" data-seg="density">
-              <button data-val="compact">紧凑</button>
-              <button data-val="medium">中等</button>
-              <button data-val="loose">宽松</button>
-            </div>
-          </div>
-          <div class="pp-row">
-            <div class="pp-row-lbl">字体</div>
-            <div class="seg" data-seg="font">
-              <button data-val="sans">Sans</button>
-              <button data-val="mono">Mono</button>
-            </div>
-          </div>
-          <div class="pp-hue-row">
-            <div class="pp-hue-lbl">强调色 <span id="pp-hue-val">195°</span></div>
-            <input type="range" min="0" max="360" value="195" id="pp-hue-slider">
-            <div class="pp-hue-swatch" id="pp-hue-swatch"></div>
-          </div>
-          <div class="pp-divider"></div>
-          <div class="pp-section-label">数据</div>
-          <button class="pp-action" id="pp-sync-action">
-            <span style="display:flex;align-items:center;gap:8px">
-              <span class="pp-sync-dot" id="pp-sync-dot"></span>
-              <span id="pp-sync-label">跨设备同步</span>
-            </span>
-            <span class="pp-action-caret">›</span>
-          </button>
-          <div class="pp-divider"></div>
-          <div class="pp-section-label">高级</div>
-          <button class="pp-action" id="pp-cols-action">
-            <span>显示字段配置</span>
-            <span class="pp-action-caret">›</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <button class="avatar-btn" title="Trader">YZ</button>
     <button class="theme-toggle" id="theme-toggle" aria-label="切换主题">
       <span class="icon-bg l">☀</span>
       <span class="icon-bg r">☾</span>
@@ -2246,12 +2106,69 @@
 <div class="drawer-backdrop" id="backdrop"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 
-<!-- ============ TWEAKS (columns only — appearance moved to profile panel) ============ -->
+<!-- ============ TWEAKS ============ -->
 <div class="tweaks" id="tweaks">
-  <h5>显示字段 <span class="x" id="tweaks-close">×</span></h5>
+  <h5>TWEAKS <span class="x" id="tweaks-close">×</span></h5>
+  <div class="group">
+    <div class="gl">主题</div>
+    <div class="seg" data-seg="theme">
+      <button data-val="dark" class="active">深色</button>
+      <button data-val="light">浅色</button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="gl">信息密度</div>
+    <div class="seg" data-seg="density">
+      <button data-val="compact" class="">紧凑</button>
+      <button data-val="medium" class="active">中等</button>
+      <button data-val="loose" class="">宽松</button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="gl">字体风格</div>
+    <div class="seg" data-seg="font">
+      <button data-val="sans" class="active">Sans-heavy</button>
+      <button data-val="mono">Mono-heavy</button>
+    </div>
+  </div>
+  <div class="group">
+    <div class="gl">强调色色相 <span class="mono muted" id="hue-val" style="float:right">195°</span></div>
+    <div class="hue-row">
+      <input type="range" min="0" max="360" value="195" id="hue-slider">
+      <div class="swatch" id="hue-swatch"></div>
+    </div>
+  </div>
   <div class="group">
     <div class="gl">主表显示字段</div>
-    <div class="cols-list" id="cols-list"></div>
+    <div class="cols-list" id="cols-list">
+      <label><input type="checkbox" data-col="tk" checked="" disabled=""> Ticker <span class="muted" style="font-size:10px">(锁定)</span></label>
+    
+      <label><input type="checkbox" data-col="setup" checked=""> Setup</label>
+    
+      <label><input type="checkbox" data-col="entry" checked=""> 建仓</label>
+    
+      <label><input type="checkbox" data-col="days" checked=""> 持仓</label>
+    
+      <label><input type="checkbox" data-col="cost" checked=""> 成本</label>
+    
+      <label><input type="checkbox" data-col="last" checked=""> 最新</label>
+    
+      <label><input type="checkbox" data-col="spark" checked=""> 24h</label>
+    
+      <label><input type="checkbox" data-col="size" checked=""> 仓位%</label>
+    
+      <label><input type="checkbox" data-col="pnld" checked=""> 浮盈亏 $</label>
+    
+      <label><input type="checkbox" data-col="pnlp" checked=""> 浮盈亏 %</label>
+    
+      <label><input type="checkbox" data-col="stop" checked=""> 止损</label>
+    
+      <label><input type="checkbox" data-col="target" checked=""> 目标</label>
+    
+      <label><input type="checkbox" data-col="rmult" checked=""> R</label>
+    
+      <label><input type="checkbox" data-col="status" checked="" disabled=""> 状态 <span class="muted" style="font-size:10px">(锁定)</span></label>
+    </div>
   </div>
 </div>
 
