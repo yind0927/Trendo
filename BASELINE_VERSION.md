@@ -1,21 +1,24 @@
-# Trendo v6.5 Baseline Version
+# Trendo v6.6 Baseline Version
 
 **记录时间**: 2026-04-29  
-**基于**: v6.4-baseline (`35607f9`)  
-**当前 commit**: `1fac508`  
-**状态**: ✅ 手机端 FAB 开仓按钮 · 手机端响应式布局 · Logo 双源兜底 · 同步密钥可编辑
+**基于**: v6.5-baseline (`1fac508`)  
+**当前 commit**: `3a3f26f`  
+**状态**: ✅ FAB 图标居中修复 · 日期选择器深色主题 · 手机端响应式 · Logo 双源兜底
 
-> **注意**: "回到版本" 指的是此版本 (commit `1fac508`)。
+> **注意**: "回到版本" 指的是此版本 (commit `3a3f26f`)。
 
 ---
 
-## 相较 v6.4 新增
+## 相较 v6.5 新增 / 修复
 
-### 手机端 FAB 开仓按钮
-- ✅ **浮动圆形 ＋ 按钮** — 固定在底部 Tab 栏上方（bottom: 86px / right: 20px）
-- ✅ **点击打开新建持仓弹窗** — 与桌面端 "Open Position" 按钮功能完全一致
-- ✅ **桌面端自动隐藏** — `@media (min-width: 769px)` 强制不显示
-- ✅ **点击缩放反馈** — `:active` 缩至 90%，有触觉感
+### FAB 开仓按钮图标修复
+- ✅ **SVG 图标替换全角字符** — 原 `＋`（全角）在部分字体下垂直偏移，改为内联 SVG 路径，`display:grid; place-items:center` 完美居中
+
+### 日期选择器平台适配
+- ✅ **`color-scheme: dark`** — 浏览器原生日历弹窗自动切换深色模式，与 App 主题一致
+- ✅ **自定义日历图标** — SVG data URI 替换浏览器默认图标，色调匹配 `--fg-2`（冷灰蓝），hover 有背景高亮
+- ✅ **亮色主题兼容** — `color-scheme: light` + 较深图标笔触，切换主题时自动适配
+- ✅ **全场景覆盖** — 新建持仓弹窗（`form-date` / `form-earnings`）+ 加仓弹窗（`add-date`）均已更新
 
 ---
 
@@ -40,7 +43,8 @@
 - ✅ 跨设备同步 — Upstash Redis，密钥手动触发 / 可编辑，本地优先
 - ✅ localStorage 持久化 (`trendo_v4_*`)
 - ✅ 财报日期自动获取 — Finnhub + Yahoo Finance 双源
-- ✅ 手机端响应式 — 底部 Tab 栏 · FAB 开仓按钮 · Modal 底部弹出 · 表格横向滚动 · 2 列概览
+- ✅ 手机端响应式 — 底部 Tab 栏 · FAB 开仓按钮（SVG 图标） · Modal 底部弹出 · 表格横向滚动
+- ✅ 日期选择器深色主题 — color-scheme 自动适配，自定义图标
 
 ---
 
@@ -74,13 +78,13 @@ project/
 ## 回到此版本
 
 ```bash
+git checkout 3a3f26f
+# 或回到 v6.5
 git checkout 1fac508
 # 或回到 v6.4
 git checkout 35607f9
-# 或回到 v6.3
-git checkout 7c27bd2
 ```
 
 ---
 
-**此版本标志**: 手机端 FAB 开仓 · 响应式布局 · Logo 双源兜底 · 数据零丢失 ✅
+**此版本标志**: FAB SVG 居中 · 日期选择器深色适配 · 手机端完整 · 数据零丢失 ✅
