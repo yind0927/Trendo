@@ -488,6 +488,14 @@
 
   function loadFromStorage() {
     try {
+      // Restore appearance settings
+      const ap = JSON.parse(localStorage.getItem("trendo_appearance") || "{}");
+      if (ap.density)       document.body.dataset.density = ap.density;
+      if (ap.font)          document.body.dataset.font    = ap.font;
+      if (ap.theme)         document.body.dataset.theme   = ap.theme;
+      if (ap.accentHue != null) document.documentElement.style.setProperty("--accent-h", ap.accentHue);
+    } catch (e) { /* use HTML defaults */ }
+    try {
       const h  = localStorage.getItem("trendo_v4_holdings");
       const c  = localStorage.getItem("trendo_v4_closed");
       const n  = localStorage.getItem("trendo_v4_notional");
@@ -1425,7 +1433,6 @@
 
   // ============ TWEAKS ============
   function wireTweaks() {
-    // cols list
     const cl = $("#cols-list");
     cl.innerHTML = COLS.map(c => `
       <label><input type="checkbox" data-col="${c.id}" ${c.on ? "checked" : ""} ${c.locked ? "disabled" : ""}/> ${c.label}${c.locked ? " <span class='muted' style='font-size:10px'>(锁定)</span>" : ""}</label>
@@ -1437,54 +1444,156 @@
       renderTable();
       persist();
     });
-
-    $("#tweaks-toggle").addEventListener("click", () => $("#tweaks").classList.toggle("open"));
     $("#tweaks-close").addEventListener("click", () => $("#tweaks").classList.remove("open"));
+  }
 
-    $$(".seg").forEach(seg => {
+  function applyAppearance(key, val) {
+    if (key === "density") document.body.dataset.density = val;
+    if (key === "font")    document.body.dataset.font    = val;
+    if (key === "theme")   document.body.dataset.theme   = val;
+    $$(`[data-seg="${key}"] button`).forEach(b => b.classList.toggle("active", b.dataset.val === val));
+    persist();
+  }
+
+  function wireProfilePanel() {
+    const panel = $("#profile-panel");
+    const btn   = $("#avatar-btn");
+    if (!panel || !btn) return;
+
+    // Load stored user name & initials
+    let userName     = localStorage.getItem("trendo_user_name")     || "Trader";
+    let userInitials = localStorage.getItem("trendo_user_initials") || "YZ";
+
+    function syncProfileUI() {
+      const nameEl = $("#pp-name");
+      if (nameEl) nameEl.value = userName;
+      const hintEl = $("#pp-name-hint");
+      if (hintEl) hintEl.textContent = "缩写 · " + userInitials;
+      const lgEl = $("#pp-avatar-lg");
+      if (lgEl) lgEl.textContent = userInitials;
+      btn.textContent = userInitials;
+    }
+
+    function deriveInitials(name) {
+      const parts = name.trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) return "?";
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+
+    syncProfileUI();
+
+    // Reflect current appearance state into seg buttons
+    const curDensity = document.body.dataset.density || "medium";
+    const curFont    = document.body.dataset.font    || "sans";
+    const curTheme   = document.body.dataset.theme   || "dark";
+    const storedAp   = JSON.parse(localStorage.getItem("trendo_appearance") || "{}");
+    const curHue     = String(storedAp.accentHue ?? getComputedStyle(document.documentElement).getPropertyValue("--accent-h").trim() || "195");
+    $$(`[data-seg="density"] button`).forEach(b => b.classList.toggle("active", b.dataset.val === curDensity));
+    $$(`[data-seg="font"]    button`).forEach(b => b.classList.toggle("active", b.dataset.val === curFont));
+    $$(`[data-seg="theme"]   button`).forEach(b => b.classList.toggle("active", b.dataset.val === curTheme));
+    const hueSlider = $("#pp-hue-slider");
+    if (hueSlider) { hueSlider.value = curHue; }
+    const hueValEl = $("#pp-hue-val");
+    if (hueValEl) hueValEl.textContent = curHue + "°";
+
+    // Toggle open/close
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      panel.classList.toggle("open");
+      if (panel.classList.contains("open")) updateSyncRow();
+    });
+    document.addEventListener("click", e => {
+      if (!panel.contains(e.target) && e.target !== btn) panel.classList.remove("open");
+    });
+
+    // Name input
+    const nameInput = $("#pp-name");
+    if (nameInput) {
+      nameInput.addEventListener("input", () => {
+        userInitials = deriveInitials(nameInput.value) || userInitials;
+        $("#pp-name-hint").textContent = "缩写 · " + userInitials;
+        $("#pp-avatar-lg").textContent = userInitials;
+        btn.textContent = userInitials;
+      });
+      nameInput.addEventListener("blur", () => {
+        userName = nameInput.value.trim() || "Trader";
+        userInitials = deriveInitials(userName);
+        localStorage.setItem("trendo_user_name",     userName);
+        localStorage.setItem("trendo_user_initials", userInitials);
+        syncProfileUI();
+      });
+    }
+
+    // Seg buttons (theme / density / font)
+    $$(".seg", panel).forEach(seg => {
       seg.addEventListener("click", e => {
         if (e.target.tagName !== "BUTTON") return;
-        $$("button", seg).forEach(b => b.classList.remove("active"));
-        e.target.classList.add("active");
-        const key = seg.dataset.seg, val = e.target.dataset.val;
-        if (key === "density") document.body.dataset.density = val;
-        if (key === "font") document.body.dataset.font = val;
-        if (key === "theme") document.body.dataset.theme = val;
-        persist();
+        applyAppearance(seg.dataset.seg, e.target.dataset.val);
       });
     });
 
-    const slider = $("#hue-slider");
-    slider.addEventListener("input", e => {
-      const h = e.target.value;
-      document.documentElement.style.setProperty("--accent-h", h);
-      $("#hue-val").textContent = h + "°";
-      persist();
+    // Hue slider
+    if (hueSlider) {
+      hueSlider.addEventListener("input", e => {
+        const h = e.target.value;
+        document.documentElement.style.setProperty("--accent-h", h);
+        if (hueValEl) hueValEl.textContent = h + "°";
+        persist();
+      });
+    }
+
+    // Sync action row
+    function updateSyncRow() {
+      const dot   = $("#pp-sync-dot");
+      const label = $("#pp-sync-label");
+      if (!dot || !label) return;
+      if (!syncKey) {
+        dot.className = "pp-sync-dot";
+        label.textContent = "跨设备同步 · 未配置";
+      } else if (lastSyncAt) {
+        dot.className = "pp-sync-dot on";
+        label.textContent = "同步 · " + syncKey;
+      } else {
+        dot.className = "pp-sync-dot";
+        label.textContent = "同步 · " + syncKey;
+      }
+    }
+    updateSyncRow();
+
+    $("#pp-sync-action")?.addEventListener("click", () => {
+      panel.classList.remove("open");
+      $("#sync-btn")?.click();
     });
 
-    // theme toggle (dark / light)
+    // Column config action
+    $("#pp-cols-action")?.addEventListener("click", () => {
+      panel.classList.remove("open");
+      $("#tweaks").classList.add("open");
+    });
+
+    // Theme toggle button (keep in sync with seg)
     const tt = $("#theme-toggle");
     if (tt) tt.addEventListener("click", () => {
       const cur = document.body.dataset.theme || "dark";
-      document.body.dataset.theme = cur === "dark" ? "light" : "dark";
-      // reflect into theme segmented control if present
-      const seg = document.querySelector('.seg[data-seg="theme"]');
-      if (seg) {
-        $$("button", seg).forEach(b => b.classList.toggle("active", b.dataset.val === document.body.dataset.theme));
-      }
-      persist();
+      applyAppearance("theme", cur === "dark" ? "light" : "dark");
     });
   }
 
   function persist() {
     try {
+      const hue = +( $("#pp-hue-slider")?.value ||
+        getComputedStyle(document.documentElement).getPropertyValue("--accent-h").trim() || 195 );
       const state = {
         density: document.body.dataset.density,
         font: document.body.dataset.font,
         theme: document.body.dataset.theme,
-        accentHue: +$("#hue-slider").value,
+        accentHue: hue,
         hiddenCols: COLS.filter(c => !c.on).map(c => c.id),
       };
+      localStorage.setItem("trendo_appearance", JSON.stringify({
+        density: state.density, font: state.font, theme: state.theme, accentHue: hue
+      }));
       window.parent.postMessage({ type: "__edit_mode_set_keys", edits: state }, "*");
     } catch (e) { /* no host */ }
   }
@@ -2557,6 +2666,7 @@
   renderBottom();
   wireControls();
   wireTweaks();
+  wireProfilePanel();
   wireTableTabs();
   wireNewPositionModal();
   $("#add-to-close")?.addEventListener("click",  () => closeModal("add-to-modal"));
