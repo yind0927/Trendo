@@ -7,7 +7,12 @@
 <title>Trendo - Swing Trading Concepts</title>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <link rel="apple-touch-icon" href="/logo.svg">
+<link rel="manifest" href="/manifest.json">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trendo">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
@@ -1599,9 +1604,22 @@
     table.holdings th:first-child { padding-left: 12px; position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
     table.holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
 
-    /* ---- Drawer ---- */
-    .drawer { width: 100vw; border-left: none; }
-    .drawer-head { padding: 14px 14px 12px; }
+    /* ---- Drawer → bottom sheet ---- */
+    .drawer {
+      width: 100vw; border-left: none;
+      top: auto; bottom: 0; left: 0; right: 0;
+      height: 92dvh;
+      border-radius: 20px 20px 0 0;
+      transform: translateY(100%);
+      box-shadow: 0 -20px 60px -10px oklch(0 0 0 / .5);
+    }
+    .drawer.open  { transform: translateY(0); }
+    .drawer-handle {
+      width: 40px; height: 4px; border-radius: 2px;
+      background: var(--line-strong);
+      margin: 10px auto 0; flex-shrink: 0;
+    }
+    .drawer-head { padding: 10px 14px 12px; }
     .drawer-section { padding: 14px; }
     .plan-prices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .plan-price-item { padding: 7px 8px; }
@@ -1633,7 +1651,24 @@
 
     /* ---- Watchlist ---- */
     #watchlist-view { padding: 12px 12px 76px; }
+
+    /* ---- FAB ---- */
+    .mobile-fab {
+      position: fixed; bottom: 84px; right: 18px; z-index: 55;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--accent);
+      color: #fff; font-size: 26px; line-height: 1;
+      display: grid; place-items: center;
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 18px -4px oklch(0.78 0.12 var(--accent-h) / .7),
+                  0 0 0 1px oklch(1 0 0 / .08) inset;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .mobile-fab:active { transform: scale(.93); }
   }
+
+  /* hide FAB on desktop */
+  @media (min-width: 769px) { .mobile-fab { display: none !important; } }
 
 </style>
 </head>
@@ -2103,6 +2138,9 @@
   </div>
   <div id="watchlist-content" class="watchlist-content" style="max-width:960px;margin:0 auto;padding:16px 20px 60px"></div>
 </div>
+<!-- Mobile FAB — open position -->
+<button class="mobile-fab" id="mobile-fab" title="新建持仓">＋</button>
+
 <div class="drawer-backdrop" id="backdrop"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 
