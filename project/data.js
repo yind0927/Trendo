@@ -14,19 +14,18 @@ window.progressBucket = h => {
   if (!h.stop || !h.target || h.stop >= h.target) return "Early";
   const range = h.target - h.stop;
   const p = (h.last - h.stop) / range;
-  if (p < 0) return "Near Stop";
-  if ((h.target - h.last) / range < 0.05) return "Near Target";
+  if (p < 0.10) return "Near Stop";
   if (p < 0.30) return "Early";
   if (p < 0.60) return "Midway";
-  if (p < 0.95) return "On Track";
+  if (p < 0.90) return "On Track";
   return "Near Target";
 };
 
 window.BUCKET_STATUS = {
   "Early":       { label: "初期 · Early",          cls: "early",       color: "var(--orange)" },
   "Midway":      { label: "中期 · Midway",          cls: "midway",      color: "var(--warn)"   },
-  "On Track":    { label: "进行中 · On Track",      cls: "on-track",    color: "var(--ok)"     },
-  "Near Target": { label: "接近止盈 · Near Target", cls: "near-target", color: "var(--accent)" },
+  "On Track":    { label: "进行中 · On Track",      cls: "on-track",    color: "var(--accent)" },
+  "Near Target": { label: "接近止盈 · Near Target", cls: "near-target", color: "var(--ok)"     },
   "Near Stop":   { label: "接近止损 · Near Stop",   cls: "near-stop",   color: "var(--down)"   },
 };
 
