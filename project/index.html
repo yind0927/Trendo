@@ -1278,18 +1278,18 @@
   .status.midway .dot { background: oklch(0.80 0.15 75); }
 
   .status.on-track {
-    background: oklch(0.78 0.17 145 / .14);
-    color: oklch(0.78 0.17 145);
-    border: 1px solid oklch(0.78 0.17 145 / .35);
-  }
-  .status.on-track .dot { background: oklch(0.78 0.17 145); }
-
-  .status.near-target {
     background: var(--accent-dim);
     color: var(--accent);
     border: 1px solid var(--accent-line);
   }
-  .status.near-target .dot { background: var(--accent); }
+  .status.on-track .dot { background: var(--accent); }
+
+  .status.near-target {
+    background: oklch(0.78 0.17 145 / .14);
+    color: oklch(0.78 0.17 145);
+    border: 1px solid oklch(0.78 0.17 145 / .35);
+  }
+  .status.near-target .dot { background: oklch(0.78 0.17 145); }
 
   .status.near-stop {
     background: oklch(0.70 0.19 25 / .14);
