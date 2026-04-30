@@ -379,7 +379,7 @@
       img.dataset.tried = "1";
       img.src = kind === "crypto"
         ? `https://s3-symbol-logo.tradingview.com/crypto/XTVC${sym.toUpperCase()}--big.svg`
-        : `https://s3-symbol-logo.tradingview.com/${sym.toUpperCase()}--big.svg`;
+        : `https://financialmodelingprep.com/image-stock/${sym}.png`;
     } else {
       img.style.display = "none";
     }
@@ -388,8 +388,8 @@
   function logoImg(h) {
     const src = h.kind === "crypto"
       ? `https://assets.coincap.io/assets/icons/${h.sym.toLowerCase()}@2x.png`
-      : `https://financialmodelingprep.com/image-stock/${h.sym}.png`;
-    return `<img src="${src}" loading="lazy" decoding="async" onerror="_trLogoErr(this,'${h.sym}','${h.kind || ""}')">`;
+      : `https://s3-symbol-logo.tradingview.com/${h.sym.toUpperCase()}--big.svg`;
+    return `<img src="${src}" decoding="async" onerror="_trLogoErr(this,'${h.sym}','${h.kind || ""}')">`;
   }
 
   let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
