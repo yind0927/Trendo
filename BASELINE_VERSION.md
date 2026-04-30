@@ -1,24 +1,27 @@
-# Trendo v6.6 Baseline Version
+# Trendo v6.7 Baseline Version
 
-**记录时间**: 2026-04-29  
-**基于**: v6.5-baseline (`1fac508`)  
-**当前 commit**: `3a3f26f`  
-**状态**: ✅ FAB 图标居中修复 · 日期选择器深色主题 · 手机端响应式 · Logo 双源兜底
+**记录时间**: 2026-04-30  
+**基于**: v6.6-baseline (`3a3f26f`)  
+**当前 commit**: `97cdd14`  
+**状态**: ✅ 模拟仓跨设备同步修复 · Logo 加载优化 · Journal/Watchlist Logo 尺寸修复
 
-> **注意**: "回到版本" 指的是此版本 (commit `3a3f26f`)。
+> **注意**: "回到版本" 指的是此版本 (commit `97cdd14`)。
 
 ---
 
-## 相较 v6.5 新增 / 修复
+## 相较 v6.6 新增 / 修复
 
-### FAB 开仓按钮图标修复
-- ✅ **SVG 图标替换全角字符** — 原 `＋`（全角）在部分字体下垂直偏移，改为内联 SVG 路径，`display:grid; place-items:center` 完美居中
+### 模拟仓跨设备同步修复
+- ✅ **`applyCloudData` 无条件渲染** — 原来只有在 sim 页时才调用 `renderSim()`，导致用户在 Dashboard 同步后看不到模拟仓更新；现在无论当前页面，同步后立即写入 DOM
+- ✅ **retroactive stamp 改为 epoch 0** — 原来首次打开没有 `savedAt` 的设备会打上当前时间戳，误判为比云端新而推送覆盖；改为 `1970-01-01` 确保云端数据始终优先
 
-### 日期选择器平台适配
-- ✅ **`color-scheme: dark`** — 浏览器原生日历弹窗自动切换深色模式，与 App 主题一致
-- ✅ **自定义日历图标** — SVG data URI 替换浏览器默认图标，色调匹配 `--fg-2`（冷灰蓝），hover 有背景高亮
-- ✅ **亮色主题兼容** — `color-scheme: light` + 较深图标笔触，切换主题时自动适配
-- ✅ **全场景覆盖** — 新建持仓弹窗（`form-date` / `form-earnings`）+ 加仓弹窗（`add-date`）均已更新
+### Ticker Logo 加载优化
+- ✅ **移除 `loading="lazy"`** — `position:absolute` 的 img 在 28px 容器内被浏览器误判为离屏，永久推迟加载；移除后立即加载
+- ✅ **股票主源改为 TradingView SVG** — 覆盖率高于 FMP（含 ETF、小盘股），FMP 降为备用
+- ✅ **加密货币保持 CoinCap 主源** — TradingView 加密 SVG 作备用
+
+### Journal / Watchlist Logo 尺寸修复
+- ✅ **`.jc-ticker .avatar` 补全 CSS** — 原来缺少 `position:relative; overflow:hidden` 和 img 的绝对定位约束，图片按 CDN 原始尺寸渲染（过大）；现在统一 34px，与表格风格一致
 
 ---
 
@@ -33,14 +36,14 @@
 - ✅ Delete Confirm Modal
 - ✅ Position Drawer — 持仓详情，支持编辑 + 平仓 + 加仓
 - ✅ BX Drawer — 内联 12 色选色 · Slope 输入框按方向着色 · 数字与颜色独立
-- ✅ 股票 / 加密货币 Logo — 两级 fallback，Journal / Watchlist 也显示
+- ✅ 股票 / 加密货币 Logo — TradingView SVG 主源，三级 fallback，全页面一致尺寸
 - ✅ Journal 页 — 持仓日志流 + Notes 编辑（与抽屉笔记同步）
-- ✅ Simulation 页 — 深蓝色主题，独立模拟仓，支持加仓
+- ✅ Simulation 页 — 深蓝色主题，独立模拟仓，支持加仓，跨设备同步
 - ✅ Analytics 页 — 总资产曲线（日/周/月）+ 交易分析 + 动态财报日历
 - ✅ Watchlist 页 — 观察标的管理
 - ✅ LIVE TAPE — 实时今日涨跌幅，hover 暂停
 - ✅ 实时行情 — Finnhub / Yahoo Finance / Polygon 三级优先链，每 30 秒刷新
-- ✅ 跨设备同步 — Upstash Redis，密钥手动触发 / 可编辑，本地优先
+- ✅ 跨设备同步 — Upstash Redis，密钥手动触发 / 可编辑，last-write-wins 时间戳策略
 - ✅ localStorage 持久化 (`trendo_v4_*`)
 - ✅ 财报日期自动获取 — Finnhub + Yahoo Finance 双源
 - ✅ 手机端响应式 — 底部 Tab 栏 · FAB 开仓按钮（SVG 图标） · Modal 底部弹出 · 表格横向滚动
@@ -78,6 +81,8 @@ project/
 ## 回到此版本
 
 ```bash
+git checkout 97cdd14
+# 或回到 v6.6
 git checkout 3a3f26f
 # 或回到 v6.5
 git checkout 1fac508
@@ -87,4 +92,4 @@ git checkout 35607f9
 
 ---
 
-**此版本标志**: FAB SVG 居中 · 日期选择器深色适配 · 手机端完整 · 数据零丢失 ✅
+**此版本标志**: 模拟仓同步修复 · Logo 全页面正常显示 · 跨设备数据零丢失 ✅
