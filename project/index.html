@@ -1628,7 +1628,16 @@
 
   /* ============ MOBILE (@media max-width: 768px) ============ */
   @media (max-width: 768px) {
-    body { min-width: 0; }
+    body { min-width: 0; overscroll-behavior: none; }
+
+    /* PWA standalone: constrain body height so position:fixed navbar stays at bottom */
+    @media (display-mode: standalone) {
+      body { overflow-x: hidden; }
+      main, #journal-view, #sim-view, #analytics-view, #watchlist-view {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
+      }
+    }
 
     /* ---- Topbar ---- */
     .topbar { padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); gap: 10px; }
@@ -1652,6 +1661,10 @@
       height: auto; gap: 0;
       justify-content: space-around;
       z-index: 50;
+      /* Force own GPU compositing layer — prevents iOS from repositioning
+         the fixed element when page content height changes */
+      -webkit-transform: translate3d(0, 0, 0);
+      transform: translate3d(0, 0, 0);
     }
     .navlink {
       flex: 1; display: flex; flex-direction: column; align-items: center;

@@ -1,5 +1,5 @@
 // Trendo Service Worker — network-first, auto-update on deploy
-const CACHE = "trendo-v3";
+const CACHE = "trendo-v4";
 const PRECACHE = ["/", "/index.html", "/data.js", "/desk.js", "/logo.svg", "/icon-192.png", "/icon-512.png", "/manifest.json"];
 
 self.addEventListener("install", e => {
