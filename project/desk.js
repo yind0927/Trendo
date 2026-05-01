@@ -2358,6 +2358,12 @@
       pnlMap[d] = (pnlMap[d] || 0) + (h.pnlFinal || 0);
     });
 
+    // Today's unrealized daily change (last - prevClose) × qty
+    const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
+    const todayPnl = isCurrentMonth
+      ? HOLDINGS.reduce((s, h) => s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0)
+      : 0;
+
     // Entry map: date → [{sym, pnlDollar (null for closed)}]
     const entryMap = {};
     const add = (d, sym, pnl) => { (entryMap[d] = entryMap[d] || []).push({ sym, pnl }); };
@@ -2412,7 +2418,7 @@
       if (isToday) cls += " today";
       if (pnl != null) cls += pnl >= 0 ? " win" : " loss";
 
-      // Realized PnL text
+      // Realized PnL text; today's floating PnL shown muted if no realized trade
       let pnlHTML = "";
       if (pnl != null) {
         const col  = pnl >= 0 ? "var(--up)" : "var(--down)";
@@ -2422,6 +2428,12 @@
                    : abs >= 1000  ? `${sign}$${(abs / 1000).toFixed(1)}k`
                    : `${sign}$${abs}`;
         pnlHTML = `<div class="cal-pnl" style="color:${col}">${amt}</div>`;
+      } else if (isToday && todayPnl !== 0) {
+        const col  = todayPnl >= 0 ? "var(--up)" : "var(--down)";
+        const sign = todayPnl >= 0 ? "+" : "−";
+        const abs  = Math.abs(todayPnl);
+        const amt  = abs >= 1000 ? `${sign}$${(abs / 1000).toFixed(1)}k` : `${sign}$${abs}`;
+        pnlHTML = `<div class="cal-pnl" style="color:${col};opacity:0.5">${amt}</div>`;
       }
 
       // Entry chips: dot + ticker sym, colored by floating PnL
