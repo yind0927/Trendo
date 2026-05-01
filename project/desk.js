@@ -404,6 +404,9 @@
   let calYear  = new Date().getFullYear();
   let calMonth = new Date().getMonth();
   let dailyPnlLog = {}; // { "YYYY-MM-DD": dailyChangeDollars }
+  let histCache   = {}; // { yahooSym: { "YYYY-MM-DD": closePrice } } — in-memory, not persisted
+  let histPnlLog  = {}; // { "YYYY-MM-DD": computedDelta } — built from histCache
+  let histLoading = false;
 
   // Simulation state
   let simActiveTab = "open";
@@ -538,6 +541,8 @@
     saveLocalOnly();
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncPush, 2000);
+    // Clear hist cache so new/closed positions get fresh history on next analytics visit
+    histCache = {}; histPnlLog = {};
   }
 
   function loadFromStorage() {
@@ -1570,6 +1575,78 @@
     }
   }
 
+  function buildHistoricalPnl() {
+    histPnlLog = {};
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const allPos   = [...HOLDINGS, ...CLOSED_POSITIONS];
+    if (!allPos.length || !Object.keys(histCache).length) return;
+
+    // Collect all trading dates we have prices for (exclude today — live value wins)
+    const dateSet = new Set();
+    Object.values(histCache).forEach(prices =>
+      Object.keys(prices).forEach(d => { if (d < todayStr) dateSet.add(d); })
+    );
+    const allDates = [...dateSet].sort();
+
+    allDates.forEach(date => {
+      let total = 0, hasAny = false;
+      allPos.forEach(pos => {
+        const entryDate = pos.entry?.slice(0, 10);
+        const closeDate = pos.closedAt?.slice(0, 10);
+        if (!entryDate || date < entryDate) return;
+        if (closeDate && date > closeDate) return;
+
+        const ySym   = pos.kind === "crypto" ? `${pos.sym}-USD` : pos.sym;
+        const prices = histCache[ySym];
+        if (!prices || prices[date] == null) return;
+
+        // Previous close for this symbol (fall back to cost on entry day)
+        const symDates = Object.keys(prices).sort();
+        const idx      = symDates.indexOf(date);
+        const prevDate = idx > 0 ? symDates[idx - 1] : null;
+        const prevClose = (!prevDate || prevDate < entryDate)
+          ? pos.cost
+          : (prices[prevDate] ?? pos.cost);
+
+        total  += Math.round((prices[date] - prevClose) * pos.qty);
+        hasAny  = true;
+      });
+      if (hasAny) histPnlLog[date] = total;
+    });
+  }
+
+  async function fetchAndBuildHistory() {
+    const allPos = [...HOLDINGS, ...CLOSED_POSITIONS];
+    if (!allPos.length) return;
+
+    const fromDate = allPos
+      .map(h => h.entry?.slice(0, 10))
+      .filter(Boolean)
+      .sort()[0];
+    if (!fromDate) return;
+
+    // Symbols not yet cached
+    const needed = [...new Set(
+      allPos.map(h => h.kind === "crypto" ? `${h.sym}-USD` : h.sym)
+    )].filter(s => !histCache[s]);
+
+    if (needed.length) {
+      histLoading = true;
+      if (currentPage === "analytics") renderAnalytics();
+      try {
+        const r = await fetch(`/api/history?symbols=${needed.join(",")}&from=${fromDate}`);
+        if (r.ok) {
+          const { results } = await r.json();
+          if (results) Object.assign(histCache, results);
+        }
+      } catch (_) {}
+      histLoading = false;
+    }
+
+    buildHistoricalPnl();
+    if (currentPage === "analytics") renderAnalytics();
+  }
+
   function recordDailyPnl() {
     if (!HOLDINGS.length) return;
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -1651,7 +1728,7 @@
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
-    if (page === "analytics") renderAnalytics();
+    if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
     if (page === "watchlist") renderWatchlist();
   }
 
@@ -2451,7 +2528,8 @@
         pnlHTML = `<div class="cal-pnl" style="color:${col}">${amt}</div>`;
       } else {
         // Past days: use stored log; today: live calculation (muted = unrealized)
-        const loggedPnl = isToday ? liveTodayPnl : (dailyPnlLog[dateStr] ?? null);
+        // histPnlLog (computed from Yahoo Finance) takes priority; fall back to live-recorded log
+        const loggedPnl = isToday ? liveTodayPnl : (histPnlLog[dateStr] ?? dailyPnlLog[dateStr] ?? null);
         if (loggedPnl != null && loggedPnl !== 0) {
           const col    = loggedPnl >= 0 ? "var(--up)" : "var(--down)";
           const sign   = loggedPnl >= 0 ? "+" : "−";
@@ -2490,6 +2568,7 @@
             <div class="analytics-card-title">盈亏日历 · P&L Calendar</div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
               ${mTotalHTML}${mWLHTML}
+              ${histLoading ? `<span class="muted" style="font-size:10px">加载历史数据…</span>` : ""}
             </div>
           </div>
           <div class="cal-nav">
