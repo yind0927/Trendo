@@ -122,6 +122,7 @@
     position: sticky; top: 0; z-index: 40;
     display: flex; align-items: center; gap: 20px;
     padding: 12px 28px;
+    padding-top: calc(12px + env(safe-area-inset-top));
     background: color-mix(in oklch, var(--bg-0) 85%, transparent);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
@@ -1629,7 +1630,7 @@
     body { min-width: 0; }
 
     /* ---- Topbar ---- */
-    .topbar { padding: 10px 14px; gap: 10px; }
+    .topbar { padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); gap: 10px; }
     .brand .name { font-size: 13px; }
     .topbar .divider { display: none; }
     .topbar .search { display: none; }
