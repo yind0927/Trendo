@@ -1702,11 +1702,19 @@
 
     /* ---- Journal ---- */
     #journal-view { padding: 12px 12px 76px; }
+    .journal-card { padding: 11px 13px; gap: 10px; }
+    .jc-meta { gap: 6px; flex-wrap: wrap; }
+    .jc-bx { gap: 5px; }
 
     /* ---- Analytics ---- */
     #analytics-view { padding: 12px 12px 76px; }
-    .analytics-metrics { grid-template-columns: repeat(2, 1fr) !important; }
-    .analytics-chart-row { flex-direction: column; }
+    .analytics-metrics { grid-template-columns: repeat(3, 1fr) !important; gap: 7px; margin-bottom: 12px; }
+    .analytics-metric { padding: 9px 10px; gap: 2px; }
+    .analytics-metric-value { font-size: 15px; }
+    .analytics-metric-sub { font-size: 9px; }
+    .analytics-card { padding: 12px 13px; }
+    .analytics-card-title { font-size: 10.5px; }
+    .analytics-chart-row { flex-direction: column; gap: 8px; margin-bottom: 10px; }
     .cal-cell { min-height: 40px; padding: 3px 4px 3px; }
     .cal-pnl { font-size: 8.5px; }
     .cal-day-num { font-size: 9px; }
@@ -1714,6 +1722,19 @@
 
     /* ---- Watchlist ---- */
     #watchlist-view { padding: 12px 12px 76px; }
+    .wl-card { padding: 11px 13px; }
+    .wl-card-main {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      row-gap: 9px; column-gap: 10px;
+    }
+    .wl-card-main > .jc-ticker  { grid-column: 1; grid-row: 1; min-width: 0; }
+    .wl-card-main > .wl-actions { grid-column: 2; grid-row: 1; margin-left: 0; }
+    .wl-card-main > .wl-meta    { grid-column: 1 / -1; grid-row: 2; flex-direction: row; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+    .wl-card-main > .wl-bx-score { grid-column: 1; grid-row: 3; flex-direction: row; align-items: center; gap: 4px; min-width: 0; }
+    .wl-card-main > .wl-slope   { grid-column: 2; grid-row: 3; flex-direction: row; align-items: center; gap: 4px; min-width: 0; }
+    .wl-card-main > .wl-price   { grid-column: 1 / -1; grid-row: 4; flex-direction: row; align-items: center; gap: 6px; }
+    .wl-bx-score .mono { font-size: 16px !important; }
 
     /* ---- FAB 开仓按钮 ---- */
     .mobile-fab {
