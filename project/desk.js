@@ -403,6 +403,7 @@
   let equityPeriod = "week";
   let calYear  = new Date().getFullYear();
   let calMonth = new Date().getMonth();
+  let dailyPnlLog = {}; // { "YYYY-MM-DD": dailyChangeDollars }
 
   // Simulation state
   let simActiveTab = "open";
@@ -432,7 +433,7 @@
     const payload = {
       holdings: HOLDINGS, closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: SIM_HOLDINGS, simClosed: SIM_CLOSED,
-      simNotional, savedAt: new Date().toISOString()
+      simNotional, dailyPnlLog, savedAt: new Date().toISOString()
     };
     try {
       const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}`, {
@@ -490,6 +491,9 @@
     if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
     if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
     if (data.simNotional != null)        simNotional = data.simNotional;
+    if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
+      Object.assign(dailyPnlLog, data.dailyPnlLog);
+    }
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
@@ -525,6 +529,7 @@
       localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(SIM_HOLDINGS));
       localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
+      localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_savedAt",      new Date().toISOString());
     } catch (e) { /* storage unavailable */ }
   }
@@ -551,6 +556,8 @@
       if (sh) { const parsed = JSON.parse(sh); SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...parsed); }
       if (sc) { const parsed = JSON.parse(sc); SIM_CLOSED.splice(0, SIM_CLOSED.length, ...parsed); }
       if (sn) simNotional = parseFloat(sn) || simNotional;
+      const dp = localStorage.getItem("trendo_v4_daily_pnl");
+      if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
   }
 
@@ -1563,6 +1570,19 @@
     }
   }
 
+  function recordDailyPnl() {
+    if (!HOLDINGS.length) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const delta = HOLDINGS.reduce((s, h) =>
+      s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0);
+    dailyPnlLog[todayStr] = delta;
+    // Prune entries older than 1 year
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 1);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    Object.keys(dailyPnlLog).forEach(d => { if (d < cutoffStr) delete dailyPnlLog[d]; });
+  }
+
   async function fetchPrices() {
     const all = [...HOLDINGS, ...SIM_HOLDINGS];
     if (!all.length) return;
@@ -1597,6 +1617,7 @@
       });
 
       if (changed) {
+        recordDailyPnl();
         saveToStorage();
         renderTape();
         renderOverview();
@@ -2358,9 +2379,9 @@
       pnlMap[d] = (pnlMap[d] || 0) + (h.pnlFinal || 0);
     });
 
-    // Today's unrealized daily change (last - prevClose) × qty
+    // For today: live calculation; for past days: use stored dailyPnlLog
     const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
-    const todayPnl = isCurrentMonth
+    const liveTodayPnl = isCurrentMonth
       ? HOLDINGS.reduce((s, h) => s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0)
       : 0;
 
@@ -2428,12 +2449,19 @@
                    : abs >= 1000  ? `${sign}$${(abs / 1000).toFixed(1)}k`
                    : `${sign}$${abs}`;
         pnlHTML = `<div class="cal-pnl" style="color:${col}">${amt}</div>`;
-      } else if (isToday && todayPnl !== 0) {
-        const col  = todayPnl >= 0 ? "var(--up)" : "var(--down)";
-        const sign = todayPnl >= 0 ? "+" : "−";
-        const abs  = Math.abs(todayPnl);
-        const amt  = abs >= 1000 ? `${sign}$${(abs / 1000).toFixed(1)}k` : `${sign}$${abs}`;
-        pnlHTML = `<div class="cal-pnl" style="color:${col};opacity:0.5">${amt}</div>`;
+      } else {
+        // Past days: use stored log; today: live calculation (muted = unrealized)
+        const loggedPnl = isToday ? liveTodayPnl : (dailyPnlLog[dateStr] ?? null);
+        if (loggedPnl != null && loggedPnl !== 0) {
+          const col    = loggedPnl >= 0 ? "var(--up)" : "var(--down)";
+          const sign   = loggedPnl >= 0 ? "+" : "−";
+          const abs    = Math.abs(loggedPnl);
+          const amt    = abs >= 10000 ? `${sign}$${(abs / 1000).toFixed(0)}k`
+                       : abs >= 1000  ? `${sign}$${(abs / 1000).toFixed(1)}k`
+                       : `${sign}$${abs}`;
+          const opacity = isToday ? ";opacity:0.55" : "";
+          pnlHTML = `<div class="cal-pnl" style="color:${col}${opacity}">${amt}</div>`;
+        }
       }
 
       // Entry chips: dot + ticker sym, colored by floating PnL
