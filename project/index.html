@@ -1654,7 +1654,7 @@
     /* ---- Navbar → fixed bottom tab bar ---- */
     .navbar {
       position: fixed; bottom: 0; left: 0; right: 0; top: auto;
-      margin: 0; padding: 0 0 env(safe-area-inset-bottom);
+      margin: 0; padding: 0 0 max(env(safe-area-inset-bottom), 10px);
       border-left: none; border-top: 1px solid var(--line);
       background: color-mix(in oklch, var(--bg-1) 96%, transparent);
       backdrop-filter: blur(12px);
@@ -1680,7 +1680,7 @@
     .navlink.active::before { filter: drop-shadow(0 0 4px var(--accent)); }
 
     /* ---- Main layout ---- */
-    main { padding: 12px 12px 76px; gap: 10px; }
+    main { padding: 12px 12px 86px; gap: 10px; }
 
     /* ---- Overview strip ---- */
     .overview { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1718,7 +1718,7 @@
     }
 
     /* ---- Sim view ---- */
-    #sim-view { padding: 12px 12px 76px; }
+    #sim-view { padding: 12px 12px 86px; }
     #sim-overview { grid-template-columns: repeat(2, 1fr); }
     .sim-topbar { flex-wrap: wrap; }
     .panel-wrap.sim-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1727,13 +1727,13 @@
     table.sim-holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
 
     /* ---- Journal ---- */
-    #journal-view { padding: 12px 12px 76px; }
+    #journal-view { padding: 12px 12px 86px; }
     .journal-card { padding: 11px 13px; gap: 10px; }
     .jc-meta { gap: 6px; flex-wrap: wrap; }
     .jc-bx { gap: 5px; }
 
     /* ---- Analytics ---- */
-    #analytics-view { padding: 12px 12px 76px; }
+    #analytics-view { padding: 12px 12px 86px; }
     .analytics-metrics { grid-template-columns: repeat(3, 1fr) !important; gap: 7px; margin-bottom: 12px; }
     .analytics-metric { padding: 9px 10px; gap: 2px; }
     .analytics-metric-value { font-size: 15px; }
@@ -1748,7 +1748,7 @@
     .cal-month-lbl { min-width: 90px; font-size: 11px; }
 
     /* ---- Watchlist ---- */
-    #watchlist-view { padding: 12px 12px 76px; }
+    #watchlist-view { padding: 12px 12px 86px; }
     .wl-card { padding: 11px 13px; }
     .wl-card-main {
       display: grid;
