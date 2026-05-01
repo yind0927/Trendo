@@ -1695,7 +1695,7 @@
 
     /* ---- Drawer ---- */
     .drawer { width: 100vw; border-left: none; }
-    .drawer-head { padding: 14px 14px 12px; }
+    .drawer-head { padding: 14px 14px 12px; padding-top: calc(14px + env(safe-area-inset-top)); }
     .drawer-section { padding: 14px; }
     .plan-prices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .plan-price-item { padding: 7px 8px; }
@@ -2452,6 +2452,24 @@
 
 <script src="data.js"></script>
 <script src="desk.js"></script>
-
-
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").then(reg => {
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      sw.addEventListener("statechange", () => {
+        if (sw.state === "installed" && navigator.serviceWorker.controller) {
+          // New version available — show update banner
+          const banner = document.createElement("div");
+          banner.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999;background:var(--accent);color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px oklch(0 0 0/.4);white-space:nowrap";
+          banner.innerHTML = `已有新版本 <button style="background:#fff;color:var(--accent);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">立即更新</button>`;
+          document.body.appendChild(banner);
+          banner.querySelector("button").onclick = () => { sw.postMessage({ type: "SKIP_WAITING" }); location.reload(); };
+        }
+      });
+    });
+  });
+  navigator.serviceWorker.addEventListener("controllerchange", () => location.reload());
+}
+</script>
 </body></html>
