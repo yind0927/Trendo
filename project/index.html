@@ -1677,6 +1677,8 @@
     /* ---- Overview strip ---- */
     .overview { grid-template-columns: repeat(2, 1fr) !important; }
     .overview > *:last-child { display: none; } /* hide bar chart on mobile */
+    .overview > :nth-child(1),
+    .overview > :nth-child(2) { grid-column: 1 / -1; } /* full-width rows for first two cards */
     .ov-card { min-height: 90px; padding: 12px; }
 
     /* ---- Tape ---- */
