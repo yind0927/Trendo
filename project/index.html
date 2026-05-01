@@ -1627,19 +1627,19 @@
 
   /* ============ MOBILE (@media max-width: 768px) ============ */
   @media (max-width: 768px) {
-    body { min-width: 0; overscroll-behavior: none; }
-
-    /* PWA standalone: fixed navbar can misbehave when body overflows — prevent it */
-    @media (display-mode: standalone) {
-      body { overflow: hidden; height: 100dvh; }
-      main, #journal-view, #sim-view, #analytics-view, #watchlist-view {
-        overflow-y: auto; -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
-      }
+    /* Flex-column layout: navbar stays at bottom naturally, no position:fixed needed */
+    body {
+      min-width: 0;
+      display: flex; flex-direction: column;
+      height: 100dvh; overflow: hidden;
+      overscroll-behavior: none;
     }
 
     /* ---- Topbar ---- */
-    .topbar { padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); gap: 10px; }
+    .topbar {
+      flex-shrink: 0;
+      padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); gap: 10px;
+    }
     .brand .name { font-size: 13px; }
     .topbar .divider { display: none; }
     .topbar .search { display: none; }
@@ -1647,13 +1647,23 @@
     .top-actions { gap: 6px; }
     .top-actions .btn:not(.icon) { display: none; }
 
-    /* ---- Navbar → fixed bottom tab bar ---- */
+    /* ---- Tape ---- */
+    .tape { flex-shrink: 0; position: relative; top: auto; }
+
+    /* ---- Scrollable content areas ---- */
+    main, #journal-view, #sim-view, #analytics-view, #watchlist-view {
+      flex: 1; min-height: 0;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+
+    /* ---- Navbar → in-flow bottom tab bar (not fixed) ---- */
     .navbar {
-      position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+      flex-shrink: 0;
+      position: relative; bottom: auto; left: auto; right: auto; top: auto;
       margin: 0; padding: 0 0 env(safe-area-inset-bottom);
       border-left: none; border-top: 1px solid var(--line);
-      background: color-mix(in oklch, var(--bg-1) 96%, transparent);
-      backdrop-filter: blur(12px);
+      background: var(--bg-1);
       height: auto; gap: 0;
       justify-content: space-around;
       z-index: 50;
@@ -1672,7 +1682,7 @@
     .navlink.active::before { filter: drop-shadow(0 0 4px var(--accent)); }
 
     /* ---- Main layout ---- */
-    main { padding: 12px 12px 76px; gap: 10px; }
+    main { padding: 12px 12px 16px; gap: 10px; }
 
     /* ---- Overview strip ---- */
     .overview { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1680,9 +1690,6 @@
     .overview > :nth-child(1),
     .overview > :nth-child(2) { grid-column: 1 / -1; } /* full-width rows for first two cards */
     .ov-card { min-height: 90px; padding: 12px; }
-
-    /* ---- Tape ---- */
-    .tape { top: 48px; }
 
     /* ---- Panel / table ---- */
     .panel-head { padding: 10px 12px 8px; flex-wrap: wrap; gap: 6px; }
@@ -1713,7 +1720,7 @@
     }
 
     /* ---- Sim view ---- */
-    #sim-view { padding: 12px 12px 76px; }
+    #sim-view { padding: 12px 12px 16px; }
     #sim-overview { grid-template-columns: repeat(2, 1fr); }
     .sim-topbar { flex-wrap: wrap; }
     .panel-wrap.sim-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1722,13 +1729,13 @@
     table.sim-holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
 
     /* ---- Journal ---- */
-    #journal-view { padding: 12px 12px 76px; }
+    #journal-view { padding: 12px 12px 16px; }
     .journal-card { padding: 11px 13px; gap: 10px; }
     .jc-meta { gap: 6px; flex-wrap: wrap; }
     .jc-bx { gap: 5px; }
 
     /* ---- Analytics ---- */
-    #analytics-view { padding: 12px 12px 76px; }
+    #analytics-view { padding: 12px 12px 16px; }
     .analytics-metrics { grid-template-columns: repeat(3, 1fr) !important; gap: 7px; margin-bottom: 12px; }
     .analytics-metric { padding: 9px 10px; gap: 2px; }
     .analytics-metric-value { font-size: 15px; }
@@ -1743,7 +1750,7 @@
     .cal-month-lbl { min-width: 90px; font-size: 11px; }
 
     /* ---- Watchlist ---- */
-    #watchlist-view { padding: 12px 12px 76px; }
+    #watchlist-view { padding: 12px 12px 16px; }
     .wl-card { padding: 11px 13px; }
     .wl-card-main {
       display: grid;
