@@ -1355,11 +1355,11 @@
   .btn-add-pos {
     display: flex; align-items: center; justify-content: center; gap: 7px;
     font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
-    background: color-mix(in oklch, var(--up) 12%, transparent);
-    color: var(--up); border-color: color-mix(in oklch, var(--up) 30%, transparent);
-    padding: 10px 0; transition: background .15s, transform .1s;
+    background: transparent;
+    color: var(--up); border-color: color-mix(in oklch, var(--up) 55%, transparent);
+    padding: 10px 0; transition: background .15s, border-color .15s, transform .1s;
   }
-  .btn-add-pos:hover { background: color-mix(in oklch, var(--up) 22%, transparent); transform: translateY(-1px); }
+  .btn-add-pos:hover { background: color-mix(in oklch, var(--up) 10%, transparent); border-color: var(--up); transform: translateY(-1px); }
   .btn-add-pos:active { transform: translateY(0); }
 
   /* Section 03 — Trading Plan */
@@ -1876,7 +1876,6 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
       Open Position
     </button>
-    <button class="avatar-btn" title="Trader">YZ</button>
   </div>
 </header>
 
