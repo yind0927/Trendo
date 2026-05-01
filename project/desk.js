@@ -2347,7 +2347,6 @@
   function pnlCalendarHTML(year, month) {
     const today    = new Date();
     const todayStr = today.toISOString().slice(0, 10);
-    const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
 
     // Realized PnL grouped by close date
     const pnlMap = {};
@@ -2359,40 +2358,40 @@
       pnlMap[d] = (pnlMap[d] || 0) + (h.pnlFinal || 0);
     });
 
-    // Entry dates (open + closed) in this month
-    const entrySet = new Set();
-    [...HOLDINGS, ...CLOSED_POSITIONS].forEach(h => {
+    // Entry map: date → [{sym, pnlDollar (null for closed)}]
+    const entryMap = {};
+    const add = (d, sym, pnl) => { (entryMap[d] = entryMap[d] || []).push({ sym, pnl }); };
+    HOLDINGS.forEach(h => {
       if (!h.entry) return;
       const d = h.entry.slice(0, 10);
       const [y, m] = d.split("-").map(Number);
-      if (y === year && m - 1 === month) entrySet.add(d);
+      if (y === year && m - 1 === month) add(d, h.sym, h.pnlDollar ?? null);
+    });
+    CLOSED_POSITIONS.forEach(h => {
+      if (!h.entry) return;
+      const d = h.entry.slice(0, 10);
+      const [y, m] = d.split("-").map(Number);
+      if (y === year && m - 1 === month) add(d, h.sym, null);
     });
 
-    // Today's unrealized daily change
-    const todayPnl = isCurrentMonth
-      ? HOLDINGS.reduce((s, h) => s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0)
-      : 0;
-
     // Month summary
-    const pnlVals  = Object.values(pnlMap);
-    const mTotal   = pnlVals.reduce((s, v) => s + v, 0);
-    const mWins    = pnlVals.filter(v => v > 0).length;
-    const mLosses  = pnlVals.filter(v => v < 0).length;
-    const maxAbs   = Math.max(1, ...pnlVals.map(Math.abs));
+    const pnlVals = Object.values(pnlMap);
+    const mTotal  = pnlVals.reduce((s, v) => s + v, 0);
+    const mWins   = pnlVals.filter(v => v > 0).length;
+    const mLosses = pnlVals.filter(v => v < 0).length;
 
     const monthLabel = new Date(year, month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-    const mSign  = mTotal >= 0 ? "up" : "down";
+    const mSign     = mTotal >= 0 ? "up" : "down";
     const mTotalHTML = pnlVals.length
       ? `<span class="mono ${mSign}" style="font-size:14px;font-weight:700">${fmt.signed(Math.round(mTotal))}</span>`
       : `<span class="muted" style="font-size:12px">暂无已平仓数据</span>`;
     const mWLHTML = (mWins + mLosses) > 0
       ? `<span class="muted" style="font-size:10.5px">${mWins}W · ${mLosses}L</span>` : "";
 
-    // Calendar grid
-    const firstDow  = new Date(year, month, 1).getDay();
-    const startOff  = (firstDow + 6) % 7; // Mon = 0
-    const daysInMo  = new Date(year, month + 1, 0).getDate();
     const isNextDis = year > today.getFullYear() || (year === today.getFullYear() && month >= today.getMonth());
+    const firstDow  = new Date(year, month, 1).getDay();
+    const startOff  = (firstDow + 6) % 7;
+    const daysInMo  = new Date(year, month + 1, 0).getDate();
 
     const DOW = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
     const hdrCells = DOW.map(d => `<div class="cal-hdr">${d}</div>`).join("");
@@ -2406,13 +2405,14 @@
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const isToday = (dateStr === todayStr);
       const pnl     = pnlMap[dateStr];
-      const hasEntry = entrySet.has(dateStr);
+      const entries = entryMap[dateStr] || [];
 
       let cls = "cal-cell";
       if (isWknd)  cls += " wknd";
       if (isToday) cls += " today";
       if (pnl != null) cls += pnl >= 0 ? " win" : " loss";
 
+      // Realized PnL text
       let pnlHTML = "";
       if (pnl != null) {
         const col  = pnl >= 0 ? "var(--up)" : "var(--down)";
@@ -2422,16 +2422,25 @@
                    : abs >= 1000  ? `${sign}$${(abs / 1000).toFixed(1)}k`
                    : `${sign}$${abs}`;
         pnlHTML = `<div class="cal-pnl" style="color:${col}">${amt}</div>`;
-      } else if (isToday && todayPnl !== 0) {
-        const col  = todayPnl >= 0 ? "var(--up)" : "var(--down)";
-        const sign = todayPnl >= 0 ? "+" : "−";
-        const abs  = Math.abs(todayPnl);
-        const amt  = abs >= 1000 ? `${sign}$${(abs / 1000).toFixed(1)}k` : `${sign}$${abs}`;
-        pnlHTML = `<div class="cal-pnl" style="color:${col};opacity:0.5">${amt}</div>`;
       }
 
-      const entryDot = hasEntry ? `<div class="cal-entry-dot" title="开仓日"></div>` : "";
-      dayCells += `<div class="${cls}"><div class="cal-day-num">${d}</div>${pnlHTML}${entryDot}</div>`;
+      // Entry chips: dot + ticker sym, colored by floating PnL
+      let entryHTML = "";
+      if (entries.length) {
+        const chips = entries.slice(0, 2).map(e => {
+          const col = e.pnl == null ? "var(--fg-3)"
+                    : e.pnl >= 0   ? "var(--up)" : "var(--down)";
+          return `<div class="cal-entry-chip">
+            <div class="cal-entry-dot" style="background:${col}"></div>
+            <span class="cal-entry-sym" style="color:${col}">${e.sym.slice(0, 4)}</span>
+          </div>`;
+        }).join("");
+        const more = entries.length > 2
+          ? `<span class="cal-entry-more">+${entries.length - 2}</span>` : "";
+        entryHTML = `<div class="cal-entries">${chips}${more}</div>`;
+      }
+
+      dayCells += `<div class="${cls}"><div class="cal-day-num">${d}</div>${pnlHTML}${entryHTML}</div>`;
     }
 
     return `
