@@ -1,27 +1,39 @@
-# Trendo v6.7 Baseline Version
+# Trendo v6.8 Baseline Version
 
-**记录时间**: 2026-04-30  
-**基于**: v6.6-baseline (`3a3f26f`)  
-**当前 commit**: `97cdd14`  
-**状态**: ✅ 模拟仓跨设备同步修复 · Logo 加载优化 · Journal/Watchlist Logo 尺寸修复
+**记录时间**: 2026-05-01  
+**基于**: v6.7-baseline (`97cdd14`)  
+**当前 commit**: `5c7f08e`  
+**状态**: ✅ 盈亏日历 · 历史浮盈亏 · 进度状态优化 · 手机端全面布局更新
 
-> **注意**: "回到版本" 指的是此版本 (commit `97cdd14`)。
+> **注意**: "回到版本" 指的是此版本 (commit `5c7f08e`)。
 
 ---
 
-## 相较 v6.6 新增 / 修复
+## 相较 v6.7 新增 / 修复
 
-### 模拟仓跨设备同步修复
-- ✅ **`applyCloudData` 无条件渲染** — 原来只有在 sim 页时才调用 `renderSim()`，导致用户在 Dashboard 同步后看不到模拟仓更新；现在无论当前页面，同步后立即写入 DOM
-- ✅ **retroactive stamp 改为 epoch 0** — 原来首次打开没有 `savedAt` 的设备会打上当前时间戳，误判为比云端新而推送覆盖；改为 `1970-01-01` 确保云端数据始终优先
+### Analytics — 盈亏日历
+- ✅ **月度日历卡片** — Analytics 页新增 P&L Calendar，按月展示每日已实现盈亏（绿/红色深浅按金额比例）
+- ✅ **开仓标记** — 开仓日期显示 ticker 代号 + 彩色圆点，颜色按当前浮盈亏正负着色
+- ✅ **月份导航** — ‹ › 切换月份，不可超过当前月，顶部显示月度总盈亏 + 胜负笔数
+- ✅ **今日浮盈亏** — 今天格子显示实时当日浮盈亏（半透明，区别于已实现）
+- ✅ **历史每日浮盈亏** — `/api/history.js` 通过 Yahoo Finance 拉取历史收盘价，按持仓区间计算每天贡献，进入 Analytics 页自动加载
+- ✅ **实时录制备份** — 每次行情刷新后自动记录当日 delta，存入 localStorage 并纳入云同步
 
-### Ticker Logo 加载优化
-- ✅ **移除 `loading="lazy"`** — `position:absolute` 的 img 在 28px 容器内被浏览器误判为离屏，永久推迟加载；移除后立即加载
-- ✅ **股票主源改为 TradingView SVG** — 覆盖率高于 FMP（含 ETF、小盘股），FMP 降为备用
-- ✅ **加密货币保持 CoinCap 主源** — TradingView 加密 SVG 作备用
+### 进度状态系统更新
+- ✅ **Near Stop 触发范围扩大** — 区间底部 10%（原：跌破止损才触发）
+- ✅ **颜色对调** — On Track → 蓝紫（accent），Near Target → 绿色
+- ✅ **阈值调整** — On Track 60–90%，Near Target > 90%（原 60–95% / > 95%）
 
-### Journal / Watchlist Logo 尺寸修复
-- ✅ **`.jc-ticker .avatar` 补全 CSS** — 原来缺少 `position:relative; overflow:hidden` 和 img 的绝对定位约束，图片按 CDN 原始尺寸渲染（过大）；现在统一 34px，与表格风格一致
+### 手机端全面布局更新
+- ✅ **Analytics 指标卡** — 2 列 → 3 列，数值字号缩小适配，减少滚动距离
+- ✅ **Watchlist 卡片** — flex → grid 双行结构：上排 ticker + 操作，下排数据条不再乱换行
+- ✅ **Journal 卡片** — padding 收紧，meta 行间距优化
+- ✅ **本周复盘 + 财报日历** — 从两列并排改为各占一行，不再挤压
+
+### 其他修复
+- ✅ **Watchlist tab 图标** — `👁` → `📋`
+- ✅ **Logo 加载** — TradingView SVG 为股票主源，移除 lazy 加载
+- ✅ **Journal / Watchlist logo 尺寸** — 补全 `.jc-ticker .avatar` CSS，统一 34px
 
 ---
 
@@ -29,7 +41,7 @@
 
 - ✅ Portfolio Overview — 4 张总览卡 + 横向柱状图
 - ✅ Holdings Table — Open / Closed 双 Tab，排序 / 筛选 / 搜索
-- ✅ 5 级进度状态系统
+- ✅ 5 级进度状态系统（Near Stop / Early / Midway / On Track / Near Target）
 - ✅ Open Position Modal — 新建持仓，支持美股 / ETF / 加密货币 + 入场日期 + 财报日期
 - ✅ 加仓 Modal — 加权平均成本计算，执行记录追加
 - ✅ Close Position Modal — 平仓价输入 + PnL 预览
@@ -39,15 +51,14 @@
 - ✅ 股票 / 加密货币 Logo — TradingView SVG 主源，三级 fallback，全页面一致尺寸
 - ✅ Journal 页 — 持仓日志流 + Notes 编辑（与抽屉笔记同步）
 - ✅ Simulation 页 — 深蓝色主题，独立模拟仓，支持加仓，跨设备同步
-- ✅ Analytics 页 — 总资产曲线（日/周/月）+ 交易分析 + 动态财报日历
+- ✅ Analytics 页 — 总资产曲线（日/周/月）+ 交易分析 + 盈亏日历（含历史每日浮盈亏）
 - ✅ Watchlist 页 — 观察标的管理
 - ✅ LIVE TAPE — 实时今日涨跌幅，hover 暂停
 - ✅ 实时行情 — Finnhub / Yahoo Finance / Polygon 三级优先链，每 30 秒刷新
 - ✅ 跨设备同步 — Upstash Redis，密钥手动触发 / 可编辑，last-write-wins 时间戳策略
-- ✅ localStorage 持久化 (`trendo_v4_*`)
+- ✅ localStorage 持久化 (`trendo_v4_*`) + dailyPnlLog 历史录制
 - ✅ 财报日期自动获取 — Finnhub + Yahoo Finance 双源
-- ✅ 手机端响应式 — 底部 Tab 栏 · FAB 开仓按钮（SVG 图标） · Modal 底部弹出 · 表格横向滚动
-- ✅ 日期选择器深色主题 — color-scheme 自动适配，自定义图标
+- ✅ 手机端响应式 — 底部 Tab 栏 · FAB 开仓按钮 · Modal 底部弹出 · 全页面布局优化
 
 ---
 
@@ -62,7 +73,8 @@ project/
 └── api/
     ├── quote.js      # 行情代理：Finnhub → Yahoo Finance → Polygon（Vercel）
     ├── data.js       # Upstash Redis 同步接口（GET/POST）
-    └── earnings.js   # 财报日期：Finnhub → Yahoo Finance（Vercel）
+    ├── earnings.js   # 财报日期：Finnhub → Yahoo Finance（Vercel）
+    └── history.js    # 历史日线数据：Yahoo Finance（Vercel，新增）
 ```
 
 ---
@@ -81,15 +93,13 @@ project/
 ## 回到此版本
 
 ```bash
+git checkout 5c7f08e
+# 或回到 v6.7
 git checkout 97cdd14
 # 或回到 v6.6
 git checkout 3a3f26f
-# 或回到 v6.5
-git checkout 1fac508
-# 或回到 v6.4
-git checkout 35607f9
 ```
 
 ---
 
-**此版本标志**: 模拟仓同步修复 · Logo 全页面正常显示 · 跨设备数据零丢失 ✅
+**此版本标志**: 盈亏日历 · 历史浮盈亏计算 · 进度状态重新校准 · 手机端全面优化 ✅
