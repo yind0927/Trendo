@@ -1725,6 +1725,9 @@
       const el = document.getElementById(id);
       if (el) el.style.display = p === page ? "" : "none";
     });
+    // Hide <main> when not on desk so it doesn't add phantom height on mobile
+    const mainEl = document.querySelector("main");
+    if (mainEl) mainEl.style.display = page === "desk" ? "" : "none";
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();

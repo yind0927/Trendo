@@ -1627,7 +1627,16 @@
 
   /* ============ MOBILE (@media max-width: 768px) ============ */
   @media (max-width: 768px) {
-    body { min-width: 0; }
+    body { min-width: 0; overscroll-behavior: none; }
+
+    /* PWA standalone: fixed navbar can misbehave when body overflows — prevent it */
+    @media (display-mode: standalone) {
+      body { overflow: hidden; height: 100dvh; }
+      main, #journal-view, #sim-view, #analytics-view, #watchlist-view {
+        overflow-y: auto; -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+    }
 
     /* ---- Topbar ---- */
     .topbar { padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); gap: 10px; }
@@ -1706,6 +1715,9 @@
     #sim-overview { grid-template-columns: repeat(2, 1fr); }
     .sim-topbar { flex-wrap: wrap; }
     .panel-wrap.sim-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.sim-holdings td:first-child,
+    table.sim-holdings th:first-child { position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
+    table.sim-holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
 
     /* ---- Journal ---- */
     #journal-view { padding: 12px 12px 76px; }
@@ -2186,10 +2198,12 @@
     </div>
   </div>
 
-  <table class="sim-holdings">
-    <thead><tr id="sim-thead-row"></tr></thead>
-    <tbody id="sim-tbody"></tbody>
-  </table>
+  <div class="panel-wrap sim-wrap">
+    <table class="sim-holdings">
+      <thead><tr id="sim-thead-row"></tr></thead>
+      <tbody id="sim-tbody"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- ============ ANALYTICS VIEW ============ -->
