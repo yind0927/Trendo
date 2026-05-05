@@ -2762,17 +2762,23 @@
   ];
 
   function calcRSI(closes, period = 14) {
-    if (closes.length < period + 1) return null;
-    let gains = 0, losses = 0;
-    for (let i = closes.length - period; i < closes.length; i++) {
+    if (closes.length < period + 2) return null;
+    // Seed: SMA of first `period` changes
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
       const diff = closes[i] - closes[i - 1];
-      if (diff > 0) gains += diff; else losses -= diff;
+      if (diff > 0) avgGain += diff; else avgLoss -= diff;
     }
-    const avgGain = gains / period;
-    const avgLoss = losses / period;
+    avgGain /= period;
+    avgLoss /= period;
+    // Wilder's smoothing for remaining bars
+    for (let i = period + 1; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+      avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+    }
     if (avgLoss === 0) return 100;
-    const rs = avgGain / avgLoss;
-    return +(100 - 100 / (1 + rs)).toFixed(1);
+    return +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(1);
   }
 
   function getZone(cfg, val) {
@@ -2783,37 +2789,35 @@
     const cap = cfg.cap;
     const clamped = Math.min(val, cap);
     const pct = (clamped / cap * 100).toFixed(1);
-    const segs = cfg.zones.map(z => {
-      const zMax = Math.min(z.max, cap);
-      const zPct = (zMax / cap * 100).toFixed(1);
-      return `<div class="mkt-seg" style="width:${zPct}%;background:${z.color}"></div>`;
-    });
-    const labels = cfg.zones.map((z, i) => {
-      const prev = i === 0 ? 0 : Math.min(cfg.zones[i - 1].max, cap);
-      const mid = ((prev + Math.min(z.max, cap)) / 2 / cap * 100).toFixed(1);
-      return `<span style="position:absolute;left:${mid}%;transform:translateX(-50%)">${z.label}</span>`;
+    // Each segment width = its own range / cap (not cumulative)
+    const segs = cfg.zones.map((z, i) => {
+      const prevMax = i === 0 ? 0 : Math.min(cfg.zones[i - 1].max, cap);
+      const segMax  = Math.min(z.max, cap);
+      const w = ((segMax - prevMax) / cap * 100).toFixed(2);
+      return `<div class="mkt-seg" style="width:${w}%;background:${z.color}"></div>`;
     });
     return `
       <div class="mkt-zone-bar">
         <div class="mkt-bar-track">${segs.join("")}</div>
         <div class="mkt-bar-ptr" style="left:${pct}%"></div>
-      </div>
-      <div class="mkt-zone-labels" style="position:relative;height:14px">${labels.join("")}</div>`;
+      </div>`;
   }
 
   function mkIndicatorHTML(key, val, change) {
     const cfg = MKT_ZONES[key];
     const zone = getZone(cfg, val);
     const chgStr = change != null
-      ? `<span style="font-size:12px;color:${change >= 0 ? "#ef4444" : "#22c55e"};font-family:var(--f-mono);margin-left:8px">${change >= 0 ? "+" : ""}${change.toFixed(2)}</span>`
+      ? `<span class="mkt-chg" style="color:${change >= 0 ? "#ef4444" : "#22c55e"}">${change >= 0 ? "+" : ""}${change.toFixed(2)}</span>`
       : "";
     return `
       <div class="mkt-card">
-        <div style="font-size:10.5px;font-weight:700;letter-spacing:0.1em;color:var(--fg-2);text-transform:uppercase">${cfg.label}</div>
-        <div style="display:flex;align-items:baseline;gap:4px">
-          <div class="mkt-card-val" style="color:${zone.color}">${val}</div>${chgStr}
+        <div class="mkt-card-label">${cfg.label}</div>
+        <div class="mkt-card-row">
+          <span class="mkt-card-val" style="color:${zone.color}">${val}</span>${chgStr}
         </div>
-        <div class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}15">${zone.badge} · ${zone.label}</div>
+        <div class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}12">
+          <span class="mkt-badge-dot" style="background:${zone.color}"></span>${zone.label}
+        </div>
         ${mkZoneBarHTML(cfg, val)}
       </div>`;
   }
@@ -2908,7 +2912,7 @@
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN").then(r => r.json()),
         fetch("/api/history?symbols=%5EGSPC&from=" + (() => {
-          const d = new Date(); d.setDate(d.getDate() - 60);
+          const d = new Date(); d.setDate(d.getDate() - 90);
           return d.toISOString().slice(0, 10);
         })()).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
