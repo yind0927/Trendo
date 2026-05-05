@@ -2709,21 +2709,21 @@
     vix: {
       label: "VIX", cap: 60,
       zones: [
-        { max: 12,  color: "#22c55e", label: "金发女孩", badge: "金发女孩" },
-        { max: 20,  color: "#84cc16", label: "稳健牛市", badge: "稳健牛市" },
-        { max: 30,  color: "#eab308", label: "谨慎观望", badge: "谨慎观望" },
-        { max: 50,  color: "#f97316", label: "避险模式", badge: "避险模式" },
-        { max: 9999,color: "#ef4444", label: "恐慌崩盘", badge: "恐慌崩盘" },
+        { max: 12,  color: "#22c55e", label: "🟢 进攻", badge: "🟢 进攻" },
+        { max: 20,  color: "#84cc16", label: "🟡 稳健", badge: "🟡 稳健" },
+        { max: 30,  color: "#eab308", label: "🟠 谨慎", badge: "🟠 谨慎" },
+        { max: 50,  color: "#f97316", label: "🔶 避险", badge: "🔶 避险" },
+        { max: 9999,color: "#ef4444", label: "🔴 恐慌", badge: "🔴 恐慌" },
       ]
     },
     vxn: {
       label: "VXN", cap: 70,
       zones: [
-        { max: 15,  color: "#22c55e", label: "金发女孩", badge: "金发女孩" },
-        { max: 22,  color: "#84cc16", label: "稳健牛市", badge: "稳健牛市" },
-        { max: 32,  color: "#eab308", label: "谨慎观望", badge: "谨慎观望" },
-        { max: 55,  color: "#f97316", label: "避险模式", badge: "避险模式" },
-        { max: 9999,color: "#ef4444", label: "恐慌崩盘", badge: "恐慌崩盘" },
+        { max: 15,  color: "#22c55e", label: "🟢 进攻", badge: "🟢 进攻" },
+        { max: 22,  color: "#84cc16", label: "🟡 稳健", badge: "🟡 稳健" },
+        { max: 32,  color: "#eab308", label: "🟠 谨慎", badge: "🟠 谨慎" },
+        { max: 55,  color: "#f97316", label: "🔶 避险", badge: "🔶 避险" },
+        { max: 9999,color: "#ef4444", label: "🔴 恐慌", badge: "🔴 恐慌" },
       ]
     },
     fg: {
@@ -2750,15 +2750,15 @@
 
   const MKT_PLAYBOOK = [
     { vixMax: 12,  vixMin: 0,  fgMax: 100, fgMin: 0,  rsiMax: 80, rsiMin: 50,
-      regime: "金发女孩", action: "全力进攻。持有成长 + 动量龙头。", color: "#22c55e" },
+      regime: "🟢 进攻", action: "全力进攻。持有成长 + 动量龙头。", color: "#22c55e" },
     { vixMax: 20,  vixMin: 12, fgMax: 75,  fgMin: 25,  rsiMax: 70, rsiMin: 40,
-      regime: "稳健牛市", action: "优质股逢低买入，少量对冲可接受。", color: "#84cc16" },
+      regime: "🟡 稳健", action: "优质股逢低买入，少量对冲可接受。", color: "#84cc16" },
     { vixMax: 30,  vixMin: 20, fgMax: 55,  fgMin: 0,   rsiMax: 60, rsiMin: 30,
-      regime: "谨慎观望", action: "缩减仓位，收紧止损，持有现金。", color: "#eab308" },
+      regime: "🟠 谨慎", action: "缩减仓位，收紧止损，持有现金。", color: "#eab308" },
     { vixMax: 50,  vixMin: 30, fgMax: 35,  fgMin: 0,   rsiMax: 50, rsiMin: 0,
-      regime: "避险模式", action: "对冲或空仓。回避新多单，关注支撑位。", color: "#f97316" },
+      regime: "🔶 避险", action: "对冲或空仓。回避新多单，关注支撑位。", color: "#f97316" },
     { vixMax: 999, vixMin: 50, fgMax: 25,  fgMin: 0,   rsiMax: 35, rsiMin: 0,
-      regime: "恐慌崩盘", action: "持现 / 做空。等待投降式底部信号。", color: "#ef4444" },
+      regime: "🔴 恐慌", action: "持现 / 做空。等待投降式底部信号。", color: "#ef4444" },
   ];
 
   function calcRSI(closes, period = 14) {
