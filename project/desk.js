@@ -2709,56 +2709,56 @@
     vix: {
       label: "VIX", cap: 60,
       zones: [
-        { max: 12,  color: "#22c55e", label: "Calm",        badge: "CALM" },
-        { max: 20,  color: "#84cc16", label: "Normal",      badge: "NORMAL" },
-        { max: 30,  color: "#eab308", label: "Elevated",    badge: "ELEVATED" },
-        { max: 50,  color: "#f97316", label: "Stress",      badge: "STRESS" },
-        { max: 9999,color: "#ef4444", label: "Panic",       badge: "PANIC" },
+        { max: 12,  color: "#22c55e", label: "平静",  badge: "平静" },
+        { max: 20,  color: "#84cc16", label: "正常",  badge: "正常" },
+        { max: 30,  color: "#eab308", label: "偏高",  badge: "偏高" },
+        { max: 50,  color: "#f97316", label: "压力",  badge: "压力" },
+        { max: 9999,color: "#ef4444", label: "恐慌",  badge: "恐慌" },
       ]
     },
     vxn: {
       label: "VXN", cap: 70,
       zones: [
-        { max: 15,  color: "#22c55e", label: "Calm",        badge: "CALM" },
-        { max: 22,  color: "#84cc16", label: "Normal",      badge: "NORMAL" },
-        { max: 32,  color: "#eab308", label: "Elevated",    badge: "ELEVATED" },
-        { max: 55,  color: "#f97316", label: "Stress",      badge: "STRESS" },
-        { max: 9999,color: "#ef4444", label: "Panic",       badge: "PANIC" },
+        { max: 15,  color: "#22c55e", label: "平静",  badge: "平静" },
+        { max: 22,  color: "#84cc16", label: "正常",  badge: "正常" },
+        { max: 32,  color: "#eab308", label: "偏高",  badge: "偏高" },
+        { max: 55,  color: "#f97316", label: "压力",  badge: "压力" },
+        { max: 9999,color: "#ef4444", label: "恐慌",  badge: "恐慌" },
       ]
     },
     fg: {
-      label: "Fear & Greed", cap: 100,
+      label: "贪婪恐惧指数", cap: 100,
       zones: [
-        { max: 24,  color: "#ef4444", label: "Extreme Fear",  badge: "EXT.FEAR" },
-        { max: 44,  color: "#f97316", label: "Fear",          badge: "FEAR" },
-        { max: 55,  color: "#eab308", label: "Neutral",       badge: "NEUTRAL" },
-        { max: 75,  color: "#84cc16", label: "Greed",         badge: "GREED" },
-        { max: 9999,color: "#22c55e", label: "Extreme Greed", badge: "EXT.GREED" },
+        { max: 24,  color: "#ef4444", label: "极度恐惧", badge: "极度恐惧" },
+        { max: 44,  color: "#f97316", label: "恐惧",     badge: "恐惧" },
+        { max: 55,  color: "#eab308", label: "中性",     badge: "中性" },
+        { max: 75,  color: "#84cc16", label: "贪婪",     badge: "贪婪" },
+        { max: 9999,color: "#22c55e", label: "极度贪婪", badge: "极度贪婪" },
       ]
     },
     rsi: {
-      label: "SPX RSI(14)", cap: 100,
+      label: "标普500 RSI(14)", cap: 100,
       zones: [
-        { max: 30,  color: "#ef4444", label: "Oversold",     badge: "OVERSOLD" },
-        { max: 50,  color: "#f97316", label: "Weak",         badge: "WEAK" },
-        { max: 70,  color: "#84cc16", label: "Healthy",      badge: "HEALTHY" },
-        { max: 80,  color: "#eab308", label: "Overbought",   badge: "OVERBOUGHT" },
-        { max: 9999,color: "#ef4444", label: "Extreme OB",   badge: "EXT.OB" },
+        { max: 30,  color: "#ef4444", label: "超卖",     badge: "超卖" },
+        { max: 50,  color: "#f97316", label: "弱势",     badge: "弱势" },
+        { max: 70,  color: "#84cc16", label: "健康",     badge: "健康" },
+        { max: 80,  color: "#eab308", label: "超买",     badge: "超买" },
+        { max: 9999,color: "#ef4444", label: "极度超买", badge: "极度超买" },
       ]
     }
   };
 
   const MKT_PLAYBOOK = [
     { vixMax: 12,  vixMin: 0,  fgMax: 100, fgMin: 0,  rsiMax: 80, rsiMin: 50,
-      regime: "Goldilocks", action: "Full risk-on. Hold growth & momentum leaders.", color: "#22c55e" },
+      regime: "金发女孩", action: "全力进攻。持有成长 + 动量龙头。", color: "#22c55e" },
     { vixMax: 20,  vixMin: 12, fgMax: 75,  fgMin: 25,  rsiMax: 70, rsiMin: 40,
-      regime: "Steady Bull", action: "Buy dips in quality names. Slight hedge OK.", color: "#84cc16" },
+      regime: "稳健牛市", action: "优质股逢低买入，少量对冲可接受。", color: "#84cc16" },
     { vixMax: 30,  vixMin: 20, fgMax: 55,  fgMin: 0,   rsiMax: 60, rsiMin: 30,
-      regime: "Caution", action: "Reduce size. Tighten stops. Hold cash.", color: "#eab308" },
+      regime: "谨慎观望", action: "缩减仓位，收紧止损，持有现金。", color: "#eab308" },
     { vixMax: 50,  vixMin: 30, fgMax: 35,  fgMin: 0,   rsiMax: 50, rsiMin: 0,
-      regime: "Risk-Off", action: "Hedge or flat. Avoid new longs. Watch support.", color: "#f97316" },
+      regime: "避险模式", action: "对冲或空仓。回避新多单，关注支撑位。", color: "#f97316" },
     { vixMax: 999, vixMin: 50, fgMax: 25,  fgMin: 0,   rsiMax: 35, rsiMin: 0,
-      regime: "Panic / Crash", action: "Cash / short. Wait for capitulation signal.", color: "#ef4444" },
+      regime: "恐慌崩盘", action: "持现 / 做空。等待投降式底部信号。", color: "#ef4444" },
   ];
 
   function calcRSI(closes, period = 14) {
@@ -2835,10 +2835,10 @@
     }).join("");
     return `
       <div class="mkt-playbook">
-        <div class="mkt-playbook-title">Market Regime · Playbook</div>
+        <div class="mkt-playbook-title">市场状态 · 操作手册</div>
         <table class="mkt-pb-table">
           <thead><tr>
-            <th>REGIME</th><th>VIX RANGE</th><th>ACTION</th>
+            <th>状态</th><th>VIX 区间</th><th>操作建议</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -2848,31 +2848,31 @@
   function mkStrategyHTML(vix, fg, rsi) {
     let strat, color, sub;
     if (vix < 15 && fg > 60 && rsi > 55) {
-      strat = "Risk-On"; color = "#22c55e"; sub = "Momentum & growth";
+      strat = "进攻"; color = "#22c55e"; sub = "动量 + 成长股";
     } else if (vix < 25 && fg > 40 && rsi > 45) {
-      strat = "Selective"; color = "#84cc16"; sub = "Quality + dip buying";
+      strat = "精选"; color = "#84cc16"; sub = "优质股 + 逢低买入";
     } else if (vix < 35 || (fg < 45 && rsi < 55)) {
-      strat = "Cautious"; color = "#eab308"; sub = "Reduce / hedge / cash";
+      strat = "谨慎"; color = "#eab308"; sub = "减仓 / 对冲 / 持现";
     } else {
-      strat = "Defensive"; color = "#ef4444"; sub = "Cash / short / avoid";
+      strat = "防御"; color = "#ef4444"; sub = "持现 / 做空 / 回避";
     }
-    const posSize = vix < 15 ? "Full (100%)" : vix < 25 ? "75%" : vix < 35 ? "50%" : "25% or less";
-    const stops = vix < 15 ? "Wide (–8%)" : vix < 25 ? "Normal (–6%)" : vix < 35 ? "Tight (–4%)" : "Very tight (–3%)";
+    const posSize = vix < 15 ? "满仓 (100%)" : vix < 25 ? "七成仓 (75%)" : vix < 35 ? "半仓 (50%)" : "轻仓 (≤25%)";
+    const stops = vix < 15 ? "宽松 (−8%)" : vix < 25 ? "正常 (−6%)" : vix < 35 ? "收紧 (−4%)" : "极紧 (−3%)";
     return `
       <div class="mkt-strategy">
-        <div class="mkt-section-label">Today's Strategy</div>
+        <div class="mkt-section-label">今日策略</div>
         <div class="mkt-strat-grid">
           <div class="mkt-strat-card" style="border-color:${color}40;background:${color}10">
-            <div class="mkt-strat-sub">STANCE</div>
+            <div class="mkt-strat-sub">操作方向</div>
             <div class="mkt-strat-main" style="color:${color}">${strat}</div>
             <div class="mkt-strat-sub" style="margin-top:4px">${sub}</div>
           </div>
           <div class="mkt-strat-card" style="border-color:var(--line)">
-            <div class="mkt-strat-sub">POSITION SIZE</div>
+            <div class="mkt-strat-sub">仓位建议</div>
             <div class="mkt-strat-main">${posSize}</div>
           </div>
           <div class="mkt-strat-card" style="border-color:var(--line)">
-            <div class="mkt-strat-sub">STOP WIDTH</div>
+            <div class="mkt-strat-sub">止损幅度</div>
             <div class="mkt-strat-main">${stops}</div>
           </div>
         </div>
