@@ -1720,7 +1720,7 @@
   // ============ PAGE SWITCHING ============
   function switchPage(page) {
     currentPage = page;
-    const VIEWS = { desk: "desk-view", journal: "journal-view", sim: "sim-view", analytics: "analytics-view", watchlist: "watchlist-view" };
+    const VIEWS = { desk: "desk-view", journal: "journal-view", sim: "sim-view", analytics: "analytics-view", watchlist: "watchlist-view", market: "market-view" };
     Object.entries(VIEWS).forEach(([p, id]) => {
       const el = document.getElementById(id);
       if (el) el.style.display = p === page ? "" : "none";
@@ -1733,6 +1733,7 @@
     if (page === "sim")       renderSim();
     if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
     if (page === "watchlist") renderWatchlist();
+    if (page === "market")    fetchMarketData();
   }
 
   // ============ JOURNAL ============
@@ -2701,6 +2702,250 @@
       if (toggleBtn) toggleBtn.textContent = "+ 添加标的";
       renderWatchlist();
     });
+  }
+
+  // ============ MARKET PAGE ============
+  const MKT_ZONES = {
+    vix: {
+      label: "VIX", cap: 60,
+      zones: [
+        { max: 12,  color: "#22c55e", label: "Calm",        badge: "CALM" },
+        { max: 20,  color: "#84cc16", label: "Normal",      badge: "NORMAL" },
+        { max: 30,  color: "#eab308", label: "Elevated",    badge: "ELEVATED" },
+        { max: 50,  color: "#f97316", label: "Stress",      badge: "STRESS" },
+        { max: 9999,color: "#ef4444", label: "Panic",       badge: "PANIC" },
+      ]
+    },
+    vxn: {
+      label: "VXN", cap: 70,
+      zones: [
+        { max: 15,  color: "#22c55e", label: "Calm",        badge: "CALM" },
+        { max: 22,  color: "#84cc16", label: "Normal",      badge: "NORMAL" },
+        { max: 32,  color: "#eab308", label: "Elevated",    badge: "ELEVATED" },
+        { max: 55,  color: "#f97316", label: "Stress",      badge: "STRESS" },
+        { max: 9999,color: "#ef4444", label: "Panic",       badge: "PANIC" },
+      ]
+    },
+    fg: {
+      label: "Fear & Greed", cap: 100,
+      zones: [
+        { max: 24,  color: "#ef4444", label: "Extreme Fear",  badge: "EXT.FEAR" },
+        { max: 44,  color: "#f97316", label: "Fear",          badge: "FEAR" },
+        { max: 55,  color: "#eab308", label: "Neutral",       badge: "NEUTRAL" },
+        { max: 75,  color: "#84cc16", label: "Greed",         badge: "GREED" },
+        { max: 9999,color: "#22c55e", label: "Extreme Greed", badge: "EXT.GREED" },
+      ]
+    },
+    rsi: {
+      label: "SPX RSI(14)", cap: 100,
+      zones: [
+        { max: 30,  color: "#ef4444", label: "Oversold",     badge: "OVERSOLD" },
+        { max: 50,  color: "#f97316", label: "Weak",         badge: "WEAK" },
+        { max: 70,  color: "#84cc16", label: "Healthy",      badge: "HEALTHY" },
+        { max: 80,  color: "#eab308", label: "Overbought",   badge: "OVERBOUGHT" },
+        { max: 9999,color: "#ef4444", label: "Extreme OB",   badge: "EXT.OB" },
+      ]
+    }
+  };
+
+  const MKT_PLAYBOOK = [
+    { vixMax: 12,  vixMin: 0,  fgMax: 100, fgMin: 0,  rsiMax: 80, rsiMin: 50,
+      regime: "Goldilocks", action: "Full risk-on. Hold growth & momentum leaders.", color: "#22c55e" },
+    { vixMax: 20,  vixMin: 12, fgMax: 75,  fgMin: 25,  rsiMax: 70, rsiMin: 40,
+      regime: "Steady Bull", action: "Buy dips in quality names. Slight hedge OK.", color: "#84cc16" },
+    { vixMax: 30,  vixMin: 20, fgMax: 55,  fgMin: 0,   rsiMax: 60, rsiMin: 30,
+      regime: "Caution", action: "Reduce size. Tighten stops. Hold cash.", color: "#eab308" },
+    { vixMax: 50,  vixMin: 30, fgMax: 35,  fgMin: 0,   rsiMax: 50, rsiMin: 0,
+      regime: "Risk-Off", action: "Hedge or flat. Avoid new longs. Watch support.", color: "#f97316" },
+    { vixMax: 999, vixMin: 50, fgMax: 25,  fgMin: 0,   rsiMax: 35, rsiMin: 0,
+      regime: "Panic / Crash", action: "Cash / short. Wait for capitulation signal.", color: "#ef4444" },
+  ];
+
+  function calcRSI(closes, period = 14) {
+    if (closes.length < period + 1) return null;
+    let gains = 0, losses = 0;
+    for (let i = closes.length - period; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff > 0) gains += diff; else losses -= diff;
+    }
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    if (avgLoss === 0) return 100;
+    const rs = avgGain / avgLoss;
+    return +(100 - 100 / (1 + rs)).toFixed(1);
+  }
+
+  function getZone(cfg, val) {
+    return cfg.zones.find(z => val <= z.max) || cfg.zones[cfg.zones.length - 1];
+  }
+
+  function mkZoneBarHTML(cfg, val) {
+    const cap = cfg.cap;
+    const clamped = Math.min(val, cap);
+    const pct = (clamped / cap * 100).toFixed(1);
+    const segs = cfg.zones.map(z => {
+      const zMax = Math.min(z.max, cap);
+      const zPct = (zMax / cap * 100).toFixed(1);
+      return `<div class="mkt-seg" style="width:${zPct}%;background:${z.color}"></div>`;
+    });
+    const labels = cfg.zones.map((z, i) => {
+      const prev = i === 0 ? 0 : Math.min(cfg.zones[i - 1].max, cap);
+      const mid = ((prev + Math.min(z.max, cap)) / 2 / cap * 100).toFixed(1);
+      return `<span style="position:absolute;left:${mid}%;transform:translateX(-50%)">${z.label}</span>`;
+    });
+    return `
+      <div class="mkt-zone-bar">
+        <div class="mkt-bar-track">${segs.join("")}</div>
+        <div class="mkt-bar-ptr" style="left:${pct}%"></div>
+      </div>
+      <div class="mkt-zone-labels" style="position:relative;height:14px">${labels.join("")}</div>`;
+  }
+
+  function mkIndicatorHTML(key, val, change) {
+    const cfg = MKT_ZONES[key];
+    const zone = getZone(cfg, val);
+    const chgStr = change != null
+      ? `<span style="font-size:12px;color:${change >= 0 ? "#ef4444" : "#22c55e"};font-family:var(--f-mono);margin-left:8px">${change >= 0 ? "+" : ""}${change.toFixed(2)}</span>`
+      : "";
+    return `
+      <div class="mkt-card">
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:0.1em;color:var(--fg-2);text-transform:uppercase">${cfg.label}</div>
+        <div style="display:flex;align-items:baseline;gap:4px">
+          <div class="mkt-card-val" style="color:${zone.color}">${val}</div>${chgStr}
+        </div>
+        <div class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}15">${zone.badge} · ${zone.label}</div>
+        ${mkZoneBarHTML(cfg, val)}
+      </div>`;
+  }
+
+  function mkPlaybookHTML(vix, fg, rsi) {
+    const rows = MKT_PLAYBOOK.map((row, i) => {
+      const active = vix >= row.vixMin && vix < row.vixMax &&
+                     fg  >= row.fgMin  && fg  <= row.fgMax &&
+                     rsi >= row.rsiMin && rsi <= row.rsiMax;
+      return `<tr class="${active ? "mkt-pb-active" : ""}">
+        <td style="color:${row.color};font-weight:700">${row.regime}${active ? `<span class="mkt-now">NOW</span>` : ""}</td>
+        <td>VIX ${row.vixMin}–${row.vixMax < 999 ? row.vixMax : "∞"}</td>
+        <td>${row.action}</td>
+      </tr>`;
+    }).join("");
+    return `
+      <div class="mkt-playbook">
+        <div class="mkt-playbook-title">Market Regime · Playbook</div>
+        <table class="mkt-pb-table">
+          <thead><tr>
+            <th>REGIME</th><th>VIX RANGE</th><th>ACTION</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function mkStrategyHTML(vix, fg, rsi) {
+    let strat, color, sub;
+    if (vix < 15 && fg > 60 && rsi > 55) {
+      strat = "Risk-On"; color = "#22c55e"; sub = "Momentum & growth";
+    } else if (vix < 25 && fg > 40 && rsi > 45) {
+      strat = "Selective"; color = "#84cc16"; sub = "Quality + dip buying";
+    } else if (vix < 35 || (fg < 45 && rsi < 55)) {
+      strat = "Cautious"; color = "#eab308"; sub = "Reduce / hedge / cash";
+    } else {
+      strat = "Defensive"; color = "#ef4444"; sub = "Cash / short / avoid";
+    }
+    const posSize = vix < 15 ? "Full (100%)" : vix < 25 ? "75%" : vix < 35 ? "50%" : "25% or less";
+    const stops = vix < 15 ? "Wide (–8%)" : vix < 25 ? "Normal (–6%)" : vix < 35 ? "Tight (–4%)" : "Very tight (–3%)";
+    return `
+      <div class="mkt-strategy">
+        <div class="mkt-section-label">Today's Strategy</div>
+        <div class="mkt-strat-grid">
+          <div class="mkt-strat-card" style="border-color:${color}40;background:${color}10">
+            <div class="mkt-strat-sub">STANCE</div>
+            <div class="mkt-strat-main" style="color:${color}">${strat}</div>
+            <div class="mkt-strat-sub" style="margin-top:4px">${sub}</div>
+          </div>
+          <div class="mkt-strat-card" style="border-color:var(--line)">
+            <div class="mkt-strat-sub">POSITION SIZE</div>
+            <div class="mkt-strat-main">${posSize}</div>
+          </div>
+          <div class="mkt-strat-card" style="border-color:var(--line)">
+            <div class="mkt-strat-sub">STOP WIDTH</div>
+            <div class="mkt-strat-main">${stops}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderMarket(data) {
+    const el = $("#market-content");
+    if (!el) return;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg } = data;
+    const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    el.innerHTML = `
+      <div class="mkt-header">
+        <div class="mkt-title">
+          <span class="mkt-diamond">◆</span> Market Pulse
+          <span class="mkt-en">市场温度计</span>
+        </div>
+        <div class="mkt-date">${today}</div>
+      </div>
+      <div class="mkt-row">
+        ${mkIndicatorHTML("vix", vix, vixChg)}
+        ${mkIndicatorHTML("vxn", vxn, vxnChg)}
+      </div>
+      <div class="mkt-row">
+        ${mkIndicatorHTML("fg", fg, null)}
+        ${mkIndicatorHTML("rsi", rsi, null)}
+      </div>
+      ${mkPlaybookHTML(vix, fg, rsi)}
+      ${mkStrategyHTML(vix, fg, rsi)}`;
+  }
+
+  async function fetchMarketData() {
+    const el = $("#market-content");
+    if (!el) return;
+    el.innerHTML = `<div class="mkt-loading"><span>Loading market data…</span></div>`;
+    try {
+      const [quoteRes, histRes, fgRes] = await Promise.allSettled([
+        fetch("/api/quote?stocks=%5EVIX,%5EVXN").then(r => r.json()),
+        fetch("/api/history?symbols=%5EGSPC&from=" + (() => {
+          const d = new Date(); d.setDate(d.getDate() - 60);
+          return d.toISOString().slice(0, 10);
+        })()).then(r => r.json()),
+        fetch("/api/feargreed").then(r => r.json()),
+      ]);
+
+      // VIX / VXN
+      let vix = 0, vxn = 0, vixChg = null, vxnChg = null;
+      if (quoteRes.status === "fulfilled" && quoteRes.value?.results) {
+        const q = quoteRes.value.results;
+        if (q["^VIX"]) { vix = +q["^VIX"].last.toFixed(2); vixChg = q["^VIX"].changePct != null ? +q["^VIX"].changePct.toFixed(2) : null; }
+        if (q["^VXN"]) { vxn = +q["^VXN"].last.toFixed(2); vxnChg = q["^VXN"].changePct != null ? +q["^VXN"].changePct.toFixed(2) : null; }
+      }
+
+      // RSI from SPX history
+      let rsi = 0;
+      if (histRes.status === "fulfilled" && histRes.value?.results?.["^GSPC"]) {
+        const raw = histRes.value.results["^GSPC"];
+        const closes = Object.keys(raw).sort().map(k => raw[k]);
+        const r = calcRSI(closes);
+        if (r != null) rsi = r;
+      }
+
+      // Fear & Greed
+      let fg = 50;
+      if (fgRes.status === "fulfilled" && fgRes.value?.score != null) {
+        fg = fgRes.value.score;
+      }
+
+      if (vix === 0 && vxn === 0 && rsi === 0) {
+        el.innerHTML = `<div class="mkt-loading">无法加载数据，请稍后再试</div>`;
+        return;
+      }
+
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg });
+    } catch (e) {
+      el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
+    }
   }
 
   // ============ SYNC PANEL ============

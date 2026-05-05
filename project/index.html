@@ -1779,6 +1779,53 @@
 
   @media (min-width: 769px) { .mobile-fab { display: none !important; } }
 
+  /* ============ MARKET PAGE ============ */
+  #market-view { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
+  .mkt-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
+  .mkt-title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+  .mkt-diamond { color: var(--accent); }
+  .mkt-en { font-size: 12px; font-weight: 500; color: var(--fg-2); letter-spacing: 0.08em; }
+  .mkt-date { font-family: var(--f-mono); font-size: 12px; color: var(--fg-3); }
+  .mkt-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .mkt-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .mkt-card-hdr { display: flex; flex-direction: column; gap: 2px; }
+  .mkt-card-key { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+  .mkt-card-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .mkt-card-val { font-size: 36px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.03em; line-height: 1; }
+  .mkt-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; border: 1px solid; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; width: fit-content; }
+  .mkt-zone-bar { position: relative; height: 22px; margin-top: 4px; }
+  .mkt-bar-track { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-top: 7px; }
+  .mkt-seg { height: 100%; flex-shrink: 0; }
+  .mkt-bar-ptr { position: absolute; top: 0; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid var(--fg-0); }
+  .mkt-zone-labels { display: flex; justify-content: space-between; margin-top: 2px; }
+  .mkt-zone-labels span { font-family: var(--f-mono); font-size: 9px; color: var(--fg-3); }
+  .mkt-playbook { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .mkt-playbook-title { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--fg-2); text-transform: uppercase; margin-bottom: 10px; }
+  .mkt-pb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .mkt-pb-table th { font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em; color: var(--fg-3); text-align: left; padding: 0 6px 6px 6px; border-bottom: 1px solid var(--line); }
+  .mkt-pb-table td { padding: 5px 6px; color: var(--fg-1); }
+  .mkt-pb-table tr + tr td { border-top: 1px solid color-mix(in oklch,var(--line) 50%,transparent); }
+  .mkt-pb-active td { background: var(--accent-dim); font-weight: 600; }
+  .mkt-pb-active td:first-child { border-radius: 4px 0 0 4px; }
+  .mkt-pb-active td:last-child { border-radius: 0 4px 4px 0; }
+  .mkt-now { font-size: 9px; font-weight: 700; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; margin-left: 5px; letter-spacing: 0.05em; vertical-align: middle; }
+  .mkt-strategy { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 4px; }
+  .mkt-section-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; }
+  .mkt-strat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .mkt-strat-card { border: 1px solid; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .mkt-strat-main { font-size: 15px; font-weight: 700; }
+  .mkt-strat-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .mkt-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px 20px; color: var(--fg-3); font-size: 14px; }
+  .mkt-refresh-btn { background: none; border: 1px solid var(--line); border-radius: 7px; color: var(--fg-2); font-size: 12px; padding: 5px 12px; cursor: pointer; margin-left: auto; display: block; margin-bottom: 12px; }
+  .mkt-refresh-btn:hover { color: var(--fg-0); border-color: var(--fg-2); }
+
+  @media (max-width: 768px) {
+    #market-view { padding: 12px 12px 86px; }
+    .mkt-row { grid-template-columns: 1fr; }
+    .mkt-card-val { font-size: 28px; }
+    .mkt-strat-grid { grid-template-columns: 1fr; gap: 8px; }
+  }
+
 </style>
 </head>
 <body data-density="medium" data-font="sans" data-theme="dark">
@@ -1868,6 +1915,7 @@
     <a class="navlink" href="#" data-page="sim" data-icon="🧪">Simulation</a>
     <a class="navlink" href="#" data-page="analytics" data-icon="📈">Analytics</a>
     <a class="navlink" href="#" data-page="watchlist" data-icon="📋">Watchlist</a>
+    <a class="navlink" href="#" data-page="market" data-icon="🌡️">Market</a>
   </nav>
 
   <div class="search" role="search">
@@ -2240,6 +2288,11 @@
   </div>
   <div id="watchlist-content" class="watchlist-content" style="max-width:960px;margin:0 auto;padding:16px 20px 60px"></div>
 </div>
+<!-- ============ MARKET VIEW ============ -->
+<div id="market-view" style="display:none">
+  <div id="market-content"></div>
+</div>
+
 <!-- Mobile FAB -->
 <button class="mobile-fab" id="mobile-fab" aria-label="新建持仓">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
