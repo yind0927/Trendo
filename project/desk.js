@@ -2831,11 +2831,9 @@
 
   function mkPlaybookHTML(vix, fg, rsi) {
     const rows = MKT_PLAYBOOK.map((row, i) => {
-      const active = vix >= row.vixMin && vix < row.vixMax &&
-                     fg  >= row.fgMin  && fg  <= row.fgMax &&
-                     rsi >= row.rsiMin && rsi <= row.rsiMax;
+      const active = vix >= row.vixMin && vix < row.vixMax;
       return `<tr class="${active ? "mkt-pb-active" : ""}">
-        <td style="color:${row.color};font-weight:700">${row.regime}${active ? `<span class="mkt-now">NOW</span>` : ""}</td>
+        <td style="color:${row.color};font-weight:700">${row.regime}${active ? `<span class="mkt-now">当下</span>` : ""}</td>
         <td>VIX ${row.vixMin}–${row.vixMax < 999 ? row.vixMax : "∞"}</td>
         <td>${row.action}</td>
       </tr>`;
