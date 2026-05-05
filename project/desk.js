@@ -2886,11 +2886,26 @@
       </div>`;
   }
 
+  function getCurrentRegime(vix, fg, rsi) {
+    return MKT_PLAYBOOK.find(row =>
+      vix >= row.vixMin && vix < row.vixMax &&
+      fg  >= row.fgMin  && fg  <= row.fgMax &&
+      rsi >= row.rsiMin && rsi <= row.rsiMax
+    ) || null;
+  }
+
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
     const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs } = data;
-    const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
+    const regime = getCurrentRegime(vix, fg, rsi);
+    const regimeBanner = regime ? `
+      <div class="mkt-regime-bar" style="border-color:${regime.color}40;background:${regime.color}12">
+        <span class="mkt-regime-label">当前市场状态</span>
+        <span class="mkt-regime-name" style="color:${regime.color}">${regime.regime}</span>
+        <span class="mkt-regime-action">${regime.action}</span>
+      </div>` : "";
     el.innerHTML = `
       <div class="mkt-header">
         <div class="mkt-title">
@@ -2899,6 +2914,7 @@
         </div>
         <div class="mkt-date">${today}</div>
       </div>
+      ${regimeBanner}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs)}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs)}
@@ -2930,14 +2946,16 @@
       if (quoteRes.status === "fulfilled" && quoteRes.value?.results) {
         const q = quoteRes.value.results;
         if (q["^VIX"]) {
-          vix = +q["^VIX"].last.toFixed(2);
-          vixChg = q["^VIX"].changePct  != null ? +q["^VIX"].changePct.toFixed(2)  : null;
-          vixAbs = q["^VIX"].prevClose  != null ? +(q["^VIX"].last - q["^VIX"].prevClose).toFixed(2) : null;
+          const last = q["^VIX"].last, pc = q["^VIX"].prevClose;
+          vix    = +last.toFixed(2);
+          vixAbs = pc != null ? +(last - pc).toFixed(2) : null;
+          vixChg = pc != null ? +((last - pc) / pc * 100).toFixed(2) : (q["^VIX"].changePct != null ? +q["^VIX"].changePct.toFixed(2) : null);
         }
         if (q["^VXN"]) {
-          vxn = +q["^VXN"].last.toFixed(2);
-          vxnChg = q["^VXN"].changePct  != null ? +q["^VXN"].changePct.toFixed(2)  : null;
-          vxnAbs = q["^VXN"].prevClose  != null ? +(q["^VXN"].last - q["^VXN"].prevClose).toFixed(2) : null;
+          const last = q["^VXN"].last, pc = q["^VXN"].prevClose;
+          vxn    = +last.toFixed(2);
+          vxnAbs = pc != null ? +(last - pc).toFixed(2) : null;
+          vxnChg = pc != null ? +((last - pc) / pc * 100).toFixed(2) : (q["^VXN"].changePct != null ? +q["^VXN"].changePct.toFixed(2) : null);
         }
       }
 
