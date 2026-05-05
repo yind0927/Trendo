@@ -2709,21 +2709,21 @@
     vix: {
       label: "VIX", cap: 60,
       zones: [
-        { max: 12,  color: "#22c55e", label: "平静",  badge: "平静" },
-        { max: 20,  color: "#84cc16", label: "正常",  badge: "正常" },
-        { max: 30,  color: "#eab308", label: "偏高",  badge: "偏高" },
-        { max: 50,  color: "#f97316", label: "压力",  badge: "压力" },
-        { max: 9999,color: "#ef4444", label: "恐慌",  badge: "恐慌" },
+        { max: 12,  color: "#22c55e", label: "金发女孩", badge: "金发女孩" },
+        { max: 20,  color: "#84cc16", label: "稳健牛市", badge: "稳健牛市" },
+        { max: 30,  color: "#eab308", label: "谨慎观望", badge: "谨慎观望" },
+        { max: 50,  color: "#f97316", label: "避险模式", badge: "避险模式" },
+        { max: 9999,color: "#ef4444", label: "恐慌崩盘", badge: "恐慌崩盘" },
       ]
     },
     vxn: {
       label: "VXN", cap: 70,
       zones: [
-        { max: 15,  color: "#22c55e", label: "平静",  badge: "平静" },
-        { max: 22,  color: "#84cc16", label: "正常",  badge: "正常" },
-        { max: 32,  color: "#eab308", label: "偏高",  badge: "偏高" },
-        { max: 55,  color: "#f97316", label: "压力",  badge: "压力" },
-        { max: 9999,color: "#ef4444", label: "恐慌",  badge: "恐慌" },
+        { max: 15,  color: "#22c55e", label: "金发女孩", badge: "金发女孩" },
+        { max: 22,  color: "#84cc16", label: "稳健牛市", badge: "稳健牛市" },
+        { max: 32,  color: "#eab308", label: "谨慎观望", badge: "谨慎观望" },
+        { max: 55,  color: "#f97316", label: "避险模式", badge: "避险模式" },
+        { max: 9999,color: "#ef4444", label: "恐慌崩盘", badge: "恐慌崩盘" },
       ]
     },
     fg: {
