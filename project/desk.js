@@ -2803,18 +2803,25 @@
       </div>`;
   }
 
-  function mkIndicatorHTML(key, val, change) {
+  function mkIndicatorHTML(key, val, pctChg, absChg) {
     const cfg = MKT_ZONES[key];
     const zone = getZone(cfg, val);
-    const chgStr = change != null
-      ? `<span class="mkt-chg" style="color:${change >= 0 ? "#ef4444" : "#22c55e"}">${change >= 0 ? "+" : ""}${change.toFixed(2)}</span>`
-      : "";
+    let chgStr = "";
+    if (pctChg != null || absChg != null) {
+      const up   = (pctChg ?? absChg) >= 0;
+      const clr  = up ? "#ef4444" : "#22c55e";
+      const arr  = up ? "▲" : "▼";
+      const abs  = absChg != null ? `${up ? "+" : ""}${absChg.toFixed(2)}` : "";
+      const pct  = pctChg != null ? `(${up ? "+" : ""}${pctChg.toFixed(2)}%)` : "";
+      chgStr = `<div class="mkt-chg-row" style="color:${clr}">${arr} ${abs}${abs && pct ? " " : ""}${pct}</div>`;
+    }
     return `
       <div class="mkt-card">
         <div class="mkt-card-label">${cfg.label}</div>
         <div class="mkt-card-row">
-          <span class="mkt-card-val" style="color:${zone.color}">${val}</span>${chgStr}
+          <span class="mkt-card-val" style="color:${zone.color}">${val}</span>
         </div>
+        ${chgStr}
         <div class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}12">
           <span class="mkt-badge-dot" style="background:${zone.color}"></span>${zone.label}
         </div>
@@ -2882,7 +2889,7 @@
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs } = data;
     const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
     el.innerHTML = `
       <div class="mkt-header">
@@ -2893,8 +2900,8 @@
         <div class="mkt-date">${today}</div>
       </div>
       <div class="mkt-row">
-        ${mkIndicatorHTML("vix", vix, vixChg)}
-        ${mkIndicatorHTML("vxn", vxn, vxnChg)}
+        ${mkIndicatorHTML("vix", vix, vixChg, vixAbs)}
+        ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs)}
       </div>
       <div class="mkt-row">
         ${mkIndicatorHTML("fg", fg, null)}
@@ -2919,11 +2926,19 @@
       ]);
 
       // VIX / VXN
-      let vix = 0, vxn = 0, vixChg = null, vxnChg = null;
+      let vix = 0, vxn = 0, vixChg = null, vxnChg = null, vixAbs = null, vxnAbs = null;
       if (quoteRes.status === "fulfilled" && quoteRes.value?.results) {
         const q = quoteRes.value.results;
-        if (q["^VIX"]) { vix = +q["^VIX"].last.toFixed(2); vixChg = q["^VIX"].changePct != null ? +q["^VIX"].changePct.toFixed(2) : null; }
-        if (q["^VXN"]) { vxn = +q["^VXN"].last.toFixed(2); vxnChg = q["^VXN"].changePct != null ? +q["^VXN"].changePct.toFixed(2) : null; }
+        if (q["^VIX"]) {
+          vix = +q["^VIX"].last.toFixed(2);
+          vixChg = q["^VIX"].changePct  != null ? +q["^VIX"].changePct.toFixed(2)  : null;
+          vixAbs = q["^VIX"].prevClose  != null ? +(q["^VIX"].last - q["^VIX"].prevClose).toFixed(2) : null;
+        }
+        if (q["^VXN"]) {
+          vxn = +q["^VXN"].last.toFixed(2);
+          vxnChg = q["^VXN"].changePct  != null ? +q["^VXN"].changePct.toFixed(2)  : null;
+          vxnAbs = q["^VXN"].prevClose  != null ? +(q["^VXN"].last - q["^VXN"].prevClose).toFixed(2) : null;
+        }
       }
 
       // RSI from SPX history
@@ -2946,7 +2961,7 @@
         return;
       }
 
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs });
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
     }
