@@ -8,6 +8,7 @@ export default async function handler(req, res) {
 
   const fmpKey     = process.env.FMP_API_KEY;
   const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  const log = { hasFmpKey: !!fmpKey };
 
   // ── 1. Financial Modeling Prep — free tier includes ETF holdings ────────
   if (fmpKey) {
@@ -16,19 +17,22 @@ export default async function handler(req, res) {
         `https://financialmodelingprep.com/api/v3/etf-holder/${encodeURIComponent(sym)}?apikey=${fmpKey}`,
         { signal: AbortSignal.timeout(6000) }
       );
-      if (r.ok) {
-        const list = await r.json();
-        if (Array.isArray(list) && list.length) {
-          const holdings = list.slice(0, 20).map(h => ({
-            sym:    h.asset  || "",
-            name:   h.name   || h.asset || "",
-            weight: h.weightPercentage != null ? +Number(h.weightPercentage).toFixed(2) : null,
-          }));
-          res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
-          return res.json({ sym, holdings });
-        }
+      log.fmpStatus = r.status;
+      const body = await r.json();
+      log.fmpBodySample = JSON.stringify(body).slice(0, 200);
+      const list = Array.isArray(body) ? body : body?.holdings || body?.etfHolders;
+      log.fmpCount = list?.length ?? 0;
+      if (r.ok && list?.length) {
+        const holdings = list.slice(0, 20).map(h => ({
+          sym:    h.asset  || h.symbol || "",
+          name:   h.name   || h.asset  || h.symbol || "",
+          weight: h.weightPercentage != null ? +Number(h.weightPercentage).toFixed(2)
+                : h.weight           != null ? +Number(h.weight).toFixed(2) : null,
+        }));
+        res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
+        return res.json({ sym, holdings });
       }
-    } catch (_) {}
+    } catch (e) { log.fmpError = e.message; }
   }
 
   // ── 2. Yahoo Finance quoteSummary (fallback, may fail on cloud IPs) ─────
@@ -81,5 +85,5 @@ export default async function handler(req, res) {
     }
   } catch (_) {}
 
-  return res.status(502).json({ error: "no holdings data" });
+  return res.status(502).json({ error: "no holdings data", log });
 }
