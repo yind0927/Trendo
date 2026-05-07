@@ -1321,6 +1321,11 @@
     input.value = pos.last;
     $("#close-pos-sym-label").textContent = sym;
     updateClosePnlPreview(pos, pos.last);
+    const today = new Date().toISOString().slice(0, 10);
+    const dateInput = $("#close-pos-date-input");
+    dateInput.value = today;
+    dateInput.min = pos.entry?.slice(0, 10) || "";
+    dateInput.max = today;
     openModal("close-pos-modal");
     setTimeout(() => { input.select(); }, 80);
   }
@@ -1358,14 +1363,15 @@
       if (!pendingCloseSym) return;
       const val = parseFloat(input.value);
       if (isNaN(val) || val <= 0) { input.focus(); return; }
-      closePosition(pendingCloseSym, val);
+      const dateVal = $("#close-pos-date-input").value || new Date().toISOString().slice(0, 10);
+      closePosition(pendingCloseSym, val, dateVal);
       pendingCloseSym = null;
       closeModal("close-pos-modal");
     });
   }
 
   // closePosition — archives to closed array (real or sim based on ctx)
-  function closePosition(sym, closePrice) {
+  function closePosition(sym, closePrice, closeDate) {
     const isSim = pendingCloseCtx === "sim";
     const holdings = isSim ? SIM_HOLDINGS : HOLDINGS;
     const closed   = isSim ? SIM_CLOSED   : CLOSED_POSITIONS;
@@ -1373,7 +1379,7 @@
     if (!pos) return;
 
     const cp = (closePrice != null && closePrice > 0) ? closePrice : pos.last;
-    pos.closedAt = new Date().toISOString().slice(0, 10);
+    pos.closedAt = closeDate || new Date().toISOString().slice(0, 10);
     pos.closePrice = cp;
     pos.pnlDollar = (cp - pos.cost) * pos.qty;
     pos.pnlPct = pos.cost > 0 ? pos.pnlDollar / (pos.cost * pos.qty) : 0;
