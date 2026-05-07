@@ -1834,6 +1834,57 @@
     .mkt-pb-table td:last-child { font-size: 11px; }
   }
 
+  /* ============ SECTOR ROTATION ============ */
+  .sect-section { margin-top: 16px; }
+  .sect-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .sect-title { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--fg-2); text-transform: uppercase; }
+  .sect-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sect-view-toggle { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .sect-view-btn { background: none; border: none; padding: 5px 11px; cursor: pointer; color: var(--fg-2); font-size: 13px; line-height: 1; transition: background .15s; }
+  .sect-view-btn.active { background: var(--bg-2); color: var(--fg-0); }
+  .sect-filter { display: flex; gap: 4px; }
+  .sect-filter-btn { background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--fg-2); transition: all .15s; }
+  .sect-filter-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .sect-sort { font-size: 11px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; color: var(--fg-1); cursor: pointer; }
+
+  /* Cards */
+  .sect-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .sect-card { border-radius: 12px; padding: 12px 14px; border: 1px solid; display: flex; flex-direction: column; gap: 5px; }
+  .sect-card-top { display: flex; justify-content: space-between; align-items: center; min-height: 20px; }
+  .sect-rank { font-size: 10px; font-weight: 700; color: var(--fg-3); font-family: var(--f-mono); }
+  .sect-state-badge { font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+  .sect-hot-badge { font-size: 9px; font-weight: 700; background: #ef4444; color: #fff; padding: 2px 6px; border-radius: 4px; }
+  .sect-card-zh { font-size: 13px; font-weight: 700; margin-top: 2px; }
+  .sect-card-en { font-size: 9.5px; color: var(--fg-3); }
+  .sect-card-sym { font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); letter-spacing: 0.04em; }
+  .sect-card-score { font-size: 26px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.03em; line-height: 1.1; margin-top: 6px; }
+  .sect-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+  .sect-card-ret { font-size: 10.5px; font-family: var(--f-mono); }
+  .sect-card-slope { font-size: 10.5px; font-family: var(--f-mono); font-weight: 600; }
+  .sect-up   { background: oklch(from #22c55e l c h / 0.07); border-color: oklch(from #22c55e l c h / 0.25); }
+  .sect-start{ background: oklch(from #f97316 l c h / 0.07); border-color: oklch(from #f97316 l c h / 0.25); }
+  .sect-cool { background: oklch(from #38bdf8 l c h / 0.07); border-color: oklch(from #38bdf8 l c h / 0.25); }
+  .sect-weak { background: oklch(from #ef4444 l c h / 0.07); border-color: oklch(from #ef4444 l c h / 0.25); }
+
+  /* Table */
+  .sect-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid var(--line); }
+  .sect-table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+  .sect-table th { font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em; color: var(--fg-3); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--bg-1); }
+  .sect-table td { padding: 7px 10px; border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
+  .sect-table tr:last-child td { border-bottom: none; }
+  .sect-table tr:hover td { background: var(--bg-2); }
+  .sect-table .sc-rank { color: var(--fg-3); font-family: var(--f-mono); font-size: 11px; }
+  .sect-table .sc-sym  { font-family: var(--f-mono); font-weight: 700; color: var(--accent); }
+  .sect-table .sc-score{ font-weight: 700; }
+  .sect-table .sc-state{ font-size: 11px; font-weight: 700; }
+  .sect-table .sc-slope{ font-family: var(--f-mono); font-size: 11px; }
+
+  @media (max-width: 768px) {
+    .sect-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .sect-card-score { font-size: 22px; }
+    .sect-head { gap: 8px; }
+  }
+
 </style>
 </head>
 <body data-density="medium" data-font="sans" data-theme="dark">

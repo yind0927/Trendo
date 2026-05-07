@@ -2922,7 +2922,8 @@
         ${mkIndicatorHTML("rsi", rsi, null)}
       </div>
       ${mkPlaybookHTML(vix, fg, rsi)}
-      ${mkStrategyHTML(vix, fg, rsi)}`;
+      ${mkStrategyHTML(vix, fg, rsi)}
+      <div id="sector-rotation" class="sect-section"></div>`;
   }
 
   async function fetchMarketData() {
@@ -2978,6 +2979,210 @@
       }
 
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs });
+      fetchSectorData();
+    } catch (e) {
+      el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
+    }
+  }
+
+  // ============ SECTOR ROTATION ============
+  const BENCH_SYM = "VOO";
+  const SECTOR_ETFS = [
+    { sym: "XLK",  zh: "科技",          en: "Technology",                  layer: 2 },
+    { sym: "XLY",  zh: "非必需消费",     en: "Consumer Discretionary",      layer: 2 },
+    { sym: "XLF",  zh: "金融",          en: "Financials",                  layer: 2 },
+    { sym: "XLI",  zh: "工业",          en: "Industrials",                 layer: 2 },
+    { sym: "XLE",  zh: "能源",          en: "Energy",                      layer: 2 },
+    { sym: "XLV",  zh: "医疗健康",      en: "Health Care",                 layer: 2 },
+    { sym: "XLP",  zh: "必需消费",      en: "Consumer Staples",            layer: 2 },
+    { sym: "XLB",  zh: "材料",          en: "Materials",                   layer: 2 },
+    { sym: "SMH",  zh: "半导体",        en: "Semiconductors",              layer: 3 },
+    { sym: "IGV",  zh: "软件",          en: "Software",                    layer: 3 },
+    { sym: "CLOU", zh: "云计算",        en: "Cloud Computing",             layer: 3 },
+    { sym: "CIBR", zh: "网络安全",      en: "Cybersecurity",               layer: 3 },
+    { sym: "DTCR", zh: "数据中心",      en: "Data Centers",                layer: 3 },
+    { sym: "QTUM", zh: "量子计算",      en: "Quantum Computing",           layer: 3 },
+    { sym: "BOTZ", zh: "机器人/AI",     en: "Robotics & AI",               layer: 3 },
+    { sym: "ITA",  zh: "航空航天/国防",  en: "Aerospace & Defense",         layer: 3 },
+    { sym: "UFO",  zh: "太空探索",      en: "Space Exploration",           layer: 3 },
+    { sym: "XBI",  zh: "生物科技",      en: "Biotech",                     layer: 3 },
+    { sym: "IBIT", zh: "比特币",        en: "Bitcoin",                     layer: 3 },
+    { sym: "BKCH", zh: "区块链",        en: "Blockchain",                  layer: 3 },
+    { sym: "GLD",  zh: "黄金",          en: "Gold",                        layer: 3 },
+    { sym: "COPX", zh: "铜矿",          en: "Copper Mining",               layer: 3 },
+    { sym: "REMX", zh: "稀土材料",      en: "Rare Earth & Critical Materials", layer: 3 },
+    { sym: "GRID", zh: "清洁能源电网",  en: "Clean Energy Smart Grid",     layer: 3 },
+  ];
+
+  let sectorView   = "card";
+  let sectorFilter = "all";
+  let sectorSort   = "score";
+  let sectorData   = null;
+
+  function linregSlope(arr) {
+    const n = arr.length;
+    if (n < 2) return 0;
+    const xm = (n - 1) / 2;
+    const ym = arr.reduce((a, b) => a + b, 0) / n;
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) {
+      num += (i - xm) * (arr[i] - ym);
+      den += (i - xm) * (i - xm);
+    }
+    return den === 0 ? 0 : +(num / den).toFixed(3);
+  }
+
+  function calcEtfStats(closes, vooCloses) {
+    if (!closes || closes.length < 62 || !vooCloses || vooCloses.length < 62) return null;
+    const last = closes.at(-1), c20 = closes.at(-21), c60 = closes.at(-61);
+    const retF = last / c20 - 1, retS = last / c60 - 1;
+    const score = (retF * 1.0 + retS * 1.5) * 100;
+    const vLast = vooCloses.at(-1), v20 = vooCloses.at(-21), v60 = vooCloses.at(-61);
+    const a20 = retF - (vLast / v20 - 1);
+    const a60 = retS - (vLast / v60 - 1);
+    // 5-day score slope
+    const recent = [];
+    for (let i = 4; i >= 0; i--) {
+      const idx = closes.length - 1 - i;
+      const c = closes[idx], c2 = closes[idx - 20], c6 = closes[idx - 60];
+      recent.push(c && c2 && c6 ? ((c / c2 - 1) * 1.0 + (c / c6 - 1) * 1.5) * 100 : score);
+    }
+    const slope = linregSlope(recent);
+    let state, stateColor, stateClass;
+    if      (a20 > 0 && a60 > 0)  { state = "主升 ✅"; stateColor = "#22c55e"; stateClass = "sect-up";    }
+    else if (a20 > 0 && a60 <= 0) { state = "启动 🟠"; stateColor = "#f97316"; stateClass = "sect-start"; }
+    else if (a20 <= 0 && a60 > 0) { state = "降温 🧊"; stateColor = "#38bdf8"; stateClass = "sect-cool";  }
+    else                           { state = "弱势 ❌"; stateColor = "#ef4444"; stateClass = "sect-weak";  }
+    return {
+      retF:  +(retF  * 100).toFixed(2),
+      retS:  +(retS  * 100).toFixed(2),
+      score: +score.toFixed(2),
+      a20:   +(a20   * 100).toFixed(2),
+      a60:   +(a60   * 100).toFixed(2),
+      slope, state, stateColor, stateClass,
+    };
+  }
+
+  function getSortedFiltered() {
+    if (!sectorData) return [];
+    const list = sectorFilter === "sector" ? sectorData.filter(e => e.layer === 2)
+               : sectorFilter === "theme"  ? sectorData.filter(e => e.layer === 3)
+               : sectorData;
+    const key = { score: "score", ret20: "retF", ret60: "retS", alpha20: "a20", slope: "slope" }[sectorSort] || "score";
+    return [...list].sort((a, b) => b[key] - a[key]);
+  }
+
+  function sectCardHTML(item, rank) {
+    const hot = rank <= 3 && item.stateClass === "sect-up";
+    const badge = hot
+      ? `<span class="sect-hot-badge">🔥 HOT</span>`
+      : `<span class="sect-state-badge" style="background:${item.stateColor}20;color:${item.stateColor}">${item.state}</span>`;
+    const gc = v => v >= 0 ? "#22c55e" : "#ef4444";
+    const gs = v => v >= 0 ? "+" : "";
+    return `
+      <div class="sect-card ${item.stateClass}">
+        <div class="sect-card-top"><span class="sect-rank">#${rank}</span>${badge}</div>
+        <div class="sect-card-zh">${item.zh}</div>
+        <div class="sect-card-en">${item.en}</div>
+        <div class="sect-card-sym">${item.sym}</div>
+        <div class="sect-card-score" style="color:${gc(item.score)}">${item.score >= 0 ? "↗" : "↘"} ${item.score.toFixed(1)}</div>
+        <div class="sect-card-footer">
+          <span class="sect-card-ret" style="color:${gc(item.retF)}">20D ${gs(item.retF)}${item.retF}%</span>
+          <span class="sect-card-slope" style="color:${gc(item.slope)}">${item.slope >= 0 ? "▲" : "▼"} ${Math.abs(item.slope).toFixed(2)}</span>
+        </div>
+      </div>`;
+  }
+
+  function sectRowHTML(item, rank) {
+    const gc = v => v >= 0 ? "#22c55e" : "#ef4444";
+    const gs = v => v >= 0 ? "+" : "";
+    return `<tr>
+      <td class="sc-rank">${rank}</td>
+      <td class="sc-sym">${item.sym}</td>
+      <td>${item.zh} <span style="font-size:9.5px;color:var(--fg-3)">${item.en}</span></td>
+      <td class="sc-score" style="color:${gc(item.score)}">${gs(item.score)}${item.score.toFixed(1)}</td>
+      <td style="color:${gc(item.retF)}">${gs(item.retF)}${item.retF}%</td>
+      <td style="color:${gc(item.a20)}">${gs(item.a20)}${item.a20}%</td>
+      <td style="color:${gc(item.retS)}">${gs(item.retS)}${item.retS}%</td>
+      <td style="color:${gc(item.a60)}">${gs(item.a60)}${item.a60}%</td>
+      <td class="sc-state" style="color:${item.stateColor}">${item.state}</td>
+      <td class="sc-slope" style="color:${gc(item.slope)}">${item.slope >= 0 ? "▲" : "▼"} ${Math.abs(item.slope).toFixed(2)}</td>
+    </tr>`;
+  }
+
+  function renderSectorRotation() {
+    const el = $("#sector-rotation");
+    if (!el || !sectorData) return;
+    const sorted = getSortedFiltered();
+
+    const filterBtns = ["all", "sector", "theme"].map(f =>
+      `<button class="sect-filter-btn${sectorFilter === f ? " active" : ""}" data-filter="${f}">${f === "all" ? "全部" : f === "sector" ? "板块" : "主题"}</button>`
+    ).join("");
+
+    const sortOpts = [["score","综合得分"],["ret20","20D"],["ret60","60D"],["alpha20","Alpha"],["slope","斜率"]].map(
+      ([v, l]) => `<option value="${v}"${sectorSort === v ? " selected" : ""}>${l}</option>`
+    ).join("");
+
+    const viewBtns = `
+      <div class="sect-view-toggle">
+        <button class="sect-view-btn${sectorView === "card"  ? " active" : ""}" data-view="card">⊞</button>
+        <button class="sect-view-btn${sectorView === "table" ? " active" : ""}" data-view="table">☰</button>
+      </div>`;
+
+    const body = sectorView === "card"
+      ? `<div class="sect-cards">${sorted.map((e, i) => sectCardHTML(e, i + 1)).join("")}</div>`
+      : `<div class="sect-table-wrap"><table class="sect-table">
+          <thead><tr>
+            <th>#</th><th>代码</th><th>板块 / 主题</th>
+            <th>综合得分</th><th>20D</th><th>α20</th><th>60D</th><th>α60</th>
+            <th>状态</th><th>5D斜率</th>
+          </tr></thead>
+          <tbody>${sorted.map((e, i) => sectRowHTML(e, i + 1)).join("")}</tbody>
+        </table></div>`;
+
+    el.innerHTML = `
+      <div class="sect-head">
+        <div class="sect-title">板块轮动 <span style="font-size:9px;color:var(--fg-3);font-weight:400;margin-left:4px">基准 VOO · ${sorted.length} 个</span></div>
+        <div class="sect-controls">
+          <div class="sect-filter">${filterBtns}</div>
+          <select class="sect-sort" id="sect-sort-sel">${sortOpts}</select>
+          ${viewBtns}
+        </div>
+      </div>
+      ${body}`;
+
+    el.querySelectorAll(".sect-view-btn").forEach(b =>
+      b.addEventListener("click", () => { sectorView = b.dataset.view; renderSectorRotation(); })
+    );
+    el.querySelectorAll(".sect-filter-btn").forEach(b =>
+      b.addEventListener("click", () => { sectorFilter = b.dataset.filter; renderSectorRotation(); })
+    );
+    const sel = el.querySelector("#sect-sort-sel");
+    if (sel) sel.addEventListener("change", () => { sectorSort = sel.value; renderSectorRotation(); });
+  }
+
+  async function fetchSectorData() {
+    const el = $("#sector-rotation");
+    if (!el) return;
+    el.innerHTML = `<div class="mkt-loading" style="padding:28px 20px">加载板块数据…</div>`;
+    try {
+      const from = (() => { const d = new Date(); d.setDate(d.getDate() - 95); return d.toISOString().slice(0, 10); })();
+      const syms = [BENCH_SYM, ...SECTOR_ETFS.map(e => e.sym)];
+      const res  = await fetch(`/api/history?symbols=${syms.map(encodeURIComponent).join(",")}&from=${from}`);
+      const data = await res.json();
+      if (!data?.results) { el.innerHTML = `<div class="mkt-loading">无法加载板块数据</div>`; return; }
+
+      const vooRaw = data.results[BENCH_SYM] || {};
+      const vooCloses = Object.keys(vooRaw).sort().map(k => vooRaw[k]);
+
+      sectorData = SECTOR_ETFS.map(etf => {
+        const raw = data.results[etf.sym] || {};
+        const closes = Object.keys(raw).sort().map(k => raw[k]);
+        const stats  = calcEtfStats(closes, vooCloses);
+        return stats ? { ...etf, ...stats } : null;
+      }).filter(Boolean);
+
+      renderSectorRotation();
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
     }
