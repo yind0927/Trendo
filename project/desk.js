@@ -3229,7 +3229,8 @@
   function renderHoldings(body, footer, data) {
     if (!body) return;
     if (!data || data.error || !data.holdings?.length) {
-      body.innerHTML = `<div class="hld-no-data">暂无持仓数据（该 ETF 可能为实物/加密类型）</div>`;
+      const msg = data?.physical ? "该 ETF 为实物持仓（如黄金/比特币），无股票成分" : "暂无持仓数据";
+      body.innerHTML = `<div class="hld-no-data">${msg}</div>`;
       if (footer) footer.innerHTML = "";
       return;
     }

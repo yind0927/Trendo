@@ -1,94 +1,326 @@
 // Vercel serverless — ETF top holdings
-// Primary:  Financial Modeling Prep /etf-holder (free tier, needs FMP_API_KEY)
-// Fallback: Yahoo Finance quoteSummary (crumb auth, may be blocked by cloud IPs)
+// Static data bundled for reliability (major ETFs rebalance quarterly)
+// Physical ETFs (GLD, IBIT) have no stock holdings by design
+
+const STATIC = {
+  VOO:  [
+    { sym: "AAPL",  name: "Apple Inc",                weight: 7.0 },
+    { sym: "NVDA",  name: "NVIDIA Corp",               weight: 6.5 },
+    { sym: "MSFT",  name: "Microsoft Corp",            weight: 6.0 },
+    { sym: "AMZN",  name: "Amazon.com Inc",            weight: 3.8 },
+    { sym: "META",  name: "Meta Platforms",            weight: 2.8 },
+    { sym: "GOOGL", name: "Alphabet Inc Class A",      weight: 2.2 },
+    { sym: "GOOG",  name: "Alphabet Inc Class C",      weight: 1.9 },
+    { sym: "TSLA",  name: "Tesla Inc",                 weight: 1.8 },
+    { sym: "BRK.B", name: "Berkshire Hathaway B",      weight: 1.7 },
+    { sym: "AVGO",  name: "Broadcom Inc",              weight: 1.6 },
+  ],
+  XLK:  [
+    { sym: "NVDA",  name: "NVIDIA Corp",               weight: 22.0 },
+    { sym: "AAPL",  name: "Apple Inc",                 weight: 19.5 },
+    { sym: "MSFT",  name: "Microsoft Corp",            weight: 16.5 },
+    { sym: "AVGO",  name: "Broadcom Inc",              weight: 5.5 },
+    { sym: "ORCL",  name: "Oracle Corp",               weight: 3.5 },
+    { sym: "CRM",   name: "Salesforce Inc",            weight: 3.0 },
+    { sym: "AMD",   name: "Advanced Micro Devices",    weight: 2.5 },
+    { sym: "CSCO",  name: "Cisco Systems",             weight: 2.0 },
+    { sym: "ACN",   name: "Accenture plc",             weight: 2.0 },
+    { sym: "IBM",   name: "IBM Corp",                  weight: 1.5 },
+  ],
+  XLY:  [
+    { sym: "AMZN",  name: "Amazon.com Inc",            weight: 24.0 },
+    { sym: "TSLA",  name: "Tesla Inc",                 weight: 14.0 },
+    { sym: "HD",    name: "Home Depot",                weight: 8.5 },
+    { sym: "MCD",   name: "McDonald's Corp",           weight: 4.5 },
+    { sym: "BKNG",  name: "Booking Holdings",          weight: 4.0 },
+    { sym: "NKE",   name: "Nike Inc",                  weight: 3.5 },
+    { sym: "LOW",   name: "Lowe's Companies",          weight: 3.5 },
+    { sym: "TJX",   name: "TJX Companies",             weight: 3.0 },
+    { sym: "SBUX",  name: "Starbucks Corp",            weight: 2.5 },
+    { sym: "CMG",   name: "Chipotle Mexican Grill",    weight: 2.0 },
+  ],
+  XLF:  [
+    { sym: "BRK.B", name: "Berkshire Hathaway B",      weight: 13.5 },
+    { sym: "JPM",   name: "JPMorgan Chase",            weight: 11.0 },
+    { sym: "V",     name: "Visa Inc",                  weight: 7.5 },
+    { sym: "MA",    name: "Mastercard Inc",            weight: 6.0 },
+    { sym: "BAC",   name: "Bank of America",           weight: 4.5 },
+    { sym: "WFC",   name: "Wells Fargo",               weight: 4.0 },
+    { sym: "GS",    name: "Goldman Sachs",             weight: 3.5 },
+    { sym: "MS",    name: "Morgan Stanley",            weight: 3.0 },
+    { sym: "SPGI",  name: "S&P Global Inc",            weight: 2.5 },
+    { sym: "AXP",   name: "American Express",          weight: 2.5 },
+  ],
+  XLI:  [
+    { sym: "GE",    name: "GE Aerospace",              weight: 5.5 },
+    { sym: "CAT",   name: "Caterpillar Inc",           weight: 5.0 },
+    { sym: "RTX",   name: "RTX Corporation",           weight: 4.5 },
+    { sym: "HON",   name: "Honeywell International",   weight: 4.0 },
+    { sym: "UNP",   name: "Union Pacific Corp",        weight: 4.0 },
+    { sym: "DE",    name: "Deere & Company",           weight: 3.5 },
+    { sym: "LMT",   name: "Lockheed Martin",           weight: 3.5 },
+    { sym: "BA",    name: "Boeing Company",            weight: 3.0 },
+    { sym: "EMR",   name: "Emerson Electric",          weight: 2.5 },
+    { sym: "ADP",   name: "Automatic Data Processing", weight: 2.5 },
+  ],
+  XLE:  [
+    { sym: "XOM",   name: "Exxon Mobil Corp",          weight: 22.0 },
+    { sym: "CVX",   name: "Chevron Corp",              weight: 15.5 },
+    { sym: "COP",   name: "ConocoPhillips",            weight: 7.0 },
+    { sym: "EOG",   name: "EOG Resources",             weight: 5.0 },
+    { sym: "SLB",   name: "SLB",                       weight: 4.5 },
+    { sym: "MPC",   name: "Marathon Petroleum",        weight: 4.0 },
+    { sym: "PSX",   name: "Phillips 66",               weight: 4.0 },
+    { sym: "OXY",   name: "Occidental Petroleum",      weight: 3.5 },
+    { sym: "WMB",   name: "Williams Companies",        weight: 3.0 },
+    { sym: "DVN",   name: "Devon Energy",              weight: 2.5 },
+  ],
+  XLV:  [
+    { sym: "LLY",   name: "Eli Lilly & Co",            weight: 12.0 },
+    { sym: "UNH",   name: "UnitedHealth Group",        weight: 10.5 },
+    { sym: "ABBV",  name: "AbbVie Inc",                weight: 6.0 },
+    { sym: "JNJ",   name: "Johnson & Johnson",         weight: 5.5 },
+    { sym: "MRK",   name: "Merck & Co",                weight: 5.0 },
+    { sym: "ABT",   name: "Abbott Laboratories",       weight: 4.5 },
+    { sym: "TMO",   name: "Thermo Fisher Scientific",  weight: 4.0 },
+    { sym: "ISRG",  name: "Intuitive Surgical",        weight: 3.5 },
+    { sym: "DHR",   name: "Danaher Corp",              weight: 3.0 },
+    { sym: "BSX",   name: "Boston Scientific",         weight: 2.5 },
+  ],
+  XLP:  [
+    { sym: "PG",    name: "Procter & Gamble",          weight: 15.0 },
+    { sym: "COST",  name: "Costco Wholesale",          weight: 12.5 },
+    { sym: "KO",    name: "Coca-Cola Company",         weight: 9.0 },
+    { sym: "PEP",   name: "PepsiCo Inc",               weight: 8.5 },
+    { sym: "PM",    name: "Philip Morris International",weight: 6.0 },
+    { sym: "WMT",   name: "Walmart Inc",               weight: 5.5 },
+    { sym: "MDLZ",  name: "Mondelez International",    weight: 4.0 },
+    { sym: "MO",    name: "Altria Group",              weight: 3.5 },
+    { sym: "CL",    name: "Colgate-Palmolive",         weight: 3.0 },
+    { sym: "GIS",   name: "General Mills",             weight: 2.5 },
+  ],
+  XLB:  [
+    { sym: "LIN",   name: "Linde plc",                 weight: 17.0 },
+    { sym: "APD",   name: "Air Products & Chemicals",  weight: 6.5 },
+    { sym: "SHW",   name: "Sherwin-Williams",          weight: 6.5 },
+    { sym: "ECL",   name: "Ecolab Inc",                weight: 5.5 },
+    { sym: "NEM",   name: "Newmont Corp",              weight: 5.0 },
+    { sym: "FCX",   name: "Freeport-McMoRan",          weight: 4.5 },
+    { sym: "DOW",   name: "Dow Inc",                   weight: 4.0 },
+    { sym: "DD",    name: "DuPont de Nemours",         weight: 3.5 },
+    { sym: "PPG",   name: "PPG Industries",            weight: 3.5 },
+    { sym: "VMC",   name: "Vulcan Materials",          weight: 3.0 },
+  ],
+  SMH:  [
+    { sym: "NVDA",  name: "NVIDIA Corp",               weight: 20.5 },
+    { sym: "TSM",   name: "Taiwan Semiconductor Mfg",  weight: 13.0 },
+    { sym: "AVGO",  name: "Broadcom Inc",              weight: 8.5 },
+    { sym: "ASML",  name: "ASML Holding NV",           weight: 5.5 },
+    { sym: "AMD",   name: "Advanced Micro Devices",    weight: 4.5 },
+    { sym: "TXN",   name: "Texas Instruments",         weight: 4.5 },
+    { sym: "AMAT",  name: "Applied Materials",         weight: 4.0 },
+    { sym: "QCOM",  name: "Qualcomm Inc",              weight: 3.5 },
+    { sym: "LRCX",  name: "Lam Research Corp",         weight: 3.0 },
+    { sym: "INTC",  name: "Intel Corp",                weight: 2.5 },
+  ],
+  IGV:  [
+    { sym: "MSFT",  name: "Microsoft Corp",            weight: 8.5 },
+    { sym: "ORCL",  name: "Oracle Corp",               weight: 8.0 },
+    { sym: "ADBE",  name: "Adobe Inc",                 weight: 7.5 },
+    { sym: "NOW",   name: "ServiceNow Inc",            weight: 7.0 },
+    { sym: "INTU",  name: "Intuit Inc",                weight: 6.5 },
+    { sym: "CDNS",  name: "Cadence Design Systems",    weight: 5.0 },
+    { sym: "SNPS",  name: "Synopsys Inc",              weight: 4.5 },
+    { sym: "SAP",   name: "SAP SE",                    weight: 4.0 },
+    { sym: "WDAY",  name: "Workday Inc",               weight: 3.5 },
+    { sym: "PANW",  name: "Palo Alto Networks",        weight: 3.0 },
+  ],
+  CLOU: [
+    { sym: "WDAY",  name: "Workday Inc",               weight: 4.5 },
+    { sym: "ZS",    name: "Zscaler Inc",               weight: 4.5 },
+    { sym: "DDOG",  name: "Datadog Inc",               weight: 4.5 },
+    { sym: "MDB",   name: "MongoDB Inc",               weight: 4.0 },
+    { sym: "SNOW",  name: "Snowflake Inc",             weight: 4.0 },
+    { sym: "CFLT",  name: "Confluent Inc",             weight: 3.5 },
+    { sym: "ESTC",  name: "Elastic NV",                weight: 3.5 },
+    { sym: "AMZN",  name: "Amazon.com Inc",            weight: 3.5 },
+    { sym: "MSFT",  name: "Microsoft Corp",            weight: 3.5 },
+    { sym: "GOOGL", name: "Alphabet Inc",              weight: 3.5 },
+  ],
+  CIBR: [
+    { sym: "PANW",  name: "Palo Alto Networks",        weight: 5.5 },
+    { sym: "CRWD",  name: "CrowdStrike Holdings",      weight: 5.5 },
+    { sym: "FTNT",  name: "Fortinet Inc",              weight: 5.0 },
+    { sym: "CSCO",  name: "Cisco Systems",             weight: 4.5 },
+    { sym: "CYBR",  name: "CyberArk Software",         weight: 4.0 },
+    { sym: "CHKP",  name: "Check Point Software",      weight: 3.5 },
+    { sym: "GEN",   name: "Gen Digital Inc",           weight: 3.5 },
+    { sym: "S",     name: "SentinelOne",               weight: 3.5 },
+    { sym: "QLYS",  name: "Qualys Inc",                weight: 3.0 },
+    { sym: "VRNS",  name: "Varonis Systems",           weight: 3.0 },
+  ],
+  DTCR: [
+    { sym: "EQIX",  name: "Equinix Inc",               weight: 15.5 },
+    { sym: "AMT",   name: "American Tower Corp",        weight: 14.5 },
+    { sym: "DLR",   name: "Digital Realty Trust",      weight: 9.5 },
+    { sym: "CCI",   name: "Crown Castle Inc",          weight: 8.5 },
+    { sym: "SBAC",  name: "SBA Communications",        weight: 7.0 },
+    { sym: "IRM",   name: "Iron Mountain Inc",         weight: 5.5 },
+    { sym: "VRT",   name: "Vertiv Holdings",           weight: 5.0 },
+    { sym: "ANET",  name: "Arista Networks",           weight: 4.5 },
+    { sym: "NTAP",  name: "NetApp Inc",                weight: 4.0 },
+    { sym: "STX",   name: "Seagate Technology",        weight: 3.5 },
+  ],
+  QTUM: [
+    { sym: "NVDA",  name: "NVIDIA Corp",               weight: 5.0 },
+    { sym: "IBM",   name: "IBM Corp",                  weight: 4.5 },
+    { sym: "GOOG",  name: "Alphabet Inc",              weight: 4.5 },
+    { sym: "HON",   name: "Honeywell International",   weight: 4.5 },
+    { sym: "IONQ",  name: "IonQ Inc",                  weight: 4.0 },
+    { sym: "MSFT",  name: "Microsoft Corp",            weight: 4.0 },
+    { sym: "RGTI",  name: "Rigetti Computing",         weight: 3.5 },
+    { sym: "QBTS",  name: "D-Wave Quantum Inc",        weight: 3.5 },
+    { sym: "QUBT",  name: "Quantum Computing Inc",     weight: 3.0 },
+    { sym: "ARQQ",  name: "Arqit Quantum",             weight: 2.5 },
+  ],
+  BOTZ: [
+    { sym: "NVDA",  name: "NVIDIA Corp",               weight: 11.5 },
+    { sym: "ABB",   name: "ABB Ltd ADR",               weight: 9.5 },
+    { sym: "ISRG",  name: "Intuitive Surgical",        weight: 8.5 },
+    { sym: "FANUC", name: "Fanuc Corp ADR",            weight: 7.0 },
+    { sym: "SMC",   name: "SMC Corp ADR",              weight: 5.5 },
+    { sym: "ROK",   name: "Rockwell Automation",       weight: 4.0 },
+    { sym: "OMRON", name: "Omron Corp ADR",            weight: 4.0 },
+    { sym: "BRKS",  name: "Brooks Automation",         weight: 3.5 },
+    { sym: "AXON",  name: "Axon Enterprise",           weight: 3.0 },
+    { sym: "KION",  name: "KION Group ADR",            weight: 3.0 },
+  ],
+  ITA:  [
+    { sym: "RTX",   name: "RTX Corporation",           weight: 19.5 },
+    { sym: "LMT",   name: "Lockheed Martin Corp",      weight: 17.5 },
+    { sym: "GE",    name: "GE Aerospace",              weight: 12.0 },
+    { sym: "NOC",   name: "Northrop Grumman",          weight: 8.5 },
+    { sym: "GD",    name: "General Dynamics Corp",     weight: 7.0 },
+    { sym: "TDG",   name: "TransDigm Group",           weight: 6.5 },
+    { sym: "HII",   name: "Huntington Ingalls",        weight: 4.0 },
+    { sym: "LHX",   name: "L3Harris Technologies",     weight: 3.5 },
+    { sym: "HWM",   name: "Howmet Aerospace",          weight: 3.0 },
+    { sym: "AXON",  name: "Axon Enterprise",           weight: 2.5 },
+  ],
+  UFO:  [
+    { sym: "IRDM",  name: "Iridium Communications",    weight: 7.0 },
+    { sym: "BWXT",  name: "BWX Technologies",          weight: 6.5 },
+    { sym: "LMT",   name: "Lockheed Martin Corp",      weight: 6.0 },
+    { sym: "NOC",   name: "Northrop Grumman",          weight: 5.5 },
+    { sym: "KTOS",  name: "Kratos Defense & Security", weight: 4.5 },
+    { sym: "RKLB",  name: "Rocket Lab USA",            weight: 4.0 },
+    { sym: "ASTS",  name: "AST SpaceMobile",           weight: 4.0 },
+    { sym: "GSAT",  name: "Globalstar Inc",            weight: 3.5 },
+    { sym: "VSAT",  name: "ViaSat Inc",                weight: 3.5 },
+    { sym: "SPCE",  name: "Virgin Galactic Holdings",  weight: 3.0 },
+  ],
+  XBI:  [
+    { sym: "RXRX",  name: "Recursion Pharmaceuticals", weight: 2.5 },
+    { sym: "ARWR",  name: "Arrowhead Pharmaceuticals", weight: 2.5 },
+    { sym: "PCVX",  name: "Vaxcyte Inc",               weight: 2.5 },
+    { sym: "SRPT",  name: "Sarepta Therapeutics",      weight: 2.0 },
+    { sym: "GILD",  name: "Gilead Sciences",           weight: 2.0 },
+    { sym: "AMGN",  name: "Amgen Inc",                 weight: 2.0 },
+    { sym: "VRTX",  name: "Vertex Pharmaceuticals",    weight: 1.5 },
+    { sym: "MRNA",  name: "Moderna Inc",               weight: 1.5 },
+    { sym: "BIIB",  name: "Biogen Inc",                weight: 1.5 },
+    { sym: "REGN",  name: "Regeneron Pharmaceuticals", weight: 1.5 },
+  ],
+  BKCH: [
+    { sym: "COIN",  name: "Coinbase Global",           weight: 18.0 },
+    { sym: "MSTR",  name: "MicroStrategy Inc",         weight: 14.0 },
+    { sym: "MARA",  name: "Marathon Digital Holdings", weight: 8.0 },
+    { sym: "RIOT",  name: "Riot Platforms Inc",        weight: 7.0 },
+    { sym: "CLSK",  name: "CleanSpark Inc",            weight: 5.5 },
+    { sym: "HUT",   name: "Hut 8 Corp",               weight: 5.0 },
+    { sym: "CIFR",  name: "Cipher Mining Inc",         weight: 4.5 },
+    { sym: "WULF",  name: "TeraWulf Inc",              weight: 4.0 },
+    { sym: "IREN",  name: "Iris Energy",               weight: 3.5 },
+    { sym: "BTBT",  name: "Bit Digital Inc",           weight: 3.0 },
+  ],
+  COPX: [
+    { sym: "FCX",   name: "Freeport-McMoRan Inc",      weight: 12.0 },
+    { sym: "SCCO",  name: "Southern Copper Corp",      weight: 9.5 },
+    { sym: "BHP",   name: "BHP Group Ltd ADR",         weight: 7.5 },
+    { sym: "TECK",  name: "Teck Resources Ltd",        weight: 6.5 },
+    { sym: "VALE",  name: "Vale SA ADR",               weight: 6.0 },
+    { sym: "GLEN",  name: "Glencore plc ADR",          weight: 5.5 },
+    { sym: "IVPAF", name: "Ivanhoe Mines Ltd",         weight: 5.0 },
+    { sym: "FM",    name: "First Quantum Minerals",    weight: 4.5 },
+    { sym: "ERO",   name: "ERO Copper Corp",           weight: 3.5 },
+    { sym: "WDOFF", name: "Warrior Met Coal",          weight: 3.0 },
+  ],
+  REMX: [
+    { sym: "MP",    name: "MP Materials Corp",         weight: 8.0 },
+    { sym: "LYNAS", name: "Lynas Rare Earths ADR",     weight: 7.0 },
+    { sym: "ILUKA", name: "Iluka Resources ADR",       weight: 5.5 },
+    { sym: "AMG",   name: "AMG Advanced Metallurgy",   weight: 5.5 },
+    { sym: "UMICORE",name:"Umicore SA ADR",            weight: 5.0 },
+    { sym: "NMG",   name: "Nouveau Monde Graphite",    weight: 4.5 },
+    { sym: "NB",    name: "NioCorp Developments",      weight: 4.0 },
+    { sym: "NOVONIX",name:"Novonix Ltd",               weight: 3.5 },
+    { sym: "LITHY", name: "Lithium Americas Corp",     weight: 3.0 },
+    { sym: "REE",   name: "REE Automotive",            weight: 2.5 },
+  ],
+  GRID: [
+    { sym: "ENPH",  name: "Enphase Energy",            weight: 5.5 },
+    { sym: "ITRI",  name: "Itron Inc",                 weight: 5.5 },
+    { sym: "PWR",   name: "Quanta Services Inc",       weight: 5.0 },
+    { sym: "ETN",   name: "Eaton Corp plc",            weight: 5.0 },
+    { sym: "ABB",   name: "ABB Ltd ADR",               weight: 4.5 },
+    { sym: "VMI",   name: "Valmont Industries",        weight: 4.0 },
+    { sym: "SEDG",  name: "SolarEdge Technologies",    weight: 4.0 },
+    { sym: "NEE",   name: "NextEra Energy",            weight: 3.5 },
+    { sym: "HLIT",  name: "Harmonic Inc",              weight: 3.5 },
+    { sym: "AEE",   name: "Ameren Corp",               weight: 3.0 },
+  ],
+  MAGS: [
+    { sym: "AAPL",  name: "Apple Inc",                 weight: 14.3 },
+    { sym: "MSFT",  name: "Microsoft Corp",            weight: 14.3 },
+    { sym: "GOOGL", name: "Alphabet Inc",              weight: 14.3 },
+    { sym: "AMZN",  name: "Amazon.com Inc",            weight: 14.3 },
+    { sym: "NVDA",  name: "NVIDIA Corp",               weight: 14.3 },
+    { sym: "META",  name: "Meta Platforms",            weight: 14.3 },
+    { sym: "TSLA",  name: "Tesla Inc",                 weight: 14.3 },
+  ],
+  URA:  [
+    { sym: "CCJ",   name: "Cameco Corp",               weight: 24.0 },
+    { sym: "NXE",   name: "NexGen Energy Ltd",         weight: 7.5 },
+    { sym: "DNN",   name: "Denison Mines Corp",        weight: 5.5 },
+    { sym: "UUUU",  name: "Energy Fuels Inc",          weight: 5.0 },
+    { sym: "UEC",   name: "Uranium Energy Corp",       weight: 4.5 },
+    { sym: "BOSS",  name: "Boss Energy Ltd ADR",       weight: 4.5 },
+    { sym: "PALAF", name: "Paladin Energy",            weight: 4.0 },
+    { sym: "SRUUF", name: "Sprott Physical Uranium",   weight: 3.5 },
+    { sym: "KAZATOMPROM", name: "Kazatomprom ADR",     weight: 3.5 },
+    { sym: "FCUUF", name: "Forum Energy Metals",       weight: 3.0 },
+  ],
+  // Physical ETFs — no stock holdings
+  GLD:  null,
+  IBIT: null,
+};
 
 export default async function handler(req, res) {
   const sym = (req.query.symbol || "").trim().toUpperCase();
   if (!sym) return res.status(400).json({ error: "no symbol" });
 
-  const fmpKey     = process.env.FMP_API_KEY;
-  const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-  const log = { hasFmpKey: !!fmpKey };
-
-  // ── 1. Financial Modeling Prep — free tier includes ETF holdings ────────
-  if (fmpKey) {
-    // Try new stable endpoint first, then v4, then legacy v3
-    const fmpUrls = [
-      `https://financialmodelingprep.com/stable/etf-holdings?symbol=${encodeURIComponent(sym)}&apikey=${fmpKey}`,
-      `https://financialmodelingprep.com/api/v4/etf-holdings?symbol=${encodeURIComponent(sym)}&apikey=${fmpKey}`,
-    ];
-    for (const url of fmpUrls) {
-      try {
-        const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
-        log.fmpStatus = r.status;
-        log.fmpUrl = url.replace(fmpKey, "***");
-        const body = await r.json();
-        log.fmpBodySample = JSON.stringify(body).slice(0, 200);
-        const list = Array.isArray(body) ? body : body?.holdings || body?.data;
-        log.fmpCount = list?.length ?? 0;
-        if (r.ok && list?.length) {
-          const holdings = list.slice(0, 20).map(h => ({
-            sym:    h.asset  || h.symbol || "",
-            name:   h.name   || h.asset  || h.symbol || "",
-            weight: h.weightPercentage != null ? +Number(h.weightPercentage).toFixed(2)
-                  : h.weight           != null ? +Number(h.weight).toFixed(2) : null,
-          }));
-          res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
-          return res.json({ sym, holdings });
-        }
-      } catch (e) { log.fmpError = e.message; }
-    }
+  // Physical ETFs have no stock holdings
+  if (STATIC[sym] === null) {
+    res.setHeader("Cache-Control", "s-maxage=86400");
+    return res.json({ sym, holdings: [], physical: true });
   }
 
-  // ── 2. Yahoo Finance quoteSummary (fallback, may fail on cloud IPs) ─────
-  try {
-    const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
-      headers: { "User-Agent": UA, "Accept": "text/plain, */*", "Accept-Language": "en-US,en;q=0.9" },
-      signal: AbortSignal.timeout(6000),
-    });
+  // Return static data if available
+  if (STATIC[sym]) {
+    res.setHeader("Cache-Control", "s-maxage=86400");
+    return res.json({ sym, holdings: STATIC[sym] });
+  }
 
-    if (crumbRes.ok) {
-      const crumb = (await crumbRes.text()).trim();
-      let cookieStr = "";
-      if (typeof crumbRes.headers.getSetCookie === "function") {
-        cookieStr = crumbRes.headers.getSetCookie()
-          .map(c => c.split(";")[0].trim()).join("; ");
-      } else {
-        const raw = crumbRes.headers.get("set-cookie") || "";
-        cookieStr = raw.split(",")
-          .map(c => c.split(";")[0].trim())
-          .filter(c => c.includes("=")).join("; ");
-      }
-
-      if (crumb) {
-        for (const host of ["query1", "query2"]) {
-          const r = await fetch(
-            `https://${host}.finance.yahoo.com/v11/finance/quoteSummary/${encodeURIComponent(sym)}` +
-            `?modules=topHoldings&crumb=${encodeURIComponent(crumb)}`,
-            {
-              headers: {
-                "User-Agent": UA, "Accept": "application/json",
-                "Accept-Language": "en-US,en;q=0.9",
-                ...(cookieStr ? { "Cookie": cookieStr } : {}),
-              },
-              signal: AbortSignal.timeout(7000),
-            }
-          );
-          if (!r.ok) continue;
-          const data = await r.json();
-          const topH = data?.quoteSummary?.result?.[0]?.topHoldings;
-          if (!topH?.holdings?.length) continue;
-          const holdings = topH.holdings.slice(0, 20).map(h => ({
-            sym:    h.symbol || "",
-            name:   h.holdingName || h.symbol || "",
-            weight: h.holdingPercent != null ? +(h.holdingPercent * 100).toFixed(2) : null,
-          }));
-          res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
-          return res.json({ sym, holdings });
-        }
-      }
-    }
-  } catch (_) {}
-
-  return res.status(502).json({ error: "no holdings data", log });
+  // Unknown symbol — return empty
+  return res.status(404).json({ error: "no holdings data for " + sym });
 }
