@@ -12,27 +12,32 @@ export default async function handler(req, res) {
 
   // ── 1. Financial Modeling Prep — free tier includes ETF holdings ────────
   if (fmpKey) {
-    try {
-      const r = await fetch(
-        `https://financialmodelingprep.com/api/v3/etf-holder/${encodeURIComponent(sym)}?apikey=${fmpKey}`,
-        { signal: AbortSignal.timeout(6000) }
-      );
-      log.fmpStatus = r.status;
-      const body = await r.json();
-      log.fmpBodySample = JSON.stringify(body).slice(0, 200);
-      const list = Array.isArray(body) ? body : body?.holdings || body?.etfHolders;
-      log.fmpCount = list?.length ?? 0;
-      if (r.ok && list?.length) {
-        const holdings = list.slice(0, 20).map(h => ({
-          sym:    h.asset  || h.symbol || "",
-          name:   h.name   || h.asset  || h.symbol || "",
-          weight: h.weightPercentage != null ? +Number(h.weightPercentage).toFixed(2)
-                : h.weight           != null ? +Number(h.weight).toFixed(2) : null,
-        }));
-        res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
-        return res.json({ sym, holdings });
-      }
-    } catch (e) { log.fmpError = e.message; }
+    // Try new stable endpoint first, then v4, then legacy v3
+    const fmpUrls = [
+      `https://financialmodelingprep.com/stable/etf-holdings?symbol=${encodeURIComponent(sym)}&apikey=${fmpKey}`,
+      `https://financialmodelingprep.com/api/v4/etf-holdings?symbol=${encodeURIComponent(sym)}&apikey=${fmpKey}`,
+    ];
+    for (const url of fmpUrls) {
+      try {
+        const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        log.fmpStatus = r.status;
+        log.fmpUrl = url.replace(fmpKey, "***");
+        const body = await r.json();
+        log.fmpBodySample = JSON.stringify(body).slice(0, 200);
+        const list = Array.isArray(body) ? body : body?.holdings || body?.data;
+        log.fmpCount = list?.length ?? 0;
+        if (r.ok && list?.length) {
+          const holdings = list.slice(0, 20).map(h => ({
+            sym:    h.asset  || h.symbol || "",
+            name:   h.name   || h.asset  || h.symbol || "",
+            weight: h.weightPercentage != null ? +Number(h.weightPercentage).toFixed(2)
+                  : h.weight           != null ? +Number(h.weight).toFixed(2) : null,
+          }));
+          res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
+          return res.json({ sym, holdings });
+        }
+      } catch (e) { log.fmpError = e.message; }
+    }
   }
 
   // ── 2. Yahoo Finance quoteSummary (fallback, may fail on cloud IPs) ─────
