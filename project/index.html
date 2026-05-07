@@ -1869,16 +1869,56 @@
 
   /* Table */
   .sect-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid var(--line); }
-  .sect-table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
-  .sect-table th { font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em; color: var(--fg-3); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--bg-1); }
-  .sect-table td { padding: 7px 10px; border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
+  .sect-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+  .sect-table th { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; color: var(--fg-3); text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); background: var(--bg-1); }
+  .sect-table td { padding: 8px 10px; border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent); cursor: pointer; }
   .sect-table tr:last-child td { border-bottom: none; }
   .sect-table tr:hover td { background: var(--bg-2); }
-  .sect-table .sc-rank { color: var(--fg-3); font-family: var(--f-mono); font-size: 11px; }
-  .sect-table .sc-sym  { font-family: var(--f-mono); font-weight: 700; color: var(--accent); }
-  .sect-table .sc-score{ font-weight: 700; }
-  .sect-table .sc-state{ font-size: 11px; font-weight: 700; }
-  .sect-table .sc-slope{ font-family: var(--f-mono); font-size: 11px; }
+  .sect-table .sc-rank  { color: var(--fg-3); font-family: var(--f-mono); font-size: 12px; }
+  .sect-table .sc-sym   { font-family: var(--f-mono); font-weight: 700; color: var(--accent); font-size: 13px; }
+  .sect-table .sc-score { font-weight: 700; }
+  .sect-table .sc-state { font-size: 12px; font-weight: 700; }
+  .sect-table .sc-slope { font-family: var(--f-mono); font-size: 12px; }
+  .sect-table .sc-name-en { font-size: 13px; font-weight: 600; }
+  .sect-table .sc-name-zh { font-size: 10px; color: var(--fg-3); margin-top: 1px; }
+
+  /* Holdings Panel */
+  .hld-backdrop { position: fixed; inset: 0; background: oklch(0 0 0 / .55); z-index: 80; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .hld-backdrop.open { opacity: 1; pointer-events: auto; }
+  .hld-panel {
+    position: fixed; z-index: 81; background: var(--bg-1); border: 1px solid var(--line);
+    border-radius: 16px; width: 460px; max-width: 92vw;
+    top: 50%; left: 50%; transform: translate(-50%, -44%); opacity: 0;
+    transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .22s;
+    display: flex; flex-direction: column; max-height: 80vh; overflow: hidden;
+    pointer-events: none;
+  }
+  .hld-panel.open { transform: translate(-50%, -50%); opacity: 1; pointer-events: auto; }
+  .hld-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 18px 12px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+  .hld-head-sym  { font-size: 20px; font-weight: 800; font-family: var(--f-mono); letter-spacing: 0.02em; }
+  .hld-head-en   { font-size: 13px; font-weight: 500; color: var(--fg-2); margin-top: 2px; }
+  .hld-head-zh   { font-size: 11px; color: var(--fg-3); margin-top: 2px; }
+  .hld-close { background: none; border: 1px solid var(--line); border-radius: 7px; width: 28px; height: 28px; cursor: pointer; color: var(--fg-2); font-size: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .hld-body { overflow-y: auto; flex: 1; padding: 4px 0 8px; }
+  .hld-row { display: grid; grid-template-columns: 28px 52px 1fr 46px; align-items: center; gap: 8px; padding: 8px 18px; }
+  .hld-row:hover { background: var(--bg-2); }
+  .hld-num  { font-size: 11px; color: var(--fg-3); font-family: var(--f-mono); text-align: right; }
+  .hld-code { font-size: 13px; font-weight: 700; font-family: var(--f-mono); color: var(--accent); }
+  .hld-name { font-size: 12px; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hld-wt   { font-size: 12px; font-family: var(--f-mono); font-weight: 600; color: var(--fg-0); text-align: right; }
+  .hld-bar-wrap { grid-column: 1 / -1; height: 3px; background: var(--bg-2); border-radius: 2px; margin-top: -4px; margin-bottom: 2px; }
+  .hld-bar  { height: 100%; background: var(--accent); border-radius: 2px; }
+  .hld-footer { padding: 10px 18px; border-top: 1px solid var(--line); font-size: 11px; color: var(--fg-3); display: flex; justify-content: space-between; flex-shrink: 0; }
+  .hld-no-data { padding: 40px 20px; text-align: center; color: var(--fg-3); font-size: 13px; }
+
+  @media (max-width: 768px) {
+    .hld-panel {
+      width: 100%; max-width: 100%; border-radius: 16px 16px 0 0;
+      top: auto; left: 0; right: 0; bottom: 0; max-height: 82vh;
+      transform: translateY(100%); opacity: 1;
+    }
+    .hld-panel.open { transform: translateY(0); }
+  }
 
   @media (max-width: 768px) {
     .sect-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
@@ -2354,6 +2394,14 @@
 </div>
 
 <!-- Mobile FAB -->
+<!-- Holdings Panel -->
+<div class="hld-backdrop" id="hld-backdrop"></div>
+<div class="hld-panel" id="hld-panel" aria-hidden="true">
+  <div class="hld-head" id="hld-head"></div>
+  <div class="hld-body" id="hld-body"></div>
+  <div class="hld-footer" id="hld-footer"></div>
+</div>
+
 <button class="mobile-fab" id="mobile-fab" aria-label="新建持仓">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
     <path d="M12 5v14M5 12h14"/>

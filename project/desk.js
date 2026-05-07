@@ -3010,7 +3010,7 @@
     { sym: "BKCH", zh: "区块链",        en: "Blockchain",                  layer: 3 },
     { sym: "GLD",  zh: "黄金",          en: "Gold",                        layer: 3 },
     { sym: "COPX", zh: "铜矿",          en: "Copper Mining",               layer: 3 },
-    { sym: "REMX", zh: "稀土材料",      en: "Rare Earth & Critical Materials", layer: 3 },
+    { sym: "REMX", zh: "稀土材料",      en: "Critical Materials",              layer: 3 },
     { sym: "GRID", zh: "清洁能源电网",  en: "Clean Energy Smart Grid",     layer: 3 },
     { sym: "MAGS", zh: "科技七巨头",    en: "Magnificent Seven",            layer: 3 },
     { sym: "URA",  zh: "铀矿/核能",     en: "Uranium & Nuclear Energy",     layer: 3 },
@@ -3100,10 +3100,10 @@
   function sectRowHTML(item, rank) {
     const gc = v => v >= 0 ? "#22c55e" : "#ef4444";
     const gs = v => v >= 0 ? "+" : "";
-    return `<tr>
+    return `<tr data-sym="${item.sym}" data-zh="${item.zh}" data-en="${item.en}" style="cursor:pointer">
       <td class="sc-rank">${rank}</td>
       <td class="sc-sym">${item.sym}</td>
-      <td>${item.zh} <span style="font-size:9.5px;color:var(--fg-3)">${item.en}</span></td>
+      <td><div class="sc-name-en">${item.en}</div><div class="sc-name-zh">${item.zh}</div></td>
       <td class="sc-score" style="color:${gc(item.score)}">${gs(item.score)}${item.score.toFixed(1)}</td>
       <td style="color:${gc(item.retF)}">${gs(item.retF)}${item.retF}%</td>
       <td style="color:${gc(item.a20)}">${gs(item.a20)}${item.a20}%</td>
@@ -3163,6 +3163,95 @@
     );
     const sel = el.querySelector("#sect-sort-sel");
     if (sel) sel.addEventListener("change", () => { sectorSort = sel.value; renderSectorRotation(); });
+
+    // Click: open holdings panel
+    el.querySelectorAll(".sect-card").forEach(card => {
+      const sym = card.querySelector(".sect-card-sym")?.textContent?.trim();
+      const etf = sectorData?.find(e => e.sym === sym);
+      if (sym && etf) card.addEventListener("click", () => openHoldingsPanel(etf));
+    });
+    el.querySelectorAll("tr[data-sym]").forEach(row => {
+      row.addEventListener("click", () => {
+        const etf = sectorData?.find(e => e.sym === row.dataset.sym);
+        if (etf) openHoldingsPanel(etf);
+      });
+    });
+  }
+
+  // ---- Holdings Panel ----
+  const holdingsCache = {};
+
+  function openHoldingsPanel(etf) {
+    const panel = $("#hld-panel"), backdrop = $("#hld-backdrop");
+    const head = $("#hld-head"), body = $("#hld-body"), footer = $("#hld-footer");
+    if (!panel || !head || !body) return;
+
+    head.innerHTML = `
+      <div>
+        <div class="hld-head-sym">${etf.sym}</div>
+        <div class="hld-head-en">${etf.en}</div>
+        <div class="hld-head-zh">${etf.zh}</div>
+      </div>
+      <button class="hld-close" id="hld-close-btn">✕</button>`;
+    body.innerHTML = `<div class="hld-no-data">加载持仓数据…</div>`;
+    if (footer) footer.innerHTML = "";
+
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    backdrop?.classList.add("open");
+    document.body.style.overflow = "hidden";
+
+    $("#hld-close-btn")?.addEventListener("click", closeHoldingsPanel);
+    backdrop?.addEventListener("click", closeHoldingsPanel, { once: true });
+
+    fetchEtfHoldings(etf.sym).then(data => renderHoldings(body, footer, data));
+  }
+
+  function closeHoldingsPanel() {
+    $("#hld-panel")?.classList.remove("open");
+    $("#hld-backdrop")?.classList.remove("open");
+    $("#hld-panel")?.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+  }
+
+  async function fetchEtfHoldings(sym) {
+    if (holdingsCache[sym]) return holdingsCache[sym];
+    try {
+      const res  = await fetch(`/api/holdings?symbol=${encodeURIComponent(sym)}`);
+      const data = await res.json();
+      holdingsCache[sym] = data;
+      return data;
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  function renderHoldings(body, footer, data) {
+    if (!body) return;
+    if (!data || data.error || !data.holdings?.length) {
+      body.innerHTML = `<div class="hld-no-data">暂无持仓数据（该 ETF 可能为实物/加密类型）</div>`;
+      if (footer) footer.innerHTML = "";
+      return;
+    }
+    const list = data.holdings;
+    const maxW  = list[0]?.weight || 1;
+    const total = +list.reduce((s, h) => s + (h.weight || 0), 0).toFixed(1);
+
+    body.innerHTML = list.map((h, i) => {
+      const barW = h.weight != null ? (h.weight / maxW * 100).toFixed(1) : 0;
+      return `
+        <div class="hld-row">
+          <span class="hld-num">${i + 1}</span>
+          <span class="hld-code">${h.sym}</span>
+          <span class="hld-name">${h.name}</span>
+          <span class="hld-wt">${h.weight != null ? h.weight + "%" : "—"}</span>
+          <div class="hld-bar-wrap"><div class="hld-bar" style="width:${barW}%"></div></div>
+        </div>`;
+    }).join("");
+
+    if (footer) footer.innerHTML = `
+      <span>前 ${list.length} 大持仓</span>
+      <span>合计 <strong>${total}%</strong></span>`;
   }
 
   async function fetchSectorData() {
