@@ -3012,6 +3012,8 @@
     { sym: "COPX", zh: "铜矿",          en: "Copper Mining",               layer: 3 },
     { sym: "REMX", zh: "稀土材料",      en: "Rare Earth & Critical Materials", layer: 3 },
     { sym: "GRID", zh: "清洁能源电网",  en: "Clean Energy Smart Grid",     layer: 3 },
+    { sym: "MAGS", zh: "科技七巨头",    en: "Magnificent Seven",            layer: 3 },
+    { sym: "URA",  zh: "铀矿/核能",     en: "Uranium & Nuclear Energy",     layer: 3 },
   ];
 
   let sectorView   = "card";
@@ -3075,16 +3077,18 @@
   function sectCardHTML(item, rank) {
     const hot = rank <= 3 && item.stateClass === "sect-up";
     const badge = hot
-      ? `<span class="sect-hot-badge">🔥 HOT</span>`
+      ? `<span class="sect-hot-badge">HOT</span>`
       : `<span class="sect-state-badge" style="background:${item.stateColor}20;color:${item.stateColor}">${item.state}</span>`;
     const gc = v => v >= 0 ? "#22c55e" : "#ef4444";
     const gs = v => v >= 0 ? "+" : "";
     return `
       <div class="sect-card ${item.stateClass}">
         <div class="sect-card-top"><span class="sect-rank">#${rank}</span>${badge}</div>
+        <div class="sect-card-main">
+          <span class="sect-card-sym">${item.sym}</span>
+          <span class="sect-card-en">${item.en}</span>
+        </div>
         <div class="sect-card-zh">${item.zh}</div>
-        <div class="sect-card-en">${item.en}</div>
-        <div class="sect-card-sym">${item.sym}</div>
         <div class="sect-card-score" style="color:${gc(item.score)}">${item.score >= 0 ? "↗" : "↘"} ${item.score.toFixed(1)}</div>
         <div class="sect-card-footer">
           <span class="sect-card-ret" style="color:${gc(item.retF)}">20D ${gs(item.retF)}${item.retF}%</span>
