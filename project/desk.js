@@ -610,16 +610,11 @@
     // filter + sort
     const data = getTableData();
     let rows = data.filter(h => {
-      if (filter === "equity" && !["equity", "etf"].includes(h.kind)) return false;
+      if (filter === "equity" && h.kind !== "equity") return false;
+      if (filter === "etf"    && h.kind !== "etf") return false;
       if (filter === "crypto" && h.kind !== "crypto") return false;
-      if (filter === "risk") {
-        const bucket = progressBucket(h);
-        if (!["Pullback", "Near Stop"].includes(bucket)) return false;
-      }
-      if (filter === "target") {
-        const bucket = progressBucket(h);
-        if (bucket !== "Near Target") return false;
-      }
+      if (filter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
+      if (filter === "target" && progressBucket(h) !== "Near Target") return false;
       if (query) {
         const q = query.toLowerCase();
         if (!(h.sym.toLowerCase().includes(q) || h.name.toLowerCase().includes(q))) return false;
@@ -682,10 +677,11 @@
     // counts
     const rc = $("#row-count"); if (rc) rc.textContent = rows.length;
     $("#c-all").textContent = data.length;
-    $("#c-eq").textContent = data.filter(h => h.kind === "equity").length;
-    $("#c-cr").textContent = data.filter(h => h.kind === "crypto").length;
-    $("#c-rk").textContent = data.filter(h => ["Pullback", "Near Stop"].includes(progressBucket(h))).length;
-    $("#c-tg").textContent = data.filter(h => progressBucket(h) === "Near Target").length;
+    $("#c-eq").textContent   = data.filter(h => h.kind === "equity").length;
+    $("#c-etf").textContent  = data.filter(h => h.kind === "etf").length;
+    $("#c-cr").textContent   = data.filter(h => h.kind === "crypto").length;
+    $("#c-rk").textContent   = data.filter(h => ["Pullback", "Near Stop"].includes(progressBucket(h))).length;
+    $("#c-tg").textContent   = data.filter(h => progressBucket(h) === "Near Target").length;
     $("#c-open").textContent = HOLDINGS.length;
     $("#c-closed").textContent = CLOSED_POSITIONS.length;
   }
@@ -1327,9 +1323,14 @@
     pendingCloseSym = sym;
     pendingCloseCtx = currentPage === "sim" ? "sim" : "desk";
     const input = $("#close-pos-price-input");
+    const qtyInput = $("#close-pos-qty-input");
     input.value = pos.last;
+    qtyInput.value = pos.qty;
+    qtyInput.max = pos.qty;
+    const hint = $("#close-pos-qty-hint");
+    if (hint) hint.textContent = `持有 ${pos.qty} 股`;
     $("#close-pos-sym-label").textContent = sym;
-    updateClosePnlPreview(pos, pos.last);
+    updateClosePnlPreview(pos, pos.last, pos.qty);
     const today = new Date().toISOString().slice(0, 10);
     const dateInput = $("#close-pos-date-input");
     dateInput.value = today;
@@ -1339,28 +1340,36 @@
     setTimeout(() => { input.select(); }, 80);
   }
 
-  function updateClosePnlPreview(pos, closePrice) {
-    const pnlDollar = (closePrice - pos.cost) * pos.qty;
-    const pnlPct = pos.cost > 0 ? pnlDollar / (pos.cost * pos.qty) : 0;
+  function updateClosePnlPreview(pos, closePrice, qty) {
+    const q = qty ?? pos.qty;
+    const pnlDollar = (closePrice - pos.cost) * q;
+    const pnlPct = pos.cost > 0 ? (closePrice - pos.cost) / pos.cost : 0;
     const sign = pnlDollar >= 0 ? "up" : "down";
+    const partial = q < pos.qty ? ` <span style="font-size:11px;opacity:0.55;margin-left:6px">(${q}/${pos.qty} 股)</span>` : "";
     const preview = $("#close-pos-pnl-preview");
     if (preview) {
       preview.innerHTML = `
         <span class="${sign}" style="font-size:20px;font-weight:700;font-family:var(--f-mono);letter-spacing:-0.5px">${fmt.signed(pnlDollar)}</span>
-        <span class="${sign}" style="font-size:12px;font-weight:600;margin-left:10px;opacity:0.85">${fmt.pct(pnlPct)}</span>`;
+        <span class="${sign}" style="font-size:12px;font-weight:600;margin-left:10px;opacity:0.85">${fmt.pct(pnlPct)}</span>${partial}`;
     }
   }
 
   function wireClosePositionModal() {
-    const input = $("#close-pos-price-input");
-    input.addEventListener("input", () => {
+    const input    = $("#close-pos-price-input");
+    const qtyInput = $("#close-pos-qty-input");
+
+    const refreshPreview = () => {
       if (!pendingCloseSym) return;
       const holdings = pendingCloseCtx === "sim" ? SIM_HOLDINGS : HOLDINGS;
       const pos = holdings.find(h => h.sym === pendingCloseSym);
       if (!pos) return;
-      const val = parseFloat(input.value);
-      if (!isNaN(val) && val > 0) updateClosePnlPreview(pos, val);
-    });
+      const price = parseFloat(input.value);
+      const qty   = Math.min(parseInt(qtyInput.value) || pos.qty, pos.qty);
+      if (!isNaN(price) && price > 0) updateClosePnlPreview(pos, price, qty);
+    };
+
+    input.addEventListener("input", refreshPreview);
+    qtyInput.addEventListener("input", refreshPreview);
 
     const closeFn = () => { pendingCloseSym = null; closeModal("close-pos-modal"); };
     $("#close-pos-modal-x").addEventListener("click", closeFn);
@@ -1373,39 +1382,62 @@
       if (!pendingCloseSym) return;
       const val = parseFloat(input.value);
       if (isNaN(val) || val <= 0) { input.focus(); return; }
+      const holdings = pendingCloseCtx === "sim" ? SIM_HOLDINGS : HOLDINGS;
+      const pos = holdings.find(h => h.sym === pendingCloseSym);
+      const closeQty = pos ? Math.min(Math.max(1, parseInt(qtyInput.value) || pos.qty), pos.qty) : null;
       const dateVal = $("#close-pos-date-input").value || new Date().toISOString().slice(0, 10);
-      closePosition(pendingCloseSym, val, dateVal);
+      closePosition(pendingCloseSym, val, dateVal, closeQty);
       pendingCloseSym = null;
       closeModal("close-pos-modal");
     });
   }
 
-  // closePosition — archives to closed array (real or sim based on ctx)
-  function closePosition(sym, closePrice, closeDate) {
+  // closePosition — full or partial close (real or sim based on ctx)
+  function closePosition(sym, closePrice, closeDate, closeQty) {
     const isSim = pendingCloseCtx === "sim";
     const holdings = isSim ? SIM_HOLDINGS : HOLDINGS;
     const closed   = isSim ? SIM_CLOSED   : CLOSED_POSITIONS;
     const pos = holdings.find(h => h.sym === sym);
     if (!pos) return;
 
-    const cp = (closePrice != null && closePrice > 0) ? closePrice : pos.last;
-    pos.closedAt = closeDate || new Date().toISOString().slice(0, 10);
-    pos.closePrice = cp;
-    pos.pnlDollar = (cp - pos.cost) * pos.qty;
-    pos.pnlPct = pos.cost > 0 ? pos.pnlDollar / (pos.cost * pos.qty) : 0;
-    pos.rMult = pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0;
-    pos.pnlFinal = pos.pnlDollar;
-    pos.exitReason = "manual";
+    const cp  = (closePrice != null && closePrice > 0) ? closePrice : pos.last;
+    const qty = (closeQty != null && closeQty > 0 && closeQty < pos.qty) ? closeQty : pos.qty;
+    const cd  = closeDate || new Date().toISOString().slice(0, 10);
 
-    holdings.splice(holdings.indexOf(pos), 1);
-    closed.push(pos);
+    if (qty < pos.qty) {
+      // Partial close — create a closed record for the sold portion
+      const notional = isSim ? simNotional : totalNotional;
+      const closedRecord = { ...pos, qty, closedAt: cd, closePrice: cp,
+        pnlDollar: Math.round((cp - pos.cost) * qty),
+        pnlPct: pos.cost > 0 ? (cp - pos.cost) / pos.cost : 0,
+        pnlFinal: Math.round((cp - pos.cost) * qty),
+        rMult: pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0,
+        exitReason: "partial" };
+      closed.push(closedRecord);
+      // Update remaining open position
+      pos.qty = pos.qty - qty;
+      pos.size = notional > 0 ? (pos.qty * pos.cost / notional) * 100 : pos.size;
+      recomputeHolding(pos, notional);
+    } else {
+      // Full close
+      pos.closedAt = cd;
+      pos.closePrice = cp;
+      pos.pnlDollar = Math.round((cp - pos.cost) * pos.qty);
+      pos.pnlPct = pos.cost > 0 ? (cp - pos.cost) / pos.cost : 0;
+      pos.rMult = pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0;
+      pos.pnlFinal = pos.pnlDollar;
+      pos.exitReason = "manual";
+      holdings.splice(holdings.indexOf(pos), 1);
+      closed.push(pos);
+    }
 
+    const isFull = !holdings.find(h => h.sym === sym); // removed from holdings = full close
     saveToStorage();
     if (isSim) {
-      if (simSelectedSym === sym) closeSimDrawer();
+      if (isFull && simSelectedSym === sym) closeSimDrawer();
       renderSimTable(); renderSimOverview();
     } else {
-      if (selectedSym === sym) closeDrawer();
+      if (isFull && selectedSym === sym) closeDrawer();
       renderTable(); renderOverview();
     }
   }
@@ -1931,9 +1963,11 @@
 
     // Filter + sort
     let rows = data.filter(h => {
-      if (simFilter === "equity" && !["equity", "etf"].includes(h.kind)) return false;
+      if (simFilter === "equity" && h.kind !== "equity") return false;
+      if (simFilter === "etf"    && h.kind !== "etf") return false;
       if (simFilter === "crypto" && h.kind !== "crypto") return false;
-      if (simFilter === "risk") { if (!["Pullback", "Near Stop"].includes(progressBucket(h))) return false; }
+      if (simFilter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
+      if (simFilter === "target" && progressBucket(h) !== "Near Target") return false;
       if (simQuery) {
         const q = simQuery.toLowerCase();
         if (!(h.sym.toLowerCase().includes(q) || (h.name || "").toLowerCase().includes(q))) return false;
@@ -2013,9 +2047,11 @@
     setCount("sim-c-open",   SIM_HOLDINGS.length);
     setCount("sim-c-closed", SIM_CLOSED.length);
     setCount("sim-c-all",    allData.length);
-    setCount("sim-c-eq",     allData.filter(h => ["equity","etf"].includes(h.kind)).length);
+    setCount("sim-c-eq",     allData.filter(h => h.kind === "equity").length);
+    setCount("sim-c-etf",    allData.filter(h => h.kind === "etf").length);
     setCount("sim-c-cr",     allData.filter(h => h.kind === "crypto").length);
-    setCount("sim-c-rk",     allData.filter(h => ["Dip","Pullback","Near Stop"].includes(progressBucket(h))).length);
+    setCount("sim-c-rk",     allData.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
+    setCount("sim-c-tg",     allData.filter(h => progressBucket(h) === "Near Target").length);
   }
 
   function openSimDrawer(sym) {

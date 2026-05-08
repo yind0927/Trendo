@@ -32,7 +32,7 @@ window.BUCKET_STATUS = {
   "Early":       { label: "初期 · Early",           cls: "early",       color: "var(--orange)"        },
   "Midway":      { label: "中期 · Midway",          cls: "midway",      color: "var(--warn)"          },
   "On Track":    { label: "进行中 · On Track",      cls: "on-track",    color: "var(--accent)"        },
-  "Near Target": { label: "接近止盈 · Near Target", cls: "near-target", color: "var(--ok)"            },
+  "Near Target": { label: "近止盈 · Near Target",    cls: "near-target", color: "var(--ok)"            },
 };
 
 // columns configuration for the main table (id, label, right-align, visible by default)

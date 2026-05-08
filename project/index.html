@@ -1300,19 +1300,19 @@
   .status.near-target .dot { background: oklch(0.78 0.17 145); }
 
   .status.near-stop {
-    background: oklch(0.70 0.19 25 / .14);
-    color: oklch(0.70 0.19 25);
-    border: 1px solid oklch(0.70 0.19 25 / .35);
+    background: oklch(0.55 0.23 18 / .18);
+    color: oklch(0.58 0.23 18);
+    border: 1px solid oklch(0.55 0.23 18 / .40);
     animation: pulseDanger 2.4s infinite;
   }
-  .status.near-stop .dot { background: oklch(0.70 0.19 25); }
+  .status.near-stop .dot { background: oklch(0.58 0.23 18); }
 
   .status.pullback {
-    background: oklch(0.70 0.19 25 / .09);
-    color: oklch(0.70 0.19 25 / .75);
-    border: 1px solid oklch(0.70 0.19 25 / .25);
+    background: oklch(0.76 0.13 18 / .13);
+    color: oklch(0.76 0.13 18);
+    border: 1px solid oklch(0.76 0.13 18 / .30);
   }
-  .status.pullback .dot { background: oklch(0.70 0.19 25 / .6); }
+  .status.pullback .dot { background: oklch(0.76 0.13 18); }
 
   /* ALLOCATION BAR CHART (replaces pie) */
   .ov-alloc { flex-direction: column; gap: 8px; align-items: stretch; }
@@ -2166,10 +2166,11 @@
       </div>
       <div class="filters">
         <button class="filter-chip active" data-filter="all">全部 <span class="c" id="c-all">15</span></button>
-        <button class="filter-chip" data-filter="equity">美股 <span class="c" id="c-eq">10</span></button>
-        <button class="filter-chip" data-filter="crypto">加密 <span class="c" id="c-cr">5</span></button>
-        <button class="filter-chip" data-filter="risk">风险项 <span class="c" id="c-rk">5</span></button>
-        <button class="filter-chip" data-filter="target">近目标 <span class="c" id="c-tg">2</span></button>
+        <button class="filter-chip" data-filter="equity">美股 <span class="c" id="c-eq">0</span></button>
+        <button class="filter-chip" data-filter="etf">ETF <span class="c" id="c-etf">0</span></button>
+        <button class="filter-chip" data-filter="crypto">加密 <span class="c" id="c-cr">0</span></button>
+        <button class="filter-chip" data-filter="risk">近止损 <span class="c" id="c-rk">0</span></button>
+        <button class="filter-chip" data-filter="target">近止盈 <span class="c" id="c-tg">0</span></button>
       </div>
     </div>
     <div style="overflow-x:auto;">
@@ -2362,10 +2363,12 @@
       <input id="sim-search-input" placeholder="搜索…">
     </div>
     <div class="sim-chips">
-      <button class="filter-chip active" data-simfilter="all">All <span id="sim-c-all">0</span></button>
-      <button class="filter-chip" data-simfilter="equity">股票 <span id="sim-c-eq">0</span></button>
-      <button class="filter-chip" data-simfilter="crypto">Crypto <span id="sim-c-cr">0</span></button>
-      <button class="filter-chip" data-simfilter="risk">风险 <span id="sim-c-rk">0</span></button>
+      <button class="filter-chip active" data-simfilter="all">全部 <span id="sim-c-all">0</span></button>
+      <button class="filter-chip" data-simfilter="equity">美股 <span id="sim-c-eq">0</span></button>
+      <button class="filter-chip" data-simfilter="etf">ETF <span id="sim-c-etf">0</span></button>
+      <button class="filter-chip" data-simfilter="crypto">加密 <span id="sim-c-cr">0</span></button>
+      <button class="filter-chip" data-simfilter="risk">近止损 <span id="sim-c-rk">0</span></button>
+      <button class="filter-chip" data-simfilter="target">近止盈 <span id="sim-c-tg">0</span></button>
     </div>
   </div>
 
@@ -2561,6 +2564,10 @@
     <div class="form-row">
       <label>平仓价格</label>
       <input type="number" id="close-pos-price-input" placeholder="输入平仓价格" step="0.01" min="0"/>
+    </div>
+    <div class="form-row">
+      <label>平仓数量 <span id="close-pos-qty-hint" style="font-weight:400;color:var(--fg-3);font-size:11px"></span></label>
+      <input type="number" id="close-pos-qty-input" placeholder="股数" step="1" min="1"/>
     </div>
     <div class="form-row">
       <label>平仓日期</label>
