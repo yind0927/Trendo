@@ -1677,7 +1677,7 @@
   }
 
   async function fetchPrices() {
-    const all = [...HOLDINGS, ...SIM_HOLDINGS];
+    const all = [...SIM_HOLDINGS, ...HOLDINGS];
     if (!all.length) return;
 
     const stocks  = [...new Set(all.filter(h => h.kind !== "crypto").map(h => h.sym))];
