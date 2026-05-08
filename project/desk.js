@@ -2524,10 +2524,11 @@
       let cls = "cal-cell";
       if (isWknd)  cls += " wknd";
       if (isToday) cls += " today";
-      if (pnl != null) cls += pnl >= 0 ? " win" : " loss";
+      if (!isWknd && pnl != null) cls += pnl >= 0 ? " win" : " loss";
 
       // Realized PnL text; today's floating PnL shown muted if no realized trade
       let pnlHTML = "";
+      if (!isWknd) {
       if (pnl != null) {
         const col  = pnl >= 0 ? "var(--up)" : "var(--down)";
         const sign = pnl >= 0 ? "+" : "−";
@@ -2551,10 +2552,11 @@
           pnlHTML = `<div class="cal-pnl" style="color:${col}${opacity}">${amt}</div>`;
         }
       }
+      } // end !isWknd
 
       // Entry chips: dot + ticker sym, colored by floating PnL
       let entryHTML = "";
-      if (entries.length) {
+      if (!isWknd && entries.length) {
         const chips = entries.slice(0, 2).map(e => {
           const col = e.pnl == null ? "var(--fg-3)"
                     : e.pnl >= 0   ? "var(--up)" : "var(--down)";
