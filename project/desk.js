@@ -3065,6 +3065,7 @@
   let sectorFilter = "all";
   let sectorSort   = "score";
   let sectorData   = null;
+  let vooStats     = null;
 
   function linregSlope(arr) {
     const n = arr.length;
@@ -3189,9 +3190,24 @@
           <tbody>${sorted.map((e, i) => sectRowHTML(e, i + 1)).join("")}</tbody>
         </table></div>`;
 
+    const gc = v => v >= 0 ? "var(--up)" : "var(--down)";
+    const gs = v => v >= 0 ? "+" : "";
+    const vooBenchHTML = vooStats ? `
+      <div class="voo-bench-strip">
+        <span class="voo-bench-label">VOO</span>
+        <span class="voo-bench-stat" style="color:${gc(vooStats.ret20)}">20D ${gs(vooStats.ret20)}${vooStats.ret20}%</span>
+        <span class="voo-bench-divider">·</span>
+        <span class="voo-bench-stat" style="color:${gc(vooStats.ret60)}">60D ${gs(vooStats.ret60)}${vooStats.ret60}%</span>
+        <span class="voo-bench-divider">·</span>
+        <span class="voo-bench-score" style="color:${gc(vooStats.score)}">${vooStats.score >= 0 ? "↗" : "↘"} ${vooStats.score.toFixed(1)}</span>
+      </div>` : "";
+
     el.innerHTML = `
       <div class="sect-head">
-        <div class="sect-title">板块轮动 <span style="font-size:9px;color:var(--fg-3);font-weight:400;margin-left:4px">基准 VOO · ${sorted.length} 个</span></div>
+        <div class="sect-title-row">
+          <div class="sect-title">板块轮动 <span style="font-size:9px;color:var(--fg-3);font-weight:400;margin-left:4px">基准 VOO · ${sorted.length} 个</span></div>
+          ${vooBenchHTML}
+        </div>
         <div class="sect-controls">
           <div class="sect-filter">${filterBtns}</div>
           <select class="sect-sort" id="sect-sort-sel">${sortOpts}</select>
@@ -3313,6 +3329,16 @@
 
       const vooRaw = data.results[BENCH_SYM] || {};
       const vooCloses = Object.keys(vooRaw).sort().map(k => vooRaw[k]);
+
+      if (vooCloses.length >= 62) {
+        const r20 = vooCloses.at(-1) / vooCloses.at(-21) - 1;
+        const r60 = vooCloses.at(-1) / vooCloses.at(-61) - 1;
+        vooStats = {
+          ret20: +(r20 * 100).toFixed(2),
+          ret60: +(r60 * 100).toFixed(2),
+          score: +((r20 * 1.0 + r60 * 1.5) * 100).toFixed(2),
+        };
+      }
 
       sectorData = SECTOR_ETFS.map(etf => {
         const raw = data.results[etf.sym] || {};
