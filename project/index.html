@@ -1442,6 +1442,9 @@
   table.sim-holdings tbody tr:hover::before { background: var(--accent); }
   table.sim-holdings tbody tr:hover { background: color-mix(in oklch,var(--bg-2) 70%,transparent); }
   table.sim-holdings tbody tr.selected { background: var(--accent-dim); }
+  table.sim-holdings tbody tr.date-group-hdr { cursor: default; background: transparent !important; }
+  table.sim-holdings tbody tr.date-group-hdr::before { display: none; }
+  table.sim-holdings tbody tr.date-group-hdr td { padding: 14px 10px 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); border-bottom: 1px solid var(--line); }
   table.sim-holdings tbody tr.selected::before { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
   table.sim-holdings tbody tr:hover .close-pos-btn,
   table.sim-holdings tbody tr:hover .delete-btn { opacity: 1; }

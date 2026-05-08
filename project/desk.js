@@ -1943,7 +1943,9 @@
 
     // Body
     const cols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
-    tbody.innerHTML = rows.map(h => {
+    const colSpan = cols.length + 1;
+
+    const makeRow = h => {
       const isSel = simSelectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
       const actions = simActiveTab === "open"
@@ -1955,7 +1957,29 @@
              <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除">✕</button>
            </div></td>`;
       return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
-    }).join("");
+    };
+
+    if (simActiveTab === "open") {
+      // Group by entry date, render sections newest-first
+      const groups = {};
+      rows.forEach(h => {
+        const d = h.entry?.slice(0, 10) || "—";
+        (groups[d] = groups[d] || []).push(h);
+      });
+      const today = new Date().getFullYear();
+      tbody.innerHTML = Object.keys(groups)
+        .sort((a, b) => b.localeCompare(a))
+        .map(date => {
+          const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
+          const label = dt
+            ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== today && { year: "numeric" }) })
+            : "—";
+          const hdr = `<tr class="date-group-hdr"><td colspan="${colSpan}">${label}</td></tr>`;
+          return hdr + groups[date].map(makeRow).join("");
+        }).join("");
+    } else {
+      tbody.innerHTML = rows.map(makeRow).join("");
+    }
 
     $$("tr", tbody).forEach(tr => {
       tr.addEventListener("click", e => {
