@@ -1249,7 +1249,7 @@
 
       const targetHoldings = isSim ? SIM_HOLDINGS : HOLDINGS;
       const targetClosed   = isSim ? SIM_CLOSED   : CLOSED_POSITIONS;
-      if (targetHoldings.find(h => h.sym === sym) || targetClosed.find(h => h.sym === sym)) {
+      if (targetHoldings.find(h => h.sym === sym)) {
         alert("Position already exists");
         return;
       }
