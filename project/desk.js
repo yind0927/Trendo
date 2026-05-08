@@ -1289,6 +1289,8 @@
       if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); }
       else { renderTable(); renderOverview(); }
       newPositionContext = "desk";
+      lastPriceFetch = 0; // trigger immediate price fetch on next tick
+      fetchPrices();
     });
   }
 
