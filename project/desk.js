@@ -721,7 +721,7 @@
         if (activeTab === "closed") {
           const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
           const win = pnl > 0;
-          return `<td><span class="status ${win ? "on-track" : "near-stop"}"><span class="dot"></span>${win ? "盈利 · Win" : "亏损 · Loss"}</span></td>`;
+          return `<td><span class="status ${win ? "ok" : "danger"}"><span class="dot"></span>${win ? "盈利 · Win" : "亏损 · Loss"}</span></td>`;
         }
         const bucket = progressBucket(h);
         const status = BUCKET_STATUS[bucket];
