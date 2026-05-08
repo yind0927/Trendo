@@ -970,6 +970,13 @@
                 <span class="exec-price mono">$${price(h.cost)}</span>
                 <span class="exec-qty muted">${h.qty} 股</span>
               </div>`}
+            ${h.closedAt ? `
+              <div class="exec-item">
+                <span class="exec-type" style="background:color-mix(in oklch,var(--fg-3) 18%,transparent);color:var(--fg-2)">平仓</span>
+                <span class="exec-date">${fmt.date(h.closedAt)}</span>
+                <span class="exec-price mono">$${price(h.closePrice ?? h.last)}</span>
+                <span class="exec-qty muted">${h.qty} 股</span>
+              </div>` : ""}
           </div>
 
           <div class="plan-subhead">Journal 笔记</div>
@@ -1978,7 +1985,10 @@
           return hdr + groups[date].map(makeRow).join("");
         }).join("");
     } else {
+      const prevTab = activeTab;
+      activeTab = simActiveTab;
       tbody.innerHTML = rows.map(makeRow).join("");
+      activeTab = prevTab;
     }
 
     $$("tr", tbody).forEach(tr => {
