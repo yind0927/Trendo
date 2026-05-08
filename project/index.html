@@ -2164,13 +2164,18 @@
         <button class="tab active" data-tab="open">Open <span class="c" id="c-open">15</span></button>
         <button class="tab" data-tab="closed">Closed <span class="c" id="c-closed">0</span></button>
       </div>
-      <div class="filters">
-        <button class="filter-chip active" data-filter="all">全部 <span class="c" id="c-all">15</span></button>
+      <div class="filters" id="filters-open">
+        <button class="filter-chip active" data-filter="all">全部 <span class="c" id="c-all">0</span></button>
         <button class="filter-chip" data-filter="equity">美股 <span class="c" id="c-eq">0</span></button>
         <button class="filter-chip" data-filter="etf">ETF <span class="c" id="c-etf">0</span></button>
         <button class="filter-chip" data-filter="crypto">加密 <span class="c" id="c-cr">0</span></button>
         <button class="filter-chip" data-filter="risk">近止损 <span class="c" id="c-rk">0</span></button>
         <button class="filter-chip" data-filter="target">近止盈 <span class="c" id="c-tg">0</span></button>
+      </div>
+      <div class="filters" id="filters-closed" style="display:none">
+        <button class="filter-chip active" data-filter-closed="all">全部 <span class="c" id="c-cl-all">0</span></button>
+        <button class="filter-chip" data-filter-closed="profit">盈利 <span class="c" id="c-cl-profit">0</span></button>
+        <button class="filter-chip" data-filter-closed="loss">亏损 <span class="c" id="c-cl-loss">0</span></button>
       </div>
     </div>
     <div style="overflow-x:auto;">
@@ -2362,13 +2367,18 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
       <input id="sim-search-input" placeholder="搜索…">
     </div>
-    <div class="sim-chips">
+    <div class="sim-chips" id="sim-filters-open">
       <button class="filter-chip active" data-simfilter="all">全部 <span id="sim-c-all">0</span></button>
       <button class="filter-chip" data-simfilter="equity">美股 <span id="sim-c-eq">0</span></button>
       <button class="filter-chip" data-simfilter="etf">ETF <span id="sim-c-etf">0</span></button>
       <button class="filter-chip" data-simfilter="crypto">加密 <span id="sim-c-cr">0</span></button>
       <button class="filter-chip" data-simfilter="risk">近止损 <span id="sim-c-rk">0</span></button>
       <button class="filter-chip" data-simfilter="target">近止盈 <span id="sim-c-tg">0</span></button>
+    </div>
+    <div class="sim-chips" id="sim-filters-closed" style="display:none">
+      <button class="filter-chip active" data-simfilter-closed="all">全部 <span id="sim-c-cl-all">0</span></button>
+      <button class="filter-chip" data-simfilter-closed="profit">盈利 <span id="sim-c-cl-profit">0</span></button>
+      <button class="filter-chip" data-simfilter-closed="loss">亏损 <span id="sim-c-cl-loss">0</span></button>
     </div>
   </div>
 

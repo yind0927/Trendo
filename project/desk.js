@@ -61,7 +61,7 @@
       ${card({
         label: "当前持仓数", info: false,
         value: `${HOLDINGS.length}`,
-        sub: `<span class="chip neu">${eqLabel}</span><span class="chip neu">${crCount} 加密</span>`,
+        sub: `<span class="muted">现持仓</span>`,
         spark: ""
       })}
       ${pieCard()}
@@ -392,7 +392,7 @@
     return `<img src="${src}" decoding="async" onerror="_trLogoErr(this,'${h.sym}','${h.kind || ""}')">`;
   }
 
-  let sortKey = "pnl", sortDir = -1, filter = "all", query = "", selectedSym = null;
+  let sortKey = "pnl", sortDir = -1, filter = "all", closedFilter = "all", query = "", selectedSym = null;
   let activeTab = "open";
   let totalNotional = 60000;
   let reviewPeriod = "week";
@@ -411,7 +411,7 @@
   // Simulation state
   let simActiveTab = "open";
   let simSortKey = "pnl", simSortDir = -1;
-  let simFilter = "all", simQuery = "";
+  let simFilter = "all", simClosedFilter = "all", simQuery = "";
   let simSelectedSym = null;
   let simNotional = 100000;
   let newPositionContext = "desk"; // "desk" | "sim"
@@ -610,11 +610,17 @@
     // filter + sort
     const data = getTableData();
     let rows = data.filter(h => {
-      if (filter === "equity" && h.kind !== "equity") return false;
-      if (filter === "etf"    && h.kind !== "etf") return false;
-      if (filter === "crypto" && h.kind !== "crypto") return false;
-      if (filter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
-      if (filter === "target" && progressBucket(h) !== "Near Target") return false;
+      if (activeTab === "closed") {
+        const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
+        if (closedFilter === "profit" && pnl <= 0) return false;
+        if (closedFilter === "loss"   && pnl >  0) return false;
+      } else {
+        if (filter === "equity" && h.kind !== "equity") return false;
+        if (filter === "etf"    && h.kind !== "etf") return false;
+        if (filter === "crypto" && h.kind !== "crypto") return false;
+        if (filter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
+        if (filter === "target" && progressBucket(h) !== "Near Target") return false;
+      }
       if (query) {
         const q = query.toLowerCase();
         if (!(h.sym.toLowerCase().includes(q) || h.name.toLowerCase().includes(q))) return false;
@@ -676,14 +682,25 @@
 
     // counts
     const rc = $("#row-count"); if (rc) rc.textContent = rows.length;
-    $("#c-all").textContent = data.length;
-    $("#c-eq").textContent   = data.filter(h => h.kind === "equity").length;
-    $("#c-etf").textContent  = data.filter(h => h.kind === "etf").length;
-    $("#c-cr").textContent   = data.filter(h => h.kind === "crypto").length;
-    $("#c-rk").textContent   = data.filter(h => ["Pullback", "Near Stop"].includes(progressBucket(h))).length;
-    $("#c-tg").textContent   = data.filter(h => progressBucket(h) === "Near Target").length;
-    $("#c-open").textContent = HOLDINGS.length;
+    $("#c-open").textContent   = HOLDINGS.length;
     $("#c-closed").textContent = CLOSED_POSITIONS.length;
+    if (activeTab === "closed") {
+      const safe = el => { const e = $(el); if (e) e.textContent = v; };
+      const cp = CLOSED_POSITIONS;
+      const profit = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
+      const loss   = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length;
+      const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+      set("#c-cl-all",    cp.length);
+      set("#c-cl-profit", profit);
+      set("#c-cl-loss",   loss);
+    } else {
+      $("#c-all").textContent  = data.length;
+      $("#c-eq").textContent   = data.filter(h => h.kind === "equity").length;
+      $("#c-etf").textContent  = data.filter(h => h.kind === "etf").length;
+      $("#c-cr").textContent   = data.filter(h => h.kind === "crypto").length;
+      $("#c-rk").textContent   = data.filter(h => ["Pullback", "Near Stop"].includes(progressBucket(h))).length;
+      $("#c-tg").textContent   = data.filter(h => progressBucket(h) === "Near Target").length;
+    }
   }
 
   function renderCell(h, id) {
@@ -1166,6 +1183,13 @@
         $$(".panel-head .tab").forEach(t => t.classList.remove("active"));
         tab.classList.add("active");
         activeTab = tab.dataset.tab;
+        filter = "all"; closedFilter = "all";
+        const isOpen = activeTab === "open";
+        const fo = $("#filters-open"), fc = $("#filters-closed");
+        if (fo) fo.style.display = isOpen ? "" : "none";
+        if (fc) fc.style.display = isOpen ? "none" : "";
+        $$("[data-filter]").forEach(x => x.classList.toggle("active", x.dataset.filter === "all"));
+        $$("[data-filter-closed]").forEach(x => x.classList.toggle("active", x.dataset.filterClosed === "all"));
         closeDrawer();
         renderTable();
       });
@@ -1507,12 +1531,20 @@
     });
 
     $("#search-input").addEventListener("input", e => { query = e.target.value; renderTable(); });
-    $$(".filter-chip[data-filter]").forEach(b => b.addEventListener("click", () => {
-      $$(".filter-chip[data-filter]").forEach(x => x.classList.remove("active"));
-      b.classList.add("active");
+    document.addEventListener("click", e => {
+      const b = e.target.closest("[data-filter]");
+      if (!b) return;
       filter = b.dataset.filter;
+      $$("[data-filter]").forEach(x => x.classList.toggle("active", x.dataset.filter === filter));
       renderTable();
-    }));
+    });
+    document.addEventListener("click", e => {
+      const b = e.target.closest("[data-filter-closed]");
+      if (!b) return;
+      closedFilter = b.dataset.filterClosed;
+      $$("[data-filter-closed]").forEach(x => x.classList.toggle("active", x.dataset.filterClosed === closedFilter));
+      renderTable();
+    });
     $("#backdrop").addEventListener("click", () => {
       if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
     });
@@ -1963,11 +1995,17 @@
 
     // Filter + sort
     let rows = data.filter(h => {
-      if (simFilter === "equity" && h.kind !== "equity") return false;
-      if (simFilter === "etf"    && h.kind !== "etf") return false;
-      if (simFilter === "crypto" && h.kind !== "crypto") return false;
-      if (simFilter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
-      if (simFilter === "target" && progressBucket(h) !== "Near Target") return false;
+      if (simActiveTab === "closed") {
+        const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
+        if (simClosedFilter === "profit" && pnl <= 0) return false;
+        if (simClosedFilter === "loss"   && pnl >  0) return false;
+      } else {
+        if (simFilter === "equity" && h.kind !== "equity") return false;
+        if (simFilter === "etf"    && h.kind !== "etf") return false;
+        if (simFilter === "crypto" && h.kind !== "crypto") return false;
+        if (simFilter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
+        if (simFilter === "target" && progressBucket(h) !== "Near Target") return false;
+      }
       if (simQuery) {
         const q = simQuery.toLowerCase();
         if (!(h.sym.toLowerCase().includes(q) || (h.name || "").toLowerCase().includes(q))) return false;
@@ -2046,12 +2084,18 @@
     const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     setCount("sim-c-open",   SIM_HOLDINGS.length);
     setCount("sim-c-closed", SIM_CLOSED.length);
-    setCount("sim-c-all",    allData.length);
-    setCount("sim-c-eq",     allData.filter(h => h.kind === "equity").length);
-    setCount("sim-c-etf",    allData.filter(h => h.kind === "etf").length);
-    setCount("sim-c-cr",     allData.filter(h => h.kind === "crypto").length);
-    setCount("sim-c-rk",     allData.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
-    setCount("sim-c-tg",     allData.filter(h => progressBucket(h) === "Near Target").length);
+    if (simActiveTab === "closed") {
+      setCount("sim-c-cl-all",    SIM_CLOSED.length);
+      setCount("sim-c-cl-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
+      setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length);
+    } else {
+      setCount("sim-c-all",    SIM_HOLDINGS.length);
+      setCount("sim-c-eq",     SIM_HOLDINGS.filter(h => h.kind === "equity").length);
+      setCount("sim-c-etf",    SIM_HOLDINGS.filter(h => h.kind === "etf").length);
+      setCount("sim-c-cr",     SIM_HOLDINGS.filter(h => h.kind === "crypto").length);
+      setCount("sim-c-rk",     SIM_HOLDINGS.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
+      setCount("sim-c-tg",     SIM_HOLDINGS.filter(h => progressBucket(h) === "Near Target").length);
+    }
   }
 
   function openSimDrawer(sym) {
@@ -2155,12 +2199,24 @@
     const tabClosed = $("#sim-tab-closed");
     if (tabOpen) tabOpen.addEventListener("click", () => {
       simActiveTab = "open";
+      simFilter = "all"; simClosedFilter = "all";
       tabOpen.classList.add("active"); if (tabClosed) tabClosed.classList.remove("active");
+      const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");
+      if (sfo) sfo.style.display = "";
+      if (sfc) sfc.style.display = "none";
+      $$("[data-simfilter]").forEach(c => c.classList.toggle("active", c.dataset.simfilter === "all"));
+      $$("[data-simfilter-closed]").forEach(c => c.classList.toggle("active", c.dataset.simfilterClosed === "all"));
       renderSimTable();
     });
     if (tabClosed) tabClosed.addEventListener("click", () => {
       simActiveTab = "closed";
+      simFilter = "all"; simClosedFilter = "all";
       tabClosed.classList.add("active"); if (tabOpen) tabOpen.classList.remove("active");
+      const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");
+      if (sfo) sfo.style.display = "none";
+      if (sfc) sfc.style.display = "";
+      $$("[data-simfilter]").forEach(c => c.classList.toggle("active", c.dataset.simfilter === "all"));
+      $$("[data-simfilter-closed]").forEach(c => c.classList.toggle("active", c.dataset.simfilterClosed === "all"));
       renderSimTable();
     });
 
@@ -2169,10 +2225,18 @@
 
     document.addEventListener("click", e => {
       const chip = e.target.closest("[data-simfilter]");
-      if (!chip) return;
-      simFilter = chip.dataset.simfilter;
-      $$("[data-simfilter]").forEach(c => c.classList.toggle("active", c.dataset.simfilter === simFilter));
-      renderSimTable();
+      if (chip) {
+        simFilter = chip.dataset.simfilter;
+        $$("[data-simfilter]").forEach(c => c.classList.toggle("active", c.dataset.simfilter === simFilter));
+        renderSimTable();
+        return;
+      }
+      const chipC = e.target.closest("[data-simfilter-closed]");
+      if (chipC) {
+        simClosedFilter = chipC.dataset.simfilterClosed;
+        $$("[data-simfilter-closed]").forEach(c => c.classList.toggle("active", c.dataset.simfilterClosed === simClosedFilter));
+        renderSimTable();
+      }
     });
 
   }
