@@ -1340,11 +1340,12 @@
   function updateClosePnlPreview(pos, closePrice) {
     const pnlDollar = (closePrice - pos.cost) * pos.qty;
     const pnlPct = pos.cost > 0 ? pnlDollar / (pos.cost * pos.qty) : 0;
-    const rMult = pos.risk1R > 0 ? (closePrice - pos.cost) / pos.risk1R : 0;
     const sign = pnlDollar >= 0 ? "up" : "down";
     const preview = $("#close-pos-pnl-preview");
     if (preview) {
-      preview.innerHTML = `<span class="${sign}">${fmt.signed(pnlDollar)}</span><span class="muted" style="font-size:11px;margin-left:8px">${fmt.pct(pnlPct)}</span><span class="mono muted" style="font-size:11px;margin-left:8px">${fmt.rMult(rMult)}</span>`;
+      preview.innerHTML = `
+        <span class="${sign}" style="font-size:22px;font-weight:700;font-family:var(--f-mono);letter-spacing:-0.5px">${fmt.signed(pnlDollar)}</span>
+        <span class="${sign}" style="font-size:13px;font-weight:600;margin-left:10px;opacity:0.85">${fmt.pct(pnlPct)}</span>`;
     }
   }
 
