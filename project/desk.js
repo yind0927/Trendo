@@ -242,7 +242,7 @@
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
-              <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">Overall vs VOO</span>
+              <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">VS VOO</span>
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="overallScore">${bx.overall.score}</span>
@@ -1344,8 +1344,8 @@
     const preview = $("#close-pos-pnl-preview");
     if (preview) {
       preview.innerHTML = `
-        <span class="${sign}" style="font-size:22px;font-weight:700;font-family:var(--f-mono);letter-spacing:-0.5px">${fmt.signed(pnlDollar)}</span>
-        <span class="${sign}" style="font-size:13px;font-weight:600;margin-left:10px;opacity:0.85">${fmt.pct(pnlPct)}</span>`;
+        <span class="${sign}" style="font-size:20px;font-weight:700;font-family:var(--f-mono);letter-spacing:-0.5px">${fmt.signed(pnlDollar)}</span>
+        <span class="${sign}" style="font-size:12px;font-weight:600;margin-left:10px;opacity:0.85">${fmt.pct(pnlPct)}</span>`;
     }
   }
 
