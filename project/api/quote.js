@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
   // ── Stocks + ETFs ─────────────────────────────────────────────────
   if (stocks.length) {
-    await Promise.all(stocks.slice(0, 40).map(async sym => {
+    await Promise.all(stocks.slice(0, 30).map(async sym => {
 
       // 1) Finnhub — real-time, single call (needs FINNHUB_API_KEY)
       if (finnhubKey) {
