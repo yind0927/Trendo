@@ -9,24 +9,30 @@ window.STATUS_LABEL = {
   trim: "可减仓", earnings: "财报临近", neutral: "—"
 };
 
-// Progress bucket function for 5-stage position lifecycle
+// Progress bucket function — dual-axis: loss zone (2 stages) + profit zone (4 stages)
 window.progressBucket = h => {
-  if (!h.stop || !h.target || h.stop >= h.target) return "Early";
-  const range = h.target - h.stop;
-  const p = (h.last - h.stop) / range;
-  if (p < 0.10) return "Near Stop";
-  if (p < 0.30) return "Early";
-  if (p < 0.60) return "Midway";
-  if (p < 0.90) return "On Track";
+  if (!h.stop || !h.cost || !h.target || h.stop >= h.target) return "Early";
+  if (h.last < h.cost && h.cost > h.stop) {
+    const lp = (h.cost - h.last) / (h.cost - h.stop);
+    if (lp < 0.50) return "Pullback";
+    return "Near Stop";
+  }
+  const range = h.target - h.cost;
+  if (range <= 0) return "On Track";
+  const pp = (h.last - h.cost) / range;
+  if (pp < 0.25) return "Early";
+  if (pp < 0.60) return "Midway";
+  if (pp < 0.90) return "On Track";
   return "Near Target";
 };
 
 window.BUCKET_STATUS = {
-  "Early":       { label: "初期 · Early",          cls: "early",       color: "var(--orange)" },
-  "Midway":      { label: "中期 · Midway",          cls: "midway",      color: "var(--warn)"   },
-  "On Track":    { label: "进行中 · On Track",      cls: "on-track",    color: "var(--accent)" },
-  "Near Target": { label: "接近止盈 · Near Target", cls: "near-target", color: "var(--ok)"     },
-  "Near Stop":   { label: "接近止损 · Near Stop",   cls: "near-stop",   color: "var(--down)"   },
+  "Pullback":    { label: "回调 · Pullback",        cls: "pullback",    color: "var(--down)"          },
+  "Near Stop":   { label: "近止损 · Near Stop",     cls: "near-stop",   color: "var(--down)"          },
+  "Early":       { label: "初期 · Early",           cls: "early",       color: "var(--orange)"        },
+  "Midway":      { label: "中期 · Midway",          cls: "midway",      color: "var(--warn)"          },
+  "On Track":    { label: "进行中 · On Track",      cls: "on-track",    color: "var(--accent)"        },
+  "Near Target": { label: "接近止盈 · Near Target", cls: "near-target", color: "var(--ok)"            },
 };
 
 // columns configuration for the main table (id, label, right-align, visible by default)

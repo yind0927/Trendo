@@ -614,7 +614,7 @@
       if (filter === "crypto" && h.kind !== "crypto") return false;
       if (filter === "risk") {
         const bucket = progressBucket(h);
-        if (!["Early", "Near Stop"].includes(bucket)) return false;
+        if (!["Pullback", "Near Stop"].includes(bucket)) return false;
       }
       if (filter === "target") {
         const bucket = progressBucket(h);
@@ -684,7 +684,7 @@
     $("#c-all").textContent = data.length;
     $("#c-eq").textContent = data.filter(h => h.kind === "equity").length;
     $("#c-cr").textContent = data.filter(h => h.kind === "crypto").length;
-    $("#c-rk").textContent = data.filter(h => ["Early", "Near Stop"].includes(progressBucket(h))).length;
+    $("#c-rk").textContent = data.filter(h => ["Pullback", "Near Stop"].includes(progressBucket(h))).length;
     $("#c-tg").textContent = data.filter(h => progressBucket(h) === "Near Target").length;
     $("#c-open").textContent = HOLDINGS.length;
     $("#c-closed").textContent = CLOSED_POSITIONS.length;
@@ -1931,7 +1931,7 @@
     let rows = data.filter(h => {
       if (simFilter === "equity" && !["equity", "etf"].includes(h.kind)) return false;
       if (simFilter === "crypto" && h.kind !== "crypto") return false;
-      if (simFilter === "risk") { if (!["Early", "Near Stop"].includes(progressBucket(h))) return false; }
+      if (simFilter === "risk") { if (!["Pullback", "Near Stop"].includes(progressBucket(h))) return false; }
       if (simQuery) {
         const q = simQuery.toLowerCase();
         if (!(h.sym.toLowerCase().includes(q) || (h.name || "").toLowerCase().includes(q))) return false;
@@ -2013,7 +2013,7 @@
     setCount("sim-c-all",    allData.length);
     setCount("sim-c-eq",     allData.filter(h => ["equity","etf"].includes(h.kind)).length);
     setCount("sim-c-cr",     allData.filter(h => h.kind === "crypto").length);
-    setCount("sim-c-rk",     allData.filter(h => ["Early","Near Stop"].includes(progressBucket(h))).length);
+    setCount("sim-c-rk",     allData.filter(h => ["Dip","Pullback","Near Stop"].includes(progressBucket(h))).length);
   }
 
   function openSimDrawer(sym) {

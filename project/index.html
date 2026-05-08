@@ -1307,6 +1307,13 @@
   }
   .status.near-stop .dot { background: oklch(0.70 0.19 25); }
 
+  .status.pullback {
+    background: oklch(0.70 0.19 25 / .09);
+    color: oklch(0.70 0.19 25 / .75);
+    border: 1px solid oklch(0.70 0.19 25 / .25);
+  }
+  .status.pullback .dot { background: oklch(0.70 0.19 25 / .6); }
+
   /* ALLOCATION BAR CHART (replaces pie) */
   .ov-alloc { flex-direction: column; gap: 8px; align-items: stretch; }
   .alloc-head { display: flex; align-items: baseline; justify-content: space-between; }
