@@ -1223,10 +1223,10 @@
       }
       updateOrderUI();
     };
-    openBtn.addEventListener("click", () => { resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
-    $("#mobile-fab")?.addEventListener("click", () => { resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
-    closeBtn.addEventListener("click", () => closeModal("new-position-modal"));
-    cancelBtn.addEventListener("click", () => closeModal("new-position-modal"));
+    openBtn.addEventListener("click", () => { newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
+    $("#mobile-fab")?.addEventListener("click", () => { newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
+    closeBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
+    cancelBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
 
     // Kind segmented control
     const kindSeg = $("#form-kind-seg");
