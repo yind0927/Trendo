@@ -1476,6 +1476,26 @@
   .journal-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
   .journal-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
   .journal-filters-row { display: flex; gap: 6px; }
+
+  /* ── Unified page header ── */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; gap: 16px; flex-wrap: wrap;
+  }
+  .page-title {
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .page-title-en {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.03em;
+    color: var(--fg-0);
+  }
+  .page-title-zh {
+    font-size: 13px; font-weight: 500; color: var(--fg-3);
+    letter-spacing: 0.04em;
+    padding: 2px 8px; border-radius: 4px;
+    border: 1px solid var(--line);
+    font-family: var(--f-sans);
+  }
   .journal-feed { display: flex; flex-direction: column; gap: 14px; }
   .journal-card {
     background: var(--bg-1); border: 1px solid var(--line);
@@ -2046,7 +2066,7 @@
     <a class="navlink" href="#" data-page="market" data-icon="🌡️">Market</a>
     <a class="navlink" href="#" data-page="analytics" data-icon="📈">Analytics</a>
     <a class="navlink" href="#" data-page="journal" data-icon="📓">Journal</a>
-    <a class="navlink" href="#" data-page="watchlist" data-icon="📋">Watchlist</a>
+    <a class="navlink" href="#" data-page="watchlist" data-icon="🎯">Preparation</a>
   </nav>
 
   <div class="search" role="search">
@@ -2347,7 +2367,12 @@
 <!-- ============ JOURNAL VIEW ============ -->
 <div id="journal-view" style="display:none">
   <div class="journal-topbar">
-    <div class="journal-title">Trade Journal</div>
+    <div class="page-header" style="margin-bottom:0">
+      <div class="page-title">
+        <span class="page-title-en">Journal</span>
+        <span class="page-title-zh">记录</span>
+      </div>
+    </div>
     <div class="journal-filters-row">
       <button class="filter-chip active" data-journal-filter="all">所有</button>
       <button class="filter-chip" data-journal-filter="open">持仓中</button>
@@ -2361,9 +2386,11 @@
 <div id="sim-view" style="display:none">
   <div class="sim-topbar">
     <div class="sim-title-group">
-      <span class="sim-badge">SIM</span>
-      <span class="sim-title">模拟仓 · Simulation</span>
-      <span class="sim-sub" id="sim-subtitle">— 笔持仓</span>
+      <div class="page-title">
+        <span class="page-title-en">Simulation</span>
+        <span class="page-title-zh">模拟仓</span>
+      </div>
+      <span class="sim-sub" id="sim-subtitle" style="color:var(--fg-3);font-size:12px;margin-left:4px">— 笔持仓</span>
     </div>
     <button class="btn primary" id="sim-new-pos-btn">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
@@ -2418,7 +2445,10 @@
 <!-- ============ WATCHLIST VIEW ============ -->
 <div id="watchlist-view" style="display:none">
   <div class="journal-topbar" style="max-width:960px;margin:0 auto;padding:24px 20px 0">
-    <div class="journal-title">Watchlist</div>
+    <div class="page-title">
+      <span class="page-title-en">Preparation</span>
+      <span class="page-title-zh">预备</span>
+    </div>
     <button class="btn primary" id="wl-toggle-form">+ 添加标的</button>
   </div>
   <div id="wl-form-body" style="display:none;max-width:960px;margin:0 auto;padding:12px 20px 0">

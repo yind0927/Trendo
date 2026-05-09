@@ -2590,8 +2590,11 @@
     const openSorted = [...open].sort((a, b) => b.size - a.size);
 
     aContent.innerHTML = `
-      <div class="analytics-topbar">
-        <div class="journal-title">Analytics</div>
+      <div class="page-header">
+        <div class="page-title">
+          <span class="page-title-en">Analytics</span>
+          <span class="page-title-zh">分析</span>
+        </div>
         <div class="muted" style="font-size:12px;font-family:var(--f-mono)">${total} 笔已平仓 · ${open.length} 笔持仓中</div>
       </div>
 
@@ -3215,10 +3218,10 @@
         <span class="mkt-regime-action">${regime.action}</span>
       </div>` : "";
     el.innerHTML = `
-      <div class="mkt-header">
-        <div class="mkt-title">
-          <span class="mkt-diamond">◆</span> Market Pulse
-          <span class="mkt-en">市场温度计</span>
+      <div class="page-header">
+        <div class="page-title">
+          <span class="page-title-en">Market</span>
+          <span class="page-title-zh">市场</span>
         </div>
         <div class="mkt-date">${today}</div>
       </div>
