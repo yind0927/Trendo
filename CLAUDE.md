@@ -29,7 +29,7 @@ git push -u origin main   # Vercel 自动触发部署，约30秒
 
 本地预览：`cd project && vercel dev`（需安装 Vercel CLI）
 
-版本标签：`git tag v7.1 -m "说明" && git push origin v7.1`
+版本标签：`git tag v7.2 -m "说明" && git push origin v7.2`
 
 ---
 
@@ -347,6 +347,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v6.x | 移动端响应布局，PWA，FAB按钮，P&L日历，BX斜率，Market页(VIX/VXN/板块轮动) |
 | v7.0 | progressBucket双轴重设计，ETF成分更新，VOO基准条，筛选重设计(ETF/近止损/近止盈)，部分平仓，已平仓盈亏筛选 |
 | v7.1 | 模拟仓挂单系统（市价单/限价单），F&G/RSI昨日变化，板块排名日变化，统一双语页面标题(20px)，Watchlist→Preparation，6态市场状态系统(优先级匹配)，抛售/偏热更名，手册触发条件列 |
+| v7.2 | 移除顶部时钟模块，修复响应式根因(body min-width)，新增769–1290px紧凑断点，导航选中改为下划线设计，搜索框简化，持仓数动态关联 |
 
 ---
 
