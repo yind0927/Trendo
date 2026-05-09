@@ -39,6 +39,8 @@
 
     const portfolioValue = totalNotional + totalPnlDollar;
 
+    const opc = $("#open-pos-count"); if (opc) opc.textContent = HOLDINGS.length;
+
     const ov = $("#overview");
     ov.innerHTML = `
       <div class="ov-card" id="nav-card">
