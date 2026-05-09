@@ -887,12 +887,12 @@
     padding: 6px 12px; border-radius: 6px;
     font-size: 12.5px; font-weight: 500;
     color: var(--fg-2); text-decoration: none;
-    transition: color .15s, background .15s;
+    transition: color .15s;
   }
-  .navlink:hover{ color: var(--fg-0); background: oklch(1 0 0 / .03); }
-  .navlink.active{ color: var(--fg-0); background: var(--bg-2); box-shadow: inset 0 0 0 1px var(--line); }
+  .navlink:hover{ color: var(--fg-0); }
+  .navlink.active{ color: var(--fg-0); font-weight: 600; }
   .navlink.active::after{
-    content: ""; position: absolute; left: 10px; right: 10px; bottom: -11px;
+    content: ""; position: absolute; left: 8px; right: 8px; bottom: -11px;
     height: 2px; background: var(--accent);
     border-radius: 2px 2px 0 0;
     box-shadow: 0 0 8px var(--accent);
@@ -1657,7 +1657,7 @@
     .topbar { gap: 8px; padding: 10px 16px; }
     .wordmark .tagline { display: none; }
     .navbar { margin-left: 6px; padding-left: 10px; gap: 0px; }
-    .navlink { padding: 6px 17px; font-size: 12px; }
+    .navlink { padding: 6px 12px; font-size: 12px; }
     .topbar .search { width: 200px; }
     #tweaks-toggle .tweaks-label { display: none; }
     #new-pos-btn .pos-label { display: inline; }
