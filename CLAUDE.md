@@ -29,7 +29,7 @@ git push -u origin main   # Vercel 自动触发部署，约30秒
 
 本地预览：`cd project && vercel dev`（需安装 Vercel CLI）
 
-版本标签：`git tag v7.0 -m "说明" && git push origin v7.0`
+版本标签：`git tag v7.1 -m "说明" && git push origin v7.1`
 
 ---
 
@@ -180,9 +180,28 @@ desk      → main + #desk-view（默认主页，持仓表格）
 journal   → #journal-view（日志，按持仓卡片展示）
 sim       → #sim-view（模拟仓）
 analytics → #analytics-view（分析：权益曲线 + P&L日历）
-watchlist → #watchlist-view（自选股）
-market    → #market-view（市场：VIX/VXN + 板块轮动 + VOO基准）
+watchlist → #watchlist-view（Preparation预备，自选股）
+market    → #market-view（市场：VIX/VXN + 板块轮动 + VOO基准 + 市场状态）
 ```
+
+### 页面标题格式（v7.1 统一）
+
+所有页面使用双语标题 `.page-title`：
+```html
+<div class="page-title">
+  <span class="page-title-en">English</span>
+  <span class="page-title-zh">中文</span>
+</div>
+```
+CSS：`.page-title-en` 20px 700粗体，`.page-title-zh` 13px pill形状边框。
+- **注意**：Journal 和 Preparation 使用 `journal-topbar` 作为布局容器（含 padding），不用 `page-header`。
+
+### 手机端 Tab Bar
+
+```
+Dashboard / Simulation / Market / Analytics / Journal(🗂️) / Preparation(⭐)
+```
+- Watchlist 页已重命名为 Preparation，tab emoji 为 ⭐，nav label "Preparation"
 
 ---
 
@@ -199,6 +218,64 @@ market    → #market-view（市场：VIX/VXN + 板块轮动 + VOO基准）
 - Closed tab: `data-simfilter-closed` → all / profit / loss
 
 Closed tab 按 `pnlFinal ?? pnlDollar` 判断盈利/亏损。
+
+---
+
+## 市场状态系统（Market 页，v7.1）
+
+### MKT_REGIMES — 优先级顺序匹配（first match wins）
+
+```js
+const MKT_REGIMES = [
+  { id: "panic",   regime: "抛售",  color: "#92400e",
+    condition: v => v.vix > 50,
+    cond: "VIX > 50",
+    meaning: "极端抛售，市场失控", posSize: "0%", stopRule: "不适用" },
+
+  { id: "defense", regime: "防守",  color: "#ef4444",
+    condition: v => v.vix >= 30 || v.fg < 20,
+    cond: "VIX >= 30 或 FGI < 20",
+    meaning: "高波动或极度恐惧", posSize: "<= 25%", stopRule: "极紧 (-3%)" },
+
+  { id: "caution", regime: "谨慎",  color: "#f97316",
+    condition: v => v.vix >= 20,
+    cond: "VIX 20-30",
+    meaning: "波动放大，方向不明", posSize: "50%", stopRule: "收紧 (-4%)" },
+
+  { id: "hot",     regime: "偏热",  color: "#eab308",
+    condition: v => v.vix < 20 && (v.rsi > 70 || v.fg > 70),
+    cond: "VIX < 20 且 RSI > 70 或 FGI > 70",
+    meaning: "低波动，但情绪过热", posSize: "75%", stopRule: "正常 (-6%)" },
+
+  { id: "attack",  regime: "进攻",  color: "#22c55e",
+    condition: v => v.vix < 12 && v.rsi >= 45 && v.rsi <= 70 && v.fg > 25,
+    cond: "VIX < 12 且 RSI 45-70 且 FGI > 25",
+    meaning: "低波动，动量健康", posSize: "100%", stopRule: "宽松 (-8%)" },
+
+  { id: "steady",  regime: "稳健",  color: "#3b82f6",
+    condition: () => true,           // 兜底
+    cond: "VIX 12-20 · RSI/FGI 正常区间",
+    meaning: "正常风险环境", posSize: "75%", stopRule: "正常 (-6%)" },
+];
+function getCurrentRegime(vix, fg, rsi) {
+  return MKT_REGIMES.find(r => r.condition({ vix, fg, rsi }));
+}
+```
+
+### 手册表格显示顺序（≠ 优先级顺序）
+
+```js
+const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
+// 进攻 → 稳健 → 偏热 → 谨慎 → 防守 → 抛售
+```
+
+### Market 页数据源
+
+- **VIX / VXN**：`/api/history?sym=^VIX` + `/api/history?sym=^VXN`
+- **F&G**：`/api/feargreed` → `{ score, rating, prevScore }`（含昨日值用于显示日变化）
+- **VOO RSI**：`/api/history?sym=VOO` → `calcRSI(closes)` + `calcRSI(closes.slice(0,-1))` 得昨日RSI
+- **板块ETF**：`XLK XLY XLV XLF XLB XLP XLE XLI COPX ITA` 各自 `/api/history`
+- 板块得分：`calcEtfStats(closes, vooCloses)` → `{ score, scorePrev }`，昨日得分用于排名变化列
 
 ---
 
@@ -269,7 +346,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v6.0 | Upstash Redis 跨设备同步，修复多次数据丢失 |
 | v6.x | 移动端响应布局，PWA，FAB按钮，P&L日历，BX斜率，Market页(VIX/VXN/板块轮动) |
 | v7.0 | progressBucket双轴重设计，ETF成分更新，VOO基准条，筛选重设计(ETF/近止损/近止盈)，部分平仓，已平仓盈亏筛选 |
-| v7.x | 模拟仓挂单系统（市价单/限价单，开盘自动成交） |
+| v7.1 | 模拟仓挂单系统（市价单/限价单），F&G/RSI昨日变化，板块排名日变化，统一双语页面标题(20px)，Watchlist→Preparation，6态市场状态系统(优先级匹配)，抛售/偏热更名，手册触发条件列 |
 
 ---
 
@@ -288,3 +365,17 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 
 **修改 HTML 筛选器：**
 同步更新 desk.js 里的 filter 逻辑和 counter setCount 调用
+
+**修改 MKT_REGIMES：**
+- 数组顺序 = 优先级顺序（panic 最高，steady 兜底）
+- 显示顺序由 `mkPlaybookHTML` 里的 `displayOrder` 数组单独控制
+
+**包含 Unicode 表情的字符串替换：**
+Edit 工具对 emoji 字符串匹配可能失败，用 Python 脚本替代：
+```python
+import sys
+with open('project/desk.js', encoding='utf-8') as f: c = f.read()
+c = c.replace('旧字符串', '新字符串')
+with open('project/desk.js', 'w', encoding='utf-8') as f: f.write(c)
+print("Done")
+```
