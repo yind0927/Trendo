@@ -16,8 +16,9 @@ export default async function handler(req, res) {
     const data = await r.json();
     const fg = data?.fear_and_greed;
     if (!fg) return res.status(502).json({ error: "unexpected format" });
+    const prevScore = fg.previous_close != null ? Math.round(fg.previous_close) : null;
     res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
-    res.json({ score: Math.round(fg.score), rating: fg.rating });
+    res.json({ score: Math.round(fg.score), rating: fg.rating, prevScore });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

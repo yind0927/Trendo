@@ -3119,10 +3119,13 @@
   function mkIndicatorHTML(key, val, pctChg, absChg) {
     const cfg = MKT_ZONES[key];
     const zone = getZone(cfg, val);
+    // VIX/VXN: up = bad (red); FG/RSI: up = good (green)
+    const invertColor = key === "fg" || key === "rsi";
     let chgStr = "";
     if (pctChg != null || absChg != null) {
       const up   = (pctChg ?? absChg) >= 0;
-      const clr  = up ? "#ef4444" : "#22c55e";
+      const good = invertColor ? up : !up;
+      const clr  = good ? "#22c55e" : "#ef4444";
       const arr  = up ? "▲" : "▼";
       const abs  = absChg != null ? `${up ? "+" : ""}${absChg.toFixed(2)}` : "";
       const pct  = pctChg != null ? `(${up ? "+" : ""}${pctChg.toFixed(2)}%)` : "";
@@ -3208,7 +3211,7 @@
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const regime = getCurrentRegime(vix, fg, rsi);
     const regimeBanner = regime ? `
@@ -3231,8 +3234,8 @@
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs)}
       </div>
       <div class="mkt-row">
-        ${mkIndicatorHTML("fg", fg, null)}
-        ${mkIndicatorHTML("rsi", rsi, null)}
+        ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
+        ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
       ${mkPlaybookHTML(vix, fg, rsi)}
       ${mkStrategyHTML(vix, fg, rsi)}
@@ -3271,27 +3274,37 @@
         }
       }
 
-      // RSI from SPX history
-      let rsi = 0;
+      // RSI from SPX history (today + yesterday)
+      let rsi = 0, rsiPrev = null;
       if (histRes.status === "fulfilled" && histRes.value?.results?.["^GSPC"]) {
         const raw = histRes.value.results["^GSPC"];
         const closes = Object.keys(raw).sort().map(k => raw[k]);
         const r = calcRSI(closes);
         if (r != null) rsi = r;
+        if (closes.length > 1) {
+          const rp = calcRSI(closes.slice(0, -1));
+          if (rp != null) rsiPrev = rp;
+        }
       }
 
       // Fear & Greed
-      let fg = 50;
+      let fg = 50, fgPrev = null;
       if (fgRes.status === "fulfilled" && fgRes.value?.score != null) {
         fg = fgRes.value.score;
+        fgPrev = fgRes.value.prevScore ?? null;
       }
+
+      const fgAbs = fgPrev != null ? +(fg - fgPrev).toFixed(1) : null;
+      const fgChg = fgPrev != null && fgPrev !== 0 ? +((fg - fgPrev) / fgPrev * 100).toFixed(2) : null;
+      const rsiAbs = rsiPrev != null ? +(rsi - rsiPrev).toFixed(2) : null;
+      const rsiChg = rsiPrev != null && rsiPrev !== 0 ? +((rsi - rsiPrev) / rsiPrev * 100).toFixed(2) : null;
 
       if (vix === 0 && vxn === 0 && rsi === 0) {
         el.innerHTML = `<div class="mkt-loading">无法加载数据，请稍后再试</div>`;
         return;
       }
 
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg });
       fetchSectorData();
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
@@ -3414,6 +3427,11 @@
   function sectRowHTML(item, rank) {
     const gc = v => v >= 0 ? "#22c55e" : "#ef4444";
     const gs = v => v >= 0 ? "+" : "";
+    const rankChg = item.rankPrev != null ? item.rankPrev - rank : null;
+    const rankChgHTML = rankChg == null ? `<span style="color:var(--fg-3)">—</span>`
+      : rankChg > 0 ? `<span style="color:#22c55e">▲${rankChg}</span>`
+      : rankChg < 0 ? `<span style="color:#ef4444">▼${Math.abs(rankChg)}</span>`
+      : `<span style="color:var(--fg-3)">—</span>`;
     return `<tr data-sym="${item.sym}" data-zh="${item.zh}" data-en="${item.en}" style="cursor:pointer">
       <td class="sc-rank">${rank}</td>
       <td class="sc-sym">${item.sym}</td>
@@ -3425,6 +3443,7 @@
       <td style="color:${gc(item.a60)}">${gs(item.a60)}${item.a60}%</td>
       <td class="sc-state" style="color:${item.stateColor}">${item.state}</td>
       <td class="sc-slope" style="color:${gc(item.slope)}">${item.slope >= 0 ? "▲" : "▼"} ${Math.abs(item.slope).toFixed(2)}</td>
+      <td style="font-family:var(--f-mono);font-size:11.5px;text-align:center">${rankChgHTML}</td>
     </tr>`;
   }
 
@@ -3453,7 +3472,7 @@
           <thead><tr>
             <th>#</th><th>代码</th><th>板块 / 主题</th>
             <th>综合得分</th><th>20D</th><th>α20</th><th>60D</th><th>α60</th>
-            <th>状态</th><th>5D斜率</th>
+            <th>状态</th><th>5D斜率</th><th title="昨日排名变化">排名↕</th>
           </tr></thead>
           <tbody>${sorted.map((e, i) => sectRowHTML(e, i + 1)).join("")}</tbody>
         </table></div>`;
@@ -3608,12 +3627,23 @@
         };
       }
 
+      const vooClosesPrev = vooCloses.slice(0, -1);
+
       sectorData = SECTOR_ETFS.map(etf => {
         const raw = data.results[etf.sym] || {};
         const closes = Object.keys(raw).sort().map(k => raw[k]);
         const stats  = calcEtfStats(closes, vooCloses);
-        return stats ? { ...etf, ...stats } : null;
+        if (!stats) return null;
+        // Compute yesterday's score for rank-change calculation
+        const statsPrev = calcEtfStats(closes.slice(0, -1), vooClosesPrev);
+        return { ...etf, ...stats, scorePrev: statsPrev?.score ?? null };
       }).filter(Boolean);
+
+      // Assign yesterday's ranks
+      const prevSorted = [...sectorData]
+        .filter(e => e.scorePrev != null)
+        .sort((a, b) => b.scorePrev - a.scorePrev);
+      prevSorted.forEach((e, i) => { e.rankPrev = i + 1; });
 
       renderSectorRotation();
     } catch (e) {
