@@ -100,7 +100,7 @@
     line-height: 1.45;
     font-feature-settings: "ss01", "cv11";
     -webkit-font-smoothing: antialiased;
-    min-width: 1440px;
+    min-width: 769px;
   }
   /* faint starfield grid */
   body::before{
@@ -1663,6 +1663,9 @@
     #new-pos-btn .pos-label { display: none; }
     #new-pos-btn { padding: 7px 9px; }
     .top-actions { gap: 5px; }
+    main { padding: 16px 16px 40px; }
+    .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .overview { grid-template-columns: repeat(3, 1fr) !important; }
   }
 
   /* ============ MOBILE (@media max-width: 768px) ============ */
