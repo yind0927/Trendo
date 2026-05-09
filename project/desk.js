@@ -1708,7 +1708,6 @@
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
     const ss = String(d.getSeconds()).padStart(2, "0");
-    $("#clock-txt").textContent = `${hh}:${mm}:${ss}`;
     const lu = $("#last-updated");
     if (lu) lu.textContent = "更新于 " + hh + ":" + mm + ":" + ss;
 
@@ -1902,15 +1901,6 @@
         if (currentPage === "analytics") renderAnalytics();
       }
 
-      // Update live price indicator
-      const statusEl = $("#price-status");
-      if (statusEl) {
-        const d = new Date();
-        const hh = String(d.getHours()).padStart(2, "0");
-        const mm = String(d.getMinutes()).padStart(2, "0");
-        statusEl.textContent = `LIVE · ${hh}:${mm}`;
-        statusEl.dataset.live = "true";
-      }
     } catch (_) {
       // Network error or API key not set — keep static prices silently
     }

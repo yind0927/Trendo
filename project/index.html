@@ -164,7 +164,6 @@
   .btn.primary{ background: var(--accent-dim); border-color: var(--accent-line); color: var(--accent);}
   .btn.primary:hover{ background: color-mix(in oklch, var(--accent-dim) 60%, var(--accent) 10%); color: var(--fg-0);}
   .btn.icon{ padding: 7px 9px; }
-  .clock{ font-family: var(--f-mono); font-size: 12px; color: var(--fg-2); display:flex; align-items:center; gap: 8px;}
   .live-dot{ width:6px;height:6px;border-radius:50%;background:var(--up);box-shadow:0 0 8px var(--up); animation: pulse 1.8s infinite;}
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 
@@ -906,24 +905,6 @@
     transition: border-color .15s, background .15s;
   }
   .topbar .search:focus-within{ border-color: var(--accent-line); background: var(--bg-2); }
-
-  .clock{
-    display: flex; align-items: center; gap: 9px;
-    padding: 5px 11px 5px 10px;
-    background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: 8px;
-  }
-  .clock .clock-text{ display: flex; flex-direction: column; line-height: 1.15; }
-  .clock .clock-text #clock-txt{
-    font-family: var(--f-mono); font-weight: 600; font-size: 12.5px;
-    color: var(--fg-0); font-variant-numeric: tabular-nums;
-  }
-  .clock .clock-text .clock-sub{
-    font-family: var(--f-mono); font-size: 9px; letter-spacing: 0.1em;
-    color: var(--up); font-weight: 600; transition: color .4s;
-  }
-  #price-status[data-live="true"] { color: var(--up); }
-  #price-status:not([data-live]) { color: var(--fg-3); }
 
   /* ── Sync panel ── */
   .sync-wrap { position: relative; }
@@ -1689,8 +1670,7 @@
     .brand .name { font-size: 13px; }
     .topbar .divider { display: none; }
     .topbar .search { display: none; }
-    .clock { display: none; }
-    .top-actions { gap: 6px; }
+.top-actions { gap: 6px; }
     .top-actions .btn:not(.icon) { display: none; }
 
     /* ---- Tape ---- */
@@ -2076,13 +2056,6 @@
   </div>
 
   <div class="top-actions">
-    <div class="clock" title="美东时间">
-      <span class="live-dot"></span>
-      <div class="clock-text">
-        <span id="clock-txt">13:51:43</span>
-        <span class="clock-sub" id="price-status">MKT OPEN · NY</span>
-      </div>
-    </div>
     <button class="btn icon" title="刷新">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"></path><path d="M3 3v5h5"></path></svg>
     </button>
