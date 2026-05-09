@@ -1425,6 +1425,21 @@
   .sim-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
   .sim-card-value { font-size: 22px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.02em; }
   .sim-card-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .pending-order-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 6px;
+  }
+  .pending-order-badge {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0;
+  }
+  .pending-order-badge.market { background: var(--accent-dim); color: var(--accent); }
+  .pending-order-badge.limit  { background: var(--warn-dim);   color: var(--warn); }
+  .pending-order-sym { font-family: var(--f-mono); font-weight: 700; font-size: 13px; }
+  .pending-order-detail { font-size: 11.5px; color: var(--fg-2); flex: 1; }
+  .pending-order-cancel { background: none; border: none; cursor: pointer; color: var(--fg-3); font-size: 15px; padding: 2px 4px; }
+  .pending-order-cancel:hover { color: var(--down); }
   .sim-table-controls {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
@@ -2358,6 +2373,11 @@
 
   <div id="sim-overview"></div>
 
+  <div id="sim-pending-section" style="display:none;margin:0 0 12px">
+    <div style="font-size:11px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 2px">挂单队列 · Pending Orders</div>
+    <div id="sim-pending-list"></div>
+  </div>
+
   <div class="sim-table-controls">
     <div class="sim-tabs">
       <button class="sim-tab active" id="sim-tab-open">Open <span id="sim-c-open">0</span></button>
@@ -2526,9 +2546,25 @@
         <label>Ticker Symbol</label>
         <input type="text" id="form-ticker" placeholder="e.g. NVDA" maxlength="10" required/>
       </div>
-      <div class="form-row">
+      <div class="form-row" id="form-order-type-row" style="display:none">
+        <label>订单类型</label>
+        <div class="seg" id="form-order-seg" style="width:100%">
+          <button type="button" data-order="manual" class="active">手动</button>
+          <button type="button" data-order="market">市价单</button>
+          <button type="button" data-order="limit">限价单</button>
+        </div>
+      </div>
+      <div class="form-row" id="form-entry-row">
         <label>Entry Price</label>
-        <input type="number" id="form-entry" placeholder="0.00" step="0.01" required/>
+        <input type="number" id="form-entry" placeholder="0.00" step="0.01"/>
+      </div>
+      <div class="form-row" id="form-limit-row" style="display:none">
+        <label>限价 <span style="font-weight:400;color:var(--fg-3);font-size:11px">价格触达时自动成交</span></label>
+        <input type="number" id="form-limit-price" placeholder="0.00" step="0.01"/>
+      </div>
+      <div class="form-row" id="form-market-hint-row" style="display:none">
+        <label></label>
+        <div style="color:var(--fg-2);font-size:12px;padding:6px 0">下次价格更新时以市价自动成交</div>
       </div>
       <div class="form-row">
         <label>Entry Date</label>

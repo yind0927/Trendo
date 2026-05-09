@@ -64,3 +64,4 @@ window.WATCHLIST = [];
 
 window.SIM_HOLDINGS = [];
 window.SIM_CLOSED   = [];
+window.SIM_PENDING  = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }

@@ -436,7 +436,7 @@
     const payload = {
       holdings: HOLDINGS, closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: SIM_HOLDINGS, simClosed: SIM_CLOSED,
-      simNotional, dailyPnlLog, savedAt: new Date().toISOString()
+      simNotional, simPending: SIM_PENDING, dailyPnlLog, savedAt: new Date().toISOString()
     };
     try {
       const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}`, {
@@ -494,6 +494,7 @@
     if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
     if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
     if (data.simNotional != null)        simNotional = data.simNotional;
+    if (Array.isArray(data.simPending))  SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending);
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
@@ -532,6 +533,7 @@
       localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(SIM_HOLDINGS));
       localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
+      localStorage.setItem("trendo_v4_sim_pending",  JSON.stringify(SIM_PENDING));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_savedAt",      new Date().toISOString());
     } catch (e) { /* storage unavailable */ }
@@ -561,6 +563,8 @@
       if (sh) { const parsed = JSON.parse(sh); SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...parsed); }
       if (sc) { const parsed = JSON.parse(sc); SIM_CLOSED.splice(0, SIM_CLOSED.length, ...parsed); }
       if (sn) simNotional = parseFloat(sn) || simNotional;
+      const sp = localStorage.getItem("trendo_v4_sim_pending");
+      if (sp) { const parsed = JSON.parse(sp); SIM_PENDING.splice(0, SIM_PENDING.length, ...parsed); }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
@@ -1209,8 +1213,18 @@
       const fe = $("#form-earnings"); if (fe) fe.value = "";
     };
 
-    openBtn.addEventListener("click", () => { resetDateFields(); openModal("new-position-modal"); });
-    $("#mobile-fab")?.addEventListener("click", () => { resetDateFields(); openModal("new-position-modal"); });
+    const resetOrderType = () => {
+      const isSim = newPositionContext === "sim";
+      const orderRow = $("#form-order-type-row");
+      if (orderRow) orderRow.style.display = isSim ? "" : "none";
+      // Reset to manual
+      if (orderSeg) {
+        $$("button", orderSeg).forEach(b => b.classList.toggle("active", b.dataset.order === "manual"));
+      }
+      updateOrderUI();
+    };
+    openBtn.addEventListener("click", () => { resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
+    $("#mobile-fab")?.addEventListener("click", () => { resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
     closeBtn.addEventListener("click", () => closeModal("new-position-modal"));
     cancelBtn.addEventListener("click", () => closeModal("new-position-modal"));
 
@@ -1222,6 +1236,30 @@
         if (!btn) return;
         $$("button", kindSeg).forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
+      });
+    }
+
+    // Order type segmented control (sim only)
+    const orderSeg = $("#form-order-seg");
+    const updateOrderUI = () => {
+      const active = orderSeg?.querySelector(".active")?.dataset.order || "manual";
+      const entryRow      = $("#form-entry-row");
+      const limitRow      = $("#form-limit-row");
+      const marketHintRow = $("#form-market-hint-row");
+      if (entryRow)      entryRow.style.display      = active === "manual" ? "" : "none";
+      if (limitRow)      limitRow.style.display      = active === "limit"  ? "" : "none";
+      if (marketHintRow) marketHintRow.style.display  = active === "market" ? "" : "none";
+      // required only for manual entry
+      const entryInput = $("#form-entry");
+      if (entryInput) entryInput.required = active === "manual";
+    };
+    if (orderSeg) {
+      orderSeg.addEventListener("click", e => {
+        const btn = e.target.closest("button[data-order]");
+        if (!btn) return;
+        $$("button", orderSeg).forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        updateOrderUI();
       });
     }
 
@@ -1252,34 +1290,60 @@
     form.addEventListener("submit", e => {
       e.preventDefault();
       const sym    = $("#form-ticker").value.toUpperCase().trim();
-      const entry  = parseFloat($("#form-entry").value);
       const stop   = parseFloat($("#form-stop").value)   || 0;
       const target = parseFloat($("#form-target").value) || 0;
       const qty    = parseInt($("#form-qty").value);
       const isSim  = newPositionContext === "sim";
 
+      const orderType  = isSim ? ($("#form-order-seg .active")?.dataset.order || "manual") : "manual";
+      const limitPrice = orderType === "limit" ? parseFloat($("#form-limit-price").value) : null;
+      const entry      = orderType === "manual" ? parseFloat($("#form-entry").value) : null;
+
       const entryDateStr = ($("#form-date") && $("#form-date").value) || todayStr();
-      const entryDate    = new Date(entryDateStr + "T00:00:00");
-      const today        = new Date(); today.setHours(0, 0, 0, 0);
-      const daysHeld     = Math.max(1, Math.round((today - entryDate) / 86400000) + 1);
       const earningsStr  = ($("#form-earnings") && $("#form-earnings").value) || null;
 
-      if (!sym || !entry || !qty) { alert("请填写 Ticker、入场价、数量"); return; }
+      if (!sym || !qty) { alert("请填写 Ticker 和数量"); return; }
+      if (orderType === "manual" && !entry) { alert("请填写入场价"); return; }
+      if (orderType === "limit"  && !limitPrice) { alert("请填写限价"); return; }
       if (!isSim && (!stop || !target)) { alert("真实仓位必须填写止损和止盈"); return; }
-
-      const targetHoldings = isSim ? SIM_HOLDINGS : HOLDINGS;
-      const targetClosed   = isSim ? SIM_CLOSED   : CLOSED_POSITIONS;
-      if (targetHoldings.find(h => h.sym === sym)) {
-        alert("Position already exists");
-        return;
-      }
-      if (!isSim && (stop >= entry || entry >= target)) {
+      if (!isSim && entry && (stop >= entry || entry >= target)) {
         alert("Invalid price levels: stop < entry < target");
         return;
       }
 
       const kindBtn = $("#form-kind-seg .active");
       const kind = kindBtn ? kindBtn.dataset.kind : "equity";
+
+      // Market / limit order → add to pending queue (sim only)
+      if (isSim && (orderType === "market" || orderType === "limit")) {
+        if (SIM_PENDING.find(p => p.sym === sym)) { alert("该 Ticker 已有挂单"); return; }
+        if (SIM_HOLDINGS.find(h => h.sym === sym)) { alert("Position already exists"); return; }
+        SIM_PENDING.push({
+          id: Date.now().toString(36),
+          sym, name: sym, kind, qty, stop, target,
+          orderType, limitPrice,
+          entryDate: entryDateStr,
+          earnings: earningsStr,
+          createdAt: new Date().toISOString(),
+          bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: 0, slopeDir: 0 }, overall: { score: "50", slope: 0, slopeDir: 0 } }
+        });
+        saveToStorage();
+        form.reset();
+        closeModal("new-position-modal");
+        renderSimPending();
+        newPositionContext = "desk";
+        // Immediately try to execute (in case price already known)
+        lastPriceFetch = 0;
+        fetchPrices();
+        return;
+      }
+
+      const targetHoldings = isSim ? SIM_HOLDINGS : HOLDINGS;
+      if (targetHoldings.find(h => h.sym === sym)) { alert("Position already exists"); return; }
+
+      const entryDate = new Date(entryDateStr + "T00:00:00");
+      const today     = new Date(); today.setHours(0, 0, 0, 0);
+      const daysHeld  = Math.max(1, Math.round((today - entryDate) / 86400000) + 1);
 
       const base   = isSim ? simNotional : totalNotional;
       const size   = base > 0 ? (qty * entry / base) * 100 : 2.5;
@@ -1309,7 +1373,7 @@
       if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); }
       else { renderTable(); renderOverview(); }
       newPositionContext = "desk";
-      lastPriceFetch = 0; // trigger immediate price fetch on next tick
+      lastPriceFetch = 0;
       fetchPrices();
     });
   }
@@ -1742,10 +1806,20 @@
 
   async function fetchPrices() {
     const all = [...SIM_HOLDINGS, ...HOLDINGS];
-    if (!all.length) return;
+    // Include pending order symbols so we can execute them
+    const pendingSyms = SIM_PENDING.map(p => p.sym);
 
-    const stocks  = [...new Set(all.filter(h => h.kind !== "crypto").map(h => h.sym))];
-    const cryptos = [...new Set(all.filter(h => h.kind === "crypto").map(h => h.sym))];
+    const allSyms = [...all.map(h => h.sym), ...pendingSyms];
+    if (!allSyms.length) return;
+
+    const stocks  = [...new Set(allSyms.filter(sym => {
+      const h = all.find(x => x.sym === sym) || SIM_PENDING.find(p => p.sym === sym);
+      return (h?.kind || "equity") !== "crypto";
+    }))];
+    const cryptos = [...new Set(allSyms.filter(sym => {
+      const h = all.find(x => x.sym === sym) || SIM_PENDING.find(p => p.sym === sym);
+      return (h?.kind || "equity") === "crypto";
+    }))];
 
     const params = new URLSearchParams();
     if (stocks.length)  params.set("stocks",  stocks.join(","));
@@ -1772,6 +1846,51 @@
           recomputeHolding(h, notional);
         }
       });
+
+      // Auto-execute pending orders
+      const executed = [];
+      SIM_PENDING.forEach(order => {
+        const q = results[order.sym];
+        if (!q?.last) return;
+        const execPrice = q.last;
+        const shouldExecute =
+          order.orderType === "market" ||
+          (order.orderType === "limit" && execPrice <= order.limitPrice);
+        if (!shouldExecute) return;
+        if (SIM_HOLDINGS.find(h => h.sym === order.sym)) return; // already open
+
+        const entryDate = new Date(order.entryDate + "T00:00:00");
+        const today     = new Date(); today.setHours(0, 0, 0, 0);
+        const daysHeld  = Math.max(1, Math.round((today - entryDate) / 86400000) + 1);
+        const size      = simNotional > 0 ? (order.qty * execPrice / simNotional) * 100 : 2.5;
+
+        const newPos = {
+          sym: order.sym, name: order.sym, kind: order.kind,
+          qty: order.qty, cost: execPrice, last: execPrice,
+          prevClose: q.prevClose ?? execPrice,
+          stop: order.stop, target: order.target,
+          entry: order.entryDate,
+          size, earnings: order.earnings, holdEarn: false,
+          setup: order.orderType === "market" ? "市价单" : `限价单 @${order.limitPrice}`,
+          thesis: "",
+          status: "ok", pnlPct: 0, pnlDollar: 0,
+          risk1R: order.stop ? execPrice - order.stop : 0,
+          rMult: 0, days: daysHeld, spark: [execPrice],
+          bx: order.bx,
+        };
+        recomputeHolding(newPos, simNotional);
+        SIM_HOLDINGS.push(newPos);
+        executed.push(order.id);
+        changed = true;
+      });
+
+      if (executed.length) {
+        executed.forEach(id => {
+          const idx = SIM_PENDING.findIndex(p => p.id === id);
+          if (idx !== -1) SIM_PENDING.splice(idx, 1);
+        });
+        renderSimPending();
+      }
 
       if (changed) {
         recordDailyPnl();
@@ -1921,7 +2040,41 @@
 
   function renderSim() {
     renderSimOverview();
+    renderSimPending();
     renderSimTable();
+  }
+
+  function renderSimPending() {
+    const section = $("#sim-pending-section");
+    const list    = $("#sim-pending-list");
+    if (!section || !list) return;
+    if (!SIM_PENDING.length) { section.style.display = "none"; return; }
+    section.style.display = "";
+    list.innerHTML = SIM_PENDING.map(order => {
+      const typeLabel = order.orderType === "market" ? "市价单" : "限价单";
+      const typeCls   = order.orderType === "market" ? "market" : "limit";
+      const priceHint = order.orderType === "limit"
+        ? `限价 $${order.limitPrice?.toFixed(2)} · `
+        : "下次更新自动成交 · ";
+      const stopTarget = order.stop && order.target
+        ? `止损 $${order.stop} / 止盈 $${order.target}`
+        : "";
+      return `
+        <div class="pending-order-card" data-pending-id="${order.id}">
+          <span class="pending-order-badge ${typeCls}">${typeLabel}</span>
+          <span class="pending-order-sym">${order.sym}</span>
+          <span class="pending-order-detail">${priceHint}${order.qty}股 ${stopTarget}</span>
+          <button class="pending-order-cancel" data-cancel-id="${order.id}" title="取消挂单">✕</button>
+        </div>`;
+    }).join("");
+
+    list.querySelectorAll(".pending-order-cancel").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id  = btn.dataset.cancelId;
+        const idx = SIM_PENDING.findIndex(p => p.id === id);
+        if (idx !== -1) { SIM_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
+      });
+    });
   }
 
   function renderSimOverview() {
@@ -2192,6 +2345,18 @@
       newPositionContext = "sim";
       const fd = $("#form-date"); if (fd) fd.value = new Date().toISOString().slice(0, 10);
       const fe = $("#form-earnings"); if (fe) fe.value = "";
+      // Show order type selector for sim
+      const orderRow = $("#form-order-type-row");
+      if (orderRow) orderRow.style.display = "";
+      const orderSeg = $("#form-order-seg");
+      if (orderSeg) {
+        $$("button", orderSeg).forEach(b => b.classList.toggle("active", b.dataset.order === "manual"));
+      }
+      const entryRow = $("#form-entry-row"), limitRow = $("#form-limit-row"), mHint = $("#form-market-hint-row");
+      if (entryRow) entryRow.style.display = "";
+      if (limitRow) limitRow.style.display = "none";
+      if (mHint)    mHint.style.display    = "none";
+      const ei = $("#form-entry"); if (ei) ei.required = true;
       openModal("new-position-modal");
     });
 
