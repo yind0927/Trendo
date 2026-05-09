@@ -3064,9 +3064,10 @@
   const MKT_REGIMES = [
     {
       id: "panic",
-      regime: "🟤 恐慌",
+      regime: "🟤 抛售",
       color: "#92400e",
       condition: v => v.vix > 50,
+      cond:    "VIX > 50",
       meaning: "极端抛售，市场失控",
       action: "清仓观望，等待 VIX 回落至 40 以下再评估。不抄底，不加仓。",
       posSize: "0%",
@@ -3077,7 +3078,8 @@
       regime: "🔴 防守",
       color: "#ef4444",
       condition: v => v.vix >= 30 || v.fg < 20,
-      meaning: "高波动或极度恐惧，风险敞口需最小化",
+      cond:    "VIX ≥ 30 或 FGI < 20",
+      meaning: "高波动或极度恐惧",
       action: "减仓至轻仓，收紧止损，回避所有新多单。关注关键支撑位是否守住。",
       posSize: "≤ 25%",
       stopRule: "极紧 (−3%)",
@@ -3087,17 +3089,19 @@
       regime: "🟠 谨慎",
       color: "#f97316",
       condition: v => v.vix >= 20,
-      meaning: "波动放大，市场方向不明",
+      cond:    "VIX 20–30",
+      meaning: "波动放大，方向不明",
       action: "降低整体仓位，优先持有高质量个股，止损收紧，暂停追涨。",
       posSize: "50%",
       stopRule: "收紧 (−4%)",
     },
     {
       id: "hot",
-      regime: "🟡 稳健偏热",
+      regime: "🟡 偏热",
       color: "#eab308",
       condition: v => v.vix < 20 && (v.rsi > 70 || v.fg > 70),
-      meaning: "波动低但市场拥挤，交易过热",
+      cond:    "VIX < 20 且 RSI > 70 或 FGI > 70",
+      meaning: "低波动，但情绪过热",
       action: "不追高，分批止盈，等待回调再布局。现有持仓可持有，不加仓。",
       posSize: "75%",
       stopRule: "正常 (−6%)",
@@ -3107,7 +3111,8 @@
       regime: "🟢 进攻",
       color: "#22c55e",
       condition: v => v.vix < 12 && v.rsi >= 45 && v.rsi <= 70 && v.fg > 25,
-      meaning: "低波动，动量健康，可全力进攻",
+      cond:    "VIX < 12 且 RSI 45–70 且 FGI > 25",
+      meaning: "低波动，动量健康",
       action: "持有成长 + 动量龙头，积极布局突破形态，止损可适当放宽。",
       posSize: "100%",
       stopRule: "宽松 (−8%)",
@@ -3117,7 +3122,8 @@
       regime: "🔵 稳健",
       color: "#3b82f6",
       condition: () => true,
-      meaning: "正常风险环境，市场运行平稳",
+      cond:    "VIX 12–20 · RSI / FGI 正常区间",
+      meaning: "正常风险环境",
       action: "持有核心仓位，优质个股逢回调买入，止损正常执行。",
       posSize: "75%",
       stopRule: "正常 (−6%)",
@@ -3197,11 +3203,16 @@
 
   function mkPlaybookHTML(vix, fg, rsi) {
     const current = getCurrentRegime(vix, fg, rsi);
-    const rows = MKT_REGIMES.map(r => {
+    const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
+    const ordered = displayOrder.map(id => MKT_REGIMES.find(r => r.id === id)).filter(Boolean);
+    const rows = ordered.map(r => {
       const active = r.id === current?.id;
       return `<tr class="${active ? "mkt-pb-active" : ""}">
         <td style="color:${r.color};font-weight:700;white-space:nowrap">${r.regime}${active ? `<span class="mkt-now">当下</span>` : ""}</td>
-        <td style="color:var(--fg-2);font-size:11.5px">${r.meaning}</td>
+        <td>
+          <div style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3);margin-bottom:3px">${r.cond}</div>
+          <div style="font-size:12px;color:var(--fg-1)">${r.meaning}</div>
+        </td>
         <td>${r.action}</td>
       </tr>`;
     }).join("");
@@ -3210,7 +3221,7 @@
         <div class="mkt-playbook-title">市场状态 · 操作手册</div>
         <table class="mkt-pb-table">
           <thead><tr>
-            <th>状态</th><th>含义</th><th>操作建议</th>
+            <th>状态</th><th>触发条件 · 含义</th><th>操作建议</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
