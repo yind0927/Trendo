@@ -3061,17 +3061,67 @@
     }
   };
 
-  const MKT_PLAYBOOK = [
-    { vixMax: 12,  vixMin: 0,  fgMax: 100, fgMin: 0,  rsiMax: 80, rsiMin: 50,
-      regime: "🟢 进攻", action: "全力进攻。持有成长 + 动量龙头。", color: "#22c55e" },
-    { vixMax: 20,  vixMin: 12, fgMax: 75,  fgMin: 25,  rsiMax: 70, rsiMin: 40,
-      regime: "🟡 稳健", action: "优质股逢低买入，少量对冲可接受。", color: "#84cc16" },
-    { vixMax: 30,  vixMin: 20, fgMax: 55,  fgMin: 0,   rsiMax: 60, rsiMin: 30,
-      regime: "🟠 谨慎", action: "缩减仓位，收紧止损，持有现金。", color: "#eab308" },
-    { vixMax: 50,  vixMin: 30, fgMax: 35,  fgMin: 0,   rsiMax: 50, rsiMin: 0,
-      regime: "🔶 避险", action: "对冲或空仓。回避新多单，关注支撑位。", color: "#f97316" },
-    { vixMax: 999, vixMin: 50, fgMax: 25,  fgMin: 0,   rsiMax: 35, rsiMin: 0,
-      regime: "🔴 恐慌", action: "持现 / 做空。等待投降式底部信号。", color: "#ef4444" },
+  const MKT_REGIMES = [
+    {
+      id: "panic",
+      regime: "🟤 恐慌",
+      color: "#92400e",
+      condition: v => v.vix > 50,
+      meaning: "极端抛售，市场失控",
+      action: "清仓观望，等待 VIX 回落至 40 以下再评估。不抄底，不加仓。",
+      posSize: "0%",
+      stopRule: "不适用",
+    },
+    {
+      id: "defense",
+      regime: "🔴 防守",
+      color: "#ef4444",
+      condition: v => v.vix >= 30 || v.fg < 20,
+      meaning: "高波动或极度恐惧，风险敞口需最小化",
+      action: "减仓至轻仓，收紧止损，回避所有新多单。关注关键支撑位是否守住。",
+      posSize: "≤ 25%",
+      stopRule: "极紧 (−3%)",
+    },
+    {
+      id: "caution",
+      regime: "🟠 谨慎",
+      color: "#f97316",
+      condition: v => v.vix >= 20,
+      meaning: "波动放大，市场方向不明",
+      action: "降低整体仓位，优先持有高质量个股，止损收紧，暂停追涨。",
+      posSize: "50%",
+      stopRule: "收紧 (−4%)",
+    },
+    {
+      id: "hot",
+      regime: "🟡 稳健偏热",
+      color: "#eab308",
+      condition: v => v.vix < 20 && (v.rsi > 70 || v.fg > 70),
+      meaning: "波动低但市场拥挤，交易过热",
+      action: "不追高，分批止盈，等待回调再布局。现有持仓可持有，不加仓。",
+      posSize: "75%",
+      stopRule: "正常 (−6%)",
+    },
+    {
+      id: "attack",
+      regime: "🟢 进攻",
+      color: "#22c55e",
+      condition: v => v.vix < 12 && v.rsi >= 45 && v.rsi <= 70 && v.fg > 25,
+      meaning: "低波动，动量健康，可全力进攻",
+      action: "持有成长 + 动量龙头，积极布局突破形态，止损可适当放宽。",
+      posSize: "100%",
+      stopRule: "宽松 (−8%)",
+    },
+    {
+      id: "steady",
+      regime: "🔵 稳健",
+      color: "#3b82f6",
+      condition: () => true,
+      meaning: "正常风险环境，市场运行平稳",
+      action: "持有核心仓位，优质个股逢回调买入，止损正常执行。",
+      posSize: "75%",
+      stopRule: "正常 (−6%)",
+    },
   ];
 
   function calcRSI(closes, period = 14) {
@@ -3146,12 +3196,13 @@
   }
 
   function mkPlaybookHTML(vix, fg, rsi) {
-    const rows = MKT_PLAYBOOK.map((row, i) => {
-      const active = vix >= row.vixMin && vix < row.vixMax;
+    const current = getCurrentRegime(vix, fg, rsi);
+    const rows = MKT_REGIMES.map(r => {
+      const active = r.id === current?.id;
       return `<tr class="${active ? "mkt-pb-active" : ""}">
-        <td style="color:${row.color};font-weight:700">${row.regime}${active ? `<span class="mkt-now">当下</span>` : ""}</td>
-        <td>VIX ${row.vixMin}–${row.vixMax < 999 ? row.vixMax : "∞"}</td>
-        <td>${row.action}</td>
+        <td style="color:${r.color};font-weight:700;white-space:nowrap">${r.regime}${active ? `<span class="mkt-now">当下</span>` : ""}</td>
+        <td style="color:var(--fg-2);font-size:11.5px">${r.meaning}</td>
+        <td>${r.action}</td>
       </tr>`;
     }).join("");
     return `
@@ -3159,7 +3210,7 @@
         <div class="mkt-playbook-title">市场状态 · 操作手册</div>
         <table class="mkt-pb-table">
           <thead><tr>
-            <th>状态</th><th>VIX 区间</th><th>操作建议</th>
+            <th>状态</th><th>含义</th><th>操作建议</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -3167,45 +3218,30 @@
   }
 
   function mkStrategyHTML(vix, fg, rsi) {
-    let strat, color, sub;
-    if (vix < 15 && fg > 60 && rsi > 55) {
-      strat = "进攻"; color = "#22c55e"; sub = "动量 + 成长股";
-    } else if (vix < 25 && fg > 40 && rsi > 45) {
-      strat = "精选"; color = "#84cc16"; sub = "优质股 + 逢低买入";
-    } else if (vix < 35 || (fg < 45 && rsi < 55)) {
-      strat = "谨慎"; color = "#eab308"; sub = "减仓 / 对冲 / 持现";
-    } else {
-      strat = "防御"; color = "#ef4444"; sub = "持现 / 做空 / 回避";
-    }
-    const posSize = vix < 15 ? "满仓 (100%)" : vix < 25 ? "七成仓 (75%)" : vix < 35 ? "半仓 (50%)" : "轻仓 (≤25%)";
-    const stops = vix < 15 ? "宽松 (−8%)" : vix < 25 ? "正常 (−6%)" : vix < 35 ? "收紧 (−4%)" : "极紧 (−3%)";
+    const r = getCurrentRegime(vix, fg, rsi);
     return `
       <div class="mkt-strategy">
         <div class="mkt-section-label">今日策略</div>
         <div class="mkt-strat-grid">
-          <div class="mkt-strat-card" style="border-color:${color}40;background:${color}10">
+          <div class="mkt-strat-card" style="border-color:${r.color}40;background:${r.color}10">
             <div class="mkt-strat-sub">操作方向</div>
-            <div class="mkt-strat-main" style="color:${color}">${strat}</div>
-            <div class="mkt-strat-sub" style="margin-top:4px">${sub}</div>
+            <div class="mkt-strat-main" style="color:${r.color}">${r.regime}</div>
+            <div class="mkt-strat-sub" style="margin-top:4px">${r.meaning}</div>
           </div>
           <div class="mkt-strat-card" style="border-color:var(--line)">
-            <div class="mkt-strat-sub">仓位建议</div>
-            <div class="mkt-strat-main">${posSize}</div>
+            <div class="mkt-strat-sub">建议仓位</div>
+            <div class="mkt-strat-main">${r.posSize}</div>
           </div>
           <div class="mkt-strat-card" style="border-color:var(--line)">
             <div class="mkt-strat-sub">止损幅度</div>
-            <div class="mkt-strat-main">${stops}</div>
+            <div class="mkt-strat-main">${r.stopRule}</div>
           </div>
         </div>
       </div>`;
   }
 
   function getCurrentRegime(vix, fg, rsi) {
-    return MKT_PLAYBOOK.find(row =>
-      vix >= row.vixMin && vix < row.vixMax &&
-      fg  >= row.fgMin  && fg  <= row.fgMax &&
-      rsi >= row.rsiMin && rsi <= row.rsiMax
-    ) || null;
+    return MKT_REGIMES.find(r => r.condition({ vix, fg, rsi }));
   }
 
   function renderMarket(data) {
