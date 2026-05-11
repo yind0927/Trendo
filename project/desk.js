@@ -737,7 +737,7 @@
         return `<td class="right num" style="font-weight:600">$${price(p)}</td>`;
       }
       case "qty": return `<td class="right num muted">${h.qty.toLocaleString("en-US")}</td>`;
-      case "pnl": return `<td class="right"><div class="pnl-cell"><span class="num ${fmt.sign(h.pnlDollar)}" style="font-weight:600">${fmt.signed(h.pnlDollar)}</span><span class="num muted" style="font-size:10.5px">${fmt.pct(h.pnlPct)}</span></div></td>`;
+      case "pnl": return `<td class="right"><div class="pnl-cell"><span class="num ${fmt.sign(h.pnlDollar)}" style="font-weight:600">${fmt.signed(h.pnlDollar)}</span><span class="num ${fmt.sign(h.pnlDollar)}" style="font-size:12px;opacity:0.75">${fmt.pct(h.pnlPct)}</span></div></td>`;
       case "stop": return `<td class="right num" style="color:var(--down)">$${price(h.stop)}</td>`;
       case "target": return `<td class="right num" style="color:var(--up)">$${price(h.target)}</td>`;
       case "progstatus": {
