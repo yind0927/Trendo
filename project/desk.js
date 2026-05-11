@@ -2338,7 +2338,7 @@
              <button class="delete-btn" data-sym="${h.sym}" title="删除">✕</button>
            </div></td>`
         : `<td style="width:60px;padding:6px 4px"><div class="row-actions">
-             <button class="sim-restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+             <button class="sim-restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
              <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除">✕</button>
            </div></td>`;
       return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
