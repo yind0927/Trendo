@@ -2337,7 +2337,8 @@
              <button class="close-pos-btn" data-sym="${h.sym}" title="平仓">⊟</button>
              <button class="delete-btn" data-sym="${h.sym}" title="删除">✕</button>
            </div></td>`
-        : `<td style="width:40px;padding:6px 4px"><div class="row-actions">
+        : `<td style="width:60px;padding:6px 4px"><div class="row-actions">
+             <button class="sim-restore-btn" data-sym="${h.sym}" title="撤回至持仓">↩</button>
              <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除">✕</button>
            </div></td>`;
       return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
@@ -2370,7 +2371,7 @@
 
     $$("tr", tbody).forEach(tr => {
       tr.addEventListener("click", e => {
-        if (e.target.closest(".close-pos-btn, .delete-btn")) return;
+        if (e.target.closest(".close-pos-btn, .delete-btn, .sim-restore-btn")) return;
         openSimDrawer(tr.dataset.sym);
       });
     });
@@ -2379,6 +2380,24 @@
     });
     $$(".delete-btn", tbody).forEach(btn => {
       btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); });
+    });
+    $$(".sim-restore-btn", tbody).forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const sym = btn.dataset.sym;
+        const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
+        if (idx === -1) return;
+        const h = SIM_CLOSED[idx];
+        if (SIM_HOLDINGS.find(x => x.sym === sym)) { alert("模拟仓中已有该持仓"); return; }
+        const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = h;
+        restored.last = restored.cost;
+        recomputeHolding(restored, simNotional);
+        SIM_HOLDINGS.push(restored);
+        SIM_CLOSED.splice(idx, 1);
+        saveToStorage();
+        renderSimOverview();
+        renderSimTable();
+      });
     });
 
     // Counts
