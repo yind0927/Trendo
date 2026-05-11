@@ -62,6 +62,7 @@ window.EVENTS = [];
 // Empty watchlist — user-populated
 window.WATCHLIST = [];
 
-window.SIM_HOLDINGS = [];
-window.SIM_CLOSED   = [];
-window.SIM_PENDING  = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }
+window.SIM_HOLDINGS    = [];
+window.SIM_CLOSED      = [];
+window.SIM_PENDING     = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }
+window.SIM_CLOSE_PENDING = []; // { id, sym, qty, orderType:"market"|"limit", limitPrice, createdAt }

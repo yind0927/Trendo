@@ -438,7 +438,7 @@
     const payload = {
       holdings: HOLDINGS, closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: SIM_HOLDINGS, simClosed: SIM_CLOSED,
-      simNotional, simPending: SIM_PENDING, dailyPnlLog, savedAt: new Date().toISOString()
+      simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog, savedAt: new Date().toISOString()
     };
     try {
       const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}`, {
@@ -496,7 +496,8 @@
     if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
     if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
     if (data.simNotional != null)        simNotional = data.simNotional;
-    if (Array.isArray(data.simPending))  SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending);
+    if (Array.isArray(data.simPending))      SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending);
+    if (Array.isArray(data.simClosePending)) SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending);
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
@@ -535,7 +536,8 @@
       localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(SIM_HOLDINGS));
       localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
-      localStorage.setItem("trendo_v4_sim_pending",  JSON.stringify(SIM_PENDING));
+      localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
+      localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_savedAt",      new Date().toISOString());
     } catch (e) { /* storage unavailable */ }
@@ -565,8 +567,10 @@
       if (sh) { const parsed = JSON.parse(sh); SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...parsed); }
       if (sc) { const parsed = JSON.parse(sc); SIM_CLOSED.splice(0, SIM_CLOSED.length, ...parsed); }
       if (sn) simNotional = parseFloat(sn) || simNotional;
-      const sp = localStorage.getItem("trendo_v4_sim_pending");
-      if (sp) { const parsed = JSON.parse(sp); SIM_PENDING.splice(0, SIM_PENDING.length, ...parsed); }
+      const sp  = localStorage.getItem("trendo_v4_sim_pending");
+      if (sp)  { const parsed = JSON.parse(sp);  SIM_PENDING.splice(0, SIM_PENDING.length, ...parsed); }
+      const scp = localStorage.getItem("trendo_v4_sim_close_pending");
+      if (scp) { const parsed = JSON.parse(scp); SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...parsed); }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
@@ -1412,6 +1416,7 @@
     if (!pos) return;
     pendingCloseSym = sym;
     pendingCloseCtx = currentPage === "sim" ? "sim" : "desk";
+    if (wireClosePositionModal._resetOrderType) wireClosePositionModal._resetOrderType();
     const input = $("#close-pos-price-input");
     const qtyInput = $("#close-pos-qty-input");
     input.value = pos.last;
@@ -1445,11 +1450,40 @@
   }
 
   function wireClosePositionModal() {
-    const input    = $("#close-pos-price-input");
-    const qtyInput = $("#close-pos-qty-input");
+    const input      = $("#close-pos-price-input");
+    const limitInput = $("#close-limit-price-input");
+    const qtyInput   = $("#close-pos-qty-input");
+
+    const getCloseOrderType = () => $("#close-order-seg .active")?.dataset.closeOrder || "manual";
+
+    const updateCloseOrderUI = () => {
+      const t = getCloseOrderType();
+      const priceRow  = $("#close-price-row");
+      const limitRow  = $("#close-limit-row");
+      const hintRow   = $("#close-market-hint-row");
+      const dateRow   = $("#close-date-row");
+      const preview   = $("#close-pos-pnl-preview");
+      if (priceRow)  priceRow.style.display  = t === "manual"  ? "" : "none";
+      if (limitRow)  limitRow.style.display  = t === "limit"   ? "" : "none";
+      if (hintRow)   hintRow.style.display   = t === "market"  ? "" : "none";
+      if (dateRow)   dateRow.style.display   = t === "manual"  ? "" : "none";
+      if (preview)   preview.style.display   = t === "manual"  ? "" : "none";
+      $("#close-pos-confirm-btn").textContent = t === "manual" ? "确认平仓" : "提交挂单";
+    };
+
+    const closeOrderSeg = $("#close-order-seg");
+    if (closeOrderSeg) {
+      closeOrderSeg.addEventListener("click", e => {
+        const btn = e.target.closest("[data-close-order]");
+        if (!btn) return;
+        $$("button", closeOrderSeg).forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        updateCloseOrderUI();
+      });
+    }
 
     const refreshPreview = () => {
-      if (!pendingCloseSym) return;
+      if (!pendingCloseSym || getCloseOrderType() !== "manual") return;
       const holdings = pendingCloseCtx === "sim" ? SIM_HOLDINGS : HOLDINGS;
       const pos = holdings.find(h => h.sym === pendingCloseSym);
       if (!pos) return;
@@ -1470,16 +1504,47 @@
 
     $("#close-pos-confirm-btn").addEventListener("click", () => {
       if (!pendingCloseSym) return;
-      const val = parseFloat(input.value);
-      if (isNaN(val) || val <= 0) { input.focus(); return; }
+      const orderType = getCloseOrderType();
       const holdings = pendingCloseCtx === "sim" ? SIM_HOLDINGS : HOLDINGS;
       const pos = holdings.find(h => h.sym === pendingCloseSym);
-      const closeQty = pos ? Math.min(Math.max(1, parseInt(qtyInput.value) || pos.qty), pos.qty) : null;
+      if (!pos) return;
+      const closeQty = Math.min(Math.max(1, parseInt(qtyInput.value) || pos.qty), pos.qty);
+
+      // Sim pending close orders
+      if (pendingCloseCtx === "sim" && (orderType === "market" || orderType === "limit")) {
+        const lp = orderType === "limit" ? parseFloat(limitInput.value) : null;
+        if (orderType === "limit" && (!lp || lp <= 0)) { limitInput.focus(); return; }
+        if (SIM_CLOSE_PENDING.find(p => p.sym === pendingCloseSym)) { alert("该持仓已有平仓挂单"); return; }
+        SIM_CLOSE_PENDING.push({
+          id: Date.now().toString(36), sym: pendingCloseSym,
+          qty: closeQty, orderType, limitPrice: lp,
+          createdAt: new Date().toISOString()
+        });
+        saveToStorage(); renderSimPending();
+        pendingCloseSym = null;
+        closeModal("close-pos-modal");
+        return;
+      }
+
+      // Manual / real holdings — immediate close
+      const val = parseFloat(input.value);
+      if (isNaN(val) || val <= 0) { input.focus(); return; }
       const dateVal = $("#close-pos-date-input").value || new Date().toISOString().slice(0, 10);
       closePosition(pendingCloseSym, val, dateVal, closeQty);
       pendingCloseSym = null;
       closeModal("close-pos-modal");
     });
+
+    // expose reset fn for use when opening modal
+    wireClosePositionModal._resetOrderType = () => {
+      const isSim = pendingCloseCtx === "sim";
+      const row = $("#close-order-type-row");
+      if (row) row.style.display = isSim ? "" : "none";
+      if (closeOrderSeg) {
+        $$("button", closeOrderSeg).forEach(b => b.classList.toggle("active", b.dataset.closeOrder === "manual"));
+      }
+      updateCloseOrderUI();
+    };
   }
 
   // closePosition — full or partial close (real or sim based on ctx)
@@ -1808,7 +1873,10 @@
   async function fetchPrices() {
     const all = [...SIM_HOLDINGS, ...HOLDINGS];
     // Include pending order symbols so we can execute them
-    const pendingSyms = SIM_PENDING.map(p => p.sym);
+    const pendingSyms = [
+      ...SIM_PENDING.map(p => p.sym),
+      ...SIM_CLOSE_PENDING.map(p => p.sym),
+    ];
 
     const allSyms = [...all.map(h => h.sym), ...pendingSyms];
     if (!allSyms.length) return;
@@ -1889,6 +1957,31 @@
         executed.forEach(id => {
           const idx = SIM_PENDING.findIndex(p => p.id === id);
           if (idx !== -1) SIM_PENDING.splice(idx, 1);
+        });
+        renderSimPending();
+      }
+
+      // Execute pending close orders
+      const closedIds = [];
+      SIM_CLOSE_PENDING.forEach(order => {
+        const q = results[order.sym];
+        if (!q?.last) return;
+        const execPrice = q.last;
+        const shouldClose = order.orderType === "market" ||
+          (order.orderType === "limit" && execPrice >= order.limitPrice);
+        if (!shouldClose) return;
+        const prevCtx = pendingCloseCtx;
+        pendingCloseCtx = "sim";
+        const today = new Date().toISOString().slice(0, 10);
+        closePosition(order.sym, execPrice, today, order.qty);
+        pendingCloseCtx = prevCtx;
+        closedIds.push(order.id);
+        changed = true;
+      });
+      if (closedIds.length) {
+        closedIds.forEach(id => {
+          const idx = SIM_CLOSE_PENDING.findIndex(p => p.id === id);
+          if (idx !== -1) SIM_CLOSE_PENDING.splice(idx, 1);
         });
         renderSimPending();
       }
@@ -2040,31 +2133,56 @@
     const section = $("#sim-pending-section");
     const list    = $("#sim-pending-list");
     if (!section || !list) return;
-    if (!SIM_PENDING.length) { section.style.display = "none"; return; }
+    const hasAny = SIM_PENDING.length || SIM_CLOSE_PENDING.length;
+    if (!hasAny) { section.style.display = "none"; return; }
     section.style.display = "";
-    list.innerHTML = SIM_PENDING.map(order => {
+
+    const openCards = SIM_PENDING.map(order => {
       const typeLabel = order.orderType === "market" ? "市价单" : "限价单";
       const typeCls   = order.orderType === "market" ? "market" : "limit";
       const priceHint = order.orderType === "limit"
         ? `限价 $${order.limitPrice?.toFixed(2)} · `
         : "下次更新自动成交 · ";
       const stopTarget = order.stop && order.target
-        ? `止损 $${order.stop} / 止盈 $${order.target}`
-        : "";
+        ? `止损 $${order.stop} / 止盈 $${order.target}` : "";
       return `
         <div class="pending-order-card" data-pending-id="${order.id}">
           <span class="pending-order-badge ${typeCls}">${typeLabel}</span>
           <span class="pending-order-sym">${order.sym}</span>
           <span class="pending-order-detail">${priceHint}${order.qty}股 ${stopTarget}</span>
-          <button class="pending-order-cancel" data-cancel-id="${order.id}" title="取消挂单">✕</button>
+          <button class="pending-order-cancel" data-cancel-id="${order.id}" data-cancel-type="open" title="取消挂单">✕</button>
         </div>`;
-    }).join("");
+    });
+
+    const closeCards = SIM_CLOSE_PENDING.map(order => {
+      const typeLabel = order.orderType === "market" ? "市价单" : "限价单";
+      const typeCls   = order.orderType === "market" ? "market" : "limit";
+      const priceHint = order.orderType === "limit"
+        ? `限价 ≥$${order.limitPrice?.toFixed(2)} · `
+        : "下次更新自动成交 · ";
+      return `
+        <div class="pending-order-card" data-pending-id="${order.id}">
+          <span class="pending-order-badge close-order">平仓</span>
+          <span class="pending-order-badge ${typeCls}" style="margin-left:2px">${typeLabel}</span>
+          <span class="pending-order-sym">${order.sym}</span>
+          <span class="pending-order-detail">${priceHint}${order.qty}股</span>
+          <button class="pending-order-cancel" data-cancel-id="${order.id}" data-cancel-type="close" title="取消平仓挂单">✕</button>
+        </div>`;
+    });
+
+    list.innerHTML = [...openCards, ...closeCards].join("");
 
     list.querySelectorAll(".pending-order-cancel").forEach(btn => {
       btn.addEventListener("click", () => {
-        const id  = btn.dataset.cancelId;
-        const idx = SIM_PENDING.findIndex(p => p.id === id);
-        if (idx !== -1) { SIM_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
+        const id   = btn.dataset.cancelId;
+        const type = btn.dataset.cancelType;
+        if (type === "close") {
+          const idx = SIM_CLOSE_PENDING.findIndex(p => p.id === id);
+          if (idx !== -1) { SIM_CLOSE_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
+        } else {
+          const idx = SIM_PENDING.findIndex(p => p.id === id);
+          if (idx !== -1) { SIM_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
+        }
       });
     });
   }
