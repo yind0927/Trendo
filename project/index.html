@@ -878,7 +878,7 @@
   }
 
   .navbar{
-    display: flex; align-items: center; gap: 2px;
+    display: flex; align-items: center; gap: 25px;
     margin-left: 14px; padding-left: 18px;
     border-left: 1px solid var(--line);
     height: 28px;
@@ -1238,16 +1238,19 @@
   .nav-edit-btn:hover { color: var(--accent); background: var(--accent-dim); }
 
   /* ROW ACTIONS: close (archive) vs delete (permanent) */
-  .close-pos-btn, .delete-btn {
+  .close-pos-btn, .delete-btn, .sim-restore-btn {
     all: unset; cursor: pointer; font-size: 13px; opacity: 0; transition: opacity .15s;
     display: grid; place-items: center; border-radius: 4px; width: 22px; height: 22px;
   }
   .close-pos-btn { color: var(--accent); }
   .delete-btn { color: var(--down); }
+  .sim-restore-btn { color: var(--warn); }
   table.holdings tbody tr:hover .close-pos-btn,
   table.holdings tbody tr:hover .delete-btn { opacity: 1; }
   .close-pos-btn:hover { background: var(--accent-dim); opacity: 1 !important; }
   .delete-btn:hover { background: var(--down-dim); opacity: 1 !important; }
+  .sim-restore-btn:hover { background: var(--warn-dim); opacity: 1 !important; }
+  table.sim-holdings tbody tr:hover .sim-restore-btn { opacity: 1; }
 
   /* row-actions cell */
   .row-actions { display: flex; gap: 4px; align-items: center; justify-content: center; }
