@@ -878,7 +878,7 @@
   }
 
   .navbar{
-    display: flex; align-items: center; gap: 25px;
+    display: flex; align-items: center; gap: 26px;
     margin-left: 14px; padding-left: 18px;
     border-left: 1px solid var(--line);
     height: 28px;
@@ -1661,12 +1661,13 @@
   @media (max-width: 1290px) and (min-width: 769px) {
     .topbar { gap: 8px; padding: 10px 16px; }
     .wordmark .tagline { display: none; }
-    .navbar { margin-left: 6px; padding-left: 10px; gap: 0px; }
-    .navlink { padding: 6px 12px; font-size: 12px; }
-    .topbar .search { width: 200px; }
+    .navbar { margin-left: 6px; padding-left: 10px; gap: 8px; }
+    .navlink { padding: 6px 10px; font-size: 12px; }
+    .topbar .search { width: 180px; }
     #tweaks-toggle .tweaks-label { display: none; }
+    #new-pos-btn { padding: 6px 10px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
     #new-pos-btn .pos-label { display: inline; }
-    .top-actions { gap: 5px; }
+    .top-actions { gap: 5px; flex-shrink: 0; }
     main { padding: 16px 16px 40px; }
     .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .overview { grid-template-columns: repeat(3, 1fr) !important; }
