@@ -2069,6 +2069,44 @@
     });
   }
 
+  function renderSimEvents() {
+    const section = $("#sim-earnings-section");
+    const el = $("#sim-events");
+    if (!section || !el) return;
+
+    const today  = new Date(); today.setHours(0, 0, 0, 0);
+    const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() + 30);
+    const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+    const entries = SIM_HOLDINGS
+      .filter(h => h.earnings)
+      .map(h => ({ h, date: (() => { const d = new Date(h.earnings); d.setHours(0,0,0,0); return d; })() }))
+      .filter(({ date }) => date >= today && date <= cutoff)
+      .sort((a, b) => a.date - b.date);
+
+    if (!entries.length) {
+      section.style.display = "none";
+      return;
+    }
+    section.style.display = "";
+
+    el.innerHTML = entries.map(({ h, date }) => {
+      const days = Math.round((date - today) / 86400000);
+      const urgColor  = days <= 2 ? "var(--down)" : days <= 6 ? "var(--warn)" : "var(--fg-2)";
+      const daysLabel = days === 0 ? "今天" : days === 1 ? "明天" : `${days}天后`;
+      const holdColor = h.holdEarn ? "var(--up)" : "var(--warn)";
+      const holdText  = h.holdEarn ? "计划持有" : "计划减仓";
+      return `
+        <div class="event">
+          <div class="when"><span class="d">${String(date.getDate()).padStart(2,"0")}</span>${MO[date.getMonth()]} · ${WD[date.getDay()]}</div>
+          <div class="evt-sym-col"><span class="sym">${h.sym}</span></div>
+          <div class="evt-days" style="color:${urgColor}">${daysLabel}</div>
+          <span class="alert" style="color:${holdColor};background:color-mix(in oklch,${holdColor} 15%,transparent)">${holdText}</span>
+        </div>`;
+    }).join("");
+  }
+
   function renderSimOverview() {
     const el = $("#sim-overview");
     if (!el) return;
@@ -2120,6 +2158,7 @@
   }
 
   function renderSimTable() {
+    renderSimEvents();
     const thead = $("#sim-thead-row");
     const tbody = $("#sim-tbody");
     if (!thead || !tbody) return;
