@@ -611,12 +611,29 @@
   }
 
   function calcTradingDays(entryStr, endStr) {
-    if (!entryStr) return 1;
-    const start = new Date(entryStr + 'T00:00:00');
-    const end = endStr ? new Date(endStr + 'T00:00:00') : new Date();
-    end.setHours(0,0,0,0);
-    if (start > end) return 1;
+    if (!entryStr) return 0;
     const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+    // Start counting from the day AFTER entry
+    const start = new Date(entryStr + 'T00:00:00');
+    start.setDate(start.getDate() + 1);
+
+    // End: provided close date, or last completed trading day
+    let end;
+    if (endStr) {
+      end = new Date(endStr + 'T00:00:00');
+    } else {
+      // US market closes at 4pm ET = 20:00 UTC; before that, today hasn't closed
+      end = new Date(); end.setHours(0,0,0,0);
+      const utcMins = new Date().getUTCHours() * 60 + new Date().getUTCMinutes();
+      if (utcMins < 20 * 60) end.setDate(end.getDate() - 1);
+      // Walk back past weekends/holidays to last trading day
+      const hols0 = new Set([...usMarketHolidays(end.getFullYear()), ...usMarketHolidays(end.getFullYear() - 1)]);
+      while (end.getDay() === 0 || end.getDay() === 6 || hols0.has(f(end)))
+        end.setDate(end.getDate() - 1);
+    }
+
+    if (start > end) return 0;
     const hols = new Set();
     for (let yr = start.getFullYear(); yr <= end.getFullYear(); yr++)
       usMarketHolidays(yr).forEach(h => hols.add(h));
@@ -627,7 +644,7 @@
       if (dow !== 0 && dow !== 6 && !hols.has(f(d))) count++;
       d.setDate(d.getDate() + 1);
     }
-    return Math.max(1, count);
+    return count;
   }
 
   // ============ DERIVED FIELD RECOMPUTE ============
