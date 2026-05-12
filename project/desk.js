@@ -1873,6 +1873,14 @@
     Object.keys(dailyPnlLog).forEach(d => { if (d < cutoffStr) delete dailyPnlLog[d]; });
   }
 
+  function isUSMarketOpen() {
+    const now = new Date();
+    const day = now.getUTCDay(); // 0=Sun, 6=Sat
+    if (day === 0 || day === 6) return false;
+    const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    return mins >= 13 * 60 + 30 && mins < 21 * 60; // 13:30–21:00 UTC covers EDT+EST
+  }
+
   async function fetchPrices() {
     const all = [...SIM_HOLDINGS, ...HOLDINGS];
     // Include pending order symbols so we can execute them
@@ -1925,9 +1933,9 @@
         const q = results[order.sym];
         if (!q?.last) return;
         const execPrice = q.last;
-        const shouldExecute =
+        const shouldExecute = isUSMarketOpen() && (
           order.orderType === "market" ||
-          (order.orderType === "limit" && execPrice <= order.limitPrice);
+          (order.orderType === "limit" && execPrice <= order.limitPrice));
         if (!shouldExecute) return;
         if (SIM_HOLDINGS.find(h => h.sym === order.sym)) return; // already open
 
@@ -1970,8 +1978,9 @@
         const q = results[order.sym];
         if (!q?.last) return;
         const execPrice = q.last;
-        const shouldClose = order.orderType === "market" ||
-          (order.orderType === "limit" && execPrice >= order.limitPrice);
+        const shouldClose = isUSMarketOpen() && (
+          order.orderType === "market" ||
+          (order.orderType === "limit" && execPrice >= order.limitPrice));
         if (!shouldClose) return;
         const prevCtx = pendingCloseCtx;
         pendingCloseCtx = "sim";
