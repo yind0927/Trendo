@@ -207,7 +207,7 @@
         <h4><span class="idx">02</span>BX Trend &amp; 市场背景</h4>
 
         <div class="bx-row">
-          <div class="bx-row-label">Daily BX Trend <span class="bx-hint">入场后第 ${h.days} 日</span></div>
+          <div class="bx-row-label">Daily BX Trend <span class="bx-hint">入场后第 ${calcTradingDays(h.entry)} 交易日</span></div>
           <div class="bx-daily-seg">
             ${["0-5","5-15","15+"].map(v => `
               <button class="bx-daily-btn ${bx.dailyBars === v ? "active" : ""}"
@@ -610,10 +610,11 @@
     ];
   }
 
-  function calcTradingDays(entryStr) {
+  function calcTradingDays(entryStr, endStr) {
     if (!entryStr) return 1;
     const start = new Date(entryStr + 'T00:00:00');
-    const end = new Date(); end.setHours(0,0,0,0);
+    const end = endStr ? new Date(endStr + 'T00:00:00') : new Date();
+    end.setHours(0,0,0,0);
     if (start > end) return 1;
     const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const hols = new Set();
@@ -946,6 +947,7 @@
     const kindLabel = h.kind === "crypto" ? "Crypto" : h.kind === "etf" ? "ETF" : "Equity";
     const displayPrice = isClosed ? (h.closePrice ?? h.last) : h.last;
     const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
+    const dispDays = calcTradingDays(h.entry, isClosed ? h.closedAt : undefined);
     const pnlPct = isClosed ? h.pnlPct : h.pnlPct;
     const pnlSign = fmt.sign(pnlAmt);
     return `
@@ -971,7 +973,7 @@
           ${isClosed ? `<span class="muted" style="font-size:11px;font-family:var(--f-mono);align-self:center">平仓价</span>` : ""}
           <span class="pct ${pnlSign}">${fmt.pct(pnlPct)}</span>
           <span class="pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>
-          <span class="muted" style="font-family:var(--f-mono);font-size:11px;margin-left:auto">${isClosed ? `平仓 ${fmt.date(h.closedAt)}` : `持仓 ${h.days}d · since ${fmt.date(h.entry)}`}</span>
+          <span class="muted" style="font-family:var(--f-mono);font-size:11px;margin-left:auto">${isClosed ? `平仓 ${fmt.date(h.closedAt)}` : `持仓 ${dispDays}d · since ${fmt.date(h.entry)}`}</span>
         </div>
         ${levelBar(h)}
         ${!isClosed ? `<div class="drawer-actions">
@@ -997,7 +999,7 @@
             <div><div class="k">盈亏金额</div><div class="v big ${fmt.sign(pnlAmt)}">${fmt.signed(pnlAmt)}</div></div>
             <div><div class="k">盈亏百分比</div><div class="v ${fmt.sign(pnlAmt)}">${fmt.pct(h.pnlPct)}</div></div>
             <div><div class="k">R 倍数</div><div class="v big ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</div></div>
-            <div><div class="k">持有天数</div><div class="v">${h.days}<span class="sub">天</span></div></div>
+            <div><div class="k">持有天数</div><div class="v">${dispDays}<span class="sub">交易日</span></div></div>
           </div>` : `
           <div class="kv-grid">
             <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}</div></div>
@@ -1617,6 +1619,7 @@
       // Partial close — create a closed record for the sold portion
       const notional = isSim ? simNotional : totalNotional;
       const closedRecord = { ...pos, qty, closedAt: cd, closePrice: cp,
+        days: calcTradingDays(pos.entry, cd),
         pnlDollar: Math.round((cp - pos.cost) * qty),
         pnlPct: pos.cost > 0 ? (cp - pos.cost) / pos.cost : 0,
         pnlFinal: Math.round((cp - pos.cost) * qty),
@@ -1631,6 +1634,7 @@
       // Full close
       pos.closedAt = cd;
       pos.closePrice = cp;
+      pos.days = calcTradingDays(pos.entry, cd);
       pos.pnlDollar = Math.round((cp - pos.cost) * pos.qty);
       pos.pnlPct = pos.cost > 0 ? (cp - pos.cost) / pos.cost : 0;
       pos.rMult = pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0;
