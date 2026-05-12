@@ -1983,7 +1983,9 @@
 
   }
 
+  html.authed #auth-gate { display: none !important; }
 </style>
+<script>try{if(sessionStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
 </head>
 <body data-density="medium" data-font="sans" data-theme="dark">
 
@@ -2733,7 +2735,7 @@ if ("serviceWorker" in navigator) {
 </script>
 
 <!-- Auth Gate -->
-<div id="auth-gate" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg-0);display:flex;align-items:center;justify-content:center">
+<div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:9999;background:var(--bg-0);align-items:center;justify-content:center">
   <div style="width:100%;max-width:340px;padding:0 20px">
     <div style="text-align:center;margin-bottom:32px">
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="margin-bottom:12px">
@@ -2776,7 +2778,7 @@ if ("serviceWorker" in navigator) {
   }
 
   function unlock() {
-    gate.style.display = "none";
+    document.documentElement.classList.add("authed");
     sessionStorage.setItem(SESSION_KEY, "1");
   }
 
@@ -2794,9 +2796,8 @@ if ("serviceWorker" in navigator) {
   }
 
   if (sessionStorage.getItem(SESSION_KEY) === "1") {
-    gate.style.display = "none";
+    document.documentElement.classList.add("authed");
   } else {
-    gate.style.display = "flex";
     document.getElementById("auth-submit-btn").addEventListener("click", tryUnlock);
     input.addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
     setTimeout(() => input.focus(), 100);
