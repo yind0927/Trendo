@@ -1303,7 +1303,25 @@
       updateOrderUI();
     };
     openBtn.addEventListener("click", () => { newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
-    $("#mobile-fab")?.addEventListener("click", () => { newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
+    $("#mobile-fab")?.addEventListener("click", () => {
+      if (currentPage === "sim") {
+        newPositionContext = "sim";
+        const fd = $("#form-date"); if (fd) fd.value = new Date().toISOString().slice(0, 10);
+        const fe = $("#form-earnings"); if (fe) fe.value = "";
+        const orderRow = $("#form-order-type-row");
+        if (orderRow) orderRow.style.display = "";
+        const orderSeg = $("#form-order-seg");
+        if (orderSeg) $$("button", orderSeg).forEach(b => b.classList.toggle("active", b.dataset.order === "manual"));
+        const entryRow = $("#form-entry-row"), limitRow = $("#form-limit-row"), mHint = $("#form-market-hint-row");
+        if (entryRow) entryRow.style.display = "";
+        if (limitRow) limitRow.style.display = "none";
+        if (mHint)    mHint.style.display    = "none";
+        const ei = $("#form-entry"); if (ei) ei.required = true;
+        openModal("new-position-modal");
+      } else {
+        newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal");
+      }
+    });
     closeBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
     cancelBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
 
