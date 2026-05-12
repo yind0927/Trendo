@@ -1541,7 +1541,7 @@
       const row = $("#close-order-type-row");
       if (row) row.style.display = isSim ? "" : "none";
       if (closeOrderSeg) {
-        $$("button", closeOrderSeg).forEach(b => b.classList.toggle("active", b.dataset.closeOrder === "manual"));
+        $$("button", closeOrderSeg).forEach(b => b.classList.toggle("active", b.dataset.closeOrder === (isSim ? "market" : "manual")));
       }
       updateCloseOrderUI();
     };
