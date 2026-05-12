@@ -584,6 +584,11 @@
     h.pnlPct = h.cost > 0 ? (h.last - h.cost) / h.cost : 0;
     h.risk1R = h.stop ? h.cost - h.stop : 0;
     h.rMult = h.risk1R !== 0 ? (h.last - h.cost) / h.risk1R : 0;
+    if (h.entry) {
+      const entryDate = new Date(h.entry + "T00:00:00");
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      h.days = Math.max(1, Math.round((today - entryDate) / 86400000) + 1);
+    }
   }
 
   // ============ MODAL MANAGEMENT ============
