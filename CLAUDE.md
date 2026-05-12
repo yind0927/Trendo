@@ -118,17 +118,18 @@ window.EVENTS            // 事件记录（Analytics）
 ## localStorage 键名
 
 ```
-trendo_v4_holdings      → HOLDINGS[]
-trendo_v4_closed        → CLOSED_POSITIONS[]
-trendo_v4_notional      → totalNotional (默认60000)
-trendo_v4_watchlist     → WATCHLIST[]
-trendo_v4_sim_holdings  → SIM_HOLDINGS[]
-trendo_v4_sim_closed    → SIM_CLOSED[]
-trendo_v4_sim_notional  → simNotional (默认100000)
-trendo_v4_sim_pending   → SIM_PENDING[]
-trendo_v4_daily_pnl     → dailyPnlLog {}
-trendo_v4_savedAt       → ISO时间戳（防止旧云数据覆盖本地）
-trendo_sync_key         → 云同步密钥
+trendo_v4_holdings           → HOLDINGS[]
+trendo_v4_closed             → CLOSED_POSITIONS[]
+trendo_v4_notional           → totalNotional (默认60000)
+trendo_v4_watchlist          → WATCHLIST[]
+trendo_v4_sim_holdings       → SIM_HOLDINGS[]
+trendo_v4_sim_closed         → SIM_CLOSED[]
+trendo_v4_sim_notional       → simNotional (默认100000)
+trendo_v4_sim_pending        → SIM_PENDING[]
+trendo_v4_sim_close_pending  → SIM_CLOSE_PENDING[]
+trendo_v4_daily_pnl          → dailyPnlLog {}
+trendo_v4_savedAt            → ISO时间戳（防止旧云数据覆盖本地）
+trendo_sync_key              → 云同步密钥
 ```
 
 ---
@@ -153,8 +154,9 @@ pp >= 0.90 → "Near Target" // 近止盈 green
 
 ### recomputeHolding(h, notional)
 
-每次价格更新后调用，重算 pnlDollar / pnlPct / risk1R / rMult。
+每次价格更新后调用，重算 pnlDollar / pnlPct / risk1R / rMult / days。
 注意：qty 由 size 反推（`qty = round(size/100 * notional / cost)`）。
+`h.days` 由 `calcTradingDays(h.entry)` 实时更新（美股交易日，不含周末和10个美股假日）。
 
 ### fetchPrices()
 
@@ -163,8 +165,25 @@ pp >= 0.90 → "Near Target" // 近止盈 green
 - 调用 `/api/quote?stocks=...&crypto=...`，上限50个股票symbol
 - 收到价格后：
   1. 更新已有持仓的 last/prevClose，调用 recomputeHolding
-  2. **检查 SIM_PENDING**：市价单直接成交；限价单在 price ≤ limitPrice 时成交
-  3. 成交的挂单从 SIM_PENDING 移除，新建持仓加入 SIM_HOLDINGS
+  2. **检查 SIM_PENDING**（仅美股开盘时段 `isUSMarketOpen()`）：市价单直接成交；限价单在 price ≤ limitPrice 时成交
+  3. **检查 SIM_CLOSE_PENDING**（仅美股开盘时段）：市价单直接平仓；限价单在 price ≥ limitPrice 时平仓
+  4. 成交的挂单从队列移除，结果写入持仓/已平仓
+
+### isUSMarketOpen()
+
+```js
+// 周一至周五，UTC 13:30–21:00（美东 9:30–17:00）
+const day = now.getUTCDay(); // 0=Sun, 6=Sat
+const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
+return day >= 1 && day <= 5 && mins >= 13*60+30 && mins < 21*60;
+```
+
+### calcTradingDays(entryStr, endStr?)
+
+计算美股交易日数（排除周末和10个美股假日）。
+- 从入场日**次日**开始计算第1个交易日
+- 结束日：若传入 `endStr` 用平仓日；否则用最后已收盘交易日（UTC 20:00前用昨天，之后用今天，再向前跳过周末/假日）
+- 用于 `recomputeHolding`（开仓实时更新）、`drawerHTML`（抽屉展示）、`closePosition`（平仓记录）
 
 ### closePosition(sym, closePrice, closeDate, closeQty)
 
@@ -283,10 +302,16 @@ const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
 
 新开仓弹窗在 sim 上下文显示"订单类型"选择器：
 - **手动**：原有流程，直接填入场价
-- **市价单**：跳过入场价，提交后进入 SIM_PENDING，下次 fetchPrices 以市价成交
-- **限价单**：填写限价，price ≤ limitPrice 时自动成交
+- **市价单**：跳过入场价，提交后进入 SIM_PENDING，下次 fetchPrices（开盘时段）以当时市价成交
+- **限价单**：填写限价，开盘时段内 price ≤ limitPrice 时自动成交
 
-挂单队列显示在模拟仓 sim-overview 和 sim-table-controls 之间（`#sim-pending-section`）。
+挂单队列（`#sim-pending-section`）显示在模拟仓 **sim-overview 上方**（topbar 下方），保证手机端第一屏可见。
+
+手机端开仓入口：
+- `sim-new-pos-btn`（sim topbar 内，始终可见）
+- 移动端 FAB 悬浮按钮：在 sim 页时自动切换为 sim 上下文（`currentPage === "sim"`），效果与 sim-new-pos-btn 一致；其他页面仍为真实仓开仓。
+
+非 sim 上下文的平仓挂单走 `SIM_CLOSE_PENDING[]`，同样受 `isUSMarketOpen()` 门控。
 
 ---
 
@@ -347,7 +372,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v6.x | 移动端响应布局，PWA，FAB按钮，P&L日历，BX斜率，Market页(VIX/VXN/板块轮动) |
 | v7.0 | progressBucket双轴重设计，ETF成分更新，VOO基准条，筛选重设计(ETF/近止损/近止盈)，部分平仓，已平仓盈亏筛选 |
 | v7.1 | 模拟仓挂单系统（市价单/限价单），F&G/RSI昨日变化，板块排名日变化，统一双语页面标题(20px)，Watchlist→Preparation，6态市场状态系统(优先级匹配)，抛售/偏热更名，手册触发条件列 |
-| v7.2 | 移除顶部时钟模块，修复响应式根因(body min-width)，新增769–1290px紧凑断点，导航选中改为下划线设计，搜索框简化，持仓数动态关联 |
+| v7.2 | 移除顶部时钟模块，修复响应式根因(body min-width)，新增769–1290px紧凑断点，导航选中改为下划线设计，搜索框简化，持仓数动态关联，市价单/限价单开盘时段门控(isUSMarketOpen)，美股交易日计算(calcTradingDays+usMarketHolidays)，持仓天数改为实时交易日，抽屉天数动态渲染，修复密码页闪屏，手机端挂单队列移至overview上方，FAB按当前页面切换开仓上下文 |
 
 ---
 
