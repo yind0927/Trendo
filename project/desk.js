@@ -1690,6 +1690,9 @@
         $("#tweaks").classList.remove("open");
       }
       if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("#search-input").focus(); }
+      if (e.key === "n" && !e.ctrlKey && !e.metaKey && !e.altKey && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
+        e.preventDefault(); $("#new-pos-btn")?.click();
+      }
     });
   }
 
