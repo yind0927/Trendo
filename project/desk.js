@@ -576,6 +576,59 @@
     } catch (e) { /* corrupted storage, use defaults */ }
   }
 
+  // ============ TRADING DAYS CALCULATOR ============
+  function usMarketHolidays(y) {
+    const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const obs = (m, day) => {
+      const d = new Date(y, m-1, day);
+      if (d.getDay()===6) d.setDate(day-1); else if (d.getDay()===0) d.setDate(day+1);
+      return f(d);
+    };
+    const nth = (m, dow, n) => {
+      const d = new Date(y, m-1, 1); let c = 0;
+      while (c < n) { if (d.getDay()===dow) c++; if (c < n) d.setDate(d.getDate()+1); }
+      return f(d);
+    };
+    const lastMon = m => {
+      const d = new Date(y, m, 0);
+      while (d.getDay()!==1) d.setDate(d.getDate()-1);
+      return f(d);
+    };
+    const goodFriday = () => {
+      const a=y%19,b=Math.floor(y/100),c=y%100,d2=Math.floor(b/4),e=b%4,
+            g=Math.floor((b-Math.floor((b+8)/25)+1)/3),
+            h2=(19*a+b-d2-g+15)%30,i=Math.floor(c/4),k=c%4,
+            l=(32+2*e+2*i-h2-k)%7,m2=Math.floor((a+11*h2+22*l)/451),
+            mo=Math.floor((h2+l-7*m2+114)/31),dy=(h2+l-7*m2+114)%31+1;
+      const d = new Date(y, mo-1, dy-2);
+      return f(d);
+    };
+    return [
+      obs(1,1), nth(1,1,3), nth(2,1,3), goodFriday(),
+      lastMon(5), ...(y>=2022?[obs(6,19)]:[]),
+      obs(7,4), nth(9,1,1), nth(11,4,4), obs(12,25)
+    ];
+  }
+
+  function calcTradingDays(entryStr) {
+    if (!entryStr) return 1;
+    const start = new Date(entryStr + 'T00:00:00');
+    const end = new Date(); end.setHours(0,0,0,0);
+    if (start > end) return 1;
+    const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const hols = new Set();
+    for (let yr = start.getFullYear(); yr <= end.getFullYear(); yr++)
+      usMarketHolidays(yr).forEach(h => hols.add(h));
+    let count = 0;
+    const d = new Date(start);
+    while (d <= end) {
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6 && !hols.has(f(d))) count++;
+      d.setDate(d.getDate() + 1);
+    }
+    return Math.max(1, count);
+  }
+
   // ============ DERIVED FIELD RECOMPUTE ============
   function recomputeHolding(h, notional) {
     const base = notional ?? totalNotional;
@@ -584,11 +637,7 @@
     h.pnlPct = h.cost > 0 ? (h.last - h.cost) / h.cost : 0;
     h.risk1R = h.stop ? h.cost - h.stop : 0;
     h.rMult = h.risk1R !== 0 ? (h.last - h.cost) / h.risk1R : 0;
-    if (h.entry) {
-      const entryDate = new Date(h.entry + "T00:00:00");
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      h.days = Math.max(1, Math.round((today - entryDate) / 86400000) + 1);
-    }
+    if (h.entry) h.days = calcTradingDays(h.entry);
   }
 
   // ============ MODAL MANAGEMENT ============
