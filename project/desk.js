@@ -2361,11 +2361,6 @@
           <div class="sim-astat-sub down">${losses.length ? "−" + avgLossPct + "%" : "暂无亏损"}</div>
         </div>
         <div class="sim-astat">
-          <div class="sim-astat-label">胜率</div>
-          <div class="sim-astat-value ${SIM_CLOSED.length ? (wins.length / SIM_CLOSED.length >= 0.5 ? "up" : "down") : ""}">${SIM_CLOSED.length ? (wins.length / SIM_CLOSED.length * 100).toFixed(0) + "%" : "—"}</div>
-          <div class="sim-astat-sub">${wins.length}胜 · ${losses.length}负</div>
-        </div>
-        <div class="sim-astat">
           <div class="sim-astat-label">盈利因子</div>
           <div class="sim-astat-value ${pfCls}">${pf}×</div>
           <div class="sim-astat-sub">${lossSum > 0 ? "总盈 / 总亏" : "暂无亏损"}</div>
@@ -2375,6 +2370,10 @@
           <div class="sim-astat-value">${avgDays}d</div>
           <div class="sim-astat-sub">${wins.length   ? `盈利 ${avgWinDays}d` : ""}${wins.length && losses.length ? " · " : ""}${losses.length ? `亏损 ${avgLossDays}d` : ""}</div>
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:16px 0 10px">
+        <span style="font-size:10px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase">交易记录 · Trade History</span>
+        <div style="flex:1;height:1px;background:var(--line)"></div>
       </div>
       <div class="sim-atrades">${rows}</div>`;
   }
@@ -2449,7 +2448,7 @@
       </div>
       <div class="sim-card">
         <div class="sim-card-label">模拟胜率</div>
-        <div class="sim-card-value ${wins > closedTotal / 2 ? 'up' : closedTotal ? 'down' : 'neu'}">${winRate}</div>
+        <div class="sim-card-value ${wins >= closedTotal / 2 ? 'up' : closedTotal ? 'down' : 'neu'}">${winRate}</div>
         <div class="sim-card-sub">${closedTotal ? `${wins}胜 / ${closedTotal - wins}负` : "暂无数据"}</div>
       </div>`;
 

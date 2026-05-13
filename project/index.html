@@ -1438,7 +1438,7 @@
   #sim-analytics-section { margin-top: 28px; }
   .sim-a-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
   .sim-a-title { font-size: 11px; font-weight: 700; color: var(--fg-3); letter-spacing: .06em; text-transform: uppercase; }
-  .sim-a-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+  .sim-a-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
   .sim-astat { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
   .sim-astat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); font-weight: 500; }
   .sim-astat-value { font-size: 18px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
@@ -2399,36 +2399,37 @@
 
   <div id="sim-analytics-section" style="display:none"></div>
 
-  <div class="sim-table-controls">
-    <div class="sim-tabs">
-      <button class="sim-tab active" id="sim-tab-open">Open <span id="sim-c-open">0</span></button>
-      <button class="sim-tab" id="sim-tab-closed">Closed <span id="sim-c-closed">0</span></button>
+  <section class="panel">
+    <div class="panel-head">
+      <div class="panel-title">
+        <button class="tab active" id="sim-tab-open">Open <span class="c" id="sim-c-open">0</span></button>
+        <button class="tab" id="sim-tab-closed">Closed <span class="c" id="sim-c-closed">0</span></button>
+      </div>
+      <div class="sim-search" style="margin-left:auto">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+        <input id="sim-search-input" placeholder="搜索…">
+      </div>
+      <div class="filters" id="sim-filters-open" style="margin-left:0">
+        <button class="filter-chip active" data-simfilter="all">全部 <span class="c" id="sim-c-all">0</span></button>
+        <button class="filter-chip" data-simfilter="equity">美股 <span class="c" id="sim-c-eq">0</span></button>
+        <button class="filter-chip" data-simfilter="etf">ETF <span class="c" id="sim-c-etf">0</span></button>
+        <button class="filter-chip" data-simfilter="crypto">加密 <span class="c" id="sim-c-cr">0</span></button>
+        <button class="filter-chip" data-simfilter="risk">近止损 <span class="c" id="sim-c-rk">0</span></button>
+        <button class="filter-chip" data-simfilter="target">近止盈 <span class="c" id="sim-c-tg">0</span></button>
+      </div>
+      <div class="filters" id="sim-filters-closed" style="display:none;margin-left:0">
+        <button class="filter-chip active" data-simfilter-closed="all">全部 <span class="c" id="sim-c-cl-all">0</span></button>
+        <button class="filter-chip" data-simfilter-closed="profit">盈利 <span class="c" id="sim-c-cl-profit">0</span></button>
+        <button class="filter-chip" data-simfilter-closed="loss">亏损 <span class="c" id="sim-c-cl-loss">0</span></button>
+      </div>
     </div>
-    <div class="sim-search">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
-      <input id="sim-search-input" placeholder="搜索…">
+    <div style="overflow-x:auto">
+      <table class="sim-holdings">
+        <thead><tr id="sim-thead-row"></tr></thead>
+        <tbody id="sim-tbody"></tbody>
+      </table>
     </div>
-    <div class="sim-chips" id="sim-filters-open">
-      <button class="filter-chip active" data-simfilter="all">全部 <span id="sim-c-all">0</span></button>
-      <button class="filter-chip" data-simfilter="equity">美股 <span id="sim-c-eq">0</span></button>
-      <button class="filter-chip" data-simfilter="etf">ETF <span id="sim-c-etf">0</span></button>
-      <button class="filter-chip" data-simfilter="crypto">加密 <span id="sim-c-cr">0</span></button>
-      <button class="filter-chip" data-simfilter="risk">近止损 <span id="sim-c-rk">0</span></button>
-      <button class="filter-chip" data-simfilter="target">近止盈 <span id="sim-c-tg">0</span></button>
-    </div>
-    <div class="sim-chips" id="sim-filters-closed" style="display:none">
-      <button class="filter-chip active" data-simfilter-closed="all">全部 <span id="sim-c-cl-all">0</span></button>
-      <button class="filter-chip" data-simfilter-closed="profit">盈利 <span id="sim-c-cl-profit">0</span></button>
-      <button class="filter-chip" data-simfilter-closed="loss">亏损 <span id="sim-c-cl-loss">0</span></button>
-    </div>
-  </div>
-
-  <div class="panel-wrap sim-wrap">
-    <table class="sim-holdings">
-      <thead><tr id="sim-thead-row"></tr></thead>
-      <tbody id="sim-tbody"></tbody>
-    </table>
-  </div>
+  </section>
 
 </div>
 
