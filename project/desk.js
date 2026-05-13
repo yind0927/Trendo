@@ -680,7 +680,9 @@
     const thead = $("#thead-row");
     thead.innerHTML = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide)).map(c => {
       const sorted = sortKey === c.id ? "sorted" : "";
-      const label = (activeTab === "closed" && c.id === "last") ? "平仓价" : c.label;
+      const label = (activeTab === "closed" && c.id === "last") ? "平仓价"
+                  : (activeTab === "closed" && c.id === "pnl")  ? "盈亏"
+                  : c.label;
       return `<th class="${c.r ? "right" : ""} ${sorted}" data-col="${c.id}">${label}</th>`;
     }).join("");
     $$("#thead-row th").forEach(th => th.addEventListener("click", () => {
@@ -2306,16 +2308,17 @@
     const lossSum    = Math.abs(losses.reduce((s, h) => s + (h.pnlFinal || 0), 0));
     const pf         = lossSum > 0 ? (winSum / lossSum).toFixed(2) : "∞";
     const winRate    = Math.round(wins.length / SIM_CLOSED.length * 100);
-    const avgDays    = Math.round(SIM_CLOSED.reduce((s, h) => s + (h.days || 0), 0) / SIM_CLOSED.length);
+    const avgDays    = Math.round(SIM_CLOSED.reduce((s, h) => s + (h.days || calcTradingDays(h.entry, h.closedAt)), 0) / SIM_CLOSED.length);
     const retPct     = (totalPnl / simNotional * 100).toFixed(1);
     const retCls     = totalPnl >= 0 ? "up" : "down";
     const pfCls      = parseFloat(pf) >= 1 ? "up" : "down";
 
-    const sorted = [...SIM_CLOSED].sort((a, b) => (b.closedAt || "") > (a.closedAt || "") ? 1 : -1);
+    const sorted = [...SIM_CLOSED].sort((a, b) => (b.pnlFinal || 0) - (a.pnlFinal || 0));
     const maxAbs = Math.max(...sorted.map(h => Math.abs(h.pnlFinal || 0)), 1);
 
     const rows = sorted.map(h => {
       const pnl  = h.pnlFinal || 0;
+      const days = h.days || calcTradingDays(h.entry, h.closedAt);
       const cost = h.cost > 0 && h.qty > 0 ? h.cost * h.qty : 1;
       const pct  = (pnl / cost * 100).toFixed(1);
       const cls  = pnl >= 0 ? "up" : "down";
@@ -2325,7 +2328,7 @@
         <div class="sim-atrade">
           <span class="sim-atrade-sym">${h.sym}</span>
           <span class="sim-atrade-date">${fmt.date(h.closedAt || h.entry)}</span>
-          <span class="sim-atrade-days">${h.days || 0}d</span>
+          <span class="sim-atrade-days">${days}d</span>
           <span class="sim-atrade-pnl ${cls}">${fmt.signed(Math.round(pnl))}</span>
           <span class="sim-atrade-pct ${cls}">${pnl >= 0 ? "+" : ""}${pct}%</span>
           <span class="sim-atrade-bar"><span style="display:inline-block;width:${barW}px;height:3px;background:${barC};border-radius:2px;vertical-align:middle"></span></span>
@@ -2461,7 +2464,9 @@
     // Header
     thead.innerHTML = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide)).map(c => {
       const sorted = simSortKey === c.id ? "sorted" : "";
-      const label = (simActiveTab === "closed" && c.id === "last") ? "平仓价" : c.label;
+      const label = (simActiveTab === "closed" && c.id === "last") ? "平仓价"
+                  : (simActiveTab === "closed" && c.id === "pnl")  ? "盈亏"
+                  : c.label;
       return `<th class="${c.r ? "right" : ""} ${sorted}" data-simcol="${c.id}">${label}</th>`;
     }).join("");
     $$("[data-simcol]", thead).forEach(th => th.addEventListener("click", () => {
