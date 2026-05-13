@@ -2297,9 +2297,15 @@
 
   function renderSimAnalytics() {
     const section = $("#sim-analytics-section");
+    const label   = $("#sim-analytics-label");
     if (!section) return;
-    if (!SIM_CLOSED.length) { section.style.display = "none"; return; }
+    if (!SIM_CLOSED.length) {
+      section.style.display = "none";
+      if (label) label.style.display = "none";
+      return;
+    }
     section.style.display = "";
+    if (label) label.style.display = "";
 
     const wins   = SIM_CLOSED.filter(h => (h.pnlFinal || 0) > 0);
     const losses = SIM_CLOSED.filter(h => (h.pnlFinal || 0) <= 0);
@@ -2344,11 +2350,13 @@
         </div>`;
     }).join("");
 
+    if (label) label.innerHTML = `
+      <span class="ssl-zh">模拟分析</span>
+      <span class="ssl-en">Analytics</span>
+      <span class="ssl-rule"></span>
+      <span class="ssl-meta">${SIM_CLOSED.length} 笔已平仓</span>`;
+
     section.innerHTML = `
-      <div class="sim-a-header">
-        <span class="sim-a-title">模拟分析 · Analytics</span>
-        <span style="font-size:11px;color:var(--fg-3)">${SIM_CLOSED.length} 笔已平仓</span>
-      </div>
       <div class="sim-a-stats">
         <div class="sim-astat">
           <div class="sim-astat-label">平均盈利</div>

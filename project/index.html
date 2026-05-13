@@ -1435,9 +1435,12 @@
   .pending-order-cancel:hover { color: var(--down); }
 
   /* ---- Sim Analytics ---- */
-  #sim-analytics-section { margin-top: 28px; margin-bottom: 20px; }
-  .sim-a-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-  .sim-a-title { font-size: 11px; font-weight: 700; color: var(--fg-3); letter-spacing: .06em; text-transform: uppercase; }
+  #sim-analytics-section { margin-top: 0; margin-bottom: 20px; }
+  .sim-section-label { display: flex; align-items: center; gap: 10px; margin: 24px 0 14px; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-2); }
+  .sim-section-label .ssl-zh { color: var(--fg-1); font-weight: 700; }
+  .sim-section-label .ssl-en { color: var(--fg-3); }
+  .sim-section-label .ssl-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+  .sim-section-label .ssl-meta { font-size: 10px; color: var(--fg-3); letter-spacing: 0.1em; }
   .sim-a-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
   .sim-astat { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
   .sim-astat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); font-weight: 500; }
@@ -2397,8 +2400,18 @@
     </div>
   </div>
 
+  <div class="sim-section-label" id="sim-analytics-label" style="display:none">
+    <span class="ssl-zh">模拟分析</span>
+    <span class="ssl-en">Analytics</span>
+    <span class="ssl-rule"></span>
+  </div>
   <div id="sim-analytics-section" style="display:none"></div>
 
+  <div class="sim-section-label">
+    <span class="ssl-zh">模拟仓持仓</span>
+    <span class="ssl-en">Simulation Positions</span>
+    <span class="ssl-rule"></span>
+  </div>
   <section class="panel">
     <div class="panel-head">
       <div class="panel-title">
