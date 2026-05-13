@@ -2361,9 +2361,14 @@
           <div class="sim-astat-sub down">${losses.length ? "−" + avgLossPct + "%" : "暂无亏损"}</div>
         </div>
         <div class="sim-astat">
+          <div class="sim-astat-label">胜率</div>
+          <div class="sim-astat-value ${SIM_CLOSED.length ? (wins.length / SIM_CLOSED.length >= 0.5 ? "up" : "down") : ""}">${SIM_CLOSED.length ? (wins.length / SIM_CLOSED.length * 100).toFixed(0) + "%" : "—"}</div>
+          <div class="sim-astat-sub">${wins.length}胜 · ${losses.length}负</div>
+        </div>
+        <div class="sim-astat">
           <div class="sim-astat-label">盈利因子</div>
           <div class="sim-astat-value ${pfCls}">${pf}×</div>
-          <div class="sim-astat-sub">${wins.length}胜 · ${losses.length}负</div>
+          <div class="sim-astat-sub">${lossSum > 0 ? "总盈 / 总亏" : "暂无亏损"}</div>
         </div>
         <div class="sim-astat">
           <div class="sim-astat-label">平均持仓</div>
