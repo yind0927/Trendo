@@ -2303,23 +2303,31 @@
 
     const wins   = SIM_CLOSED.filter(h => (h.pnlFinal || 0) > 0);
     const losses = SIM_CLOSED.filter(h => (h.pnlFinal || 0) <= 0);
-    const totalPnl   = SIM_CLOSED.reduce((s, h) => s + (h.pnlFinal || 0), 0);
-    const winSum     = wins.reduce((s, h) => s + (h.pnlFinal || 0), 0);
-    const lossSum    = Math.abs(losses.reduce((s, h) => s + (h.pnlFinal || 0), 0));
-    const pf         = lossSum > 0 ? (winSum / lossSum).toFixed(2) : "∞";
-    const winRate    = Math.round(wins.length / SIM_CLOSED.length * 100);
-    const avgDays    = Math.round(SIM_CLOSED.reduce((s, h) => s + (h.days || calcTradingDays(h.entry, h.closedAt)), 0) / SIM_CLOSED.length);
-    const retPct     = (totalPnl / simNotional * 100).toFixed(1);
-    const retCls     = totalPnl >= 0 ? "up" : "down";
-    const pfCls      = parseFloat(pf) >= 1 ? "up" : "down";
+    const winSum  = wins.reduce((s, h) => s + (h.pnlFinal || 0), 0);
+    const lossSum = Math.abs(losses.reduce((s, h) => s + (h.pnlFinal || 0), 0));
+    const pf      = lossSum > 0 ? (winSum / lossSum).toFixed(2) : "∞";
+    const pfCls   = parseFloat(pf) >= 1 ? "up" : "down";
+
+    const avgWin    = wins.length   ? winSum / wins.length   : 0;
+    const avgLoss   = losses.length ? lossSum / losses.length : 0;
+    const avgWinPct = wins.length
+      ? (wins.reduce((s, h) => s + (h.pnlFinal || 0) / Math.max(h.cost * h.qty, 1), 0) / wins.length * 100).toFixed(1)
+      : "0.0";
+    const avgLossPct = losses.length
+      ? (losses.reduce((s, h) => s + Math.abs(h.pnlFinal || 0) / Math.max(h.cost * h.qty, 1), 0) / losses.length * 100).toFixed(1)
+      : "0.0";
+
+    const avgDays = Math.round(
+      SIM_CLOSED.reduce((s, h) => s + calcTradingDays(h.entry, h.closedAt), 0) / SIM_CLOSED.length
+    );
 
     const sorted = [...SIM_CLOSED].sort((a, b) => (b.pnlFinal || 0) - (a.pnlFinal || 0));
     const maxAbs = Math.max(...sorted.map(h => Math.abs(h.pnlFinal || 0)), 1);
 
     const rows = sorted.map(h => {
       const pnl  = h.pnlFinal || 0;
-      const days = h.days || calcTradingDays(h.entry, h.closedAt);
-      const cost = h.cost > 0 && h.qty > 0 ? h.cost * h.qty : 1;
+      const days = calcTradingDays(h.entry, h.closedAt);
+      const cost = Math.max(h.cost * h.qty, 1);
       const pct  = (pnl / cost * 100).toFixed(1);
       const cls  = pnl >= 0 ? "up" : "down";
       const barW = Math.round(Math.abs(pnl) / maxAbs * 64);
@@ -2327,7 +2335,7 @@
       return `
         <div class="sim-atrade">
           <span class="sim-atrade-sym">${h.sym}</span>
-          <span class="sim-atrade-date">${fmt.date(h.closedAt || h.entry)}</span>
+          <span class="sim-atrade-dates">${fmt.date(h.entry)} → ${fmt.date(h.closedAt || h.entry)}</span>
           <span class="sim-atrade-days">${days}d</span>
           <span class="sim-atrade-pnl ${cls}">${fmt.signed(Math.round(pnl))}</span>
           <span class="sim-atrade-pct ${cls}">${pnl >= 0 ? "+" : ""}${pct}%</span>
@@ -2342,19 +2350,19 @@
       </div>
       <div class="sim-a-stats">
         <div class="sim-astat">
-          <div class="sim-astat-label">已实现回报</div>
-          <div class="sim-astat-value ${retCls}">${fmt.signed(Math.round(totalPnl))}</div>
-          <div class="sim-astat-sub ${retCls}">${totalPnl >= 0 ? "+" : ""}${retPct}%</div>
+          <div class="sim-astat-label">平均盈利</div>
+          <div class="sim-astat-value up">${wins.length ? fmt.signed(Math.round(avgWin)) : "—"}</div>
+          <div class="sim-astat-sub up">${wins.length ? "+" + avgWinPct + "%" : "暂无盈利"}</div>
         </div>
         <div class="sim-astat">
-          <div class="sim-astat-label">胜率</div>
-          <div class="sim-astat-value">${winRate}%</div>
-          <div class="sim-astat-sub">${wins.length}胜 · ${losses.length}负</div>
+          <div class="sim-astat-label">平均亏损</div>
+          <div class="sim-astat-value down">${losses.length ? "−$" + Math.round(avgLoss).toLocaleString("en-US") : "—"}</div>
+          <div class="sim-astat-sub down">${losses.length ? "−" + avgLossPct + "%" : "暂无亏损"}</div>
         </div>
         <div class="sim-astat">
           <div class="sim-astat-label">盈利因子</div>
           <div class="sim-astat-value ${pfCls}">${pf}×</div>
-          <div class="sim-astat-sub">总盈 / 总亏</div>
+          <div class="sim-astat-sub">${wins.length}胜 · ${losses.length}负</div>
         </div>
         <div class="sim-astat">
           <div class="sim-astat-label">平均持仓</div>
