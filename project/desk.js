@@ -2353,12 +2353,12 @@
         <div class="sim-astat">
           <div class="sim-astat-label">平均盈利</div>
           <div class="sim-astat-value up">${wins.length ? fmt.signed(Math.round(avgWin)) : "—"}</div>
-          <div class="sim-astat-sub up" style="font-size:18px;font-weight:700">${wins.length ? "+" + avgWinPct + "%" : "暂无盈利"}</div>
+          <div class="sim-astat-sub up">${wins.length ? "+" + avgWinPct + "%" : "暂无盈利"}</div>
         </div>
         <div class="sim-astat">
           <div class="sim-astat-label">平均亏损</div>
           <div class="sim-astat-value down">${losses.length ? "−$" + Math.round(avgLoss).toLocaleString("en-US") : "—"}</div>
-          <div class="sim-astat-sub down" style="font-size:18px;font-weight:700">${losses.length ? "−" + avgLossPct + "%" : "暂无亏损"}</div>
+          <div class="sim-astat-sub down">${losses.length ? "−" + avgLossPct + "%" : "暂无亏损"}</div>
         </div>
         <div class="sim-astat">
           <div class="sim-astat-label">盈利因子</div>
