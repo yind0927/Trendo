@@ -2802,15 +2802,17 @@
     };
 
     if (period === "week") {
-      const days   = getTradingDays(5);
-      const labels = days.map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d + "T12:00:00Z").getUTCDay()]);
-      return { values: buildCurve(days), labels };
+      const days        = getTradingDays(5);
+      const labels      = days.map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d + "T12:00:00Z").getUTCDay()]);
+      const dailyChanges = days.map(d => getDayPnl(d));
+      return { values: buildCurve(days), labels, dailyChanges };
     }
 
     if (period === "month") {
-      const days   = getTradingDays(22);
-      const labels = days.map(d => { const [,m,dy] = d.split("-"); return `${+m}/${+dy}`; });
-      return { values: buildCurve(days), labels };
+      const days        = getTradingDays(22);
+      const labels      = days.map(d => { const [,m,dy] = d.split("-"); return `${+m}/${+dy}`; });
+      const dailyChanges = days.map(d => getDayPnl(d));
+      return { values: buildCurve(days), labels, dailyChanges };
     }
 
     // year: 12 monthly cumulative endpoint values
@@ -2828,7 +2830,7 @@
     const labels = Array.from({length: 12}, (_, i) =>
       new Date(today.getFullYear(), today.getMonth() - 11 + i, 1).toLocaleDateString("en-US", { month: "short" })
     );
-    return { values: cums.slice(1), labels };
+    return { values: cums.slice(1), labels, dailyChanges: monthPnls };
   }
 
   function portfolioCurveSVG(points, labels, h, chartId) {
@@ -2846,45 +2848,58 @@
     const col = lastUp ? "var(--up)" : "var(--down)";
     const gid = "pcg" + (Math.random() * 1e6 | 0);
 
-    // Horizontal grid lines with $ labels
-    const gridSVG = [0.25, 0.5, 0.75].map(t => {
-      const v = minV + rng * t;
-      const gy = sy(v).toFixed(1);
-      const lbl = "$" + (v / 1000).toFixed(1) + "k";
-      return `<line x1="8" y1="${gy}" x2="${W - 8}" y2="${gy}" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="4,5" opacity="0.8"/>` +
-             `<text x="${W - 10}" y="${gy}" text-anchor="end" dominant-baseline="middle" fill="var(--fg-3)" font-size="8" font-family="sans-serif">${lbl}</text>`;
+    // Grid lines only (no SVG text — labels rendered as HTML to avoid stretch)
+    const gridLines = [0.25, 0.5, 0.75].map(t => {
+      const gy = sy(minV + rng * t).toFixed(1);
+      return `<line x1="8" y1="${gy}" x2="${W - 8}" y2="${gy}" stroke="var(--line)" stroke-width="0.5" stroke-dasharray="4,5" opacity="0.8"/>`;
     }).join("");
 
-    // X-axis labels: first, mid, last
-    const lIdx = [0, Math.floor((points.length - 1) / 2), points.length - 1];
-    const xLabels = labels ? lIdx.map((i, pos) =>
-      `<text x="${sx(i).toFixed(1)}" y="${h + 12}" text-anchor="${pos === 0 ? 'start' : pos === 2 ? 'end' : 'middle'}" fill="var(--fg-3)" font-size="9.5" font-family="sans-serif">${labels[i] || ""}</text>`
-    ).join("") : "";
+    // Y-axis labels as absolute-positioned HTML (avoids SVG text stretch)
+    const yLabelHTML = [0.75, 0.5, 0.25].map(t => {
+      const v    = minV + rng * t;
+      const topP = (sy(v) / h * 100).toFixed(1);
+      const lbl  = Math.abs(v) >= 10000 ? `$${(v/1000).toFixed(0)}k`
+                 : Math.abs(v) >= 1000  ? `$${(v/1000).toFixed(1)}k`
+                 : `$${Math.round(v)}`;
+      return `<span style="position:absolute;right:3px;top:${topP}%;transform:translateY(-50%);font-size:10px;color:var(--fg-3);font-family:var(--f-mono);line-height:1;pointer-events:none">${lbl}</span>`;
+    }).join("");
+
+    // X-axis labels as HTML flex row
+    const xIdxs  = points.length <= 5
+      ? points.map((_, i) => i)
+      : [0, Math.floor((points.length - 1) / 4), Math.floor((points.length - 1) / 2), Math.floor((points.length - 1) * 3 / 4), points.length - 1];
+    const xLblHTML = xIdxs.map((idx, pos) => {
+      const align = pos === 0 ? "left" : pos === xIdxs.length - 1 ? "right" : "center";
+      return `<span style="flex:1;text-align:${align};font-size:10.5px;color:var(--fg-3);font-family:var(--f-mono)">${labels ? (labels[idx] || "") : ""}</span>`;
+    }).join("");
 
     return `<div id="${chartId}-wrap" style="position:relative">
-<svg id="${chartId}" viewBox="0 0 ${W} ${h + 16}" preserveAspectRatio="none" style="display:block;width:100%;height:${h + 16}px;cursor:crosshair">
-  <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="${col}" stop-opacity="0.22"/>
-    <stop offset="1" stop-color="${col}" stop-opacity="0.02"/>
-  </linearGradient></defs>
-  ${gridSVG}
-  <path d="${areaD}" fill="url(#${gid})"/>
-  <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="${sx(0).toFixed(1)}" cy="${sy(points[0]).toFixed(1)}" r="3" fill="${col}" stroke="var(--bg-1)" stroke-width="1.5" opacity="0.6"/>
-  <circle cx="${sx(points.length - 1).toFixed(1)}" cy="${sy(points[points.length - 1]).toFixed(1)}" r="4.5" fill="${col}" stroke="var(--bg-1)" stroke-width="2"/>
-  ${xLabels}
-  <line id="${chartId}-cross" x1="0" y1="2" x2="0" y2="${h - 2}" stroke="var(--fg-2)" stroke-width="1" stroke-dasharray="3,2" opacity="0"/>
-  <circle id="${chartId}-hdot" cx="0" cy="0" r="4.5" fill="${col}" stroke="var(--bg-1)" stroke-width="2" opacity="0"/>
-</svg>
+<div style="position:relative;height:${h}px">
+  ${yLabelHTML}
+  <svg id="${chartId}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" style="display:block;width:100%;height:${h}px;cursor:crosshair">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${col}" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="${col}" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    ${gridLines}
+    <path d="${areaD}" fill="url(#${gid})"/>
+    <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${sx(0).toFixed(1)}" cy="${sy(points[0]).toFixed(1)}" r="3" fill="${col}" stroke="var(--bg-1)" stroke-width="1.5" opacity="0.6"/>
+    <circle cx="${sx(points.length-1).toFixed(1)}" cy="${sy(points[points.length-1]).toFixed(1)}" r="4.5" fill="${col}" stroke="var(--bg-1)" stroke-width="2"/>
+    <line id="${chartId}-cross" x1="0" y1="2" x2="0" y2="${h-2}" stroke="var(--fg-2)" stroke-width="1" stroke-dasharray="3,2" opacity="0"/>
+    <circle id="${chartId}-hdot" cx="0" cy="0" r="4.5" fill="${col}" stroke="var(--bg-1)" stroke-width="2" opacity="0"/>
+  </svg>
+</div>
+<div style="display:flex;margin-top:6px;padding:0 4px">${xLblHTML}</div>
 <div id="${chartId}-tip" class="ec-tooltip" style="display:none"></div>
 </div>`;
   }
 
-  function wireCurveTooltip(chartId, points, labels) {
-    const svg  = document.getElementById(chartId);
-    const tip  = document.getElementById(chartId + "-tip");
+  function wireCurveTooltip(chartId, points, labels, dailyChanges) {
+    const svg   = document.getElementById(chartId);
+    const tip   = document.getElementById(chartId + "-tip");
     const cross = document.getElementById(chartId + "-cross");
-    const hdot = document.getElementById(chartId + "-hdot");
+    const hdot  = document.getElementById(chartId + "-hdot");
     if (!svg || !tip || !cross || !hdot) return;
 
     const W = 560;
@@ -2892,7 +2907,7 @@
     const rng = maxV - minV || 1;
     const lo = minV - rng * 0.05, hi = maxV + rng * 0.05;
     const range = hi - lo;
-    const h = svg.viewBox.baseVal.height - 16;
+    const h = svg.viewBox.baseVal.height;
     const sx = i => ((i / (points.length - 1)) * (W - 16) + 8);
     const sy = v => (h - 6) - ((v - lo) / range) * (h - 14);
 
@@ -2903,22 +2918,23 @@
       const idx  = Math.min(points.length - 1, Math.max(0, Math.round(pct * (points.length - 1))));
       const val  = points[idx];
       const lbl  = labels ? (labels[idx] || "") : "";
-      const chg  = val - points[0];
-      const chgPct = ((val / points[0] - 1) * 100);
 
-      // Crosshair + dot in viewBox coords
+      // Daily P&L: use actual recorded change for that day/period
+      const dayPnl = dailyChanges ? (dailyChanges[idx] || 0) : (val - (idx > 0 ? points[idx - 1] : val));
+      const pct2   = val > 0 ? (dayPnl / val * 100) : 0;
+
+      // Crosshair + dot
       const vx = sx(idx);
       cross.setAttribute("x1", vx); cross.setAttribute("x2", vx);
       cross.setAttribute("opacity", "0.55");
       hdot.setAttribute("cx", vx); hdot.setAttribute("cy", sy(val));
       hdot.setAttribute("opacity", "1");
 
-      // Tooltip
+      // Tooltip: show portfolio value + that day's actual PnL
       tip.innerHTML = `<div class="ec-tip-label">${lbl}</div>` +
         `<div class="ec-tip-val">${fmt.usd(Math.round(val))}</div>` +
-        `<div class="ec-tip-chg ${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '+' : '−'}$${Math.abs(Math.round(chg)).toLocaleString()} (${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(2)}%)</div>`;
+        `<div class="ec-tip-chg ${dayPnl >= 0 ? 'up' : 'down'}">${dayPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(dayPnl)).toLocaleString()} (${pct2 >= 0 ? '+' : ''}${pct2.toFixed(2)}%)</div>`;
 
-      // Clamp left so tooltip stays inside container
       const tipHalf = 65;
       const clampedX = Math.max(tipHalf, Math.min(rect.width - tipHalf, relX));
       tip.style.left = clampedX + "px";
@@ -3068,7 +3084,7 @@
     });
     if (!["week","month","year"].includes(equityPeriod)) equityPeriod = "week";
 
-    wireCurveTooltip("ec-main", curveData.values, curveData.labels);
+    wireCurveTooltip("ec-main", curveData.values, curveData.labels, curveData.dailyChanges);
 
     const calPrev = $("#cal-prev", aContent);
     const calNext = $("#cal-next", aContent);
