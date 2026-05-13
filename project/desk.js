@@ -2778,54 +2778,57 @@
 
   function generatePortfolioCurve(period) {
     const totalPnlDollar = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
-    const currentValue = totalNotional + totalPnlDollar;
-    // stable pseudo-random seeded on current state
-    let seed = Math.round(totalNotional + Math.abs(totalPnlDollar * 7));
-    const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    const currentValue   = totalNotional + totalPnlDollar;
+    const today    = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const liveTodayPnl = HOLDINGS.reduce((s, h) => s + ((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0), 0);
 
-    if (period === "day") {
-      const prevValue = totalNotional + HOLDINGS.reduce((s, h) => s + ((h.prevClose || h.cost) - h.cost) * (h.qty || 0), 0);
-      const labels = ["9:30", "10:15", "11:00", "11:45", "12:30", "14:00", "15:00", "16:00"];
-      const n = 8;
-      const range = Math.abs(currentValue - prevValue) || currentValue * 0.003;
-      const values = Array.from({length: n}, (_, i) => {
-        const t = i / (n - 1);
-        const noise = i > 0 && i < n - 1 ? (rand() - 0.5) * range * 0.5 : 0;
-        return prevValue + (currentValue - prevValue) * t + noise;
-      });
-      values[0] = prevValue; values[n - 1] = currentValue;
-      return { values, labels };
-    }
+    const getDayPnl = d => d === todayStr ? liveTodayPnl : (histPnlLog[d] ?? dailyPnlLog[d] ?? 0);
+
+    const getTradingDays = n => {
+      const days = [], d = new Date(today);
+      while (days.length < n) {
+        if (d.getDay() !== 0 && d.getDay() !== 6) days.unshift(d.toISOString().slice(0, 10));
+        d.setDate(d.getDate() - 1);
+      }
+      return days;
+    };
+
+    const buildCurve = days => {
+      const v = new Array(days.length);
+      v[v.length - 1] = currentValue;
+      for (let i = v.length - 2; i >= 0; i--) v[i] = v[i + 1] - getDayPnl(days[i + 1]);
+      return v;
+    };
 
     if (period === "week") {
-      const labels = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-      const weekStart = currentValue - totalPnlDollar * 0.75;
-      const range = Math.abs(totalPnlDollar) || currentValue * 0.01;
-      const values = Array.from({length: 5}, (_, i) => {
-        const t = i / 4;
-        const noise = i > 0 && i < 4 ? (rand() - 0.5) * range * 0.3 : 0;
-        return weekStart + totalPnlDollar * 0.75 * t + noise;
-      });
-      values[4] = currentValue;
-      return { values, labels };
+      const days   = getTradingDays(5);
+      const labels = days.map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d + "T12:00:00Z").getUTCDay()]);
+      return { values: buildCurve(days), labels };
     }
 
-    // month: 22 trading days
-    const n = 22;
-    const today = new Date();
-    const labels = Array.from({length: n}, (_, i) => {
-      const d = new Date(today); d.setDate(today.getDate() - (n - 1 - i));
-      return `${d.getMonth() + 1}/${d.getDate()}`;
+    if (period === "month") {
+      const days   = getTradingDays(22);
+      const labels = days.map(d => { const [,m,dy] = d.split("-"); return `${+m}/${+dy}`; });
+      return { values: buildCurve(days), labels };
+    }
+
+    // year: 12 monthly cumulative endpoint values
+    const merged = Object.assign({}, dailyPnlLog, histPnlLog);
+    const monthPnls = Array.from({length: 12}, (_, i) => {
+      const d = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
+      const y = d.getFullYear(), m = d.getMonth();
+      return Object.entries(merged)
+        .filter(([date]) => { const [dy, dm] = date.split("-").map(Number); return dy === y && dm - 1 === m; })
+        .reduce((s, [, v]) => s + v, 0);
     });
-    const monthStart = currentValue - totalPnlDollar * 1.3;
-    const range = Math.abs(totalPnlDollar) || currentValue * 0.015;
-    const values = Array.from({length: n}, (_, i) => {
-      const t = i / (n - 1);
-      const noise = i > 0 && i < n - 1 ? (rand() - 0.5) * range * 0.35 : 0;
-      return monthStart + totalPnlDollar * 1.3 * t + noise;
-    });
-    values[n - 1] = currentValue;
-    return { values, labels };
+    const cums = new Array(13);
+    cums[12] = currentValue;
+    for (let i = 11; i >= 0; i--) cums[i] = cums[i + 1] - monthPnls[i];
+    const labels = Array.from({length: 12}, (_, i) =>
+      new Date(today.getFullYear(), today.getMonth() - 11 + i, 1).toLocaleDateString("en-US", { month: "short" })
+    );
+    return { values: cums.slice(1), labels };
   }
 
   function portfolioCurveSVG(points, labels, h, chartId) {
@@ -2977,24 +2980,25 @@
         ${ametric("平均持仓",    avgHold !== null ? avgHold + " 天" : "—", "neu", avgHold !== null ? `最长 ${Math.max(...closed.map(h => h.days || 0))}d` : "")}
       </div>
 
-      <div class="analytics-chart-row">
-        <div class="analytics-card" style="flex:2">
-          <div class="ec-header">
-            <div>
-              <div class="analytics-card-title">总资产曲线 · Portfolio Value</div>
-              <div class="analytics-card-sub">
-                <span class="mono" style="font-size:15px;font-weight:700;color:var(--fg-0)">${fmt.usd(Math.round(currentPortfolioValue))}</span>
-                <span class="mono ${fmt.sign(totalPnlDollar)}" style="font-size:11px;margin-left:6px">${fmt.signed(Math.round(totalPnlDollar))}</span>
-              </div>
-            </div>
-            <div class="ec-period-seg">
-              <button class="ec-period-btn${equityPeriod === 'day' ? ' active' : ''}" data-period="day">日</button>
-              <button class="ec-period-btn${equityPeriod === 'week' ? ' active' : ''}" data-period="week">周</button>
-              <button class="ec-period-btn${equityPeriod === 'month' ? ' active' : ''}" data-period="month">月</button>
+      <div class="analytics-card" style="margin-bottom:14px">
+        <div class="ec-header">
+          <div>
+            <div class="analytics-card-title">总资产曲线 · Portfolio Value</div>
+            <div class="analytics-card-sub">
+              <span class="mono" style="font-size:15px;font-weight:700;color:var(--fg-0)">${fmt.usd(Math.round(currentPortfolioValue))}</span>
+              <span class="mono ${fmt.sign(totalPnlDollar)}" style="font-size:11px;margin-left:6px">${fmt.signed(Math.round(totalPnlDollar))}</span>
             </div>
           </div>
-          <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136, "ec-main")}</div>
+          <div class="ec-period-seg">
+            <button class="ec-period-btn${equityPeriod === 'week' ? ' active' : ''}" data-period="week">周</button>
+            <button class="ec-period-btn${equityPeriod === 'month' ? ' active' : ''}" data-period="month">月</button>
+            <button class="ec-period-btn${equityPeriod === 'year' ? ' active' : ''}" data-period="year">年</button>
+          </div>
         </div>
+        <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136, "ec-main")}</div>
+      </div>
+
+      <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
           <div class="analytics-card-title">BX Bars 效能</div>
           <div class="analytics-card-sub">胜率 · 平均盈亏</div>
@@ -3016,9 +3020,8 @@
             }).join("")}
           </div>
         </div>
+        ${pnlCalendarHTML(calYear, calMonth, "flex:2;margin-bottom:0")}
       </div>
-
-      ${pnlCalendarHTML(calYear, calMonth)}
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
@@ -3063,6 +3066,7 @@
         renderAnalytics();
       });
     });
+    if (!["week","month","year"].includes(equityPeriod)) equityPeriod = "week";
 
     wireCurveTooltip("ec-main", curveData.values, curveData.labels);
 
@@ -3127,7 +3131,7 @@
     }).join("");
   }
 
-  function pnlCalendarHTML(year, month) {
+  function pnlCalendarHTML(year, month, extraStyle = "margin-bottom:14px") {
     const today    = new Date();
     const todayStr = today.toISOString().slice(0, 10);
 
@@ -3249,7 +3253,7 @@
     }
 
     return `
-      <div class="analytics-card" style="margin-bottom:14px">
+      <div class="analytics-card" style="${extraStyle}">
         <div class="ec-header" style="margin-bottom:14px">
           <div>
             <div class="analytics-card-title">盈亏日历 · P&L Calendar</div>
