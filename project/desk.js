@@ -171,6 +171,20 @@
 
   const slopeClass = v => parseFloat(v) > 0 ? "up" : parseFloat(v) < 0 ? "down" : "flat";
 
+  function bxQuadrant(score, slopeDir) {
+    const sc = parseFloat(score) || 0;
+    const sl = parseFloat(slopeDir) || 0;
+    if (sc === 0 && sl === 0) return { cls: "bq-neu",  label: "中性",     sub: "暂无明显趋势" };
+    if (sc > 0 && sl > 0)    return { cls: "bq-lead", label: "进行时",   sub: "强者恒强 · 持有" };
+    if (sc > 0 && sl <= 0)   return { cls: "bq-pull", label: "回调",     sub: "高位震荡 · 待定" };
+    if (sc <= 0 && sl > 0)   return { cls: "bq-turn", label: "逐渐加强", sub: "弱转强 · 准备"   };
+    return                           { cls: "bq-lag",  label: "下降",     sub: "趋势走弱 · 规避" };
+  }
+  function bqBadgeHTML(score, slopeDir) {
+    const q = bxQuadrant(score, slopeDir);
+    return `<span class="bq-badge ${q.cls}">${q.label}<span class="bq-sub">${q.sub}</span></span>`;
+  }
+
   function bxSectionHTML(h) {
     const bx = h.bx;
     const scoreButtons = field => BX_SCORE_OPTS.map(o => `
@@ -227,8 +241,7 @@
           <div class="bx-score-seg">${scoreButtons("monthly")}</div>
         </div>
 
-        ${colorStrip()}
-        <div class="bx-align-grid">
+            <div class="bx-align-grid">
           <div class="bx-align-hdr">
             <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
           </div>
@@ -242,6 +255,7 @@
                   data-bx-field="sectorScore">${bx.sector.score}</span>
             ${slopeCell("sectorSlope", bx.sector.slope, getSlopeDir(bx.sector))}
           </div>
+          <div class="bx-quad-row" id="bq-sector">${bqBadgeHTML(bx.sector.score, getSlopeDir(bx.sector))}</div>
           <div class="bx-align-row">
             <div class="bx-align-label">
               <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">VS VOO</span>
@@ -250,7 +264,9 @@
                   data-bx-field="overallScore">${bx.overall.score}</span>
             ${slopeCell("overallSlope", bx.overall.slope, getSlopeDir(bx.overall))}
           </div>
+          <div class="bx-quad-row" id="bq-overall">${bqBadgeHTML(bx.overall.score, getSlopeDir(bx.overall))}</div>
         </div>
+        ${colorStrip()}
       </div>`;
   }
 
@@ -316,6 +332,15 @@
       input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
     });
 
+    const refreshBadge = which => {
+      const el = $(`#bq-${which}`, dr);
+      if (!el) return;
+      const score = which === "sector" ? h.bx.sector.score : h.bx.overall.score;
+      const dir   = which === "sector" ? (h.bx.sector.slopeDir  ?? Math.sign(h.bx.sector.slope  || 0))
+                                       : (h.bx.overall.slopeDir ?? Math.sign(h.bx.overall.slope || 0));
+      el.innerHTML = bqBadgeHTML(score, dir);
+    };
+
     // Slope color dots — saves only direction, independent of number; also tints input
     $$(".bx-dot[data-dir-field]", dr).forEach(dot => {
       dot.addEventListener("click", () => {
@@ -329,6 +354,7 @@
         const tint = d > 0 ? "tint-up" : d < 0 ? "tint-down" : "tint-flat";
         const inp = $(`[data-slope-field="${field}"].bx-slope-input`, dr);
         if (inp) { inp.classList.remove("tint-up", "tint-flat", "tint-down"); inp.classList.add(tint); }
+        refreshBadge(field === "sectorSlope" ? "sector" : "overall");
         saveToStorage();
       });
     });
@@ -365,8 +391,8 @@
       el.addEventListener("blur", () => {
         const v = el.textContent.trim(), f = el.dataset.bxField;
         if (f === "sectorName")   h.bx.sector.name   = v;
-        if (f === "sectorScore")  h.bx.sector.score  = v;
-        if (f === "overallScore") h.bx.overall.score = v;
+        if (f === "sectorScore")  { h.bx.sector.score  = v; refreshBadge("sector");  }
+        if (f === "overallScore") { h.bx.overall.score = v; refreshBadge("overall"); }
         saveToStorage();
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
