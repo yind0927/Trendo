@@ -1156,8 +1156,6 @@
       const days = Math.round((date - today) / 86400000);
       const urgColor = days <= 2 ? "var(--down)" : days <= 6 ? "var(--warn)" : "var(--fg-2)";
       const daysLabel = days === 0 ? "今天" : days === 1 ? "明天" : `${days}天后`;
-      const holdColor = h.holdEarn ? "var(--up)" : "var(--warn)";
-      const holdText  = h.holdEarn ? "计划持有" : "计划减仓";
       const srcBadge  = src === "sim"
         ? `<span class="evt-src sim">模拟</span>`
         : `<span class="evt-src real">持仓</span>`;
@@ -1166,7 +1164,6 @@
           <div class="when"><span class="d">${String(date.getDate()).padStart(2,"0")}</span>${MO[date.getMonth()]} · ${WD[date.getDay()]}</div>
           <div class="evt-sym-col"><span class="sym">${h.sym}</span>${srcBadge}</div>
           <div class="evt-days" style="color:${urgColor}">${daysLabel}</div>
-          <span class="alert" style="color:${holdColor};background:color-mix(in oklch,${holdColor} 15%,transparent)">${holdText}</span>
         </div>`;
     }).join("");
   }
@@ -2413,14 +2410,11 @@
       const days = Math.round((date - today) / 86400000);
       const urgColor  = days <= 2 ? "var(--down)" : days <= 6 ? "var(--warn)" : "var(--fg-2)";
       const daysLabel = days === 0 ? "今天" : days === 1 ? "明天" : `${days}天后`;
-      const holdColor = h.holdEarn ? "var(--up)" : "var(--warn)";
-      const holdText  = h.holdEarn ? "计划持有" : "计划减仓";
       return `
         <div class="event">
           <div class="when"><span class="d">${String(date.getDate()).padStart(2,"0")}</span>${MO[date.getMonth()]} · ${WD[date.getDay()]}</div>
           <div class="evt-sym-col"><span class="sym">${h.sym}</span></div>
           <div class="evt-days" style="color:${urgColor}">${daysLabel}</div>
-          <span class="alert" style="color:${holdColor};background:color-mix(in oklch,${holdColor} 15%,transparent)">${holdText}</span>
         </div>`;
     }).join("");
   }
