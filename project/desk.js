@@ -1326,6 +1326,7 @@
     });
     closeBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
     cancelBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
+    $("#new-position-modal").addEventListener("click", e => { if (e.target === e.currentTarget) { newPositionContext = "desk"; closeModal("new-position-modal"); } });
 
     // Kind segmented control
     const kindSeg = $("#form-kind-seg");
@@ -1488,6 +1489,7 @@
 
     $("#equity-close").addEventListener("click", () => closeModal("equity-modal"));
     $("#equity-cancel").addEventListener("click", () => closeModal("equity-modal"));
+    $("#equity-modal").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal("equity-modal"); });
 
     $("#equity-form").addEventListener("submit", e => {
       e.preventDefault();

@@ -1769,6 +1769,8 @@
     /* ---- Panel / table ---- */
     .panel-head { padding: 10px 12px 8px; flex-wrap: wrap; gap: 6px; }
     .panel-head .filters { flex-wrap: wrap; gap: 5px; }
+    .panel-head .sim-search { order: 3; margin-left: 0; flex: 1 1 100%; }
+    .panel-head .sim-search input { width: 100%; }
     .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     table.holdings td, table.holdings th { padding: 7px 8px; font-size: 12px; }
     table.holdings td:first-child,
@@ -2407,16 +2409,6 @@
 
   <div id="sim-overview"></div>
 
-  <div id="sim-earnings-section" style="display:none;margin:0 0 12px">
-    <div class="panel">
-      <div class="panel-head">
-        <div class="panel-title">财报日历</div>
-        <span class="muted" style="font-size:11px;margin-left:auto">未来30天 · 模拟仓</span>
-      </div>
-      <div class="events" id="sim-events"></div>
-    </div>
-  </div>
-
   <div class="sim-section-label" id="sim-analytics-label" style="display:none">
     <span class="ssl-zh">模拟分析</span>
     <span class="ssl-en">Analytics</span>
@@ -2427,6 +2419,16 @@
   <div id="sim-pending-section" style="display:none;margin:0 0 12px">
     <div style="font-size:11px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 2px">挂单队列 · Pending Orders</div>
     <div id="sim-pending-list"></div>
+  </div>
+
+  <div id="sim-earnings-section" style="display:none;margin:0 0 4px">
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">财报日历</div>
+        <span class="muted" style="font-size:11px;margin-left:auto">未来30天 · 模拟仓</span>
+      </div>
+      <div class="events" id="sim-events"></div>
+    </div>
   </div>
 
   <div class="sim-section-label">
