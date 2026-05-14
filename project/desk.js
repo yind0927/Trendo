@@ -134,8 +134,8 @@
     return `
       <div class="ov-pie ov-alloc">
         <div class="alloc-head">
-          <span class="tiny">仓位分布</span>
-          <span class="big">${invested.toFixed(0)}% <span class="tiny">已投</span></span>
+          <span class="label">仓位分布</span>
+          <span class="big">${invested.toFixed(0)}% <span style="font-size:var(--fs-small);font-weight:500;opacity:.6">已投</span></span>
         </div>
         <div class="alloc-bars">
           ${sectors.slice(0, 7).map(s => `
