@@ -193,26 +193,15 @@
         <span class="bx-val">${o.label}</span>
         <span class="bx-sub">${o.sub}</span>
       </button>`).join("");
-    const getSlopeDir = obj => {
-      if (obj.slopeDir !== undefined) return obj.slopeDir;
-      const n = parseFloat(obj.slope) || 0;
-      return n > 0 ? 1 : n < 0 ? -1 : 0;
-    };
-    const slopeCell = (field, val, dir) => {
+    const getSlopeDir = obj => Math.sign(parseFloat(obj.slope) || 0);
+    const slopeCell = (field, val) => {
       const n = parseFloat(val) || 0;
-      const d = dir ?? 0;
-      const tint = d > 0 ? "tint-up" : d < 0 ? "tint-down" : "tint-flat";
-      return `<div class="bx-slope-cell">
-        <input type="number" class="bx-slope-input ${tint}" data-slope-field="${field}" value="${n}" step="0.1">
-        <div class="bx-slope-dots">
-          <button class="bx-dot up${d > 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="1" title="上升"></button>
-          <button class="bx-dot flat${d === 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="0" title="中性"></button>
-          <button class="bx-dot down${d < 0 ? ' active' : ''}" data-dir-field="${field}" data-dot-val="-1" title="下降"></button>
-        </div>
-      </div>`;
+      const tint = n > 0 ? "tint-up" : n < 0 ? "tint-down" : "tint-flat";
+      return `<input type="number" class="bx-slope-input ${tint}" data-slope-field="${field}" value="${n}" step="0.1">`;
     };
-    const colorStrip = () => `
-      <div class="bx-color-inline">
+    const colorDivider = () => `
+      <div class="bx-color-divider">
+        <span class="bx-meta-lbl" style="white-space:nowrap;margin-right:4px">板块色</span>
         ${SWATCH_COLORS.map(c => `<button class="bx-color-opt${bx.sector.color===c?' active':''}"
           style="background:${c}" data-color-val="${c}" title="${c}"></button>`).join('')}
       </div>`;
@@ -241,7 +230,7 @@
           <div class="bx-score-seg">${scoreButtons("monthly")}</div>
         </div>
 
-            <div class="bx-align-grid">
+        <div class="bx-align-grid">
           <div class="bx-align-hdr">
             <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
           </div>
@@ -253,20 +242,20 @@
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="sectorScore">${bx.sector.score}</span>
-            ${slopeCell("sectorSlope", bx.sector.slope, getSlopeDir(bx.sector))}
+            ${slopeCell("sectorSlope", bx.sector.slope)}
           </div>
           <div class="bx-quad-row" id="bq-sector">${bqBadgeHTML(bx.sector.score, getSlopeDir(bx.sector))}</div>
+          ${colorDivider()}
           <div class="bx-align-row">
             <div class="bx-align-label">
               <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">VS VOO</span>
             </div>
             <span class="bx-chip-score" contenteditable="true"
                   data-bx-field="overallScore">${bx.overall.score}</span>
-            ${slopeCell("overallSlope", bx.overall.slope, getSlopeDir(bx.overall))}
+            ${slopeCell("overallSlope", bx.overall.slope)}
           </div>
           <div class="bx-quad-row" id="bq-overall">${bqBadgeHTML(bx.overall.score, getSlopeDir(bx.overall))}</div>
         </div>
-        ${colorStrip()}
       </div>`;
   }
 
@@ -320,43 +309,27 @@
   function wireBX(h) {
     const dr = $("#drawer");
 
-    // Slope number input — saves only the numeric value, no dot sync
-    $$(".bx-slope-input", dr).forEach(input => {
-      const commit = () => {
-        const n = parseFloat(input.value) || 0;
-        if (input.dataset.slopeField === "sectorSlope") h.bx.sector.slope = n;
-        else h.bx.overall.slope = n;
-        saveToStorage();
-      };
-      input.addEventListener("blur", commit);
-      input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
-    });
-
     const refreshBadge = which => {
       const el = $(`#bq-${which}`, dr);
       if (!el) return;
       const score = which === "sector" ? h.bx.sector.score : h.bx.overall.score;
-      const dir   = which === "sector" ? (h.bx.sector.slopeDir  ?? Math.sign(h.bx.sector.slope  || 0))
-                                       : (h.bx.overall.slopeDir ?? Math.sign(h.bx.overall.slope || 0));
-      el.innerHTML = bqBadgeHTML(score, dir);
+      const slope = which === "sector" ? (h.bx.sector.slope || 0) : (h.bx.overall.slope || 0);
+      el.innerHTML = bqBadgeHTML(score, Math.sign(slope));
     };
 
-    // Slope color dots — saves only direction, independent of number; also tints input
-    $$(".bx-dot[data-dir-field]", dr).forEach(dot => {
-      dot.addEventListener("click", () => {
-        const field = dot.dataset.dirField;
-        const d = parseFloat(dot.dataset.dotVal);
-        if (field === "sectorSlope") h.bx.sector.slopeDir = d;
-        else h.bx.overall.slopeDir = d;
-        $$(`[data-dir-field="${field}"].bx-dot`, dr).forEach(b =>
-          b.classList.toggle("active", parseFloat(b.dataset.dotVal) === d)
-        );
-        const tint = d > 0 ? "tint-up" : d < 0 ? "tint-down" : "tint-flat";
-        const inp = $(`[data-slope-field="${field}"].bx-slope-input`, dr);
-        if (inp) { inp.classList.remove("tint-up", "tint-flat", "tint-down"); inp.classList.add(tint); }
-        refreshBadge(field === "sectorSlope" ? "sector" : "overall");
+    // Slope number input — tints by sign, refreshes badge
+    $$(".bx-slope-input", dr).forEach(input => {
+      const commit = () => {
+        const n = parseFloat(input.value) || 0;
+        const which = input.dataset.slopeField === "sectorSlope" ? "sector" : "overall";
+        if (which === "sector") h.bx.sector.slope = n; else h.bx.overall.slope = n;
+        input.classList.remove("tint-up", "tint-flat", "tint-down");
+        input.classList.add(n > 0 ? "tint-up" : n < 0 ? "tint-down" : "tint-flat");
+        refreshBadge(which);
         saveToStorage();
-      });
+      };
+      input.addEventListener("blur", commit);
+      input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
     });
 
     // Inline color strip — click a color to immediately apply it
