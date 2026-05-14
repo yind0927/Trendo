@@ -198,7 +198,7 @@ return day >= 1 && day <= 5 && mins >= 13*60+30 && mins < 21*60;
 desk      → main + #desk-view（默认主页，持仓表格）
 journal   → #journal-view（日志，按持仓卡片展示）
 sim       → #sim-view（模拟仓）
-analytics → #analytics-view（分析：权益曲线 + P&L日历）
+analytics → #analytics-view（分析：权益曲线(周/月/年，真实数据) + BX Bars效能 + P&L日历）
 watchlist → #watchlist-view（Preparation预备，自选股）
 market    → #market-view（市场：VIX/VXN + 板块轮动 + VOO基准 + 市场状态）
 ```
@@ -336,6 +336,17 @@ const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
 **字体模式**：`body[data-font="mono"]`
 **永远用 CSS 变量，不用硬编码颜色值**
 
+**双语区块标题（`.sim-section-label`）**
+```html
+<div class="sim-section-label">
+  <span class="ssl-zh">中文标题</span>
+  <span class="ssl-en">English</span>
+  <span class="ssl-rule"></span>          <!-- 分隔线，flex:1 -->
+  <span class="ssl-meta">附加信息</span>  <!-- 可选 -->
+</div>
+```
+Dashboard 和 Sim 页均使用此组件，替代旧版 §01/§02 样式标题。
+
 ---
 
 ## API 环境变量
@@ -372,7 +383,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v6.x | 移动端响应布局，PWA，FAB按钮，P&L日历，BX斜率，Market页(VIX/VXN/板块轮动) |
 | v7.0 | progressBucket双轴重设计，ETF成分更新，VOO基准条，筛选重设计(ETF/近止损/近止盈)，部分平仓，已平仓盈亏筛选 |
 | v7.1 | 模拟仓挂单系统（市价单/限价单），F&G/RSI昨日变化，板块排名日变化，统一双语页面标题(20px)，Watchlist→Preparation，6态市场状态系统(优先级匹配)，抛售/偏热更名，手册触发条件列 |
-| v7.2 | 移除顶部时钟模块，修复响应式根因(body min-width)，新增769–1290px紧凑断点，导航选中改为下划线设计，搜索框简化，持仓数动态关联，市价单/限价单开盘时段门控(isUSMarketOpen)，美股交易日计算(calcTradingDays+usMarketHolidays)，持仓天数改为实时交易日，抽屉天数动态渲染，修复密码页闪屏，手机端挂单队列移至overview上方，FAB按当前页面切换开仓上下文 |
+| v7.2 | 移除顶部时钟模块，修复响应式根因(body min-width)，新增769–1290px紧凑断点，导航选中改为下划线设计，搜索框简化，持仓数动态关联，市价单/限价单开盘时段门控(isUSMarketOpen)，美股交易日计算(calcTradingDays+usMarketHolidays)，持仓天数改为实时交易日，抽屉天数动态渲染，修复密码页闪屏，手机端挂单队列移至overview上方，FAB按当前页面切换开仓上下文，`.sim-section-label`双语区块标题(ssl-zh/ssl-en/ssl-rule/ssl-meta)，Sim页模拟分析/模拟仓持仓区块标题，Dashboard页持仓总结/持仓列表区块标题，Analytics权益曲线改用真实数据(histPnlLog+dailyPnlLog)，周/月/年切换，修复轴标签拉伸(SVG text→HTML)，修复悬浮tooltip日P&L误差，BX Bars与P&L日历同行排列，Dashboard页标题更新(持仓/持仓总结/持仓列表) |
 
 ---
 
