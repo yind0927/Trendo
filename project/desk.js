@@ -1440,7 +1440,7 @@
         } catch {
           fetchEarnBtn.textContent = "失败";
         }
-        setTimeout(() => { fetchEarnBtn.disabled = false; fetchEarnBtn.textContent = "Auto-fetch"; }, 2000);
+        setTimeout(() => { fetchEarnBtn.disabled = false; fetchEarnBtn.textContent = "自动获取"; }, 2000);
       });
     }
 

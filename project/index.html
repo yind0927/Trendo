@@ -2558,7 +2558,7 @@
 <div id="new-position-modal" class="modal-backdrop">
   <div class="modal">
     <div class="modal-header">
-      <h2>New Position</h2>
+      <h2>开仓</h2>
       <button class="modal-close" id="new-pos-close">✕</button>
     </div>
     <form id="new-position-form">
@@ -2571,7 +2571,7 @@
         </div>
       </div>
       <div class="form-row">
-        <label>Ticker Symbol</label>
+        <label>代码</label>
         <input type="text" id="form-ticker" placeholder="AAPL" maxlength="10" required/>
       </div>
       <div class="form-row">
@@ -2587,7 +2587,7 @@
         </div>
       </div>
       <div class="form-row" id="form-entry-row">
-        <label>Entry Price</label>
+        <label>入场价</label>
         <input type="number" id="form-entry" placeholder="0.00" step="0.01"/>
       </div>
       <div class="form-row" id="form-limit-row" style="display:none">
@@ -2599,35 +2599,35 @@
         <div style="color:var(--fg-2);font-size:12px;padding:6px 0">下次价格更新时以市价自动成交</div>
       </div>
       <div class="form-row">
-        <label>Entry Date</label>
+        <label>入场日期</label>
         <input type="date" id="form-date"/>
       </div>
       <div class="form-row">
-        <label>Stop Loss</label>
+        <label>止损价</label>
         <input type="number" id="form-stop" placeholder="0.00" step="0.01" required/>
       </div>
       <div class="form-row">
-        <label>Target Price</label>
+        <label>目标价</label>
         <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
       </div>
       <div class="form-row">
-        <label>Earnings Date <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(可选)</span></label>
+        <label>财报日期 <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(可选)</span></label>
         <div class="form-row-inline">
           <input type="date" id="form-earnings"/>
-          <button type="button" class="fetch-btn" id="form-earnings-fetch">Auto-fetch</button>
+          <button type="button" class="fetch-btn" id="form-earnings-fetch">自动获取</button>
         </div>
       </div>
       <div class="form-row">
-        <label>Quantity (shares)</label>
+        <label>数量（股）</label>
         <input type="number" id="form-qty" placeholder="100" step="1" required/>
       </div>
       <button type="button" id="form-bx-toggle" class="form-bx-toggle">
-        <span>综合评分 <span class="form-bx-hint">可选</span></span>
+        <span>综合评分信息 <span class="form-bx-hint">可选</span></span>
         <svg class="form-bx-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div id="form-bx-body" style="display:none;padding-bottom:4px">
         <div class="bx-row">
-          <div class="bx-row-label">Daily Bars</div>
+          <div class="bx-row-label">日线周期</div>
           <div class="bx-daily-seg">
             <button type="button" class="bx-daily-btn active" data-fbx="dailyBars" data-val="0-5">0-5<span class="bx-sub">bars</span></button>
             <button type="button" class="bx-daily-btn" data-fbx="dailyBars" data-val="5-15">5-15<span class="bx-sub">bars</span></button>
@@ -2635,28 +2635,28 @@
           </div>
         </div>
         <div class="bx-row">
-          <div class="bx-row-label">Weekly BX</div>
+          <div class="bx-row-label">周线 BX</div>
           <div class="bx-score-seg">
-            <button type="button" class="bx-score-btn bx-down"   data-fbx="weekly" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">Bearish</span></button>
-            <button type="button" class="bx-score-btn bx-warn"   data-fbx="weekly" data-val="-1"><span class="bx-val">−1</span><span class="bx-sub">→ Bull</span></button>
-            <button type="button" class="bx-score-btn bx-neu active" data-fbx="weekly" data-val="0"><span class="bx-val"> 0</span><span class="bx-sub">Neutral</span></button>
-            <button type="button" class="bx-score-btn bx-softup" data-fbx="weekly" data-val="1"><span class="bx-val">+1</span><span class="bx-sub">Less Bull</span></button>
-            <button type="button" class="bx-score-btn bx-up"     data-fbx="weekly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">Bullish</span></button>
+            <button type="button" class="bx-score-btn bx-down"   data-fbx="weekly" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">熊市</span></button>
+            <button type="button" class="bx-score-btn bx-warn"   data-fbx="weekly" data-val="-1"><span class="bx-val">−1</span><span class="bx-sub">转多</span></button>
+            <button type="button" class="bx-score-btn bx-neu active" data-fbx="weekly" data-val="0"><span class="bx-val"> 0</span><span class="bx-sub">中性</span></button>
+            <button type="button" class="bx-score-btn bx-softup" data-fbx="weekly" data-val="1"><span class="bx-val">+1</span><span class="bx-sub">偏多</span></button>
+            <button type="button" class="bx-score-btn bx-up"     data-fbx="weekly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">看多</span></button>
           </div>
         </div>
         <div class="bx-row">
-          <div class="bx-row-label">Monthly BX</div>
+          <div class="bx-row-label">月线 BX</div>
           <div class="bx-score-seg">
-            <button type="button" class="bx-score-btn bx-down"   data-fbx="monthly" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">Bearish</span></button>
-            <button type="button" class="bx-score-btn bx-warn"   data-fbx="monthly" data-val="-1"><span class="bx-val">−1</span><span class="bx-sub">→ Bull</span></button>
-            <button type="button" class="bx-score-btn bx-neu active" data-fbx="monthly" data-val="0"><span class="bx-val"> 0</span><span class="bx-sub">Neutral</span></button>
-            <button type="button" class="bx-score-btn bx-softup" data-fbx="monthly" data-val="1"><span class="bx-val">+1</span><span class="bx-sub">Less Bull</span></button>
-            <button type="button" class="bx-score-btn bx-up"     data-fbx="monthly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">Bullish</span></button>
+            <button type="button" class="bx-score-btn bx-down"   data-fbx="monthly" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">熊市</span></button>
+            <button type="button" class="bx-score-btn bx-warn"   data-fbx="monthly" data-val="-1"><span class="bx-val">−1</span><span class="bx-sub">转多</span></button>
+            <button type="button" class="bx-score-btn bx-neu active" data-fbx="monthly" data-val="0"><span class="bx-val"> 0</span><span class="bx-sub">中性</span></button>
+            <button type="button" class="bx-score-btn bx-softup" data-fbx="monthly" data-val="1"><span class="bx-val">+1</span><span class="bx-sub">偏多</span></button>
+            <button type="button" class="bx-score-btn bx-up"     data-fbx="monthly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">看多</span></button>
           </div>
         </div>
         <div class="bx-align-grid" style="margin-top:4px">
           <div class="bx-align-hdr">
-            <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
+            <span></span><span class="bx-meta-lbl">分数</span><span class="bx-meta-lbl">斜率</span>
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
@@ -2680,8 +2680,8 @@
         </div>
       </div>
       <div class="form-actions">
-        <button type="submit" class="btn primary">Add Position</button>
-        <button type="button" id="new-pos-cancel" class="btn">Cancel</button>
+        <button type="submit" class="btn primary">确认开仓</button>
+        <button type="button" id="new-pos-cancel" class="btn">取消</button>
       </div>
     </form>
   </div>
