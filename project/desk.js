@@ -1306,6 +1306,45 @@
       } catch (_) { nameEl.placeholder = "公司名称（可留空）"; }
     });
 
+    const readFormBX = () => {
+      const body = $("#form-bx-body");
+      const dailyBars = body?.querySelector("[data-fbx='dailyBars'].active")?.dataset.val || "0-5";
+      const weekly    = parseFloat(body?.querySelector("[data-fbx='weekly'].active")?.dataset.val) || 0;
+      const monthly   = parseFloat(body?.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
+      const snameEl   = $("#fbx-sname");
+      const sname     = snameEl?.textContent.trim() || "—";
+      const scolor    = snameEl?.style.background || "oklch(0.35 0.01 250)";
+      const sscore    = parseFloat($("#fbx-sscore")?.value) || 0;
+      const sslope    = parseFloat($("#fbx-sslope")?.value) || 0;
+      const oscore    = parseFloat($("#fbx-oscore")?.value) || 0;
+      const oslope    = parseFloat($("#fbx-oslope")?.value) || 0;
+      return {
+        dailyBars, weekly, monthly,
+        sector:  { name: sname, color: scolor, score: String(sscore), slope: sslope, slopeDir: Math.sign(sslope) },
+        overall: { score: String(oscore), slope: oslope, slopeDir: Math.sign(oslope) }
+      };
+    };
+
+    const resetFormBX = () => {
+      const toggle = $("#form-bx-toggle"), body = $("#form-bx-body");
+      if (toggle) toggle.classList.remove("open");
+      if (!body) return;
+      body.style.display = "none";
+      [["dailyBars","0-5"],["weekly","0"],["monthly","0"]].forEach(([field, def]) => {
+        $$(`[data-fbx="${field}"]`, body).forEach(b => b.classList.toggle("active", b.dataset.val === def));
+      });
+      ["fbx-sscore","fbx-sslope","fbx-oscore","fbx-oslope"].forEach(id => {
+        const el = $(`#${id}`);
+        if (el) { el.value = "0"; el.className = "bx-slope-input tint-flat"; }
+      });
+      const fbqS = $("#fbq-sector"), fbqO = $("#fbq-overall");
+      if (fbqS) fbqS.innerHTML = bqBadgeHTML(0, 0);
+      if (fbqO) fbqO.innerHTML = bqBadgeHTML(0, 0);
+      const snameEl = $("#fbx-sname");
+      if (snameEl) { snameEl.textContent = "—"; snameEl.style.background = "oklch(0.35 0.01 250)"; }
+      $$(".bx-color-opt", body).forEach(b => b.classList.toggle("active", b.dataset.colorVal === "oklch(0.35 0.01 250)"));
+    };
+
     const todayStr = () => new Date().toISOString().slice(0, 10);
     const resetDateFields = () => {
       const fd = $("#form-date"); if (fd) fd.value = todayStr();
@@ -1342,9 +1381,9 @@
         newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal");
       }
     });
-    closeBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
-    cancelBtn.addEventListener("click", () => { newPositionContext = "desk"; closeModal("new-position-modal"); });
-    $("#new-position-modal").addEventListener("click", e => { if (e.target === e.currentTarget) { newPositionContext = "desk"; closeModal("new-position-modal"); } });
+    closeBtn.addEventListener("click", () => { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); });
+    cancelBtn.addEventListener("click", () => { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); });
+    $("#new-position-modal").addEventListener("click", e => { if (e.target === e.currentTarget) { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); } });
 
     // Kind segmented control
     const kindSeg = $("#form-kind-seg");
@@ -1405,6 +1444,75 @@
       });
     }
 
+    // Inject color swatches into BX form color divider
+    const fbxColorDiv = $("#fbx-color-div");
+    if (fbxColorDiv) {
+      SWATCH_COLORS.forEach(c => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "bx-color-opt" + (c === "oklch(0.35 0.01 250)" ? " active" : "");
+        btn.style.background = c;
+        btn.dataset.colorVal = c;
+        btn.title = c;
+        fbxColorDiv.appendChild(btn);
+      });
+    }
+
+    // Toggle BX section open/close
+    const formBxToggle = $("#form-bx-toggle"), formBxBody = $("#form-bx-body");
+    if (formBxToggle && formBxBody) {
+      formBxToggle.addEventListener("click", () => {
+        const open = formBxBody.style.display !== "none";
+        formBxBody.style.display = open ? "none" : "";
+        formBxToggle.classList.toggle("open", !open);
+      });
+    }
+
+    // BX form interactions: button groups, slope inputs, color swatches
+    if (formBxBody) {
+      // Button groups (dailyBars / weekly / monthly)
+      formBxBody.addEventListener("click", e => {
+        const btn = e.target.closest("[data-fbx]");
+        if (!btn) return;
+        const field = btn.dataset.fbx;
+        $$(`[data-fbx="${field}"]`, formBxBody).forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+
+      // Slope/score inputs: tint + badge refresh
+      const refreshFormBadge = which => {
+        const score = parseFloat((which === "sector" ? $("#fbx-sscore") : $("#fbx-oscore"))?.value) || 0;
+        const slope = parseFloat((which === "sector" ? $("#fbx-sslope") : $("#fbx-oslope"))?.value) || 0;
+        const badgeEl = which === "sector" ? $("#fbq-sector") : $("#fbq-overall");
+        if (badgeEl) badgeEl.innerHTML = bqBadgeHTML(score, Math.sign(slope));
+      };
+      [["fbx-sscore","sector",false],["fbx-sslope","sector",true],
+       ["fbx-oscore","overall",false],["fbx-oslope","overall",true]].forEach(([id, which, isSlope]) => {
+        const el = $(`#${id}`);
+        if (!el) return;
+        const commit = () => {
+          if (isSlope) {
+            const n = parseFloat(el.value) || 0;
+            el.className = "bx-slope-input " + (n > 0 ? "tint-up" : n < 0 ? "tint-down" : "tint-flat");
+          }
+          refreshFormBadge(which);
+        };
+        el.addEventListener("input", commit);
+        el.addEventListener("blur", commit);
+      });
+
+      // Color swatch selection
+      formBxBody.addEventListener("click", e => {
+        const swatch = e.target.closest(".bx-color-opt");
+        if (!swatch) return;
+        const c = swatch.dataset.colorVal;
+        $$(".bx-color-opt", formBxBody).forEach(b => b.classList.remove("active"));
+        swatch.classList.add("active");
+        const snameEl = $("#fbx-sname");
+        if (snameEl) snameEl.style.background = c;
+      });
+    }
+
     form.addEventListener("submit", e => {
       e.preventDefault();
       const sym    = $("#form-ticker").value.toUpperCase().trim();
@@ -1444,10 +1552,11 @@
           entryDate: entryDateStr,
           earnings: earningsStr,
           createdAt: new Date().toISOString(),
-          bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: 0, slopeDir: 0 }, overall: { score: "50", slope: 0, slopeDir: 0 } }
+          bx: readFormBX()
         });
         saveToStorage();
         form.reset();
+        resetFormBX();
         closeModal("new-position-modal");
         renderSimPending();
         newPositionContext = "desk";
@@ -1482,12 +1591,13 @@
         rMult: 0,
         days: daysHeld,
         spark: [entry],
-        bx: { dailyBars: "0-5", weekly: 0, monthly: 0, sector: { name: "—", color: "oklch(0.35 0.01 250)", score: "50", slope: 0, slopeDir: 0 }, overall: { score: "50", slope: 0, slopeDir: 0 } }
+        bx: readFormBX()
       };
 
       targetHoldings.push(newPos);
       saveToStorage();
       form.reset();
+      resetFormBX();
       closeModal("new-position-modal");
       if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); }
       else { renderTable(); renderOverview(); }

@@ -1213,6 +1213,11 @@
     display: flex; gap: 10px; margin-top: 20px;
   }
   .form-actions .btn { flex: 1; }
+  .form-bx-toggle { all: unset; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 0 8px; cursor: pointer; box-sizing: border-box; border-top: 1px solid var(--line); margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--fg-2); user-select: none; }
+  .form-bx-toggle:hover { color: var(--fg-0); }
+  .form-bx-hint { font-size: 10.5px; font-weight: 400; color: var(--fg-3); margin-left: 6px; }
+  .form-bx-chevron { transition: transform .2s; flex-shrink: 0; }
+  .form-bx-toggle.open .form-bx-chevron { transform: rotate(180deg); }
 
   /* TABS */
   .panel-head .tab {
@@ -2612,6 +2617,64 @@
       <div class="form-row">
         <label>Quantity (shares)</label>
         <input type="number" id="form-qty" placeholder="100" step="1" required/>
+      </div>
+      <button type="button" id="form-bx-toggle" class="form-bx-toggle">
+        <span>BX 评分 <span class="form-bx-hint">可选</span></span>
+        <svg class="form-bx-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="form-bx-body" style="display:none;padding-bottom:4px">
+        <div class="bx-row">
+          <div class="bx-row-label">Daily Bars</div>
+          <div class="bx-daily-seg">
+            <button type="button" class="bx-daily-btn active" data-fbx="dailyBars" data-val="0-5">0-5<span class="bx-sub">bars</span></button>
+            <button type="button" class="bx-daily-btn" data-fbx="dailyBars" data-val="5-15">5-15<span class="bx-sub">bars</span></button>
+            <button type="button" class="bx-daily-btn" data-fbx="dailyBars" data-val="15+">15+<span class="bx-sub">bars</span></button>
+          </div>
+        </div>
+        <div class="bx-row">
+          <div class="bx-row-label">Weekly BX</div>
+          <div class="bx-score-seg">
+            <button type="button" class="bx-score-btn bx-down"   data-fbx="weekly" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">Bearish</span></button>
+            <button type="button" class="bx-score-btn bx-warn"   data-fbx="weekly" data-val="-1"><span class="bx-val">−1</span><span class="bx-sub">→ Bull</span></button>
+            <button type="button" class="bx-score-btn bx-neu active" data-fbx="weekly" data-val="0"><span class="bx-val"> 0</span><span class="bx-sub">Neutral</span></button>
+            <button type="button" class="bx-score-btn bx-softup" data-fbx="weekly" data-val="1"><span class="bx-val">+1</span><span class="bx-sub">Less Bull</span></button>
+            <button type="button" class="bx-score-btn bx-up"     data-fbx="weekly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">Bullish</span></button>
+          </div>
+        </div>
+        <div class="bx-row">
+          <div class="bx-row-label">Monthly BX</div>
+          <div class="bx-score-seg">
+            <button type="button" class="bx-score-btn bx-down"   data-fbx="monthly" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">Bearish</span></button>
+            <button type="button" class="bx-score-btn bx-warn"   data-fbx="monthly" data-val="-1"><span class="bx-val">−1</span><span class="bx-sub">→ Bull</span></button>
+            <button type="button" class="bx-score-btn bx-neu active" data-fbx="monthly" data-val="0"><span class="bx-val"> 0</span><span class="bx-sub">Neutral</span></button>
+            <button type="button" class="bx-score-btn bx-softup" data-fbx="monthly" data-val="1"><span class="bx-val">+1</span><span class="bx-sub">Less Bull</span></button>
+            <button type="button" class="bx-score-btn bx-up"     data-fbx="monthly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">Bullish</span></button>
+          </div>
+        </div>
+        <div class="bx-align-grid" style="margin-top:4px">
+          <div class="bx-align-hdr">
+            <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
+          </div>
+          <div class="bx-align-row">
+            <div class="bx-align-label">
+              <span id="fbx-sname" class="bx-name" contenteditable="true" spellcheck="false" style="background:oklch(0.35 0.01 250)">—</span>
+            </div>
+            <input type="number" id="fbx-sscore" class="bx-slope-input" value="0" step="0.1">
+            <input type="number" id="fbx-sslope" class="bx-slope-input tint-flat" value="0" step="0.1">
+          </div>
+          <div class="bx-quad-row" id="fbq-sector"><span class="bq-badge bq-neu">中性<span class="bq-sub">暂无明显趋势</span></span></div>
+          <div class="bx-color-divider" id="fbx-color-div">
+            <span class="bx-meta-lbl" style="white-space:nowrap;margin-right:4px">板块色</span>
+          </div>
+          <div class="bx-align-row">
+            <div class="bx-align-label">
+              <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">VS VOO</span>
+            </div>
+            <input type="number" id="fbx-oscore" class="bx-slope-input" value="0" step="0.1">
+            <input type="number" id="fbx-oslope" class="bx-slope-input tint-flat" value="0" step="0.1">
+          </div>
+          <div class="bx-quad-row" id="fbq-overall"><span class="bq-badge bq-neu">中性<span class="bq-sub">暂无明显趋势</span></span></div>
+        </div>
       </div>
       <div class="form-actions">
         <button type="submit" class="btn primary">Add Position</button>
