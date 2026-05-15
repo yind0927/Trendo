@@ -2107,6 +2107,13 @@
   }
   #auth-submit-btn:hover { opacity: .85; transform: translateX(1px); }
   #auth-error { font-size: 12px; color: var(--down); min-height: 18px; }
+
+  /* PAGE TRANSITION */
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .page-enter { animation: page-in .22s cubic-bezier(.22,1,.36,1) both; }
 </style>
 <script>try{if(sessionStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
 </head>

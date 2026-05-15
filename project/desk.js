@@ -2244,13 +2244,29 @@
   function switchPage(page) {
     currentPage = page;
     const VIEWS = { desk: "desk-view", journal: "journal-view", sim: "sim-view", analytics: "analytics-view", watchlist: "watchlist-view", market: "market-view" };
+    const mainEl = document.querySelector("main");
     Object.entries(VIEWS).forEach(([p, id]) => {
       const el = document.getElementById(id);
-      if (el) el.style.display = p === page ? "" : "none";
+      if (!el) return;
+      if (p === page) {
+        el.style.display = "";
+        el.classList.remove("page-enter");
+        void el.offsetWidth;
+        el.classList.add("page-enter");
+      } else {
+        el.style.display = "none";
+      }
     });
-    // Hide <main> when not on desk so it doesn't add phantom height on mobile
-    const mainEl = document.querySelector("main");
-    if (mainEl) mainEl.style.display = page === "desk" ? "" : "none";
+    if (mainEl) {
+      if (page === "desk") {
+        mainEl.style.display = "";
+        mainEl.classList.remove("page-enter");
+        void mainEl.offsetWidth;
+        mainEl.classList.add("page-enter");
+      } else {
+        mainEl.style.display = "none";
+      }
+    }
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
