@@ -1284,6 +1284,21 @@
     const closeBtn = $("#new-pos-close");
     const cancelBtn = $("#new-pos-cancel");
 
+    // Auto-fetch company name when ticker is entered
+    $("#form-ticker").addEventListener("blur", async () => {
+      const sym = $("#form-ticker").value.toUpperCase().trim();
+      const nameEl = $("#form-name");
+      if (!sym || !nameEl || nameEl.value.trim()) return;
+      nameEl.placeholder = "获取中…";
+      try {
+        const res = await fetch(`/api/quote?stocks=${encodeURIComponent(sym)}`);
+        const { results } = await res.json();
+        const fetched = results?.[sym]?.name;
+        if (fetched) { nameEl.value = fetched; nameEl.placeholder = fetched; }
+        else nameEl.placeholder = "公司名称（可留空）";
+      } catch (_) { nameEl.placeholder = "公司名称（可留空）"; }
+    });
+
     const todayStr = () => new Date().toISOString().slice(0, 10);
     const resetDateFields = () => {
       const fd = $("#form-date"); if (fd) fd.value = todayStr();

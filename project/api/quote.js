@@ -56,6 +56,7 @@ export default async function handler(req, res) {
             last,
             prevClose: pc,
             changePct: pc ? ((last - pc) / pc) * 100 : null,
+            name: meta.shortName || meta.longName || null,
           };
           return;
         }
