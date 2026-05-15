@@ -1113,7 +1113,7 @@
 
   // ============ BOTTOM: review / errors / events ============
   function getReviewData() {
-    const today = new Date("2026-04-24");
+    const today = new Date();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay() + 1); // Monday
     weekStart.setHours(0, 0, 0, 0);
@@ -1386,6 +1386,7 @@
     form.addEventListener("submit", e => {
       e.preventDefault();
       const sym    = $("#form-ticker").value.toUpperCase().trim();
+      const name   = ($("#form-name")?.value.trim()) || sym;
       const stop   = parseFloat($("#form-stop").value)   || 0;
       const target = parseFloat($("#form-target").value) || 0;
       const qty    = parseInt($("#form-qty").value);
@@ -1416,7 +1417,7 @@
         if (SIM_HOLDINGS.find(h => h.sym === sym)) { alert("Position already exists"); return; }
         SIM_PENDING.push({
           id: Date.now().toString(36),
-          sym, name: sym, kind, qty, stop, target,
+          sym, name, kind, qty, stop, target,
           orderType, limitPrice,
           entryDate: entryDateStr,
           earnings: earningsStr,
@@ -1444,7 +1445,7 @@
       const base   = isSim ? simNotional : totalNotional;
       const size   = base > 0 ? (qty * entry / base) * 100 : 2.5;
       const newPos = {
-        sym, qty, name: sym,
+        sym, qty, name,
         kind,
         entry: entryDateStr,
         cost: entry, last: entry,
@@ -2038,7 +2039,7 @@
         const size      = simNotional > 0 ? (order.qty * execPrice / simNotional) * 100 : 2.5;
 
         const newPos = {
-          sym: order.sym, name: order.sym, kind: order.kind,
+          sym: order.sym, name: order.name || order.sym, kind: order.kind,
           qty: order.qty, cost: execPrice, last: execPrice,
           prevClose: q.prevClose ?? execPrice,
           stop: order.stop, target: order.target,
