@@ -1284,6 +1284,13 @@
     const closeBtn = $("#new-pos-close");
     const cancelBtn = $("#new-pos-cancel");
 
+    // Auto-uppercase ticker as user types
+    $("#form-ticker").addEventListener("input", e => {
+      const el = e.target, pos = el.selectionStart;
+      el.value = el.value.toUpperCase();
+      el.setSelectionRange(pos, pos);
+    });
+
     // Auto-fetch company name when ticker is entered
     $("#form-ticker").addEventListener("blur", async () => {
       const sym = $("#form-ticker").value.toUpperCase().trim();
@@ -2025,6 +2032,7 @@
         const q = results[h.sym];
         if (!q) return;
         const notional = SIM_HOLDINGS.includes(h) ? simNotional : totalNotional;
+        if (q.name && h.name === h.sym) { h.name = q.name; changed = true; }
         if (q.prevClose != null && q.prevClose !== h.prevClose) {
           h.prevClose = q.prevClose;
           changed = true;
