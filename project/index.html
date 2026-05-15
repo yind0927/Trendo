@@ -2085,7 +2085,7 @@
     border: 1px solid oklch(0.38 0.015 250 / .45);
     border-radius: 14px;
     box-shadow: inset 0 1px 0 oklch(1 0 0 / .07);
-    padding: 13px 16px; margin-bottom: 16px;
+    padding: 10px 10px 10px 16px; margin-bottom: 16px; gap: 8px;
     transition: border-color .2s, box-shadow .2s;
   }
   .ag-glass:focus-within {
@@ -2099,17 +2099,13 @@
   }
   #auth-pw-input::placeholder { color: var(--fg-3); font-size: 14px; }
   #auth-submit-btn {
-    all: unset; cursor: pointer;
+    all: unset; cursor: pointer; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
-    width: 44px; height: 44px; border-radius: 50%; margin: 0 auto 14px;
+    width: 30px; height: 30px; border-radius: 9px;
     background: var(--accent); color: oklch(0.13 0.012 250);
-    box-shadow: 0 4px 20px -4px oklch(0.78 0.12 195 / .55);
-    transition: transform .15s, box-shadow .15s;
+    transition: opacity .15s, transform .15s;
   }
-  #auth-submit-btn:hover {
-    transform: scale(1.07);
-    box-shadow: 0 6px 24px -4px oklch(0.78 0.12 195 / .70);
-  }
+  #auth-submit-btn:hover { opacity: .85; transform: translateX(1px); }
   #auth-error { font-size: 12px; color: var(--down); min-height: 18px; }
 </style>
 <script>try{if(sessionStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
@@ -2949,10 +2945,10 @@ if ("serviceWorker" in navigator) {
     </div>
     <div class="ag-glass">
       <input id="auth-pw-input" type="password" placeholder="访问密码" autocomplete="current-password"/>
+      <button id="auth-submit-btn" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
     </div>
-    <button id="auth-submit-btn" type="button">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-    </button>
     <div id="auth-error"></div>
   </div>
 </div>
