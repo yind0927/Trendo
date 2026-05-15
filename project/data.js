@@ -42,9 +42,9 @@ window.COLS = [
   { id: "cost",       label: "入场价",  r: true,  on: true },
   { id: "last",       label: "最新价",  r: true,  on: true },
   { id: "qty",        label: "数量",    r: true,  on: true },
-  { id: "pnl",        label: "浮盈亏",  r: true,  on: true },
   { id: "stop",       label: "止损",    r: true,  on: true, closedHide: true },
   { id: "target",     label: "止盈",    r: true,  on: true, closedHide: true },
+  { id: "pnl",        label: "浮盈亏",  r: true,  on: true },
   { id: "progstatus", label: "状态",    r: false, on: true, locked: true },
 ];
 
