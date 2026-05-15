@@ -154,11 +154,11 @@
 
   // ============ BX TREND ============
   const BX_SCORE_OPTS = [
-    { val: -2, label: "−2", sub: "Bearish",    cls: "bx-down"   },
-    { val: -1, label: "−1", sub: "→ Bull",     cls: "bx-warn"   },
-    { val:  0, label: " 0", sub: "Neutral",    cls: "bx-neu"    },
-    { val:  1, label: "+1", sub: "Less Bull",  cls: "bx-softup" },
-    { val:  2, label: "+2", sub: "Bullish",    cls: "bx-up"     },
+    { val: -2, label: "−2", sub: "熊市",  cls: "bx-down"   },
+    { val: -1, label: "−1", sub: "转多",  cls: "bx-warn"   },
+    { val:  0, label: " 0", sub: "中性",  cls: "bx-neu"    },
+    { val:  1, label: "+1", sub: "偏多",  cls: "bx-softup" },
+    { val:  2, label: "+2", sub: "看多",  cls: "bx-up"     },
   ];
   const SWATCH_COLORS = [
     "oklch(0.70 0.16 200)", "oklch(0.68 0.17 260)", "oklch(0.72 0.14 280)",
@@ -210,7 +210,7 @@
         <h4><span class="idx">02</span>BX Trend &amp; 市场背景</h4>
 
         <div class="bx-row">
-          <div class="bx-row-label">Daily BX Trend <span class="bx-hint">入场后第 ${calcTradingDays(h.entry)} 交易日</span></div>
+          <div class="bx-row-label">日线周期 <span class="bx-hint">入场后第 ${calcTradingDays(h.entry)} 交易日</span></div>
           <div class="bx-daily-seg">
             ${["0-5","5-15","15+"].map(v => `
               <button class="bx-daily-btn ${bx.dailyBars === v ? "active" : ""}"
@@ -221,18 +221,18 @@
         </div>
 
         <div class="bx-row">
-          <div class="bx-row-label">Weekly BX</div>
+          <div class="bx-row-label">周线 BX</div>
           <div class="bx-score-seg">${scoreButtons("weekly")}</div>
         </div>
 
         <div class="bx-row">
-          <div class="bx-row-label">Monthly BX</div>
+          <div class="bx-row-label">月线 BX</div>
           <div class="bx-score-seg">${scoreButtons("monthly")}</div>
         </div>
 
         <div class="bx-align-grid">
           <div class="bx-align-hdr">
-            <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
+            <span></span><span class="bx-meta-lbl">分数</span><span class="bx-meta-lbl">斜率</span>
           </div>
           <div class="bx-align-row">
             <div class="bx-align-label">
