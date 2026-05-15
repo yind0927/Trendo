@@ -2051,7 +2051,7 @@
     pointer-events: none;
   }
   .ag-card {
-    position: relative; width: 100%; max-width: 340px; padding: 0 28px;
+    position: relative; width: 100%; max-width: 300px; padding: 0 20px;
     animation: ag-rise .5s cubic-bezier(.22,1,.36,1) both;
     text-align: center;
   }
@@ -2061,12 +2061,26 @@
   }
   .ag-logo { display: flex; justify-content: center; margin-bottom: 18px; }
   .ag-logo svg { filter: drop-shadow(0 4px 16px oklch(0.78 0.12 195 / .35)); }
-  .ag-brand { margin-bottom: 40px; }
+  .ag-brand { margin-bottom: 38px; }
   .ag-wordmark {
-    font-size: 46px; font-weight: 700; font-family: var(--f-mono);
-    color: var(--fg-0); letter-spacing: -.05em; line-height: 1; margin-bottom: 10px;
+    font-size: 52px; font-weight: 700; font-family: "Geist", var(--f-sans);
+    background: linear-gradient(135deg,
+      oklch(0.88 0.10 185) 0%,
+      oklch(0.97 0.005 250) 45%,
+      oklch(0.80 0.13 200) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: -.045em; line-height: 1; margin-bottom: 12px;
   }
-  .ag-tagline { font-size: 11px; color: var(--fg-3); letter-spacing: .14em; text-transform: uppercase; }
+  .ag-tagline {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 10px; color: var(--fg-3); letter-spacing: .18em; text-transform: uppercase;
+    font-family: "Geist", var(--f-sans); font-weight: 500;
+  }
+  .ag-tagline::before, .ag-tagline::after {
+    content: ''; display: block; width: 18px; height: 1px;
+    background: linear-gradient(90deg, transparent, oklch(0.78 0.12 195 / .45));
+  }
+  .ag-tagline::after { transform: scaleX(-1); }
   .ag-glass {
     display: flex; align-items: center; gap: 10px;
     background: oklch(0.19 0.013 250 / .7);
