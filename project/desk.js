@@ -3625,7 +3625,7 @@
       color: "#f97316",
       condition: v => v.vix >= 20 && (v.fg < 40 || v.vixTrend === "up"),
       cond:    "VIX ≥ 20 且 (FGI < 40 或 VIX 均线上升)",
-      meaning: "波动放大，方向不明",
+      meaning: "波动放大，方向不确定",
       action: "降低整体仓位，优先持有高质量个股，止损收紧，暂停追涨。",
       posSize: "50%",
       stopRule: "收紧 (−4%)",
@@ -3891,8 +3891,8 @@
         if (closes.length >= 13) {
           const prevEMA10 = calcEMA(closes.slice(0, -3), 10);
           if (prevEMA10 != null) {
-            if (ema10 > prevEMA10 + 0.2)      trend = "up";
-            else if (ema10 < prevEMA10 - 0.2) trend = "down";
+            if (ema10 > prevEMA10 + 0.5)      trend = "up";
+            else if (ema10 < prevEMA10 - 0.5) trend = "down";
           }
         }
         return { ema10, trend };
