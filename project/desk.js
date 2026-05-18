@@ -3623,8 +3623,8 @@
       id: "caution",
       regime: "🟠 谨慎",
       color: "#f97316",
-      condition: v => v.vix >= 20,
-      cond:    "VIX 20–30",
+      condition: v => v.vix >= 20 && (v.fg < 40 || v.vixTrend === "up"),
+      cond:    "VIX ≥ 20 且 (FGI < 40 或 VIX 均线上升)",
       meaning: "波动放大，方向不明",
       action: "降低整体仓位，优先持有高质量个股，止损收紧，暂停追涨。",
       posSize: "50%",
@@ -3707,7 +3707,7 @@
       </div>`;
   }
 
-  function mkIndicatorHTML(key, val, pctChg, absChg) {
+  function mkIndicatorHTML(key, val, pctChg, absChg, extra = "") {
     const cfg = MKT_ZONES[key];
     const zone = getZone(cfg, val);
     // VIX/VXN: up = bad (red); FG/RSI: up = good (green)
@@ -3727,6 +3727,7 @@
         <div class="mkt-card-label">${cfg.label}</div>
         <div class="mkt-card-row">
           <span class="mkt-card-val" style="color:${zone.color}">${val}</span>
+          ${extra}
         </div>
         ${chgStr}
         <div class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}12">
@@ -3736,8 +3737,8 @@
       </div>`;
   }
 
-  function mkPlaybookHTML(vix, fg, rsi) {
-    const current = getCurrentRegime(vix, fg, rsi);
+  function mkPlaybookHTML(vix, fg, rsi, vixTrend = "flat") {
+    const current = getCurrentRegime(vix, fg, rsi, vixTrend);
     const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
     const ordered = displayOrder.map(id => MKT_REGIMES.find(r => r.id === id)).filter(Boolean);
     const rows = ordered.map(r => {
@@ -3763,8 +3764,8 @@
       </div>`;
   }
 
-  function mkStrategyHTML(vix, fg, rsi) {
-    const r = getCurrentRegime(vix, fg, rsi);
+  function mkStrategyHTML(vix, fg, rsi, vixTrend = "flat") {
+    const r = getCurrentRegime(vix, fg, rsi, vixTrend);
     return `
       <div class="mkt-strategy">
         <div class="mkt-section-label">今日策略</div>
@@ -3786,22 +3787,27 @@
       </div>`;
   }
 
-  function getCurrentRegime(vix, fg, rsi) {
-    return MKT_REGIMES.find(r => r.condition({ vix, fg, rsi }));
+  function getCurrentRegime(vix, fg, rsi, vixTrend = "flat") {
+    return MKT_REGIMES.find(r => r.condition({ vix, fg, rsi, vixTrend }));
   }
 
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
-    const regime = getCurrentRegime(vix, fg, rsi);
+    const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
     const regimeBanner = regime ? `
       <div class="mkt-regime-bar" style="border-color:${regime.color}40;background:${regime.color}12">
         <span class="mkt-regime-label">当前市场状态</span>
         <span class="mkt-regime-name" style="color:${regime.color}">${regime.regime}</span>
         <span class="mkt-regime-action">${regime.action}</span>
       </div>` : "";
+    const trendArrow = vixMA10 != null ? (() => {
+      const arr  = vixTrend === "up" ? "↑" : vixTrend === "down" ? "↓" : "→";
+      const clr  = vixTrend === "up" ? "#ef4444" : vixTrend === "down" ? "#22c55e" : "var(--fg-3)";
+      return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">MA10 <span style="color:${clr};font-weight:700">${vixMA10} ${arr}</span></span>`;
+    })() : "";
     el.innerHTML = `
       <div class="page-header">
         <div class="page-title">
@@ -3812,15 +3818,15 @@
       </div>
       ${regimeBanner}
       <div class="mkt-row">
-        ${mkIndicatorHTML("vix", vix, vixChg, vixAbs)}
+        ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, trendArrow)}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs)}
       </div>
       <div class="mkt-row">
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
-      ${mkPlaybookHTML(vix, fg, rsi)}
-      ${mkStrategyHTML(vix, fg, rsi)}
+      ${mkPlaybookHTML(vix, fg, rsi, vixTrend)}
+      ${mkStrategyHTML(vix, fg, rsi, vixTrend)}
       <div id="sector-rotation" class="sect-section"></div>`;
   }
 
@@ -3829,12 +3835,10 @@
     if (!el) return;
     el.innerHTML = `<div class="mkt-loading"><span>Loading market data…</span></div>`;
     try {
+      const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN").then(r => r.json()),
-        fetch("/api/history?symbols=%5EGSPC&from=" + (() => {
-          const d = new Date(); d.setDate(d.getDate() - 90);
-          return d.toISOString().slice(0, 10);
-        })()).then(r => r.json()),
+        fetch("/api/history?symbols=%5EGSPC,%5EVIX&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
 
@@ -3869,6 +3873,22 @@
         }
       }
 
+      // VIX MA10 + trend direction
+      let vixMA10 = null, vixTrend = "flat";
+      if (histRes.status === "fulfilled" && histRes.value?.results?.["^VIX"]) {
+        const raw = histRes.value.results["^VIX"];
+        const closes = Object.keys(raw).sort().map(k => raw[k]);
+        if (closes.length >= 10) {
+          const ma = arr => +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2);
+          vixMA10 = ma(closes.slice(-10));
+          if (closes.length >= 13) {
+            const prevMA10 = ma(closes.slice(-13, -3));
+            if (vixMA10 > prevMA10 + 0.2)      vixTrend = "up";
+            else if (vixMA10 < prevMA10 - 0.2) vixTrend = "down";
+          }
+        }
+      }
+
       // Fear & Greed
       let fg = 50, fgPrev = null;
       if (fgRes.status === "fulfilled" && fgRes.value?.score != null) {
@@ -3886,7 +3906,7 @@
         return;
       }
 
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend });
       fetchSectorData();
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;

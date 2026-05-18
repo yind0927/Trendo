@@ -257,8 +257,8 @@ const MKT_REGIMES = [
     meaning: "高波动或极度恐惧", posSize: "<= 25%", stopRule: "极紧 (-3%)" },
 
   { id: "caution", regime: "谨慎",  color: "#f97316",
-    condition: v => v.vix >= 20,
-    cond: "VIX 20-30",
+    condition: v => v.vix >= 20 && (v.fg < 40 || v.vixTrend === "up"),
+    cond: "VIX ≥ 20 且 (FGI < 40 或 VIX 均线上升)",
     meaning: "波动放大，方向不明", posSize: "50%", stopRule: "收紧 (-4%)" },
 
   { id: "hot",     regime: "偏热",  color: "#eab308",
