@@ -615,7 +615,7 @@
 
   /* ticker tape */
   .tape{
-    position: sticky; top: 56px; z-index: 35;
+    position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 35;
     overflow: hidden; white-space: nowrap;
     background: linear-gradient(180deg, oklch(0.13 0.012 250) 0%, oklch(0.11 0.012 250) 100%);
     border-bottom: 1px solid var(--line);
@@ -623,6 +623,7 @@
     display: flex; align-items: center;
     height: 34px;
   }
+  .tape-spacer { height: 34px; flex-shrink: 0; display: block; }
   body[data-theme="light"] .tape{
     background: linear-gradient(180deg, oklch(0.96 0.004 250) 0%, oklch(0.94 0.004 250) 100%);
   }
@@ -1744,7 +1745,7 @@
     .top-actions .btn:not(.icon) { display: none; }
 
     /* ---- Tape ---- */
-    .tape { top: 48px; }
+    .tape { top: calc(60px + env(safe-area-inset-top)); }
 
     /* ---- Navbar → fixed bottom tab bar ---- */
     .navbar {
@@ -2288,6 +2289,7 @@
     <div class="track" id="tape-track"></div>
   </div>
 </div>
+<div class="tape-spacer"></div>
 
 <div id="desk-view">
 <main>
