@@ -804,15 +804,15 @@
         const lbl = v === "0-5" ? "开始" : (v === "5-15" ? "中间" : "延续");
         return `<td><span class="bx-bar-chip ${cls}">${v}<span class="bx-bar-sub">${lbl}</span></span></td>`;
       }
-      case "cost": return `<td class="right num muted">$${price(h.cost)}</td>`;
+      case "cost": return `<td class="right num muted" style="font-size:12px">$${price(h.cost)}</td>`;
       case "last": {
         const p = (activeTab === "closed" && h.closePrice != null) ? h.closePrice : h.last;
-        return `<td class="right num" style="font-weight:600">$${price(p)}</td>`;
+        return `<td class="right num" style="font-weight:600;font-size:13.5px">$${price(p)}</td>`;
       }
-      case "qty": return `<td class="right num muted">${h.qty.toLocaleString("en-US")}</td>`;
-      case "pnl": return `<td class="right"><div class="pnl-cell"><span class="num ${fmt.sign(h.pnlDollar)}" style="font-weight:600">${fmt.signed(h.pnlDollar)}</span><span class="num ${fmt.sign(h.pnlDollar)}" style="font-size:12px;opacity:0.75">${fmt.pct(h.pnlPct)}</span></div></td>`;
-      case "stop": return `<td class="right num" style="color:var(--down)">$${price(h.stop)}</td>`;
-      case "target": return `<td class="right num" style="color:var(--up)">$${price(h.target)}</td>`;
+      case "qty": return `<td class="right num muted" style="font-size:12px">${h.qty.toLocaleString("en-US")}</td>`;
+      case "pnl": return `<td class="right"><div class="pnl-cell"><span class="num ${fmt.sign(h.pnlDollar)}" style="font-size:15px;font-weight:700;letter-spacing:-0.01em">${fmt.signed(h.pnlDollar)}</span><span class="num ${fmt.sign(h.pnlDollar)}" style="font-size:11px;opacity:0.6">${fmt.pct(h.pnlPct)}</span></div></td>`;
+      case "stop": return `<td class="right num" style="color:color-mix(in oklch,var(--down) 70%,transparent);font-size:12px">$${price(h.stop)}</td>`;
+      case "target": return `<td class="right num" style="color:color-mix(in oklch,var(--up) 70%,transparent);font-size:12px">$${price(h.target)}</td>`;
       case "progstatus": {
         if (activeTab === "closed") {
           const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
