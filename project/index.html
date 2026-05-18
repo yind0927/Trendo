@@ -118,8 +118,11 @@
   .label { font-size: var(--fs-small); text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
 
   /* ============ TOP BAR ============ */
-  .topbar{
+  .sticky-header {
     position: sticky; top: 0; z-index: 40;
+  }
+  .topbar{
+    position: relative;
     display: flex; align-items: center; gap: 20px;
     padding: 12px 28px;
     padding-top: calc(12px + env(safe-area-inset-top));
@@ -293,7 +296,7 @@
   table.holdings tbody tr.selected{ background: var(--accent-dim); }
   table.holdings tbody tr.selected td{ border-bottom-color: var(--accent-line); }
   table.holdings td.right, table.holdings th.right{ text-align: right; }
-  table.holdings td.ticker{ padding-left: 18px;}
+  table.holdings td.ticker{ padding-left: 18px; white-space: normal; }
   table.holdings th:first-child, table.holdings td:first-child{ padding-left: 18px;}
   table.holdings th:last-child, table.holdings td:last-child{ padding-right: 18px;}
 
@@ -310,7 +313,7 @@
   .tk .avatar.crypto{ background: linear-gradient(135deg, oklch(0.4 0.1 var(--accent-h)), oklch(0.3 0.05 var(--accent-h)));}
   .tk .avatar.crypto img { background: transparent; padding: 2px; }
   .tk .meta .sym{ font-family: var(--f-mono); font-weight: 600; font-size: 13px; letter-spacing: 0.01em;}
-  .tk .meta .nm{ color: var(--fg-2); font-size: 10.5px;}
+  .tk .meta .nm{ color: var(--fg-2); font-size: 10.5px; white-space: normal; max-width: 160px; line-height: 1.3;}
 
   .setup-chip{
     display: inline-block; padding: 2px 7px; border-radius: 4px;
@@ -615,7 +618,7 @@
 
   /* ticker tape */
   .tape{
-    position: fixed; top: calc(64px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 35;
+    position: relative;
     overflow: hidden; white-space: nowrap;
     background: linear-gradient(180deg, oklch(0.13 0.012 250) 0%, oklch(0.11 0.012 250) 100%);
     border-bottom: 1px solid var(--line);
@@ -623,7 +626,6 @@
     display: flex; align-items: center;
     height: 34px;
   }
-  .tape-spacer { height: 34px; flex-shrink: 0; display: block; }
   body[data-theme="light"] .tape{
     background: linear-gradient(180deg, oklch(0.96 0.004 250) 0%, oklch(0.94 0.004 250) 100%);
   }
@@ -795,7 +797,7 @@
 
   body{ font-family: var(--f-sans) !important; font-size: var(--fs-body) !important; cursor: default !important; }
   .topbar{
-    position: sticky; top: 0; z-index: 40;
+    position: relative;
     display: flex; align-items: center; gap: 18px;
     padding: 10px 24px;
     background:
@@ -1744,9 +1746,6 @@
 .top-actions { gap: 6px; }
     .top-actions .btn:not(.icon) { display: none; }
 
-    /* ---- Tape ---- */
-    .tape { top: calc(60px + env(safe-area-inset-top)); }
-
     /* ---- Navbar → fixed bottom tab bar ---- */
     .navbar {
       position: fixed; bottom: 0; left: 0; right: 0; top: auto;
@@ -2132,6 +2131,7 @@
 }/*EDITMODE-END*/
 </script>
 
+<div class="sticky-header">
 <header class="topbar">
   <a class="brand" href="#">
     <div class="logo" aria-hidden="true">
@@ -2289,7 +2289,7 @@
     <div class="track" id="tape-track"></div>
   </div>
 </div>
-<div class="tape-spacer"></div>
+</div><!-- /.sticky-header -->
 
 <div id="desk-view">
 <main>
