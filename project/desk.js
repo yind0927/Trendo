@@ -3794,7 +3794,7 @@
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend, vxnMA10, vxnTrend } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
     const regimeBanner = regime ? `
@@ -3803,11 +3803,11 @@
         <span class="mkt-regime-name" style="color:${regime.color}">${regime.regime}</span>
         <span class="mkt-regime-action">${regime.action}</span>
       </div>` : "";
-    const trendArrow = vixMA10 != null ? (() => {
-      const arr  = vixTrend === "up" ? "↑" : vixTrend === "down" ? "↓" : "→";
-      const clr  = vixTrend === "up" ? "#ef4444" : vixTrend === "down" ? "#22c55e" : "var(--fg-3)";
-      return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">MA10 <span style="color:${clr};font-weight:700">${vixMA10} ${arr}</span></span>`;
-    })() : "";
+    const ma10Tag = (ma10, trend) => ma10 == null ? "" : (() => {
+      const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
+      const clr = trend === "up" ? "#ef4444" : trend === "down" ? "#22c55e" : "var(--fg-3)";
+      return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">MA10 <span style="color:${clr};font-weight:700">${ma10} ${arr}</span></span>`;
+    })();
     el.innerHTML = `
       <div class="page-header">
         <div class="page-title">
@@ -3818,8 +3818,8 @@
       </div>
       ${regimeBanner}
       <div class="mkt-row">
-        ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, trendArrow)}
-        ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs)}
+        ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ma10Tag(vixMA10, vixTrend))}
+        ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ma10Tag(vxnMA10, vxnTrend))}
       </div>
       <div class="mkt-row">
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
@@ -3838,7 +3838,7 @@
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN").then(r => r.json()),
-        fetch("/api/history?symbols=%5EGSPC,%5EVIX&from=" + fromDate).then(r => r.json()),
+        fetch("/api/history?symbols=%5EGSPC,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
 
@@ -3873,21 +3873,25 @@
         }
       }
 
-      // VIX MA10 + trend direction
-      let vixMA10 = null, vixTrend = "flat";
-      if (histRes.status === "fulfilled" && histRes.value?.results?.["^VIX"]) {
-        const raw = histRes.value.results["^VIX"];
+      // VIX / VXN MA10 + trend direction
+      const calcMA10Trend = (results, sym) => {
+        const raw = results?.[sym];
+        if (!raw) return { ma10: null, trend: "flat" };
         const closes = Object.keys(raw).sort().map(k => raw[k]);
-        if (closes.length >= 10) {
-          const ma = arr => +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2);
-          vixMA10 = ma(closes.slice(-10));
-          if (closes.length >= 13) {
-            const prevMA10 = ma(closes.slice(-13, -3));
-            if (vixMA10 > prevMA10 + 0.2)      vixTrend = "up";
-            else if (vixMA10 < prevMA10 - 0.2) vixTrend = "down";
-          }
+        if (closes.length < 10) return { ma10: null, trend: "flat" };
+        const ma = arr => +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2);
+        const ma10 = ma(closes.slice(-10));
+        let trend = "flat";
+        if (closes.length >= 13) {
+          const prev = ma(closes.slice(-13, -3));
+          if (ma10 > prev + 0.2)      trend = "up";
+          else if (ma10 < prev - 0.2) trend = "down";
         }
-      }
+        return { ma10, trend };
+      };
+      const histResults = histRes.status === "fulfilled" ? histRes.value?.results : null;
+      const { ma10: vixMA10, trend: vixTrend } = calcMA10Trend(histResults, "^VIX");
+      const { ma10: vxnMA10, trend: vxnTrend } = calcMA10Trend(histResults, "^VXN");
 
       // Fear & Greed
       let fg = 50, fgPrev = null;
@@ -3906,7 +3910,7 @@
         return;
       }
 
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend, vxnMA10, vxnTrend });
       fetchSectorData();
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
