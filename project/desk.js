@@ -3794,7 +3794,7 @@
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend, vxnMA10, vxnTrend } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
     const regimeBanner = regime ? `
@@ -3803,10 +3803,10 @@
         <span class="mkt-regime-name" style="color:${regime.color}">${regime.regime}</span>
         <span class="mkt-regime-action">${regime.action}</span>
       </div>` : "";
-    const ma10Tag = (ma10, trend) => ma10 == null ? "" : (() => {
+    const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
       const clr = trend === "up" ? "#ef4444" : trend === "down" ? "#22c55e" : "var(--fg-3)";
-      return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">MA10 <span style="color:${clr};font-weight:700">${ma10} ${arr}</span></span>`;
+      return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">EMA10 <span style="color:${clr};font-weight:700">${ema10} ${arr}</span></span>`;
     })();
     el.innerHTML = `
       <div class="page-header">
@@ -3818,8 +3818,8 @@
       </div>
       ${regimeBanner}
       <div class="mkt-row">
-        ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ma10Tag(vixMA10, vixTrend))}
-        ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ma10Tag(vxnMA10, vxnTrend))}
+        ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
+        ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
       </div>
       <div class="mkt-row">
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
@@ -3873,25 +3873,33 @@
         }
       }
 
-      // VIX / VXN MA10 + trend direction
-      const calcMA10Trend = (results, sym) => {
+      // VIX / VXN EMA10 + trend direction
+      const calcEMA = (closes, period) => {
+        if (closes.length < period) return null;
+        const k = 2 / (period + 1);
+        let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+        for (let i = period; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+        return +ema.toFixed(2);
+      };
+      const calcEMA10Trend = (results, sym) => {
         const raw = results?.[sym];
-        if (!raw) return { ma10: null, trend: "flat" };
+        if (!raw) return { ema10: null, trend: "flat" };
         const closes = Object.keys(raw).sort().map(k => raw[k]);
-        if (closes.length < 10) return { ma10: null, trend: "flat" };
-        const ma = arr => +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2);
-        const ma10 = ma(closes.slice(-10));
+        if (closes.length < 10) return { ema10: null, trend: "flat" };
+        const ema10 = calcEMA(closes, 10);
         let trend = "flat";
         if (closes.length >= 13) {
-          const prev = ma(closes.slice(-13, -3));
-          if (ma10 > prev + 0.2)      trend = "up";
-          else if (ma10 < prev - 0.2) trend = "down";
+          const prevEMA10 = calcEMA(closes.slice(0, -3), 10);
+          if (prevEMA10 != null) {
+            if (ema10 > prevEMA10 + 0.2)      trend = "up";
+            else if (ema10 < prevEMA10 - 0.2) trend = "down";
+          }
         }
-        return { ma10, trend };
+        return { ema10, trend };
       };
       const histResults = histRes.status === "fulfilled" ? histRes.value?.results : null;
-      const { ma10: vixMA10, trend: vixTrend } = calcMA10Trend(histResults, "^VIX");
-      const { ma10: vxnMA10, trend: vxnTrend } = calcMA10Trend(histResults, "^VXN");
+      const { ema10: vixEMA10, trend: vixTrend } = calcEMA10Trend(histResults, "^VIX");
+      const { ema10: vxnEMA10, trend: vxnTrend } = calcEMA10Trend(histResults, "^VXN");
 
       // Fear & Greed
       let fg = 50, fgPrev = null;
@@ -3910,7 +3918,7 @@
         return;
       }
 
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixMA10, vixTrend, vxnMA10, vxnTrend });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend });
       fetchSectorData();
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
