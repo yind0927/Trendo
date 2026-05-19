@@ -2356,12 +2356,11 @@
       return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
         <div class="news-avatar">${initials}${imgTag}</div>
         <div class="news-body">
-          <div class="news-hd">
-            <span class="news-sym">${a.sym}</span>
+          <div class="news-title">${safeTitle}</div>
+          <div class="news-meta">
+            <span class="news-meta-txt">${safeSource}${safeSource ? " · " : ""}${timeAgo(a.publishedAt)}</span>
             <span class="news-sent ${sentClass(sent)}">${sentLabel(sent)}</span>
           </div>
-          <div class="news-title">${safeTitle}</div>
-          <div class="news-meta">${safeSource}${safeSource ? " · " : ""}${timeAgo(a.publishedAt)}</div>
         </div>
       </a>`;
     }).join("");
