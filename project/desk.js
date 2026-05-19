@@ -2458,13 +2458,13 @@
     const section = $("#sim-analytics-section");
     const label   = $("#sim-analytics-label");
     if (!section) return;
+    const hasAny = SIM_HOLDINGS.length > 0 || SIM_CLOSED.length > 0;
+    if (label) label.style.display = hasAny ? "" : "none";
     if (!SIM_CLOSED.length) {
       section.style.display = "none";
-      if (label) label.style.display = "none";
       return;
     }
     section.style.display = "";
-    if (label) label.style.display = "";
 
     const wins   = SIM_CLOSED.filter(h => (h.pnlFinal || 0) > 0);
     const losses = SIM_CLOSED.filter(h => (h.pnlFinal || 0) <= 0);
@@ -2583,6 +2583,10 @@
   function renderSimOverview() {
     const el = $("#sim-overview");
     if (!el) return;
+    const hasAny = SIM_HOLDINGS.length > 0 || SIM_CLOSED.length > 0;
+    el.style.display = hasAny ? "" : "none";
+    const label = $("#sim-analytics-label");
+    if (label) label.style.display = hasAny ? "" : "none";
     const pnl = SIM_HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
     const nav = simNotional + pnl;
     const open = SIM_HOLDINGS.length;
