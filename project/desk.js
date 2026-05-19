@@ -811,8 +811,16 @@
       }
       case "qty": return `<td class="right num muted" style="font-size:12px">${h.qty.toLocaleString("en-US")}</td>`;
       case "pnl": return `<td class="right"><div class="pnl-cell"><span class="num ${fmt.sign(h.pnlDollar)}" style="font-size:15px;font-weight:700;letter-spacing:-0.01em">${fmt.signed(h.pnlDollar)}</span><span class="num ${fmt.sign(h.pnlDollar)}" style="font-size:12px;opacity:0.6">${fmt.pct(h.pnlPct)}</span></div></td>`;
-      case "stop": return `<td class="right num" style="color:color-mix(in oklch,var(--down) 70%,transparent);font-size:12px">$${price(h.stop)}</td>`;
-      case "target": return `<td class="right num" style="color:color-mix(in oklch,var(--up) 70%,transparent);font-size:12px">$${price(h.target)}</td>`;
+      case "stop": {
+        const nearStop = h.stop && h.last && activeTab !== "closed" && progressBucket(h) === "Near Stop";
+        const dot = nearStop ? `<span class="alert-dot stop-dot"></span>` : "";
+        return `<td class="right num" style="color:color-mix(in oklch,var(--down) 70%,transparent);font-size:12px">${dot}$${price(h.stop)}</td>`;
+      }
+      case "target": {
+        const nearTarget = h.target && h.last && activeTab !== "closed" && progressBucket(h) === "Near Target";
+        const dot = nearTarget ? `<span class="alert-dot target-dot"></span>` : "";
+        return `<td class="right num" style="color:color-mix(in oklch,var(--up) 70%,transparent);font-size:12px">${dot}$${price(h.target)}</td>`;
+      }
       case "progstatus": {
         if (activeTab === "closed") {
           const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
@@ -2625,15 +2633,10 @@
     const tbody = $("#sim-tbody");
     if (!thead || !tbody) return;
 
-    const data = simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED;
-
-    // Header
-    thead.innerHTML = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide)).map(c => {
+    // Header (open only)
+    thead.innerHTML = COLS.filter(c => c.on).map(c => {
       const sorted = simSortKey === c.id ? "sorted" : "";
-      const label = (simActiveTab === "closed" && c.id === "last") ? "平仓价"
-                  : (simActiveTab === "closed" && c.id === "pnl")  ? "盈亏"
-                  : c.label;
-      return `<th class="${c.r ? "right" : ""} ${sorted}" data-simcol="${c.id}">${label}</th>`;
+      return `<th class="${c.r ? "right" : ""} ${sorted}" data-simcol="${c.id}">${c.label}</th>`;
     }).join("");
     $$("[data-simcol]", thead).forEach(th => th.addEventListener("click", () => {
       const col = th.dataset.simcol;
@@ -2641,19 +2644,13 @@
       renderSimTable();
     }));
 
-    // Filter + sort
-    let rows = data.filter(h => {
-      if (simActiveTab === "closed") {
-        const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
-        if (simClosedFilter === "profit" && pnl <= 0) return false;
-        if (simClosedFilter === "loss"   && pnl >  0) return false;
-      } else {
-        if (simFilter === "equity" && h.kind !== "equity") return false;
-        if (simFilter === "etf"    && h.kind !== "etf") return false;
-        if (simFilter === "crypto" && h.kind !== "crypto") return false;
-        if (simFilter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
-        if (simFilter === "target" && progressBucket(h) !== "Near Target") return false;
-      }
+    // Filter + sort (open)
+    let rows = SIM_HOLDINGS.filter(h => {
+      if (simFilter === "equity" && h.kind !== "equity") return false;
+      if (simFilter === "etf"    && h.kind !== "etf") return false;
+      if (simFilter === "crypto" && h.kind !== "crypto") return false;
+      if (simFilter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
+      if (simFilter === "target" && progressBucket(h) !== "Near Target") return false;
       if (simQuery) {
         const q = simQuery.toLowerCase();
         if (!(h.sym.toLowerCase().includes(q) || (h.name || "").toLowerCase().includes(q))) return false;
@@ -2671,61 +2668,105 @@
       return va < vb ? -simSortDir : va > vb ? simSortDir : 0;
     });
 
-    // Body
-    const cols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
+    // Body — group by entry date newest-first
+    const cols = COLS.filter(c => c.on);
     const colSpan = cols.length + 1;
 
-    const makeRow = h => {
+    const makeOpenRow = h => {
       const isSel = simSelectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
-      const actions = simActiveTab === "open"
-        ? `<td style="width:60px;padding:6px 4px"><div class="row-actions">
-             <button class="close-pos-btn" data-sym="${h.sym}" title="平仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
-             <button class="delete-btn" data-sym="${h.sym}" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-           </div></td>`
-        : `<td style="width:60px;padding:6px 4px"><div class="row-actions">
-             <button class="sim-restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
-             <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-           </div></td>`;
+      const actions = `<td style="width:60px;padding:6px 4px"><div class="row-actions">
+           <button class="close-pos-btn" data-sym="${h.sym}" title="平仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
+           <button class="delete-btn" data-sym="${h.sym}" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+         </div></td>`;
       return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
     };
 
-    if (simActiveTab === "open") {
-      // Group by entry date, render sections newest-first
-      const groups = {};
-      rows.forEach(h => {
-        const d = h.entry?.slice(0, 10) || "—";
-        (groups[d] = groups[d] || []).push(h);
-      });
-      const today = new Date().getFullYear();
-      tbody.innerHTML = Object.keys(groups)
-        .sort((a, b) => b.localeCompare(a))
-        .map(date => {
-          const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
-          const label = dt
-            ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== today && { year: "numeric" }) })
-            : "—";
-          const hdr = `<tr class="date-group-hdr"><td colspan="${colSpan}">${label}</td></tr>`;
-          return hdr + groups[date].map(makeRow).join("");
-        }).join("");
-    } else {
-      const prevTab = activeTab;
-      activeTab = simActiveTab;
-      tbody.innerHTML = rows.map(makeRow).join("");
-      activeTab = prevTab;
-    }
+    const groups = {};
+    rows.forEach(h => {
+      const d = h.entry?.slice(0, 10) || "—";
+      (groups[d] = groups[d] || []).push(h);
+    });
+    const thisYear = new Date().getFullYear();
+    tbody.innerHTML = Object.keys(groups)
+      .sort((a, b) => b.localeCompare(a))
+      .map(date => {
+        const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
+        const label = dt
+          ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) })
+          : "—";
+        const hdr = `<tr class="date-group-hdr"><td colspan="${colSpan}">${label}</td></tr>`;
+        return hdr + groups[date].map(makeOpenRow).join("");
+      }).join("");
 
     $$("tr", tbody).forEach(tr => {
       tr.addEventListener("click", e => {
-        if (e.target.closest(".close-pos-btn, .delete-btn, .sim-restore-btn")) return;
-        openSimDrawer(tr.dataset.sym);
+        if (e.target.closest(".close-pos-btn, .delete-btn")) return;
+        openSimDrawer(tr.dataset.sym, "open");
       });
     });
     $$(".close-pos-btn", tbody).forEach(btn => {
       btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); });
     });
     $$(".delete-btn", tbody).forEach(btn => {
-      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); });
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, "open"); });
+    });
+
+    // Counts
+    const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setCount("sim-c-open",  SIM_HOLDINGS.length);
+    setCount("sim-c-all",   SIM_HOLDINGS.length);
+    setCount("sim-c-eq",    SIM_HOLDINGS.filter(h => h.kind === "equity").length);
+    setCount("sim-c-etf",   SIM_HOLDINGS.filter(h => h.kind === "etf").length);
+    setCount("sim-c-cr",    SIM_HOLDINGS.filter(h => h.kind === "crypto").length);
+    setCount("sim-c-rk",    SIM_HOLDINGS.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
+    setCount("sim-c-tg",    SIM_HOLDINGS.filter(h => progressBucket(h) === "Near Target").length);
+
+    renderSimClosed();
+  }
+
+  function renderSimClosed() {
+    const thead = $("#sim-closed-thead-row");
+    const tbody = $("#sim-closed-tbody");
+    const label = $("#sim-closed-label");
+    const section = $("#sim-closed-section");
+    if (!thead || !tbody) return;
+
+    const hasClosed = SIM_CLOSED.length > 0;
+    if (label) label.style.display = hasClosed ? "" : "none";
+    if (section) section.style.display = hasClosed ? "" : "none";
+
+    const closedCols = COLS.filter(c => c.on && !c.closedHide);
+    thead.innerHTML = closedCols.map(c => {
+      const label2 = c.id === "last" ? "平仓价" : c.id === "pnl" ? "盈亏" : c.label;
+      return `<th class="${c.r ? "right" : ""}">${label2}</th>`;
+    }).join("");
+
+    let rows = SIM_CLOSED.filter(h => {
+      const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
+      if (simClosedFilter === "profit" && pnl <= 0) return false;
+      if (simClosedFilter === "loss"   && pnl >  0) return false;
+      return true;
+    });
+
+    const prevTab = activeTab;
+    activeTab = "closed";
+    const makeClosedRow = h => {
+      const cells = closedCols.map(c => renderCell(h, c.id)).join("");
+      const actions = `<td style="width:60px;padding:6px 4px"><div class="row-actions">
+           <button class="sim-restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+           <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+         </div></td>`;
+      return `<tr data-sym="${h.sym}">${cells}${actions}</tr>`;
+    };
+    tbody.innerHTML = rows.map(makeClosedRow).join("");
+    activeTab = prevTab;
+
+    $$("tr", tbody).forEach(tr => {
+      tr.addEventListener("click", e => {
+        if (e.target.closest(".sim-restore-btn, .delete-btn")) return;
+        openSimDrawer(tr.dataset.sym, "closed");
+      });
     });
     $$(".sim-restore-btn", tbody).forEach(btn => {
       btn.addEventListener("click", e => {
@@ -2746,39 +2787,30 @@
         renderSimAnalytics();
       });
     });
+    $$(".delete-btn", tbody).forEach(btn => {
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, "closed"); });
+    });
 
-    // Counts
-    const allData = simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED;
     const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    setCount("sim-c-open",   SIM_HOLDINGS.length);
-    setCount("sim-c-closed", SIM_CLOSED.length);
-    if (simActiveTab === "closed") {
-      setCount("sim-c-cl-all",    SIM_CLOSED.length);
-      setCount("sim-c-cl-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
-      setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length);
-    } else {
-      setCount("sim-c-all",    SIM_HOLDINGS.length);
-      setCount("sim-c-eq",     SIM_HOLDINGS.filter(h => h.kind === "equity").length);
-      setCount("sim-c-etf",    SIM_HOLDINGS.filter(h => h.kind === "etf").length);
-      setCount("sim-c-cr",     SIM_HOLDINGS.filter(h => h.kind === "crypto").length);
-      setCount("sim-c-rk",     SIM_HOLDINGS.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
-      setCount("sim-c-tg",     SIM_HOLDINGS.filter(h => progressBucket(h) === "Near Target").length);
-    }
+    setCount("sim-c-closed",    SIM_CLOSED.length);
+    setCount("sim-c-cl-all",    SIM_CLOSED.length);
+    setCount("sim-c-cl-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
+    setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length);
   }
 
-  function openSimDrawer(sym) {
-    const data = simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED;
+  function openSimDrawer(sym, context) {
+    const fromClosed = context === "closed";
+    const data = fromClosed ? SIM_CLOSED : SIM_HOLDINGS;
     const h = data.find(x => x.sym === sym);
     if (!h) return;
     simSelectedSym = sym;
     renderSimTable();
-    // Temporarily set activeTab to simActiveTab so drawerHTML reads the right tab
     const prevTab = activeTab;
-    activeTab = simActiveTab;
+    activeTab = fromClosed ? "closed" : "open";
     $("#drawer").innerHTML = drawerHTML(h);
     activeTab = prevTab;
     wireBX(h);
-    if (simActiveTab === "open") {
+    if (!fromClosed) {
       wireSimDrawerEdits(h);
       wireSimDrawerCloseButton();
       wireAddToPosition(h, SIM_HOLDINGS, simNotional, () => { renderSimTable(); renderSimOverview(); });
@@ -2875,31 +2907,6 @@
       openModal("new-position-modal");
     });
 
-    const tabOpen   = $("#sim-tab-open");
-    const tabClosed = $("#sim-tab-closed");
-    if (tabOpen) tabOpen.addEventListener("click", () => {
-      simActiveTab = "open";
-      simFilter = "all"; simClosedFilter = "all";
-      tabOpen.classList.add("active"); if (tabClosed) tabClosed.classList.remove("active");
-      const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");
-      if (sfo) sfo.style.display = "";
-      if (sfc) sfc.style.display = "none";
-      $$("[data-simfilter]").forEach(c => c.classList.toggle("active", c.dataset.simfilter === "all"));
-      $$("[data-simfilter-closed]").forEach(c => c.classList.toggle("active", c.dataset.simfilterClosed === "all"));
-      renderSimTable();
-    });
-    if (tabClosed) tabClosed.addEventListener("click", () => {
-      simActiveTab = "closed";
-      simFilter = "all"; simClosedFilter = "all";
-      tabClosed.classList.add("active"); if (tabOpen) tabOpen.classList.remove("active");
-      const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");
-      if (sfo) sfo.style.display = "none";
-      if (sfc) sfc.style.display = "";
-      $$("[data-simfilter]").forEach(c => c.classList.toggle("active", c.dataset.simfilter === "all"));
-      $$("[data-simfilter-closed]").forEach(c => c.classList.toggle("active", c.dataset.simfilterClosed === "all"));
-      renderSimTable();
-    });
-
     const simSearch = $("#sim-search-input");
     if (simSearch) simSearch.addEventListener("input", e => { simQuery = e.target.value; renderSimTable(); });
 
@@ -2915,7 +2922,7 @@
       if (chipC) {
         simClosedFilter = chipC.dataset.simfilterClosed;
         $$("[data-simfilter-closed]").forEach(c => c.classList.toggle("active", c.dataset.simfilterClosed === simClosedFilter));
-        renderSimTable();
+        renderSimClosed();
       }
     });
 
