@@ -2249,6 +2249,107 @@
     } catch (_) {
       // Network error or API key not set — keep static prices silently
     }
+
+    // Trigger news refresh after prices update
+    if (currentPage === "desk" && HOLDINGS.length > 0) {
+      fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
+    }
+  }
+
+  // ============ NEWS ============
+  let newsCache = { symsKey: "", ts: 0, articles: [] };
+  const NEWS_TTL = 30 * 60 * 1000; // 30 minutes
+
+  function timeAgo(isoStr) {
+    if (!isoStr) return "";
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins  = Math.floor(diff / 60000);
+    if (mins < 1)   return "刚刚";
+    if (mins < 60)  return `${mins}分钟前`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24)   return `${hrs}小时前`;
+    return `${Math.floor(hrs / 24)}天前`;
+  }
+
+  async function fetchNews(syms) {
+    if (!syms.length) return;
+    const symsKey = [...syms].sort().join(",");
+    const now = Date.now();
+    // Use cache if same holdings and not stale
+    if (newsCache.symsKey === symsKey && now - newsCache.ts < NEWS_TTL) {
+      renderNews(newsCache.articles);
+      return;
+    }
+
+    // Show panel in loading state
+    const panel = $("#news-panel");
+    const label = $("#news-section-label");
+    if (panel) {
+      panel.style.display = "";
+      const feed = $("#news-feed");
+      if (feed) feed.innerHTML = `<div class="news-loading">加载新闻中...</div>`;
+    }
+    if (label) label.style.display = "";
+
+    try {
+      const r = await fetch(`/api/news?syms=${syms.join(",")}`);
+      if (!r.ok) throw new Error("api error");
+      const { articles } = await r.json();
+      newsCache = { symsKey, ts: Date.now(), articles };
+      renderNews(articles);
+    } catch (_) {
+      const feed = $("#news-feed");
+      if (feed) feed.innerHTML = `<div class="news-loading">新闻暂时无法加载</div>`;
+    }
+  }
+
+  function renderNews(articles) {
+    const feed  = $("#news-feed");
+    const panel = $("#news-panel");
+    const label = $("#news-section-label");
+    const count = $("#news-count");
+    if (!feed) return;
+
+    if (!articles || !articles.length) {
+      if (panel) panel.style.display = "none";
+      if (label) label.style.display = "none";
+      return;
+    }
+
+    // Max 3 per sym, 15 total
+    const perSym = {};
+    const shown  = [];
+    for (const a of articles) {
+      const n = perSym[a.sym] || 0;
+      if (n >= 3) continue;
+      perSym[a.sym] = n + 1;
+      shown.push(a);
+      if (shown.length >= 15) break;
+    }
+
+    if (!shown.length) {
+      if (panel) panel.style.display = "none";
+      if (label) label.style.display = "none";
+      return;
+    }
+
+    if (panel) panel.style.display = "";
+    if (label) label.style.display = "";
+    if (count) count.textContent = `${shown.length} 条`;
+
+    feed.innerHTML = shown.map(a => {
+      const dotClass = a.sentiment === "positive" ? "pos" : a.sentiment === "negative" ? "neg" : "";
+      const safeTitle = a.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const safeSource = a.source.replace(/</g, "&lt;");
+      return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
+        <span class="news-sym">${a.sym}</span>
+        <span class="news-body">
+          <span class="news-title">${safeTitle}</span>
+          <span class="news-meta">${safeSource}${safeSource ? " · " : ""}${timeAgo(a.publishedAt)}</span>
+        </span>
+        <span class="news-dot ${dotClass}"></span>
+      </a>`;
+    }).join("");
   }
 
   // ============ PAGE SWITCHING ============
@@ -2284,6 +2385,9 @@
     if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
     if (page === "watchlist") renderWatchlist();
     if (page === "market")    fetchMarketData();
+    if (page === "desk" && HOLDINGS.length > 0) {
+      fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
+    }
   }
 
   // ============ JOURNAL ============
