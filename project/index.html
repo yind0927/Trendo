@@ -1368,9 +1368,9 @@
   .news-item { display:grid; grid-template-columns:44px 1fr; gap:0 12px; padding:11px 16px; border-bottom:1px solid var(--line); align-items:start; text-decoration:none; cursor:pointer; transition:background .12s; }
   .news-item:last-child { border-bottom:none; }
   .news-item:hover { background:var(--bg-3); }
-  .news-logo-wrap { width:36px; height:36px; border-radius:8px; background:var(--bg-3); overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; border:1px solid var(--line); }
-  .news-logo-wrap img { width:100%; height:100%; object-fit:contain; }
-  .news-logo-fb { font-size:10px; font-weight:700; font-family:var(--f-mono); color:var(--fg-2); letter-spacing:.02em; display:none; }
+  /* Avatar: same structure as holdings table .tk .avatar — always visible */
+  .news-avatar { width:36px; height:36px; border-radius:8px; background:var(--bg-3); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-family:var(--f-mono); font-weight:700; font-size:11px; color:var(--fg-0); letter-spacing:.02em; position:relative; overflow:hidden; flex-shrink:0; margin-top:2px; }
+  .news-avatar img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#fff; border-radius:7px; }
   .news-body { min-width:0; }
   .news-hd { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
   .news-sym { font-size:10px; font-weight:700; font-family:var(--f-mono); padding:2px 6px; border-radius:4px; background:var(--bg-4); color:var(--fg-1); white-space:nowrap; letter-spacing:.04em; }
@@ -1460,9 +1460,9 @@
     padding: 14px 16px; display: flex; flex-direction: column; gap: 4px;
   }
   .sim-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
-  .sim-card-value { font-size: 22px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.02em; }
-  .sim-card-value.xl { font-size: 28px; }
-  .sim-card-value.md { font-size: 17px; }
+  .sim-card-value { font-size: 20px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.02em; }
+  .sim-card-value.xl { font-size: 32px; letter-spacing: -0.03em; }
+  .sim-card-value.md { font-size: 15px; font-weight: 600; }
   .sim-card-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
   .pending-order-card {
     display: flex; align-items: center; gap: 10px;

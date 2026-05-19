@@ -2341,24 +2341,20 @@
     const sentClass = s => s === "positive" ? "pos"  : s === "negative" ? "neg"  : "neu";
 
     feed.innerHTML = shown.map(a => {
-      const logoUrl   = logos[a.sym] || "";
+      const logoUrl    = logos[a.sym] || "";
       const safeTitle  = a.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const safeSource = (a.source || "").replace(/</g, "&lt;");
       const sent       = a.sentiment || "neutral";
       const initials   = a.sym.slice(0, 3);
 
-      // When logo exists: img shown + fallback hidden. On img error: swap.
-      // When no logo: fallback shown directly (override CSS display:none).
-      const logoHtml = logoUrl
-        ? `<img src="${logoUrl}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      // Initials always render (pure CSS, same as holdings .avatar).
+      // Real logo loads on top — onerror hides it so initials show through.
+      const imgTag = logoUrl
+        ? `<img src="${logoUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
         : "";
-      const fbStyle = logoUrl ? "display:none" : "display:flex";
 
       return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
-        <div class="news-logo-wrap">
-          ${logoHtml}
-          <span class="news-logo-fb" style="${fbStyle}">${initials}</span>
-        </div>
+        <div class="news-avatar">${initials}${imgTag}</div>
         <div class="news-body">
           <div class="news-hd">
             <span class="news-sym">${a.sym}</span>
