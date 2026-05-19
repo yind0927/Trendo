@@ -2257,7 +2257,7 @@
   }
 
   // ============ NEWS ============
-  let newsCache = { symsKey: "", ts: 0, articles: [] };
+  let newsCache = { symsKey: "", ts: 0, articles: [], logos: {} };
   const NEWS_TTL = 30 * 60 * 1000; // 30 minutes
 
   function timeAgo(isoStr) {
@@ -2277,7 +2277,7 @@
     const now = Date.now();
     // Use cache if same holdings and not stale
     if (newsCache.symsKey === symsKey && now - newsCache.ts < NEWS_TTL) {
-      renderNews(newsCache.articles);
+      renderNews(newsCache.articles, newsCache.logos);
       return;
     }
 
@@ -2294,16 +2294,16 @@
     try {
       const r = await fetch(`/api/news?syms=${syms.join(",")}`);
       if (!r.ok) throw new Error("api error");
-      const { articles } = await r.json();
-      newsCache = { symsKey, ts: Date.now(), articles };
-      renderNews(articles);
+      const { articles, logos = {} } = await r.json();
+      newsCache = { symsKey, ts: Date.now(), articles, logos };
+      renderNews(articles, logos);
     } catch (_) {
       const feed = $("#news-feed");
       if (feed) feed.innerHTML = `<div class="news-loading">新闻暂时无法加载</div>`;
     }
   }
 
-  function renderNews(articles) {
+  function renderNews(articles, logos = {}) {
     const feed  = $("#news-feed");
     const panel = $("#news-panel");
     const label = $("#news-section-label");
@@ -2316,7 +2316,7 @@
       return;
     }
 
-    // Max 5 per sym, 25 total — keeps feed balanced without one stock flooding it
+    // Max 5 per sym, 25 total — keeps feed balanced
     const perSym = {};
     const shown  = [];
     for (const a of articles) {
@@ -2337,17 +2337,34 @@
     if (label) label.style.display = "";
     if (count) count.textContent = `${shown.length} 条`;
 
+    const sentLabel = s => s === "positive" ? "利好" : s === "negative" ? "利空" : "中性";
+    const sentClass = s => s === "positive" ? "pos"  : s === "negative" ? "neg"  : "neu";
+
     feed.innerHTML = shown.map(a => {
-      const dotClass = a.sentiment === "positive" ? "pos" : a.sentiment === "negative" ? "neg" : "";
-      const safeTitle = a.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const safeSource = a.source.replace(/</g, "&lt;");
+      const logoUrl   = logos[a.sym] || "";
+      const safeTitle  = a.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const safeSource = (a.source || "").replace(/</g, "&lt;");
+      const sent       = a.sentiment || "neutral";
+      const initials   = a.sym.slice(0, 3);
+
+      const logoHtml = logoUrl
+        ? `<img src="${logoUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
+        : "";
+      const fbStyle = logoUrl ? "display:none" : "";
+
       return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
-        <span class="news-sym">${a.sym}</span>
-        <span class="news-body">
-          <span class="news-title">${safeTitle}</span>
-          <span class="news-meta">${safeSource}${safeSource ? " · " : ""}${timeAgo(a.publishedAt)}</span>
-        </span>
-        <span class="news-dot ${dotClass}"></span>
+        <div class="news-logo-wrap">
+          ${logoHtml}
+          <span class="news-logo-fb" style="${fbStyle}">${initials}</span>
+        </div>
+        <div class="news-body">
+          <div class="news-hd">
+            <span class="news-sym">${a.sym}</span>
+            <span class="news-sent ${sentClass(sent)}">${sentLabel(sent)}</span>
+          </div>
+          <div class="news-title">${safeTitle}</div>
+          <div class="news-meta">${safeSource}${safeSource ? " · " : ""}${timeAgo(a.publishedAt)}</div>
+        </div>
       </a>`;
     }).join("");
   }
