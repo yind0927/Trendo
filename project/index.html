@@ -122,7 +122,7 @@
     position: sticky; top: 0; z-index: 40;
   }
   .topbar{
-    position: relative;
+    position: relative; z-index: 1;
     display: flex; align-items: center; gap: 20px;
     padding: 12px 28px;
     padding-top: calc(12px + env(safe-area-inset-top));
@@ -797,7 +797,7 @@
 
   body{ font-family: var(--f-sans) !important; font-size: var(--fs-body) !important; cursor: default !important; }
   .topbar{
-    position: relative;
+    position: relative; z-index: 1;
     display: flex; align-items: center; gap: 18px;
     padding: 10px 24px;
     background:

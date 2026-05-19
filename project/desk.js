@@ -2316,15 +2316,15 @@
       return;
     }
 
-    // Max 3 per sym, 15 total
+    // Max 5 per sym, 25 total — keeps feed balanced without one stock flooding it
     const perSym = {};
     const shown  = [];
     for (const a of articles) {
       const n = perSym[a.sym] || 0;
-      if (n >= 3) continue;
+      if (n >= 5) continue;
       perSym[a.sym] = n + 1;
       shown.push(a);
-      if (shown.length >= 15) break;
+      if (shown.length >= 25) break;
     }
 
     if (!shown.length) {
