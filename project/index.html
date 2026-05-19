@@ -2530,8 +2530,6 @@
     </button>
   </div>
 
-  <div id="sim-overview"></div>
-
   <div id="sim-pending-section" style="display:none;margin:0 0 12px">
     <div style="font-size:11px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 2px">挂单队列 · Pending Orders</div>
     <div id="sim-pending-list"></div>
@@ -2541,11 +2539,14 @@
     <span class="ssl-zh">模拟仓持仓</span>
     <span class="ssl-en">Simulation Positions</span>
     <span class="ssl-rule"></span>
-    <span class="ssl-meta" id="sim-c-open">0</span>
   </div>
   <section class="panel">
     <div class="panel-head">
-      <div class="sim-search" style="margin-left:0">
+      <div class="panel-title">
+        <button class="tab active" id="sim-tab-open">Open <span class="c" id="sim-c-open">0</span></button>
+        <button class="tab" id="sim-tab-closed">Closed <span class="c" id="sim-c-closed">0</span></button>
+      </div>
+      <div class="sim-search" style="margin-left:auto">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
         <input id="sim-search-input" placeholder="搜索…">
       </div>
@@ -2556,6 +2557,11 @@
         <button class="filter-chip" data-simfilter="crypto">加密 <span class="c" id="sim-c-cr">0</span></button>
         <button class="filter-chip" data-simfilter="risk">近止损 <span class="c" id="sim-c-rk">0</span></button>
         <button class="filter-chip" data-simfilter="target">近止盈 <span class="c" id="sim-c-tg">0</span></button>
+      </div>
+      <div class="filters" id="sim-filters-closed" style="display:none;margin-left:0">
+        <button class="filter-chip active" data-simfilter-closed="all">全部 <span class="c" id="sim-c-cl-all">0</span></button>
+        <button class="filter-chip" data-simfilter-closed="profit">盈利 <span class="c" id="sim-c-cl-profit">0</span></button>
+        <button class="filter-chip" data-simfilter-closed="loss">亏损 <span class="c" id="sim-c-cl-loss">0</span></button>
       </div>
     </div>
     <div style="overflow-x:auto">
@@ -2576,6 +2582,8 @@
     </div>
   </div>
 
+  <div id="sim-overview" style="margin-top:16px"></div>
+
   <div class="sim-section-label" id="sim-analytics-label" style="display:none">
     <span class="ssl-zh">模拟分析</span>
     <span class="ssl-en">Analytics</span>
@@ -2587,14 +2595,14 @@
     <span class="ssl-zh">交易记录</span>
     <span class="ssl-en">Trade Records</span>
     <span class="ssl-rule"></span>
-    <span class="ssl-meta" id="sim-c-closed">0</span>
+    <span class="ssl-meta" id="sim-c-closed-label">0</span>
   </div>
   <section class="panel" id="sim-closed-section" style="display:none">
     <div class="panel-head">
-      <div class="filters" id="sim-filters-closed" style="margin-left:0">
-        <button class="filter-chip active" data-simfilter-closed="all">全部 <span class="c" id="sim-c-cl-all">0</span></button>
-        <button class="filter-chip" data-simfilter-closed="profit">盈利 <span class="c" id="sim-c-cl-profit">0</span></button>
-        <button class="filter-chip" data-simfilter-closed="loss">亏损 <span class="c" id="sim-c-cl-loss">0</span></button>
+      <div class="filters" id="sim-filters-trade" style="margin-left:0">
+        <button class="filter-chip active" data-tradefilter="all">全部 <span class="c" id="sim-tc-all">0</span></button>
+        <button class="filter-chip" data-tradefilter="profit">盈利 <span class="c" id="sim-tc-profit">0</span></button>
+        <button class="filter-chip" data-tradefilter="loss">亏损 <span class="c" id="sim-tc-loss">0</span></button>
       </div>
     </div>
     <div style="overflow-x:auto">
