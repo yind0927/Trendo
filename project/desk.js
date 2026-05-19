@@ -2721,8 +2721,8 @@
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
         </div>
-        <div class="sim-card-value">${fmt.usd(simNotional)}</div>
-        <div class="sim-card-sub">模拟 NAV <span class="${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</span></div>
+        <div class="sim-card-value ${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</div>
+        <div class="sim-card-sub">基准 ${fmt.usd(simNotional)}</div>
       </div>
       <div class="sim-card">
         <div class="sim-card-label">模拟浮盈亏</div>
