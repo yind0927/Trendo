@@ -2906,6 +2906,26 @@
   </div>
 </div>
 
+<!-- Sim Notional Edit Modal -->
+<div id="sim-notional-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>编辑模拟本金</h2>
+      <button class="modal-close" id="sim-notional-close">✕</button>
+    </div>
+    <form id="sim-notional-form">
+      <div class="form-row">
+        <label>模拟本金</label>
+        <input type="number" id="sim-notional-input" placeholder="100000" step="1" required/>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">更新</button>
+        <button type="button" id="sim-notional-cancel" class="btn">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="add-to-modal" class="modal-backdrop">
   <div class="modal">
     <div class="modal-header">

@@ -44,7 +44,7 @@
     const ov = $("#overview");
     ov.innerHTML = `
       <div class="ov-card" id="nav-card">
-        <div class="label" style="justify-content:space-between">总资产<button class="nav-edit-btn" title="Edit base NAV">✎</button></div>
+        <div class="label" style="justify-content:space-between">总资产<button class="nav-edit-btn" title="编辑基准总额"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>
         <div class="value">$${portfolioValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
         <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${totalPnlDollar >= 0 ? "+" : ""}${fmt.signed(totalPnlDollar)}</span></span></div>
       </div>
@@ -2715,12 +2715,14 @@
     const navSign = fmt.sign(pnl);
     el.innerHTML = `
       <div class="sim-card">
-        <div class="sim-card-label">模拟 NAV</div>
-        <div class="sim-card-value ${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</div>
-        <div class="sim-card-sub" id="sim-notional-edit" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">
-          本金 ${fmt.usd(simNotional)}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <div class="sim-card-label" style="display:flex;justify-content:space-between;align-items:center">
+          模拟本金
+          <button class="sim-notional-edit-btn" title="编辑模拟本金" style="all:unset;cursor:pointer;color:var(--fg-3);display:inline-flex;align-items:center;border-radius:4px;padding:2px">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
         </div>
+        <div class="sim-card-value">${fmt.usd(simNotional)}</div>
+        <div class="sim-card-sub">模拟 NAV <span class="${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</span></div>
       </div>
       <div class="sim-card">
         <div class="sim-card-label">模拟浮盈亏</div>
@@ -2738,14 +2740,6 @@
         <div class="sim-card-sub">${closedTotal ? `${wins}胜 / ${closedTotal - wins}负` : "暂无数据"}</div>
       </div>`;
 
-    // Sim notional edit
-    const editBtn = $("#sim-notional-edit");
-    if (editBtn) {
-      editBtn.addEventListener("click", () => {
-        const v = parseFloat(prompt("设置模拟本金 ($)", simNotional));
-        if (v > 0) { simNotional = v; saveToStorage(); renderSimOverview(); }
-      });
-    }
 
     // Update subtitle
     const sub = $("#sim-subtitle");
@@ -3060,6 +3054,23 @@
   }
 
   function wireSimControls() {
+    // Sim notional modal — event delegation survives re-renders
+    document.addEventListener("click", e => {
+      if (e.target.closest(".sim-notional-edit-btn")) {
+        const inp = $("#sim-notional-input");
+        if (inp) inp.value = simNotional;
+        openModal("sim-notional-modal");
+      }
+    });
+    $("#sim-notional-close")?.addEventListener("click", () => closeModal("sim-notional-modal"));
+    $("#sim-notional-cancel")?.addEventListener("click", () => closeModal("sim-notional-modal"));
+    $("#sim-notional-modal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeModal("sim-notional-modal"); });
+    $("#sim-notional-form")?.addEventListener("submit", e => {
+      e.preventDefault();
+      const v = parseFloat($("#sim-notional-input").value);
+      if (v > 0) { simNotional = v; saveToStorage(); renderSimOverview(); closeModal("sim-notional-modal"); }
+    });
+
     const simNewBtn = $("#sim-new-pos-btn");
     if (simNewBtn) simNewBtn.addEventListener("click", () => {
       newPositionContext = "sim";
