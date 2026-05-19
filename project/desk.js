@@ -2347,10 +2347,12 @@
       const sent       = a.sentiment || "neutral";
       const initials   = a.sym.slice(0, 3);
 
+      // When logo exists: img shown + fallback hidden. On img error: swap.
+      // When no logo: fallback shown directly (override CSS display:none).
       const logoHtml = logoUrl
-        ? `<img src="${logoUrl}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
+        ? `<img src="${logoUrl}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
         : "";
-      const fbStyle = logoUrl ? "display:none" : "";
+      const fbStyle = logoUrl ? "display:none" : "display:flex";
 
       return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
         <div class="news-logo-wrap">
@@ -2719,7 +2721,7 @@
     el.innerHTML = `
       <div class="sim-card">
         <div class="sim-card-label">模拟 NAV</div>
-        <div class="sim-card-value ${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</div>
+        <div class="sim-card-value xl ${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</div>
         <div class="sim-card-sub" id="sim-notional-edit" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">
           本金 ${fmt.usd(simNotional)}
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2732,12 +2734,12 @@
       </div>
       <div class="sim-card">
         <div class="sim-card-label">已实现盈亏</div>
-        <div class="sim-card-value ${fmt.sign(realizedPnl)}">${closedTotal ? fmt.signed(Math.round(realizedPnl)) : "—"}</div>
+        <div class="sim-card-value md ${fmt.sign(realizedPnl)}">${closedTotal ? fmt.signed(Math.round(realizedPnl)) : "—"}</div>
         <div class="sim-card-sub">${closedTotal} 笔已平仓</div>
       </div>
       <div class="sim-card">
         <div class="sim-card-label">模拟胜率</div>
-        <div class="sim-card-value ${wins >= closedTotal / 2 ? 'up' : closedTotal ? 'down' : 'neu'}">${winRate}</div>
+        <div class="sim-card-value md ${wins >= closedTotal / 2 ? 'up' : closedTotal ? 'down' : 'neu'}">${winRate}</div>
         <div class="sim-card-sub">${closedTotal ? `${wins}胜 / ${closedTotal - wins}负` : "暂无数据"}</div>
       </div>`;
 
