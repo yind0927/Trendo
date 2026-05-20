@@ -69,6 +69,47 @@
       })}
       ${pieCard()}
     `;
+    renderDailySources();
+  }
+
+  function renderDailySources() {
+    const el = $("#daily-sources");
+    const label = $("#daily-sources-label");
+    if (!el) return;
+
+    const rows = HOLDINGS
+      .map(h => {
+        const today = Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0));
+        const todayPct = h.prevClose ? ((h.last - h.prevClose) / h.prevClose * 100) : 0;
+        return { sym: h.sym, name: h.name, today, todayPct };
+      })
+      .sort((a, b) => Math.abs(b.today) - Math.abs(a.today));
+
+    const hasData = rows.some(r => r.today !== 0);
+    if (label) label.style.display = hasData ? "" : "none";
+    if (!hasData) { el.innerHTML = ""; return; }
+
+    const maxAbs = Math.max(...rows.map(r => Math.abs(r.today)), 1);
+
+    el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
+      rows.map(r => {
+        const sign = r.today > 0 ? "up" : r.today < 0 ? "down" : "neu";
+        const barW = Math.round(Math.abs(r.today) / maxAbs * 100);
+        const amtStr = r.today === 0 ? "±$0"
+          : (r.today > 0 ? "+" : "−") + "$" + Math.abs(r.today).toLocaleString("en-US");
+        const pctStr = (r.todayPct >= 0 ? "+" : "") + r.todayPct.toFixed(2) + "%";
+        return `<div class="ds-row">
+          <div>
+            <div class="ds-sym">${r.sym}</div>
+            <div class="ds-name">${r.name}</div>
+          </div>
+          <div class="ds-bar-track"><div class="ds-bar-fill ${sign}" style="width:${barW}%"></div></div>
+          <div class="ds-val-cell">
+            <div class="ds-amt ${sign}">${amtStr}</div>
+            <div class="ds-pct ${sign}">${pctStr}</div>
+          </div>
+        </div>`;
+      }).join("") + `</div>`;
   }
 
   function card({ label, info, value, sub, spark }) {

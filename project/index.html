@@ -1596,6 +1596,21 @@
   textarea.journal-note-area { width: 100%; box-sizing: border-box; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--fg-0); font-family: var(--f-sans); font-size: 12.5px; line-height: 1.65; resize: none; overflow: hidden; outline: none; transition: border-color .15s; }
   textarea.journal-note-area:focus { border-color: var(--accent-line); }
   textarea.journal-note-area::placeholder { color: var(--fg-3); }
+  /* ── Daily P&L Sources ── */
+  .ds-row { display: grid; grid-template-columns: 68px 1fr 86px; align-items: center; gap: 10px 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  .ds-row:last-child { border-bottom: none; }
+  .ds-sym { font-family: var(--f-mono); font-weight: 700; font-size: 12.5px; }
+  .ds-name { font-size: 10.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60px; }
+  .ds-bar-track { height: 4px; background: var(--bg-2); border-radius: 2px; overflow: hidden; }
+  .ds-bar-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+  .ds-bar-fill.up { background: var(--up); opacity: .8; }
+  .ds-bar-fill.down { background: var(--down); opacity: .8; }
+  .ds-val-cell { text-align: right; }
+  .ds-amt { font-family: var(--f-mono); font-size: 12.5px; font-weight: 700; }
+  .ds-pct { font-family: var(--f-mono); font-size: 10.5px; }
+  .ds-amt.up, .ds-pct.up { color: var(--up); }
+  .ds-amt.down, .ds-pct.down { color: var(--down); }
+  .ds-amt.neu, .ds-pct.neu { color: var(--fg-3); }
   .page-header {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 24px; gap: 16px; flex-wrap: wrap;
@@ -2379,6 +2394,15 @@
     <span class="ssl-meta">NAV · 今日盈亏 · 风险</span>
   </div>
   <section class="overview" id="overview"></section>
+
+  <!-- ============ DAILY SOURCES ============ -->
+  <div class="sim-section-label" id="daily-sources-label" style="display:none">
+    <span class="ssl-zh">今日盈亏</span>
+    <span class="ssl-en">Daily P&L Sources</span>
+    <span class="ssl-rule"></span>
+    <span class="ssl-meta">来源拆解</span>
+  </div>
+  <div id="daily-sources"></div>
 
   <!-- ============ HOLDINGS ============ -->
   <div class="sim-section-label">
