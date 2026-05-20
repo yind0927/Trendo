@@ -2888,80 +2888,48 @@
       setCount("sim-c-tg",    SIM_HOLDINGS.filter(h => progressBucket(h) === "Near Target").length);
     }
 
-    renderSimClosed();
+    renderSimTradeLog();
   }
 
-  let tradeFilter = "all";
-
-  function renderSimClosed() {
-    const thead = $("#sim-closed-thead-row");
-    const tbody = $("#sim-closed-tbody");
-    const labelEl = $("#sim-closed-label");
-    const section = $("#sim-closed-section");
-    if (!thead || !tbody) return;
+  function renderSimTradeLog() {
+    const labelEl = $("#sim-trade-log-label");
+    const el      = $("#sim-trade-log");
+    if (!el) return;
 
     const hasClosed = SIM_CLOSED.length > 0;
-    if (labelEl) labelEl.style.display = hasClosed ? "" : "none";
-    if (section)  section.style.display  = hasClosed ? "" : "none";
-    if (!hasClosed) return;
+    if (labelEl) {
+      labelEl.style.display = hasClosed ? "" : "none";
+      const countEl = $("#sim-trade-log-count");
+      if (countEl) countEl.textContent = SIM_CLOSED.length + " 笔";
+    }
+    if (!hasClosed) { el.innerHTML = ""; return; }
 
-    const closedCols = COLS.filter(c => c.on && !c.closedHide);
-    thead.innerHTML = closedCols.map(c => {
-      const lbl = c.id === "last" ? "平仓价" : c.id === "pnl" ? "盈亏" : c.label;
-      return `<th class="${c.r ? "right" : ""}">${lbl}</th>`;
-    }).join("");
+    const sorted = [...SIM_CLOSED].sort((a, b) =>
+      (b.closedAt || "").localeCompare(a.closedAt || "")
+    );
 
-    let rows = SIM_CLOSED.filter(h => {
-      const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
-      if (tradeFilter === "profit" && pnl <= 0) return false;
-      if (tradeFilter === "loss"   && pnl >  0) return false;
-      return true;
-    });
-
-    const prevTab = activeTab;
-    activeTab = "closed";
-    tbody.innerHTML = rows.map(h => {
-      const cells = closedCols.map(c => renderCell(h, c.id)).join("");
-      const actions = `<td style="width:60px;padding:6px 4px"><div class="row-actions">
-           <button class="sim-restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
-           <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-         </div></td>`;
-      return `<tr data-sym="${h.sym}">${cells}${actions}</tr>`;
-    }).join("");
-    activeTab = prevTab;
-
-    $$("tr", tbody).forEach(tr => {
-      tr.addEventListener("click", e => {
-        if (e.target.closest(".sim-restore-btn, .delete-btn")) return;
-        openSimDrawer(tr.dataset.sym, "closed");
-      });
-    });
-    $$(".sim-restore-btn", tbody).forEach(btn => {
-      btn.addEventListener("click", e => {
-        e.stopPropagation();
-        const sym = btn.dataset.sym;
-        const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
-        if (idx === -1) return;
-        const h = SIM_CLOSED[idx];
-        if (SIM_HOLDINGS.find(x => x.sym === sym)) { alert("模拟仓中已有该持仓"); return; }
-        const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = h;
-        restored.last = restored.cost;
-        recomputeHolding(restored, simNotional);
-        SIM_HOLDINGS.push(restored);
-        SIM_CLOSED.splice(idx, 1);
-        saveToStorage();
-        renderSimOverview(); renderSimTable(); renderSimAnalytics();
-      });
-    });
-    $$(".delete-btn", tbody).forEach(btn => {
-      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, "closed"); });
-    });
-
-    const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    setCount("sim-c-closed-label", SIM_CLOSED.length);
-    setCount("sim-tc-all",    SIM_CLOSED.length);
-    setCount("sim-tc-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
-    setCount("sim-tc-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length);
+    el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
+      sorted.map(h => {
+        const pnl     = h.pnlFinal ?? 0;
+        const pnlCls  = pnl >= 0 ? "up" : "down";
+        const pnlPct  = h.cost > 0 ? ((h.closePrice - h.cost) / h.cost * 100) : null;
+        const entryD  = h.entry?.slice(0, 10) || "—";
+        const closeD  = h.closedAt?.slice(0, 10) || "—";
+        return `<div class="tl-row">
+          <div>
+            <div class="tl-sym">${h.sym}</div>
+            <div class="tl-name">${h.name || ""}</div>
+          </div>
+          <div class="tl-mid">
+            <div class="tl-prices">$${h.cost?.toFixed(2)} → $${h.closePrice?.toFixed(2)}</div>
+            <div class="tl-dates">${entryD} → ${closeD}${h.days ? " · " + h.days + "天" : ""}</div>
+          </div>
+          <div>
+            <div class="tl-pnl ${pnlCls}">${fmt.signed(Math.round(pnl))}</div>
+            <div class="tl-pnl-pct ${pnlCls}">${pnlPct !== null ? (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(1) + "%" : ""}</div>
+          </div>
+        </div>`;
+      }).join("") + `</div>`;
   }
 
   function openSimDrawer(sym, context) {
@@ -3127,12 +3095,6 @@
         $$("[data-simfilter-closed]").forEach(c => c.classList.toggle("active", c.dataset.simfilterClosed === simClosedFilter));
         renderSimTable();
         return;
-      }
-      const chipT = e.target.closest("[data-tradefilter]");
-      if (chipT) {
-        tradeFilter = chipT.dataset.tradefilter;
-        $$("[data-tradefilter]").forEach(c => c.classList.toggle("active", c.dataset.tradefilter === tradeFilter));
-        renderSimClosed();
       }
     });
 

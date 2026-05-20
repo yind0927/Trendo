@@ -1501,6 +1501,16 @@
     margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
   }
   .sim-tabs { display: flex; gap: 4px; }
+  /* Trade Log */
+  .tl-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 10px 14px; padding: 11px 16px; border-bottom: 1px solid var(--line); }
+  .tl-row:last-child { border-bottom: none; }
+  .tl-sym { font-family: var(--f-mono); font-weight: 700; font-size: 13px; color: var(--fg-0); }
+  .tl-name { font-size: 10.5px; color: var(--fg-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tl-mid { min-width: 0; }
+  .tl-prices { font-family: var(--f-mono); font-size: 11px; color: var(--fg-2); }
+  .tl-dates { font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); margin-top: 2px; }
+  .tl-pnl { font-family: var(--f-mono); font-weight: 700; font-size: 13px; text-align: right; }
+  .tl-pnl-pct { font-size: 10px; font-weight: 500; text-align: right; margin-top: 2px; color: var(--fg-3); font-family: var(--f-mono); }
   .sim-tab {
     padding: 5px 14px; border-radius: 7px; border: 1px solid transparent;
     background: none; cursor: pointer; font-size: 12.5px; color: var(--fg-2);
@@ -2586,6 +2596,14 @@
     <div id="sim-pending-list"></div>
   </div>
 
+  <div class="sim-section-label" id="sim-analytics-label" style="display:none">
+    <span class="ssl-zh">模拟分析</span>
+    <span class="ssl-en">Analytics</span>
+    <span class="ssl-rule"></span>
+  </div>
+  <div id="sim-overview" style="display:none"></div>
+  <div id="sim-analytics-section" style="display:none"></div>
+
   <div class="sim-section-label">
     <span class="ssl-zh">模拟仓持仓</span>
     <span class="ssl-en">Simulation Positions</span>
@@ -2633,35 +2651,13 @@
     </div>
   </div>
 
-  <div class="sim-section-label" id="sim-analytics-label" style="display:none">
-    <span class="ssl-zh">模拟分析</span>
-    <span class="ssl-en">Analytics</span>
-    <span class="ssl-rule"></span>
-  </div>
-  <div id="sim-overview" style="display:none"></div>
-  <div id="sim-analytics-section" style="display:none"></div>
-
-  <div class="sim-section-label" id="sim-closed-label" style="display:none">
+  <div class="sim-section-label" id="sim-trade-log-label" style="display:none">
     <span class="ssl-zh">交易记录</span>
-    <span class="ssl-en">Trade Records</span>
+    <span class="ssl-en">Trade Log</span>
     <span class="ssl-rule"></span>
-    <span class="ssl-meta" id="sim-c-closed-label">0</span>
+    <span class="ssl-meta" id="sim-trade-log-count"></span>
   </div>
-  <section class="panel" id="sim-closed-section" style="display:none">
-    <div class="panel-head">
-      <div class="filters" id="sim-filters-trade" style="margin-left:0">
-        <button class="filter-chip active" data-tradefilter="all">全部 <span class="c" id="sim-tc-all">0</span></button>
-        <button class="filter-chip" data-tradefilter="profit">盈利 <span class="c" id="sim-tc-profit">0</span></button>
-        <button class="filter-chip" data-tradefilter="loss">亏损 <span class="c" id="sim-tc-loss">0</span></button>
-      </div>
-    </div>
-    <div style="overflow-x:auto">
-      <table class="sim-holdings">
-        <thead><tr id="sim-closed-thead-row"></tr></thead>
-        <tbody id="sim-closed-tbody"></tbody>
-      </table>
-    </div>
-  </section>
+  <div id="sim-trade-log"></div>
 
 </div>
 
