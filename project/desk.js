@@ -3289,6 +3289,9 @@
     const avgWin    = wins.length > 0 ? Math.round(grossWin / wins.length) : null;
     const avgLoss   = losses.length > 0 ? Math.round(grossLoss / losses.length) : null;
     const avgHold   = total > 0 ? (closed.reduce((s, h) => s + (h.days || 0), 0) / total).toFixed(1) : null;
+    const avgWinDays  = wins.length > 0   ? Math.round(wins.reduce((s, h) => s + (h.days || 0), 0) / wins.length) : null;
+    const avgLossDays = losses.length > 0 ? Math.round(losses.reduce((s, h) => s + (h.days || 0), 0) / losses.length) : null;
+    const holdRatio   = avgWinDays !== null && avgLossDays > 0 ? (avgWinDays / avgLossDays).toFixed(1) : null;
 
     const sortedC = [...closed].sort((a, b) => a.closedAt.localeCompare(b.closedAt));
     const totalPnlDollar = open.reduce((s, h) => s + (h.pnlDollar || 0), 0);
@@ -3317,7 +3320,12 @@
         ${ametric("盈亏因子",    pfStr || "—", parseFloat(pfStr) >= 1.5 ? "up" : "down", "总盈 ÷ 总亏")}
         ${ametric("平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `${wins.length} 笔赢` : "")}
         ${ametric("平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `${losses.length} 笔亏` : "")}
-        ${ametric("平均持仓",    avgHold !== null ? avgHold + " 天" : "—", "neu", avgHold !== null ? `最长 ${Math.max(...closed.map(h => h.days || 0))}d` : "")}
+        ${ametric("平均持仓",
+          holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
+          holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "neu" : "down") : "neu",
+          avgWinDays !== null || avgLossDays !== null
+            ? `盈 ${avgWinDays ?? "—"}d · 亏 ${avgLossDays ?? "—"}d`
+            : avgHold !== null ? `均 ${avgHold}d` : "")}
       </div>
 
       <div class="analytics-card" style="margin-bottom:14px">
