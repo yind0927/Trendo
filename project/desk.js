@@ -3436,6 +3436,12 @@
           </div>
         </div>
       </div>
+
+      <div class="analytics-card" style="margin-bottom:14px">
+        <div class="analytics-card-title">出场质量分析 · Exit Quality</div>
+        <div class="analytics-card-sub">峰值盈利 vs 实际出场 · 按损耗排序</div>
+        <div style="margin-top:14px" id="eq-content">${exitQualityHTML()}</div>
+      </div>
     `;
 
     $$(".ec-period-btn", aContent).forEach(btn => {
@@ -3466,6 +3472,96 @@
       <div class="analytics-metric-value ${colorCls || "neu"}">${value}</div>
       ${sub ? `<div class="analytics-metric-sub">${sub}</div>` : ""}
     </div>`;
+  }
+
+  function exitQualityHTML() {
+    const closed = CLOSED_POSITIONS;
+    if (!closed.length) return `<div class="eq-empty">暂无已平仓记录</div>`;
+
+    const rows = [];
+    for (const h of closed) {
+      const ySym   = h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
+      const prices = histCache[ySym];
+      if (!prices) continue;
+
+      const entryDate = h.entry?.slice(0, 10);
+      const closeDate = h.closedAt?.slice(0, 10);
+      if (!entryDate || !closeDate || !h.qty || !h.cost) continue;
+
+      const datesInRange = Object.keys(prices).filter(d => d > entryDate && d <= closeDate);
+      if (!datesInRange.length) continue;
+
+      const peakPrice = Math.max(...datesInRange.map(d => prices[d]));
+      if (peakPrice <= h.cost) continue; // never went profitable
+
+      const peakPnl     = (peakPrice - h.cost) * h.qty;
+      const actualPnl   = h.pnlFinal ?? 0;
+      const leftOnTable = peakPnl - actualPnl;
+      const efficiency  = Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100);
+
+      rows.push({ h, peakPnl, actualPnl, leftOnTable, efficiency });
+    }
+
+    if (!rows.length) {
+      return histLoading
+        ? `<div class="eq-empty">加载历史价格中…</div>`
+        : `<div class="eq-empty">暂无数据 · 需要已平仓记录和历史价格</div>`;
+    }
+
+    rows.sort((a, b) => b.leftOnTable - a.leftOnTable);
+
+    const totalPeak   = rows.reduce((s, r) => s + r.peakPnl, 0);
+    const totalActual = rows.reduce((s, r) => s + r.actualPnl, 0);
+    const overallEff  = totalPeak > 0 ? Math.round(Math.max(0, totalActual) / totalPeak * 100) : 0;
+    const effCls      = e => e >= 75 ? "high" : e >= 45 ? "mid" : "low";
+    const effLabel    = e => e < 0 ? "亏损出场" : e + "% 效率";
+
+    const summaryHTML = `
+      <div class="eq-summary">
+        <div class="eq-summary-card">
+          <div class="eq-summary-label">可捕获盈利</div>
+          <div class="eq-summary-value up">+$${Math.round(totalPeak).toLocaleString("en-US")}</div>
+          <div class="eq-summary-sub">${rows.length} 笔有效记录</div>
+        </div>
+        <div class="eq-summary-card">
+          <div class="eq-summary-label">实际盈亏</div>
+          <div class="eq-summary-value ${fmt.sign(totalActual)}">${fmt.signed(Math.round(totalActual))}</div>
+          <div class="eq-summary-sub">已实现</div>
+        </div>
+        <div class="eq-summary-card">
+          <div class="eq-summary-label">出场效率</div>
+          <div class="eq-summary-value ${effCls(overallEff) === "high" ? "up" : effCls(overallEff) === "mid" ? "neu" : "down"}">${overallEff}%</div>
+          <div class="eq-summary-sub">实际 ÷ 峰值</div>
+        </div>
+      </div>`;
+
+    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency }) => {
+      const actualW   = Math.max(0, Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100));
+      const actualCls = actualPnl >= 0 ? "up" : "down";
+      const chip      = effCls(efficiency);
+      return `<div class="eq-row">
+        <div class="eq-row-header">
+          <div>
+            <span class="eq-sym">${h.sym}</span>
+            <span class="eq-dates">${h.entry?.slice(0,10)} → ${h.closedAt?.slice(0,10)}</span>
+          </div>
+          <span class="eq-eff-chip ${chip}">${effLabel(efficiency)}</span>
+        </div>
+        <div class="eq-bar-row">
+          <span class="eq-bar-label">峰值</span>
+          <div class="eq-bar-track"><div class="eq-bar-fill peak" style="width:100%"></div></div>
+          <span class="eq-bar-val up">+$${Math.round(peakPnl).toLocaleString("en-US")}</span>
+        </div>
+        <div class="eq-bar-row">
+          <span class="eq-bar-label">实际</span>
+          <div class="eq-bar-track"><div class="eq-bar-fill actual ${actualCls}" style="width:${actualW}%"></div></div>
+          <span class="eq-bar-val ${actualCls}">${fmt.signed(Math.round(actualPnl))}</span>
+        </div>
+        <div class="eq-loss-line">损耗 <span class="loss">−$${Math.round(leftOnTable).toLocaleString("en-US")}</span></div>
+      </div>`;
+    }).join("");
+
+    return summaryHTML + listHTML;
   }
 
   function equityCurveSVG(points, h) {
