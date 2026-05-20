@@ -2,6 +2,7 @@
 (() => {
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const autoResizeTA = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
 
   const fmt = {
     usd: v => (v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
@@ -302,6 +303,8 @@
     // Wire drawer Journal note — same field as journalNote in Journal page
     const drawerNote = $(".drawer-journal-note", dr);
     if (drawerNote) {
+      autoResizeTA(drawerNote);
+      drawerNote.addEventListener("input", () => autoResizeTA(drawerNote));
       drawerNote.addEventListener("blur", () => { h.journalNote = drawerNote.value; saveToStorage(); });
     }
   }
@@ -2493,11 +2496,18 @@
     $$(".jc-note-toggle", feed).forEach(toggle => {
       toggle.addEventListener("click", () => {
         toggle.classList.toggle("open");
-        toggle.nextElementSibling.classList.toggle("open");
+        const body = toggle.nextElementSibling;
+        body.classList.toggle("open");
+        if (body.classList.contains("open")) {
+          const ta = body.querySelector("textarea");
+          if (ta) autoResizeTA(ta);
+        }
       });
     });
 
     $$(".journal-note-area", feed).forEach(ta => {
+      autoResizeTA(ta);
+      ta.addEventListener("input", () => autoResizeTA(ta));
       ta.addEventListener("blur", () => {
         const arr = ta.dataset.from === "closed" ? CLOSED_POSITIONS : HOLDINGS;
         const pos = arr.find(x => x.sym === ta.dataset.sym);
