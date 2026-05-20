@@ -1501,6 +1501,12 @@
     margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
   }
   .sim-tabs { display: flex; gap: 4px; }
+  /* Sim flag / watchlist mark */
+  .sim-flag-btn { background:none; border:none; padding:2px; cursor:pointer; color:var(--fg-4,var(--fg-3)); display:inline-flex; align-items:center; border-radius:3px; transition:color .12s; }
+  .sim-flag-btn:hover { color:var(--warn); }
+  .sim-flag-btn.flagged { color:var(--warn); }
+  .sim-flag-btn.flagged svg { fill:var(--warn); }
+  tr.sim-flagged { border-left:2px solid var(--warn); }
   /* Trade Log */
   .tl-row { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 10px 14px; padding: 11px 16px; border-bottom: 1px solid var(--line); }
   .tl-row:last-child { border-bottom: none; }
@@ -2626,6 +2632,7 @@
         <button class="filter-chip" data-simfilter="crypto">加密 <span class="c" id="sim-c-cr">0</span></button>
         <button class="filter-chip" data-simfilter="risk">近止损 <span class="c" id="sim-c-rk">0</span></button>
         <button class="filter-chip" data-simfilter="target">近止盈 <span class="c" id="sim-c-tg">0</span></button>
+        <button class="filter-chip" data-simfilter="watch">候选 <span class="c" id="sim-c-watch">0</span></button>
       </div>
       <div class="filters" id="sim-filters-closed" style="display:none;margin-left:0">
         <button class="filter-chip active" data-simfilter-closed="all">全部 <span class="c" id="sim-c-cl-all">0</span></button>
