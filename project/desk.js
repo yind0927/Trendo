@@ -33,12 +33,8 @@
     const eqLabel  = eqCount + (etfCount > 0 ? `+${etfCount}ETF` : "") + " 美股";
     const pnlSign = fmt.sign(totalPnlDollar);
 
-    // Today PnL: open positions unrealized + positions closed today intraday
-    const today = new Date().toISOString().slice(0, 10);
-    const closedToday = CLOSED_POSITIONS.filter(h => (h.closedAt || "").slice(0, 10) === today);
-    const todayPnlOpen   = HOLDINGS.reduce((s, h) => s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0);
-    const todayPnlClosed = closedToday.reduce((s, h) => s + Math.round(((h.closePrice || 0) - (h.prevClose || h.closePrice || 0)) * (h.qty || 0)), 0);
-    const todayPnl = todayPnlOpen + todayPnlClosed;
+    // Today PnL: open positions only (last vs prevClose)
+    const todayPnl = HOLDINGS.reduce((s, h) => s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0);
     const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
     const todaySign = fmt.sign(todayPnl);
 
@@ -81,22 +77,13 @@
     const label = $("#daily-sources-label");
     if (!el) return;
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const closedTodayRows = CLOSED_POSITIONS
-      .filter(h => (h.closedAt || "").slice(0, 10) === todayStr)
+    const rows = HOLDINGS
       .map(h => {
-        const today = Math.round(((h.closePrice || 0) - (h.prevClose || h.closePrice || 0)) * (h.qty || 0));
-        const todayPct = h.prevClose ? ((h.closePrice - h.prevClose) / h.prevClose * 100) : 0;
-        return { sym: h.sym, name: h.name, today, todayPct, closed: true };
-      });
-    const rows = [
-      ...HOLDINGS.map(h => {
         const today = Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0));
         const todayPct = h.prevClose ? ((h.last - h.prevClose) / h.prevClose * 100) : 0;
-        return { sym: h.sym, name: h.name, today, todayPct, closed: false };
-      }),
-      ...closedTodayRows,
-    ].sort((a, b) => Math.abs(b.today) - Math.abs(a.today));
+        return { sym: h.sym, name: h.name, today, todayPct };
+      })
+      .sort((a, b) => Math.abs(b.today) - Math.abs(a.today));
 
     const hasData = rows.some(r => r.today !== 0);
     if (label) label.style.display = hasData ? "" : "none";
@@ -113,7 +100,7 @@
         const pctStr = (r.todayPct >= 0 ? "+" : "") + r.todayPct.toFixed(2) + "%";
         return `<div class="ds-row">
           <div>
-            <div class="ds-sym">${r.sym}${r.closed ? `<span class="ds-closed-tag">已平</span>` : ""}</div>
+            <div class="ds-sym">${r.sym}</div>
             <div class="ds-name">${r.name}</div>
           </div>
           <div class="ds-bar-track"><div class="ds-bar-fill ${sign}" style="width:${barW}%"></div></div>
