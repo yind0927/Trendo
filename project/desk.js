@@ -2567,11 +2567,11 @@
 
       ${h.thesis ? `<div class="jc-thesis">${h.thesis}</div>` : ""}
 
-      <div class="jc-note-toggle${hasNote ? " open" : ""}" data-sym="${h.sym}" data-from="${from}">
+      <div class="jc-note-toggle" data-sym="${h.sym}" data-from="${from}">
         <span class="nt-chevron"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></span>
-        笔记${hasNote ? "" : " · 点击展开"}
+        笔记${hasNote ? " · 已有内容" : " · 点击展开"}
       </div>
-      <div class="jc-note-body${hasNote ? " open" : ""}">
+      <div class="jc-note-body">
         <textarea class="journal-note-area" data-sym="${h.sym}" data-from="${from}" placeholder="记录入场思路、心态、执行情况…" rows="3">${h.journalNote || ""}</textarea>
       </div>
     </div>`;
