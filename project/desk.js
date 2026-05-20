@@ -2406,6 +2406,9 @@
 
   // ============ JOURNAL ============
   function renderJournal() {
+    const feed = $("#journal-feed");
+    if (!feed) return;
+
     const combined = [
       ...HOLDINGS.map(h => ({ h, from: "open" })),
       ...CLOSED_POSITIONS.map(h => ({ h, from: "closed" })),
@@ -2419,13 +2422,79 @@
       return dB.localeCompare(dA);
     });
 
-    const feed = $("#journal-feed");
-    if (!feed) return;
-    feed.innerHTML = combined.map(({ h, from }) => journalCardHTML(h, from)).join("");
+    // Top stats bar (all-time closed)
+    const allClosed = CLOSED_POSITIONS;
+    const wins = allClosed.filter(h => (h.pnlFinal ?? 0) > 0);
+    const totalPnl = allClosed.reduce((s, h) => s + (h.pnlFinal ?? 0), 0);
+    const winRate = allClosed.length ? Math.round(wins.length / allClosed.length * 100) : null;
+    const statsBar = allClosed.length > 0 ? `
+      <div class="j-statsbar">
+        <div class="j-statsbar-item">
+          <span class="j-statsbar-label">已平仓</span>
+          <span class="j-statsbar-value">${allClosed.length} 笔</span>
+        </div>
+        <div class="j-statsbar-sep"></div>
+        <div class="j-statsbar-item">
+          <span class="j-statsbar-label">胜率</span>
+          <span class="j-statsbar-value ${winRate >= 50 ? "up" : "down"}">${winRate}%</span>
+        </div>
+        <div class="j-statsbar-sep"></div>
+        <div class="j-statsbar-item">
+          <span class="j-statsbar-label">总盈亏</span>
+          <span class="j-statsbar-value ${fmt.sign(totalPnl)}">${fmt.signed(Math.round(totalPnl))}</span>
+        </div>
+        <div class="j-statsbar-sep"></div>
+        <div class="j-statsbar-item">
+          <span class="j-statsbar-label">持仓中</span>
+          <span class="j-statsbar-value">${HOLDINGS.length} 笔</span>
+        </div>
+      </div>` : "";
+
+    // Group by year-month
+    const groups = {};
+    combined.forEach(({ h, from }) => {
+      const date = from === "closed" ? (h.closedAt || h.entry) : h.entry;
+      const key = date?.slice(0, 7) || "0000-00";
+      (groups[key] = groups[key] || []).push({ h, from });
+    });
+
+    const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+    const groupsHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(key => {
+      const items = groups[key];
+      const [yr, mo] = key.split("-");
+      const label = key === "0000-00" ? "未知日期" : `${yr}年 ${MO_ZH[parseInt(mo) - 1]}`;
+      const mClosed = items.filter(x => x.from === "closed");
+      const mWins   = mClosed.filter(x => (x.h.pnlFinal ?? 0) > 0);
+      const mPnl    = mClosed.reduce((s, x) => s + (x.h.pnlFinal ?? 0), 0);
+      const mOpen   = items.filter(x => x.from === "open").length;
+      let mStats = "";
+      if (mClosed.length > 0) {
+        mStats = `${mClosed.length}笔 · ${mWins.length}胜${mClosed.length - mWins.length}负 · ${fmt.signed(Math.round(mPnl))}`;
+      } else if (mOpen > 0) {
+        mStats = `${mOpen}笔持仓中`;
+      }
+      return `<div class="jm-group">
+        <div class="jm-header">
+          <span class="jm-title">${label}</span>
+          <span class="jm-rule"></span>
+          ${mStats ? `<span class="jm-stats">${mStats}</span>` : ""}
+        </div>
+        ${items.map(({ h, from }) => journalCardHTML(h, from)).join("")}
+      </div>`;
+    }).join("");
+
+    feed.innerHTML = statsBar + groupsHTML;
 
     $$("[data-journal-filter]").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.journalFilter === journalFilter);
       btn.addEventListener("click", () => { journalFilter = btn.dataset.journalFilter; renderJournal(); });
+    });
+
+    $$(".jc-note-toggle", feed).forEach(toggle => {
+      toggle.addEventListener("click", () => {
+        toggle.classList.toggle("open");
+        toggle.nextElementSibling.classList.toggle("open");
+      });
     });
 
     $$(".journal-note-area", feed).forEach(ta => {
@@ -2440,71 +2509,65 @@
   function journalCardHTML(h, from) {
     const isClosed = from === "closed";
     const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
-    const pnlSign = pnlAmt != null ? fmt.sign(pnlAmt) : "up";
+    const pnlSign = pnlAmt != null ? fmt.sign(pnlAmt) : "neu";
     const bx = h.bx || {};
 
     let badgeColor, badgeTxt;
     if (isClosed) {
       const win = (pnlAmt ?? 0) > 0;
       badgeColor = win ? "var(--up)" : "var(--down)";
-      badgeTxt   = win ? "盈利 · Win" : "亏损 · Loss";
+      badgeTxt = win ? "盈利" : "亏损";
     } else {
       const bs = BUCKET_STATUS[progressBucket(h)];
-      badgeColor = bs.color; badgeTxt = bs.label;
+      badgeColor = bs.color; badgeTxt = bs.label.split("·")[0].trim();
     }
 
     const barsCls = bx.dailyBars === "0-5" ? "bxbar-early" : bx.dailyBars === "5-15" ? "bxbar-mid" : "bxbar-late";
-    const barsLbl = bx.dailyBars === "0-5" ? "开始"        : bx.dailyBars === "5-15" ? "中间"      : "延续";
+    const barsLbl = bx.dailyBars === "0-5" ? "开始" : bx.dailyBars === "5-15" ? "中间" : "延续";
     const dateStr = isClosed
-      ? `${fmt.date(h.entry)} → ${fmt.date(h.closedAt)}`
+      ? `${fmt.date(h.entry)} → ${fmt.date(h.closedAt)} · ${h.days ?? "—"}d`
       : `${fmt.date(h.entry)} · ${h.days}d`;
+    const hasNote = !!(h.journalNote?.trim());
 
-    return `
-      <div class="journal-card">
-        <div class="journal-card-head">
+    return `<div class="journal-card">
+      <div class="jc-head">
+        <div class="jc-left">
           <div class="jc-ticker">
             <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">${logoImg(h)}${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}</div>
-            <div>
-              <div class="mono" style="font-size:14px;font-weight:600">${h.sym}</div>
-              <div class="muted" style="font-size:11px">${h.name}</div>
-            </div>
           </div>
-          <div class="jc-meta">
-            <span class="statlight" style="color:${badgeColor};background:color-mix(in oklch,${badgeColor} 14%,transparent)">
-              <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
-            </span>
-            <span class="mono muted" style="font-size:10.5px">${dateStr}</span>
-            ${pnlAmt != null ? `<span class="mono ${pnlSign}" style="font-size:12.5px;font-weight:600">${fmt.signed(pnlAmt)}</span>` : ""}
+          <div>
+            <div class="jc-sym">${h.sym}</div>
+            <div class="jc-name">${h.name || ""}</div>
           </div>
         </div>
-
-        <div class="jc-bx">
-          <span class="bx-bar-chip ${barsCls}">${bx.dailyBars ?? "—"}<span class="bx-bar-sub">${barsLbl}</span></span>
-          ${bx.weekly  != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">W ${bx.weekly  >= 0 ? "+" : ""}${bx.weekly}</span>`  : ""}
-          ${bx.monthly != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">M ${bx.monthly >= 0 ? "+" : ""}${bx.monthly}</span>` : ""}
-          ${bx.sector?.name ? `<span class="muted" style="font-size:10.5px;display:flex;align-items:center;gap:4px">
-            <span style="width:8px;height:8px;border-radius:50%;background:${bx.sector.color};flex-shrink:0;display:inline-block"></span>${bx.sector.name}
-          </span>` : ""}
+        <div class="jc-right">
+          <span class="statlight" style="color:${badgeColor};background:color-mix(in oklch,${badgeColor} 14%,transparent)"><span class="dot" style="background:${badgeColor}"></span>${badgeTxt}</span>
+          <span class="jc-date">${dateStr}</span>
+          ${pnlAmt != null ? `<span class="jc-pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>` : ""}
+          ${isClosed && h.rMult != null ? `<span class="jc-rmult ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</span>` : ""}
         </div>
+      </div>
 
-        ${h.thesis ? `<div class="jc-thesis">${h.thesis}</div>` : ""}
+      <div class="jc-bx">
+        <span class="bx-bar-chip ${barsCls}">${bx.dailyBars ?? "—"}<span class="bx-bar-sub">${barsLbl}</span></span>
+        ${bx.weekly  != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">W ${bx.weekly  >= 0 ? "+" : ""}${bx.weekly}</span>` : ""}
+        ${bx.monthly != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">M ${bx.monthly >= 0 ? "+" : ""}${bx.monthly}</span>` : ""}
+        ${bx.sector?.name ? `<span class="muted" style="font-size:10.5px;display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:${bx.sector.color};flex-shrink:0;display:inline-block"></span>${bx.sector.name}</span>` : ""}
+      </div>
 
-        <div class="jc-note-wrap">
-          <div class="k" style="margin-bottom:5px;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg-3)">笔记</div>
-          <textarea class="journal-note-area" data-sym="${h.sym}" data-from="${from}"
-                    placeholder="记录入场思路、心态、执行情况…" rows="3">${h.journalNote || ""}</textarea>
-        </div>
+      ${h.thesis ? `<div class="jc-thesis">${h.thesis}</div>` : ""}
 
-        ${isClosed ? `
-        <div class="jc-result">
-          <span class="mono muted" style="font-size:10.5px">持有 ${h.days ?? "—"}d</span>
-          <span class="mono ${fmt.sign(h.rMult ?? 0)}" style="font-size:10.5px">${fmt.rMult(h.rMult ?? 0)}</span>
-          <span class="mono ${fmt.sign(h.pnlPct ?? 0)}" style="font-size:10.5px">${fmt.pct(h.pnlPct ?? 0)}</span>
-        </div>` : ""}
-      </div>`;
+      <div class="jc-note-toggle${hasNote ? " open" : ""}" data-sym="${h.sym}" data-from="${from}">
+        <span class="nt-chevron"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></span>
+        笔记${hasNote ? "" : " · 点击展开"}
+      </div>
+      <div class="jc-note-body${hasNote ? " open" : ""}">
+        <textarea class="journal-note-area" data-sym="${h.sym}" data-from="${from}" placeholder="记录入场思路、心态、执行情况…" rows="3">${h.journalNote || ""}</textarea>
+      </div>
+    </div>`;
   }
 
-  // ============ ANALYTICS ============
+    // ============ ANALYTICS ============
   // ============ SIMULATION PAGE ============
 
   function renderSim() {
