@@ -3960,7 +3960,7 @@
       zones: [
         { max: 30,  color: "#ef4444", label: "超卖",     badge: "超卖" },
         { max: 50,  color: "#f97316", label: "弱势",     badge: "弱势" },
-        { max: 70,  color: "#84cc16", label: "健康",     badge: "健康" },
+        { max: 70,  color: "#84cc16", label: "稳健",     badge: "稳健" },
         { max: 80,  color: "#eab308", label: "超买",     badge: "超买" },
         { max: 9999,color: "#ef4444", label: "极度超买", badge: "极度超买" },
       ]
