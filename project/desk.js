@@ -769,7 +769,7 @@
 
     // body
     const cols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
-    $("#tbody").innerHTML = rows.map(h => {
+    $("#tbody").innerHTML = rows.map((h, i) => {
       const isSel = selectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
       // Open: archive + delete; Closed: delete only
@@ -781,13 +781,13 @@
         : `<td style="width:40px;padding:6px 4px"><div class="row-actions">
              <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
            </div></td>`;
-      return `<tr class="${isSel}" data-sym="${h.sym}">${cells}${actions}</tr>`;
+      return `<tr class="${isSel}" data-sym="${h.sym}" data-idx="${i}">${cells}${actions}</tr>`;
     }).join("");
 
     $$("#tbody tr").forEach(tr => {
       tr.addEventListener("click", e => {
         if (e.target.closest(".close-pos-btn, .delete-btn")) return;
-        openDrawer(tr.dataset.sym);
+        openDrawer(rows[parseInt(tr.dataset.idx)]);
       });
     });
 
@@ -923,11 +923,9 @@
   }
 
   // ============ DRAWER ============
-  function openDrawer(sym) {
-    const data = getTableData();
-    const h = data.find(x => x.sym === sym);
+  function openDrawer(h) {
     if (!h) return;
-    selectedSym = sym;
+    selectedSym = h.sym;
     renderTable();
     $("#drawer").innerHTML = drawerHTML(h);
     wireBX(h);
@@ -2917,7 +2915,7 @@
     const cols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
     const colSpan = cols.length + 1;
 
-    const makeRow = h => {
+    const makeRow = (h, idx) => {
       const isSel = simSelectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
       const flagCls = h.flagged ? "flagged" : "";
@@ -2932,7 +2930,7 @@
              <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
            </div></td>`;
       const flaggedCls = h.flagged ? "sim-flagged" : "";
-      return `<tr class="${isSel} ${flaggedCls}" data-sym="${h.sym}">${cells}${actions}</tr>`;
+      return `<tr class="${isSel} ${flaggedCls}" data-sym="${h.sym}" data-idx="${idx}">${cells}${actions}</tr>`;
     };
 
     if (simActiveTab === "open") {
@@ -2950,19 +2948,19 @@
             ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) })
             : "—";
           const hdr = `<tr class="date-group-hdr"><td colspan="${colSpan}">${label}</td></tr>`;
-          return hdr + groups[date].map(makeRow).join("");
+          return hdr + groups[date].map(h => makeRow(h, rows.indexOf(h))).join("");
         }).join("");
     } else {
       const prevTab = activeTab;
       activeTab = "closed";
-      tbody.innerHTML = rows.map(makeRow).join("");
+      tbody.innerHTML = rows.map((h, i) => makeRow(h, i)).join("");
       activeTab = prevTab;
     }
 
-    $$("tr", tbody).forEach(tr => {
+    $$("tr[data-idx]", tbody).forEach(tr => {
       tr.addEventListener("click", e => {
         if (e.target.closest(".close-pos-btn, .delete-btn, .sim-restore-btn, .sim-flag-btn")) return;
-        openSimDrawer(tr.dataset.sym, simActiveTab);
+        openSimDrawer(rows[parseInt(tr.dataset.idx)], simActiveTab);
       });
     });
     $$(".sim-flag-btn", tbody).forEach(btn => {
@@ -3061,12 +3059,9 @@
       }).join("") + `</div>`;
   }
 
-  function openSimDrawer(sym, context) {
-    const fromClosed = context === "closed";
-    const data = fromClosed ? SIM_CLOSED : SIM_HOLDINGS;
-    const h = data.find(x => x.sym === sym);
+  function openSimDrawer(h, context) {
     if (!h) return;
-    simSelectedSym = sym;
+    simSelectedSym = h.sym;
     renderSimTable();
     const isClosed = context === "closed";
     const prevTab = activeTab;
