@@ -2633,22 +2633,33 @@
     </button>
   </div>
 
+  <!-- 挂单队列 -->
   <div id="sim-pending-section" style="display:none;margin:0 0 12px">
     <div style="font-size:11px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 2px">挂单队列 · Pending Orders</div>
     <div id="sim-pending-list"></div>
   </div>
 
+  <!-- § 概览 Overview -->
   <div class="sim-section-label" id="sim-analytics-label" style="display:none">
-    <span class="ssl-zh">模拟分析</span>
-    <span class="ssl-en">Analytics</span>
+    <span class="ssl-zh">概览</span>
+    <span class="ssl-en">Overview</span>
     <span class="ssl-rule"></span>
   </div>
   <div id="sim-overview" style="display:none"></div>
-  <div id="sim-analytics-section" style="display:none"></div>
 
+  <!-- 今日盈亏来源 -->
+  <div class="sim-section-label" id="sim-daily-sources-label" style="display:none">
+    <span class="ssl-zh">今日盈亏</span>
+    <span class="ssl-en">Daily P&L</span>
+    <span class="ssl-rule"></span>
+    <span class="ssl-meta">来源拆解</span>
+  </div>
+  <div id="sim-daily-sources"></div>
+
+  <!-- § 持仓列表 Positions -->
   <div class="sim-section-label">
-    <span class="ssl-zh">模拟仓持仓</span>
-    <span class="ssl-en">Simulation Positions</span>
+    <span class="ssl-zh">持仓列表</span>
+    <span class="ssl-en">Positions</span>
     <span class="ssl-rule"></span>
   </div>
   <section class="panel">
@@ -2684,6 +2695,22 @@
     </div>
   </section>
 
+  <!-- § 分析复盘 Analytics -->
+  <div class="sim-section-label" id="sim-review-label" style="display:none">
+    <span class="ssl-zh">分析复盘</span>
+    <span class="ssl-en">Analytics</span>
+    <span class="ssl-rule"></span>
+  </div>
+  <div id="sim-analytics-section" style="display:none"></div>
+  <div class="sim-section-label" id="sim-trade-log-label" style="display:none">
+    <span class="ssl-zh">交易记录</span>
+    <span class="ssl-en">Trade Log</span>
+    <span class="ssl-rule"></span>
+    <span class="ssl-meta" id="sim-trade-log-count"></span>
+  </div>
+  <div id="sim-trade-log"></div>
+
+  <!-- § 参考 Reference -->
   <div id="sim-earnings-section" style="display:none;margin:12px 0 4px">
     <div class="panel">
       <div class="panel-head">
@@ -2693,14 +2720,6 @@
       <div class="events" id="sim-events"></div>
     </div>
   </div>
-
-  <div class="sim-section-label" id="sim-trade-log-label" style="display:none">
-    <span class="ssl-zh">交易记录</span>
-    <span class="ssl-en">Trade Log</span>
-    <span class="ssl-rule"></span>
-    <span class="ssl-meta" id="sim-trade-log-count"></span>
-  </div>
-  <div id="sim-trade-log"></div>
 
 </div>
 
