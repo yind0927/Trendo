@@ -83,7 +83,7 @@
         const todayPct = h.prevClose ? ((h.last - h.prevClose) / h.prevClose * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
       })
-      .sort((a, b) => Math.abs(b.today) - Math.abs(a.today));
+      .sort((a, b) => b.today - a.today);
 
     const hasData = rows.some(r => r.today !== 0);
     if (label) label.style.display = hasData ? "" : "none";
@@ -2819,7 +2819,7 @@
         const todayPct = h.prevClose ? ((h.last - h.prevClose) / h.prevClose * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
       })
-      .sort((a, b) => Math.abs(b.today) - Math.abs(a.today));
+      .sort((a, b) => b.today - a.today);
     const hasData = rows.some(r => r.today !== 0);
     if (label) label.style.display = hasData ? "" : "none";
     if (!hasData) { el.innerHTML = ""; return; }
@@ -3060,9 +3060,7 @@
     }
     if (!hasClosed) { el.innerHTML = ""; return; }
 
-    const sorted = [...SIM_CLOSED].sort((a, b) =>
-      (b.closedAt || "").localeCompare(a.closedAt || "")
-    );
+    const sorted = [...SIM_CLOSED].sort((a, b) => (b.pnlFinal ?? 0) - (a.pnlFinal ?? 0));
 
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
       sorted.map(h => {
