@@ -2743,8 +2743,8 @@
         </div>`;
     }).join("");
 
-    if (label) label.innerHTML = `
-      <span class="ssl-zh">模拟分析</span>
+    if (reviewLbl) reviewLbl.innerHTML = `
+      <span class="ssl-zh">分析复盘</span>
       <span class="ssl-en">Analytics</span>
       <span class="ssl-rule"></span>
       <span class="ssl-meta">${SIM_CLOSED.length} 笔已平仓</span>`;
@@ -2769,14 +2769,9 @@
         <div class="sim-astat">
           <div class="sim-astat-label">平均持仓</div>
           <div class="sim-astat-value">${avgDays}d</div>
-          <div class="sim-astat-sub">${wins.length   ? `盈利 ${avgWinDays}d` : ""}${wins.length && losses.length ? " · " : ""}${losses.length ? `亏损 ${avgLossDays}d` : ""}</div>
+          <div class="sim-astat-sub">${wins.length ? `盈利 ${avgWinDays}d` : ""}${wins.length && losses.length ? " · " : ""}${losses.length ? `亏损 ${avgLossDays}d` : ""}</div>
         </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;margin:16px 0 10px">
-        <span style="font-size:10px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase">交易记录 · Trade History</span>
-        <div style="flex:1;height:1px;background:var(--line)"></div>
-      </div>
-      <div class="sim-atrades">${rows}</div>`;
+      </div>`;
   }
 
   function renderSimEvents() {

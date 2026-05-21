@@ -1480,6 +1480,9 @@
   .sim-section-label .ssl-en { color: var(--fg-3); }
   .sim-section-label .ssl-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
   .sim-section-label .ssl-meta { font-size: 10px; color: var(--fg-3); letter-spacing: 0.1em; }
+  .sim-section-label.is-major { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .sim-section-label.is-major .ssl-zh { font-size: 12px; letter-spacing: 0.12em; }
+  .sim-section-label.is-major .ssl-rule { background: linear-gradient(90deg, var(--fg-3), transparent); opacity: .5; }
   .sim-a-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
   .sim-astat { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
   .sim-astat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); font-weight: 500; }
@@ -2657,7 +2660,7 @@
   <div id="sim-daily-sources"></div>
 
   <!-- § 持仓列表 Positions -->
-  <div class="sim-section-label">
+  <div class="sim-section-label is-major">
     <span class="ssl-zh">持仓列表</span>
     <span class="ssl-en">Positions</span>
     <span class="ssl-rule"></span>
@@ -2696,7 +2699,7 @@
   </section>
 
   <!-- § 分析复盘 Analytics -->
-  <div class="sim-section-label" id="sim-review-label" style="display:none">
+  <div class="sim-section-label is-major" id="sim-review-label" style="display:none">
     <span class="ssl-zh">分析复盘</span>
     <span class="ssl-en">Analytics</span>
     <span class="ssl-rule"></span>
@@ -2711,7 +2714,13 @@
   <div id="sim-trade-log"></div>
 
   <!-- § 参考 Reference -->
-  <div id="sim-earnings-section" style="display:none;margin:12px 0 4px">
+  <div id="sim-earnings-section" style="display:none">
+    <div class="sim-section-label is-major">
+      <span class="ssl-zh">参考</span>
+      <span class="ssl-en">Reference</span>
+      <span class="ssl-rule"></span>
+      <span class="ssl-meta">财报日历</span>
+    </div>
     <div class="panel">
       <div class="panel-head">
         <div class="panel-title">财报日历</div>
