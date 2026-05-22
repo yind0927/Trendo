@@ -1480,6 +1480,9 @@
   .sim-section-label .ssl-en { color: var(--fg-3); }
   .sim-section-label .ssl-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
   .sim-section-label .ssl-meta { font-size: 10px; color: var(--fg-3); letter-spacing: 0.1em; }
+  .ssl-total { font-family: var(--f-mono); font-weight: 700; font-size: 12px; letter-spacing: 0; }
+  .ssl-total.up { color: var(--up); }
+  .ssl-total.down { color: var(--down); }
   .sim-section-label.is-major { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
   .sim-section-label.is-major .ssl-zh { font-size: 12px; letter-spacing: 0.12em; }
   .sim-section-label.is-major .ssl-rule { background: linear-gradient(90deg, var(--fg-3), transparent); opacity: .5; }
@@ -2404,7 +2407,7 @@
     <span class="ssl-zh">今日盈亏</span>
     <span class="ssl-en">Daily P&L Sources</span>
     <span class="ssl-rule"></span>
-    <span class="ssl-meta">来源拆解</span>
+    <span class="ssl-meta" id="daily-sources-meta">来源拆解</span>
   </div>
   <div id="daily-sources"></div>
 
@@ -2655,7 +2658,7 @@
     <span class="ssl-zh">今日盈亏</span>
     <span class="ssl-en">Daily P&L</span>
     <span class="ssl-rule"></span>
-    <span class="ssl-meta">来源拆解</span>
+    <span class="ssl-meta" id="sim-daily-sources-meta">来源拆解</span>
   </div>
   <div id="sim-daily-sources"></div>
 

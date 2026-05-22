@@ -89,6 +89,14 @@
     if (label) label.style.display = hasData ? "" : "none";
     if (!hasData) { el.innerHTML = ""; return; }
 
+    const total = rows.reduce((s, r) => s + r.today, 0);
+    const wins  = rows.filter(r => r.today > 0).length;
+    const loses = rows.filter(r => r.today < 0).length;
+    const tSign = total > 0 ? "up" : total < 0 ? "down" : "";
+    const tStr  = total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
+    const metaEl = $("#daily-sources-meta");
+    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span> · ${wins}↑ ${loses}↓`;
+
     const maxAbs = Math.max(...rows.map(r => Math.abs(r.today)), 1);
 
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
@@ -2823,6 +2831,15 @@
     const hasData = rows.some(r => r.today !== 0);
     if (label) label.style.display = hasData ? "" : "none";
     if (!hasData) { el.innerHTML = ""; return; }
+
+    const total = rows.reduce((s, r) => s + r.today, 0);
+    const wins  = rows.filter(r => r.today > 0).length;
+    const loses = rows.filter(r => r.today < 0).length;
+    const tSign = total > 0 ? "up" : total < 0 ? "down" : "";
+    const tStr  = total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
+    const metaEl = $("#sim-daily-sources-meta");
+    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span> · ${wins}↑ ${loses}↓`;
+
     const maxAbs = Math.max(...rows.map(r => Math.abs(r.today)), 1);
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
       rows.map(r => {
