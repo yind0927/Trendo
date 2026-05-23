@@ -3877,7 +3877,7 @@
         entryHTML = `<div class="cal-entries">${chips}${more}</div>`;
       }
 
-      // Exit chips: × mark + ticker, colored by realized PnL
+      // Exit chips: ○ hollow circle + ticker, colored by realized PnL
       const exits = exitMap[dateStr] || [];
       let exitHTML = "";
       if (!isWknd && exits.length) {
@@ -3885,7 +3885,7 @@
           const col = e.pnl == null ? "var(--fg-3)"
                     : e.pnl >= 0   ? "var(--up)" : "var(--down)";
           return `<div class="cal-exit-chip">
-            <span class="cal-exit-mark" style="color:${col}">×</span>
+            <div class="cal-exit-dot" style="border-color:${col}"></div>
             <span class="cal-exit-sym" style="color:${col}">${e.sym.slice(0, 4)}</span>
           </div>`;
         }).join("");
