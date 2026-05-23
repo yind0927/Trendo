@@ -3769,7 +3769,7 @@
       ? HOLDINGS.reduce((s, h) => s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0)
       : 0;
 
-    // Entry map: date → [{sym, pnlDollar (null for closed)}]
+    // Entry map: date → [{sym, pnl}]
     const entryMap = {};
     const add = (d, sym, pnl) => { (entryMap[d] = entryMap[d] || []).push({ sym, pnl }); };
     HOLDINGS.forEach(h => {
@@ -3783,6 +3783,16 @@
       const d = h.entry.slice(0, 10);
       const [y, m] = d.split("-").map(Number);
       if (y === year && m - 1 === month) add(d, h.sym, null);
+    });
+
+    // Exit map: closedAt date → [{sym, pnl}]
+    const exitMap = {};
+    const addExit = (d, sym, pnl) => { (exitMap[d] = exitMap[d] || []).push({ sym, pnl }); };
+    CLOSED_POSITIONS.forEach(h => {
+      if (!h.closedAt) return;
+      const d = h.closedAt.slice(0, 10);
+      const [y, m] = d.split("-").map(Number);
+      if (y === year && m - 1 === month) addExit(d, h.sym, h.pnlFinal ?? null);
     });
 
     // Month summary
@@ -3851,7 +3861,7 @@
       }
       } // end !isWknd
 
-      // Entry chips: dot + ticker sym, colored by floating PnL
+      // Entry chips: ● dot + ticker, colored by floating PnL
       let entryHTML = "";
       if (!isWknd && entries.length) {
         const chips = entries.slice(0, 2).map(e => {
@@ -3867,7 +3877,27 @@
         entryHTML = `<div class="cal-entries">${chips}${more}</div>`;
       }
 
-      dayCells += `<div class="${cls}"><div class="cal-day-num">${d}</div>${pnlHTML}${entryHTML}</div>`;
+      // Exit chips: × mark + ticker, colored by realized PnL
+      const exits = exitMap[dateStr] || [];
+      let exitHTML = "";
+      if (!isWknd && exits.length) {
+        const chips = exits.slice(0, 2).map(e => {
+          const col = e.pnl == null ? "var(--fg-3)"
+                    : e.pnl >= 0   ? "var(--up)" : "var(--down)";
+          return `<div class="cal-exit-chip">
+            <span class="cal-exit-mark" style="color:${col}">×</span>
+            <span class="cal-exit-sym" style="color:${col}">${e.sym.slice(0, 4)}</span>
+          </div>`;
+        }).join("");
+        const more = exits.length > 2
+          ? `<span class="cal-entry-more">+${exits.length - 2}</span>` : "";
+        exitHTML = `<div class="cal-exits">${chips}${more}</div>`;
+      }
+
+      const marksHTML = (entryHTML || exitHTML)
+        ? `<div class="cal-marks">${entryHTML}${exitHTML}</div>` : "";
+
+      dayCells += `<div class="${cls}"><div class="cal-day-num">${d}</div>${pnlHTML}${marksHTML}</div>`;
     }
 
     return `
