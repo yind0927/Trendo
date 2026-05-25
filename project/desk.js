@@ -2452,7 +2452,7 @@
     if (page === "market")    fetchMarketData();
     if (page === "desk" && HOLDINGS.length > 0) {
       fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
-      fetchHoldingsBrief();
+      initHoldingsBriefCard();
     }
   }
 
@@ -4427,11 +4427,70 @@
       const mktCtx = { vix, fg, rsi, regime: regime?.regime ?? "", vixTrend, indices };
       _lastMktCtx = mktCtx;
       fetchSectorData()
-        .then(sectors => { _lastMktCtx = { ...mktCtx, sectors }; fetchMarketBrief(false, _lastMktCtx); })
-        .catch(()    => fetchMarketBrief(false, mktCtx));
+        .then(sectors => { _lastMktCtx = { ...mktCtx, sectors }; initMarketBriefCard(_lastMktCtx); })
+        .catch(()    => initMarketBriefCard(mktCtx));
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
     }
+  }
+
+  // ── Brief: local-cache helpers ────────────────────────────────────────────
+  function _briefAgeTag(updatedAt) {
+    if (!updatedAt) return "";
+    const m = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 60000);
+    const lbl = m < 5 ? "刚刚" : m < 60 ? `${m}分钟前` : `${Math.floor(m / 60)}小时前`;
+    return `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${lbl}</span>`;
+  }
+  function _saveBrief(key, data) { try { localStorage.setItem(key, JSON.stringify(data)); } catch (_) {} }
+  function _loadBrief(key) { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } }
+  const MARKET_BRIEF_LS   = "trendo_brief_v1_market";
+  const HOLDINGS_BRIEF_LS = "trendo_brief_v1_holdings";
+  function _briefSummaryHTML(summary) {
+    return summary.split(/\n+/).filter(l => l.trim())
+      .map(l => `<div class="brief-line">${l.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span> ')}</div>`)
+      .join("");
+  }
+
+  // ── Holdings brief ─────────────────────────────────────────────────────────
+  function _renderHoldingsBrief(el, data) {
+    const { summary, updatedAt, hasNews } = data;
+    const timeStr = updatedAt
+      ? new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
+    const newsTag = hasNews
+      ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">含新闻</span>` : "";
+    el.innerHTML = `
+      <div class="brief-head">
+        <span class="brief-badge">AI</span>
+        <span class="brief-title">持仓分析 · Portfolio</span>
+        ${newsTag}${_briefAgeTag(updatedAt)}
+        <span class="brief-time">${timeStr} 更新</span>
+        <button class="brief-toggle" title="收起/展开">▾</button>
+        <button class="brief-refresh" title="重新生成">↻</button>
+      </div>
+      <div class="brief-body">
+        <div class="brief-summary">${_briefSummaryHTML(summary)}</div>
+      </div>`;
+    if (localStorage.getItem("trendo_holdings_brief_collapsed") === "1") el.classList.add("collapsed");
+    el.querySelector(".brief-toggle")?.addEventListener("click", () => {
+      const collapsed = el.classList.toggle("collapsed");
+      localStorage.setItem("trendo_holdings_brief_collapsed", collapsed ? "1" : "0");
+    });
+    el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchHoldingsBrief(true));
+  }
+
+  function initHoldingsBriefCard() {
+    const el = $("#holdings-brief");
+    if (!el || !HOLDINGS.length) return;
+    el.style.display = "";
+    const saved = _loadBrief(HOLDINGS_BRIEF_LS);
+    if (saved?.summary) { _renderHoldingsBrief(el, saved); return; }
+    el.innerHTML = `
+      <div class="brief-head">
+        <span class="brief-badge">AI</span>
+        <span class="brief-title">持仓分析 · Portfolio</span>
+        <button class="brief-gen-btn" style="margin-left:auto">生成分析</button>
+      </div>`;
+    el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchHoldingsBrief(false));
   }
 
   async function fetchHoldingsBrief(force = false) {
@@ -4439,12 +4498,12 @@
     if (!el || !HOLDINGS.length) return;
     el.style.display = "";
 
-    const refreshBtn = el.querySelector(".brief-refresh");
-    if (refreshBtn) refreshBtn.classList.add("spinning");
+    const refreshBtn = el.querySelector(".brief-refresh, .brief-gen-btn");
+    if (refreshBtn?.classList.contains("brief-refresh")) refreshBtn.classList.add("spinning");
     else el.innerHTML = `<div class="brief-loading">正在分析持仓…</div>`;
 
     try {
-      // Encode: sym:pnlPct:rMult:days:status:earnings (no bxScore)
+      // Encode: sym:pnlPct:rMult:days:status:earnings
       const holdStr = HOLDINGS.map(h => {
         const pnl  = h.pnlPct  != null ? h.pnlPct.toFixed(1)  : "0";
         const r    = h.rMult   != null ? h.rMult.toFixed(1)   : "0";
@@ -4457,16 +4516,16 @@
       const params = new URLSearchParams({ h: holdStr });
       if (force) params.set("force", "1");
 
-      // Pass market context for richer analysis
+      // Pass current market context
       const ctx = _lastMktCtx;
       if (ctx) {
-        if (ctx.vix   != null) params.set("vix",     ctx.vix);
-        if (ctx.fg    != null) params.set("fg",      ctx.fg);
-        if (ctx.rsi   != null) params.set("rsi",     ctx.rsi);
-        if (ctx.regime)        params.set("regime",  ctx.regime);
+        if (ctx.vix   != null) params.set("vix",      ctx.vix);
+        if (ctx.fg    != null) params.set("fg",       ctx.fg);
+        if (ctx.rsi   != null) params.set("rsi",      ctx.rsi);
+        if (ctx.regime)        params.set("regime",   ctx.regime);
         if (ctx.vixTrend)      params.set("vixTrend", ctx.vixTrend);
         if (ctx.indices && Object.keys(ctx.indices).length)
-          params.set("idx", Object.entries(ctx.indices).map(([s,v]) => `${s}:${v}`).join(","));
+          params.set("idx", Object.entries(ctx.indices).map(([s, v]) => `${s}:${v}`).join(","));
         if (ctx.sectors?.length)
           params.set("sect", [...ctx.sectors]
             .sort((a, b) => b.score - a.score)
@@ -4479,44 +4538,14 @@
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || `HTTP ${res.status}`);
       }
-      const { summary, updatedAt, cached, hasNews } = await res.json();
-
-      const updatedDate = updatedAt ? new Date(updatedAt) : null;
-      const timeStr  = updatedDate ? updatedDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
-      const ageMin   = updatedDate ? Math.floor((Date.now() - updatedDate.getTime()) / 60000) : null;
-      const ageLabel = ageMin == null ? "" : ageMin < 5 ? "刚刚" : ageMin < 60 ? `${ageMin}分钟前` : `${Math.floor(ageMin / 60)}小时前`;
-      const cacheTag = cached && ageLabel ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${ageLabel}</span>` : "";
-      const newsTag  = hasNews ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">含新闻</span>` : "";
-
-      el.innerHTML = `
-        <div class="brief-head">
-          <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">AI</span>
-          <span class="brief-title">持仓分析 · Portfolio</span>
-          ${newsTag}${cacheTag}
-          <span class="brief-time">${timeStr} 更新</span>
-          <button class="brief-toggle" title="收起/展开">▾</button>
-          <button class="brief-refresh" title="重新生成">↻</button>
-        </div>
-        <div class="brief-body">
-          <div class="brief-summary">${
-            summary
-              .split(/\n+/)
-              .filter(l => l.trim())
-              .map(l => `<div class="brief-line">${l.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span> ')}</div>`)
-              .join("")
-          }</div>
-        </div>`;
-
-      if (localStorage.getItem("trendo_holdings_brief_collapsed") === "1") el.classList.add("collapsed");
-      el.querySelector(".brief-toggle")?.addEventListener("click", () => {
-        const collapsed = el.classList.toggle("collapsed");
-        localStorage.setItem("trendo_holdings_brief_collapsed", collapsed ? "1" : "0");
-      });
-      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchHoldingsBrief(true));
+      const { summary, updatedAt, hasNews } = await res.json();
+      const data = { summary, updatedAt, hasNews };
+      _saveBrief(HOLDINGS_BRIEF_LS, data);
+      _renderHoldingsBrief(el, data);
     } catch (e) {
       el.innerHTML = `
         <div class="brief-head">
-          <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">AI</span>
+          <span class="brief-badge">AI</span>
           <span class="brief-title">持仓分析 · Portfolio</span>
           <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
         </div>
@@ -4525,11 +4554,52 @@
     }
   }
 
+  // ── Market brief ───────────────────────────────────────────────────────────
+  function _renderMarketBrief(el, data, mktCtx) {
+    const { summary, headlines, updatedAt } = data;
+    const timeStr = updatedAt
+      ? new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
+    el.innerHTML = `
+      <div class="brief-head">
+        <span class="brief-badge">AI</span>
+        <span class="brief-title">今日简报 · Daily Brief</span>
+        ${_briefAgeTag(updatedAt)}
+        <span class="brief-time">${timeStr} 更新</span>
+        <button class="brief-toggle" title="收起/展开">▾</button>
+        <button class="brief-refresh" title="重新生成">↻</button>
+      </div>
+      <div class="brief-body">
+        <div class="brief-summary">${_briefSummaryHTML(summary)}</div>
+        ${headlines?.length ? `
+          <div class="brief-divider"></div>
+          <div class="brief-headlines">${headlines.map(h => `<div class="brief-hl">${h}</div>`).join("")}</div>` : ""}
+      </div>`;
+    if (localStorage.getItem("trendo_brief_collapsed") === "1") el.classList.add("collapsed");
+    el.querySelector(".brief-toggle")?.addEventListener("click", () => {
+      const collapsed = el.classList.toggle("collapsed");
+      localStorage.setItem("trendo_brief_collapsed", collapsed ? "1" : "0");
+    });
+    el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
+  }
+
+  function initMarketBriefCard(mktCtx) {
+    const el = $("#market-brief");
+    if (!el) return;
+    const saved = _loadBrief(MARKET_BRIEF_LS);
+    if (saved?.summary) { _renderMarketBrief(el, saved, mktCtx); return; }
+    el.innerHTML = `
+      <div class="brief-head">
+        <span class="brief-badge">AI</span>
+        <span class="brief-title">今日简报 · Daily Brief</span>
+        <button class="brief-gen-btn" style="margin-left:auto">生成简报</button>
+      </div>`;
+    el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchMarketBrief(false, mktCtx));
+  }
+
   async function fetchMarketBrief(force = false, mktCtx = null) {
     const el = $("#market-brief");
     if (!el) return;
 
-    // Show spinner
     const refreshBtn = el.querySelector(".brief-refresh");
     if (refreshBtn) refreshBtn.classList.add("spinning");
     else el.innerHTML = `<div class="brief-loading">正在生成今日市场简报…</div>`;
@@ -4542,67 +4612,23 @@
       if (mktCtx?.rsi    != null) params.set("rsi",      mktCtx.rsi);
       if (mktCtx?.regime)         params.set("regime",   mktCtx.regime);
       if (mktCtx?.vixTrend)       params.set("vixTrend", mktCtx.vixTrend);
-      if (mktCtx?.indices && Object.keys(mktCtx.indices).length) {
-        params.set("idx", Object.entries(mktCtx.indices)
-          .map(([s, v]) => `${s}:${v}`).join(","));
-      }
-      if (mktCtx?.sectors?.length) {
+      if (mktCtx?.indices && Object.keys(mktCtx.indices).length)
+        params.set("idx", Object.entries(mktCtx.indices).map(([s, v]) => `${s}:${v}`).join(","));
+      if (mktCtx?.sectors?.length)
         params.set("sect", [...mktCtx.sectors]
           .sort((a, b) => b.score - a.score)
           .map(s => `${s.sym}|${s.zh}:${s.score}:${s.dailyChg ?? ""}`)
           .join(","));
-      }
-      const url = "/api/market-summary?" + params.toString();
-      const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
+
+      const res = await fetch("/api/market-summary?" + params.toString(), { signal: AbortSignal.timeout(25000) });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || `HTTP ${res.status}`);
       }
-      const { summary, headlines, updatedAt, cached } = await res.json();
-
-      const updatedDate = updatedAt ? new Date(updatedAt) : null;
-      const timeStr = updatedDate
-        ? updatedDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
-        : "—";
-      const ageMin = updatedDate ? Math.floor((Date.now() - updatedDate.getTime()) / 60000) : null;
-      const ageLabel = ageMin == null ? "" : ageMin < 5 ? "刚刚" : ageMin < 60 ? `${ageMin}分钟前` : `${Math.floor(ageMin/60)}小时前`;
-      const cacheTag = cached && ageLabel
-        ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${ageLabel}</span>` : "";
-
-      el.innerHTML = `
-        <div class="brief-head">
-          <span class="brief-badge">AI</span>
-          <span class="brief-title">今日简报 · Daily Brief</span>
-          ${cacheTag}
-          <span class="brief-time">${timeStr} 更新</span>
-          <button class="brief-toggle" title="收起/展开">▾</button>
-          <button class="brief-refresh" title="重新生成">↻</button>
-        </div>
-        <div class="brief-body">
-          <div class="brief-summary">${
-            summary
-              .split(/\n+/)
-              .filter(l => l.trim())
-              .map(l => `<div class="brief-line">${l.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span> ')}</div>`)
-              .join("")
-          }</div>
-          ${headlines?.length ? `
-            <div class="brief-divider"></div>
-            <div class="brief-headlines">
-              ${headlines.map(h => `<div class="brief-hl">${h}</div>`).join("")}
-            </div>` : ""}
-        </div>`;
-
-      // Restore collapsed state
-      if (localStorage.getItem("trendo_brief_collapsed") === "1") el.classList.add("collapsed");
-
-      // Wire toggle
-      el.querySelector(".brief-toggle")?.addEventListener("click", () => {
-        const collapsed = el.classList.toggle("collapsed");
-        localStorage.setItem("trendo_brief_collapsed", collapsed ? "1" : "0");
-      });
-      // Wire refresh button
-      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
+      const { summary, headlines, updatedAt } = await res.json();
+      const data = { summary, headlines, updatedAt };
+      _saveBrief(MARKET_BRIEF_LS, data);
+      _renderMarketBrief(el, data, mktCtx);
     } catch (e) {
       el.innerHTML = `
         <div class="brief-head">

@@ -2039,6 +2039,8 @@
   .brief-hl::before { content: "·"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
   .brief-loading { display: flex; align-items: center; gap: 8px; color: var(--fg-3); font-size: 12px; padding: 2px 0; animation: pulse 1.8s ease-in-out infinite; }
   .brief-error { color: var(--fg-3); font-size: 12px; padding: 2px 0; }
+  .brief-gen-btn { all: unset; cursor: pointer; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--accent); font-family: var(--f-mono); padding: 3px 8px; border: 1px solid color-mix(in oklch, var(--accent) 50%, transparent); border-radius: 4px; opacity: 0.8; transition: opacity .15s, background .15s; }
+  .brief-gen-btn:hover { opacity: 1; background: color-mix(in oklch, var(--accent) 10%, transparent); }
   .brief-section-title { display: inline; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: var(--accent); font-family: var(--f-mono); }
   .brief-line { font-size: 12px; line-height: 1.55; color: var(--fg-1); padding: 1px 0; }
   .brief-line:not(:first-child) { margin-top: 3px; }
