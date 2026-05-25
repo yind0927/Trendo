@@ -4306,6 +4306,7 @@
       <div class="brief-card" id="market-brief">
         <div class="brief-loading">正在生成今日市场简报…</div>
       </div>
+      <div class="mkt-module-sep"></div>
       ${regimeBanner}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
@@ -4482,7 +4483,13 @@
           <span class="brief-time">${timeStr} 更新</span>
           <button class="brief-refresh" title="重新生成">↻</button>
         </div>
-        <div class="brief-summary">${summary.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span>').replace(/\n/g, "<br>")}</div>
+        <div class="brief-summary">${
+          summary
+            .split(/\n+/)
+            .filter(l => l.trim())
+            .map(l => `<div class="brief-line">${l.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span> ')}</div>`)
+            .join("")
+        }</div>
         ${headlines?.length ? `
           <div class="brief-divider"></div>
           <div class="brief-headlines">
