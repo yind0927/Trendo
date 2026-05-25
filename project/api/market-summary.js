@@ -44,12 +44,14 @@ export default async function handler(req, res) {
       if (newsRes.ok) {
         const articles = await newsRes.json();
         headlines = articles
-          .filter(a => a.headline && a.summary && a.summary.length > 20)
-          .slice(0, 10)
+          .filter(a => a.headline)
+          .slice(0, 15)
           .map(a => ({
             title:   a.headline,
-            summary: a.summary.slice(0, 250),
-          }));
+            summary: (a.summary || a.headline).slice(0, 250),
+          }))
+          .filter(a => a.summary.length > 10)
+          .slice(0, 10);
       }
     } catch (_) { /* fall through with empty headlines */ }
   }

@@ -4428,7 +4428,10 @@
     try {
       const url = "/api/market-summary" + (force ? "?force=1" : "");
       const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
       const { summary, headlines, updatedAt, cached } = await res.json();
 
       const timeStr = updatedAt
@@ -4460,7 +4463,7 @@
           <span class="brief-title">今日简报 · Daily Brief</span>
           <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
         </div>
-        <div class="brief-error">加载失败，点击右上角重试</div>`;
+        <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;
       el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true));
     }
   }
