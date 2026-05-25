@@ -123,3 +123,4 @@ export default async function handler(req, res) {
   res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
   res.json({ ...result, cached: false });
 }
+// force-redeploy Mon May 25 05:06:34 UTC 2026
