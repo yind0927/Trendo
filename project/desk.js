@@ -4327,7 +4327,7 @@
     try {
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
-        fetch("/api/quote?stocks=%5EVIX,%5EVXN").then(r => r.json()),
+        fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=%5EGSPC,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
@@ -4408,10 +4408,23 @@
         return;
       }
 
+      // Extract index daily % changes
+      const indices = {};
+      if (quoteRes.status === "fulfilled" && quoteRes.value?.results) {
+        const q = quoteRes.value.results;
+        for (const sym of ["SPY", "QQQ", "DIA", "IWM"]) {
+          if (q[sym]?.last != null && q[sym]?.prevClose != null) {
+            indices[sym] = +((q[sym].last - q[sym].prevClose) / q[sym].prevClose * 100).toFixed(2);
+          }
+        }
+      }
+
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend });
-      fetchSectorData();
       const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
-      fetchMarketBrief(false, { vix, fg, rsi, regime: regime?.regime ?? "" });
+      const mktCtx = { vix, fg, rsi, regime: regime?.regime ?? "", vixTrend, indices };
+      fetchSectorData()
+        .then(sectors => fetchMarketBrief(false, { ...mktCtx, sectors }))
+        .catch(()    => fetchMarketBrief(false, mktCtx));
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
     }
@@ -4429,10 +4442,21 @@
     try {
       const params = new URLSearchParams();
       if (force) params.set("force", "1");
-      if (mktCtx?.vix  != null) params.set("vix",    mktCtx.vix);
-      if (mktCtx?.fg   != null) params.set("fg",     mktCtx.fg);
-      if (mktCtx?.rsi  != null) params.set("rsi",    mktCtx.rsi);
-      if (mktCtx?.regime)       params.set("regime", mktCtx.regime);
+      if (mktCtx?.vix    != null) params.set("vix",      mktCtx.vix);
+      if (mktCtx?.fg     != null) params.set("fg",       mktCtx.fg);
+      if (mktCtx?.rsi    != null) params.set("rsi",      mktCtx.rsi);
+      if (mktCtx?.regime)         params.set("regime",   mktCtx.regime);
+      if (mktCtx?.vixTrend)       params.set("vixTrend", mktCtx.vixTrend);
+      if (mktCtx?.indices && Object.keys(mktCtx.indices).length) {
+        params.set("idx", Object.entries(mktCtx.indices)
+          .map(([s, v]) => `${s}:${v}`).join(","));
+      }
+      if (mktCtx?.sectors?.length) {
+        params.set("sect", [...mktCtx.sectors]
+          .sort((a, b) => b.score - a.score)
+          .map(s => `${s.sym}|${s.zh}:${s.score}:${s.dailyChg ?? ""}`)
+          .join(","));
+      }
       const url = "/api/market-summary?" + params.toString();
       const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
       if (!res.ok) {
@@ -4458,7 +4482,7 @@
           <span class="brief-time">${timeStr} 更新</span>
           <button class="brief-refresh" title="重新生成">↻</button>
         </div>
-        <div class="brief-summary">${summary}</div>
+        <div class="brief-summary">${summary.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span>').replace(/\n/g, "<br>")}</div>
         ${headlines?.length ? `
           <div class="brief-divider"></div>
           <div class="brief-headlines">
@@ -4804,7 +4828,11 @@
         if (!stats) return null;
         // Compute yesterday's score for rank-change calculation
         const statsPrev = calcEtfStats(closes.slice(0, -1), vooClosesPrev);
-        return { ...etf, ...stats, scorePrev: statsPrev?.score ?? null };
+        // Daily % change
+        const dailyChg = closes.length >= 2
+          ? +((closes.at(-1) / closes.at(-2) - 1) * 100).toFixed(2)
+          : null;
+        return { ...etf, ...stats, scorePrev: statsPrev?.score ?? null, dailyChg };
       }).filter(Boolean);
 
       // Assign yesterday's ranks
@@ -4814,6 +4842,7 @@
       prevSorted.forEach((e, i) => { e.rankPrev = i + 1; });
 
       renderSectorRotation();
+      return sectorData;
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
     }
