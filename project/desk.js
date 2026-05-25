@@ -4481,21 +4481,32 @@
           <span class="brief-title">今日简报 · Daily Brief</span>
           ${cacheTag}
           <span class="brief-time">${timeStr} 更新</span>
+          <button class="brief-toggle" title="收起/展开">▾</button>
           <button class="brief-refresh" title="重新生成">↻</button>
         </div>
-        <div class="brief-summary">${
-          summary
-            .split(/\n+/)
-            .filter(l => l.trim())
-            .map(l => `<div class="brief-line">${l.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span> ')}</div>`)
-            .join("")
-        }</div>
-        ${headlines?.length ? `
-          <div class="brief-divider"></div>
-          <div class="brief-headlines">
-            ${headlines.map(h => `<div class="brief-hl">${h}</div>`).join("")}
-          </div>` : ""}`;
+        <div class="brief-body">
+          <div class="brief-summary">${
+            summary
+              .split(/\n+/)
+              .filter(l => l.trim())
+              .map(l => `<div class="brief-line">${l.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span> ')}</div>`)
+              .join("")
+          }</div>
+          ${headlines?.length ? `
+            <div class="brief-divider"></div>
+            <div class="brief-headlines">
+              ${headlines.map(h => `<div class="brief-hl">${h}</div>`).join("")}
+            </div>` : ""}
+        </div>`;
 
+      // Restore collapsed state
+      if (localStorage.getItem("trendo_brief_collapsed") === "1") el.classList.add("collapsed");
+
+      // Wire toggle
+      el.querySelector(".brief-toggle")?.addEventListener("click", () => {
+        const collapsed = el.classList.toggle("collapsed");
+        localStorage.setItem("trendo_brief_collapsed", collapsed ? "1" : "0");
+      });
       // Wire refresh button
       el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
     } catch (e) {
