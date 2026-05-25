@@ -2451,6 +2451,7 @@
     if (page === "market")    fetchMarketData();
     if (page === "desk" && HOLDINGS.length > 0) {
       fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
+      fetchHoldingsBrief();
     }
   }
 
@@ -4428,6 +4429,80 @@
         .catch(()    => fetchMarketBrief(false, mktCtx));
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
+    }
+  }
+
+  async function fetchHoldingsBrief(force = false) {
+    const el = $("#holdings-brief");
+    if (!el || !HOLDINGS.length) return;
+    el.style.display = "";
+
+    const refreshBtn = el.querySelector(".brief-refresh");
+    if (refreshBtn) refreshBtn.classList.add("spinning");
+    else el.innerHTML = `<div class="brief-loading">正在分析持仓…</div>`;
+
+    try {
+      // Encode: sym:pnlPct:rMult:days:status:bxScore:earnings
+      const holdStr = HOLDINGS.map(h => {
+        const pnl  = h.pnlPct  != null ? h.pnlPct.toFixed(1)  : "0";
+        const r    = h.rMult   != null ? h.rMult.toFixed(1)   : "0";
+        const d    = h.days    ?? 0;
+        const s    = h.status  || "ok";
+        const bx   = h.bx?.overall?.score != null ? h.bx.overall.score.toFixed(1) : "";
+        const earn = h.earnings || "";
+        return `${h.sym}:${pnl}:${r}:${d}:${s}:${bx}:${earn}`;
+      }).join(",");
+
+      const params = new URLSearchParams({ h: holdStr });
+      if (force) params.set("force", "1");
+
+      const res = await fetch("/api/holdings-brief?" + params.toString(), { signal: AbortSignal.timeout(30000) });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      const { summary, updatedAt, cached } = await res.json();
+
+      const updatedDate = updatedAt ? new Date(updatedAt) : null;
+      const timeStr  = updatedDate ? updatedDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
+      const ageMin   = updatedDate ? Math.floor((Date.now() - updatedDate.getTime()) / 60000) : null;
+      const ageLabel = ageMin == null ? "" : ageMin < 5 ? "刚刚" : ageMin < 60 ? `${ageMin}分钟前` : `${Math.floor(ageMin / 60)}小时前`;
+      const cacheTag = cached && ageLabel ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${ageLabel}</span>` : "";
+
+      el.innerHTML = `
+        <div class="brief-head">
+          <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">AI</span>
+          <span class="brief-title">持仓分析 · Portfolio</span>
+          ${cacheTag}
+          <span class="brief-time">${timeStr} 更新</span>
+          <button class="brief-toggle" title="收起/展开">▾</button>
+          <button class="brief-refresh" title="重新生成">↻</button>
+        </div>
+        <div class="brief-body">
+          <div class="brief-summary">${
+            summary
+              .split(/\n+/)
+              .filter(l => l.trim())
+              .map(l => `<div class="brief-line">${l.replace(/【(.+?)】/g, '<span class="brief-section-title">【$1】</span> ')}</div>`)
+              .join("")
+          }</div>
+        </div>`;
+
+      if (localStorage.getItem("trendo_holdings_brief_collapsed") === "1") el.classList.add("collapsed");
+      el.querySelector(".brief-toggle")?.addEventListener("click", () => {
+        const collapsed = el.classList.toggle("collapsed");
+        localStorage.setItem("trendo_holdings_brief_collapsed", collapsed ? "1" : "0");
+      });
+      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchHoldingsBrief(true));
+    } catch (e) {
+      el.innerHTML = `
+        <div class="brief-head">
+          <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">AI</span>
+          <span class="brief-title">持仓分析 · Portfolio</span>
+          <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
+        </div>
+        <div class="brief-error">加载失败：${e.message}，点击重试</div>`;
+      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchHoldingsBrief(true));
     }
   }
 
