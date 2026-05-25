@@ -472,6 +472,7 @@
   let pendingDeleteCtx = "desk";
   let lastPriceFetch = 0;
   const PRICE_INTERVAL_MS = 30000;
+  let _lastMktCtx = null; // cached market context for holdings brief
 
   // ============ CLOUD SYNC (Upstash) ============
   let syncKey    = localStorage.getItem("trendo_sync_key") || "";
@@ -4424,8 +4425,9 @@
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend });
       const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
       const mktCtx = { vix, fg, rsi, regime: regime?.regime ?? "", vixTrend, indices };
+      _lastMktCtx = mktCtx;
       fetchSectorData()
-        .then(sectors => fetchMarketBrief(false, { ...mktCtx, sectors }))
+        .then(sectors => { _lastMktCtx = { ...mktCtx, sectors }; fetchMarketBrief(false, _lastMktCtx); })
         .catch(()    => fetchMarketBrief(false, mktCtx));
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
@@ -4442,39 +4444,55 @@
     else el.innerHTML = `<div class="brief-loading">正在分析持仓…</div>`;
 
     try {
-      // Encode: sym:pnlPct:rMult:days:status:bxScore:earnings
+      // Encode: sym:pnlPct:rMult:days:status:earnings (no bxScore)
       const holdStr = HOLDINGS.map(h => {
         const pnl  = h.pnlPct  != null ? h.pnlPct.toFixed(1)  : "0";
         const r    = h.rMult   != null ? h.rMult.toFixed(1)   : "0";
         const d    = h.days    ?? 0;
         const s    = h.status  || "ok";
-        const bxRaw = h.bx?.overall?.score;
-        const bx    = bxRaw != null && !isNaN(+bxRaw) ? (+bxRaw).toFixed(1) : "";
         const earn = h.earnings || "";
-        return `${h.sym}:${pnl}:${r}:${d}:${s}:${bx}:${earn}`;
+        return `${h.sym}:${pnl}:${r}:${d}:${s}:${earn}`;
       }).join(",");
 
       const params = new URLSearchParams({ h: holdStr });
       if (force) params.set("force", "1");
 
-      const res = await fetch("/api/holdings-brief?" + params.toString(), { signal: AbortSignal.timeout(30000) });
+      // Pass market context for richer analysis
+      const ctx = _lastMktCtx;
+      if (ctx) {
+        if (ctx.vix   != null) params.set("vix",     ctx.vix);
+        if (ctx.fg    != null) params.set("fg",      ctx.fg);
+        if (ctx.rsi   != null) params.set("rsi",     ctx.rsi);
+        if (ctx.regime)        params.set("regime",  ctx.regime);
+        if (ctx.vixTrend)      params.set("vixTrend", ctx.vixTrend);
+        if (ctx.indices && Object.keys(ctx.indices).length)
+          params.set("idx", Object.entries(ctx.indices).map(([s,v]) => `${s}:${v}`).join(","));
+        if (ctx.sectors?.length)
+          params.set("sect", [...ctx.sectors]
+            .sort((a, b) => b.score - a.score)
+            .map(s => `${s.sym}|${s.zh ?? s.sym}:${s.score}:${s.dailyChg ?? ""}`)
+            .join(","));
+      }
+
+      const res = await fetch("/api/holdings-brief?" + params.toString(), { signal: AbortSignal.timeout(35000) });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || `HTTP ${res.status}`);
       }
-      const { summary, updatedAt, cached } = await res.json();
+      const { summary, updatedAt, cached, hasNews } = await res.json();
 
       const updatedDate = updatedAt ? new Date(updatedAt) : null;
       const timeStr  = updatedDate ? updatedDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
       const ageMin   = updatedDate ? Math.floor((Date.now() - updatedDate.getTime()) / 60000) : null;
       const ageLabel = ageMin == null ? "" : ageMin < 5 ? "刚刚" : ageMin < 60 ? `${ageMin}分钟前` : `${Math.floor(ageMin / 60)}小时前`;
       const cacheTag = cached && ageLabel ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${ageLabel}</span>` : "";
+      const newsTag  = hasNews ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">含新闻</span>` : "";
 
       el.innerHTML = `
         <div class="brief-head">
           <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">AI</span>
           <span class="brief-title">持仓分析 · Portfolio</span>
-          ${cacheTag}
+          ${newsTag}${cacheTag}
           <span class="brief-time">${timeStr} 更新</span>
           <button class="brief-toggle" title="收起/展开">▾</button>
           <button class="brief-refresh" title="重新生成">↻</button>
