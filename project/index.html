@@ -1982,7 +1982,7 @@
   .mkt-diamond { color: var(--accent); }
   .mkt-en { font-size: 12px; font-weight: 500; color: var(--fg-2); letter-spacing: 0.08em; }
   .mkt-date { font-family: var(--f-mono); font-size: 12px; color: var(--fg-3); }
-  .mkt-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .mkt-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
   .mkt-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
   .mkt-card-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--fg-3); text-transform: uppercase; }
   .mkt-card-row { display: flex; align-items: baseline; gap: 10px; }
@@ -2005,20 +2005,20 @@
   .mkt-pb-active td:first-child { border-radius: 4px 0 0 4px; }
   .mkt-pb-active td:last-child { border-radius: 0 4px 4px 0; }
   .mkt-now { font-size: 9px; font-weight: 700; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; margin-left: 5px; letter-spacing: 0.05em; vertical-align: middle; }
-  .mkt-strategy { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 12px; }
+  .mkt-strategy { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 20px; }
   .mkt-section-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--accent); text-transform: uppercase; margin-bottom: 12px; }
   .mkt-strat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .mkt-strat-card { border: 1px solid; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
   .mkt-strat-main { font-size: 15px; font-weight: 700; }
   .mkt-strat-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
-  .mkt-regime-bar { display: flex; align-items: center; gap: 10px; border: 1px solid; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .mkt-regime-bar { display: flex; align-items: center; gap: 10px; border: 1px solid; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px; flex-wrap: wrap; }
   .mkt-regime-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; white-space: nowrap; }
   .mkt-regime-name { font-size: 15px; font-weight: 800; white-space: nowrap; }
   .mkt-regime-action { font-size: 12px; color: var(--fg-2); margin-left: auto; }
   .mkt-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px 20px; color: var(--fg-3); font-size: 14px; }
 
   /* AI Market Brief card */
-  .brief-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .brief-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px; margin-bottom: 0; }
   .brief-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
   .brief-badge { font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; background: var(--accent); color: oklch(0.14 0.012 250); border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
   .brief-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-2); font-family: var(--f-mono); }
@@ -2043,13 +2043,13 @@
   .brief-line { font-size: 12px; line-height: 1.55; color: var(--fg-1); padding: 1px 0; }
   .brief-line:not(:first-child) { margin-top: 3px; }
   /* Module separator between brief and regime */
-  .mkt-module-sep { height: 1px; background: linear-gradient(to right, var(--line), transparent); margin: 12px 0; }
+  .mkt-module-sep { height: 1px; background: linear-gradient(to right, var(--line), transparent); margin: 20px 0; }
   .mkt-refresh-btn { background: none; border: 1px solid var(--line); border-radius: 7px; color: var(--fg-2); font-size: 12px; padding: 5px 12px; cursor: pointer; margin-left: auto; display: block; margin-bottom: 12px; }
   .mkt-refresh-btn:hover { color: var(--fg-0); border-color: var(--fg-2); }
 
   @media (max-width: 768px) {
     #market-view { padding: 12px 12px 86px; }
-    .mkt-row { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .mkt-row { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
     .mkt-card { padding: 12px 12px 10px; gap: 8px; }
     .mkt-card-val { font-size: 30px; }
     .mkt-chg { font-size: 12px; }
@@ -2059,7 +2059,7 @@
   }
 
   /* ============ SECTOR ROTATION ============ */
-  .sect-section { margin-top: 16px; }
+  .sect-section { margin-top: 24px; }
   .sect-head { display: flex; flex-direction: column; margin-bottom: 12px; gap: 8px; }
   .sect-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .sect-title { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--fg-2); text-transform: uppercase; }
