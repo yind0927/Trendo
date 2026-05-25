@@ -4441,8 +4441,20 @@
     const lbl = m < 5 ? "刚刚" : m < 60 ? `${m}分钟前` : `${Math.floor(m / 60)}小时前`;
     return `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${lbl}</span>`;
   }
-  function _saveBrief(key, data) { try { localStorage.setItem(key, JSON.stringify(data)); } catch (_) {} }
-  function _loadBrief(key) { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } }
+  function _todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  function _saveBrief(key, data) {
+    try { localStorage.setItem(key, JSON.stringify({ ...data, _date: _todayLocal() })); } catch (_) {}
+  }
+  function _loadBrief(key) {
+    try {
+      const data = JSON.parse(localStorage.getItem(key) || "null");
+      if (!data || data._date !== _todayLocal()) return null; // expired — new day
+      return data;
+    } catch { return null; }
+  }
   const MARKET_BRIEF_LS   = "trendo_brief_v1_market";
   const HOLDINGS_BRIEF_LS = "trendo_brief_v1_holdings";
   function _briefSummaryHTML(summary) {
