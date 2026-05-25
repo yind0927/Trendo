@@ -4441,10 +4441,14 @@
       }
       const { summary, headlines, updatedAt, cached } = await res.json();
 
-      const timeStr = updatedAt
-        ? new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+      const updatedDate = updatedAt ? new Date(updatedAt) : null;
+      const timeStr = updatedDate
+        ? updatedDate.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
         : "—";
-      const cacheTag = cached ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">已缓存</span>` : "";
+      const ageMin = updatedDate ? Math.floor((Date.now() - updatedDate.getTime()) / 60000) : null;
+      const ageLabel = ageMin == null ? "" : ageMin < 5 ? "刚刚" : ageMin < 60 ? `${ageMin}分钟前` : `${Math.floor(ageMin/60)}小时前`;
+      const cacheTag = cached && ageLabel
+        ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${ageLabel}</span>` : "";
 
       el.innerHTML = `
         <div class="brief-head">

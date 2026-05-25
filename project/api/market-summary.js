@@ -52,8 +52,10 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
   }
 
-  const today     = new Date().toISOString().slice(0, 10);
-  const cacheKey  = `trendo:market_brief:${today}`; // one per calendar day
+  const now       = new Date();
+  const today     = now.toISOString().slice(0, 10);
+  const slot      = Math.floor(now.getUTCHours() / 2); // 0–11, changes every 2 hours
+  const cacheKey  = `trendo:market_brief:${today}:${slot}`;
   const force     = req.query.force === "1";
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
@@ -66,7 +68,7 @@ export default async function handler(req, res) {
       });
       const [{ result }] = await r.json();
       if (result) {
-        res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate=7200");
+        res.setHeader("Cache-Control", "s-maxage=7200, stale-while-revalidate=3600");
         return res.json({ ...JSON.parse(result), cached: true });
       }
     } catch (_) { /* ignore, proceed */ }
@@ -177,7 +179,7 @@ export default async function handler(req, res) {
         method: "POST", headers: kvHeaders,
         body: JSON.stringify([
           ["SET",    cacheKey, JSON.stringify(result)],
-          ["EXPIRE", cacheKey, 3600],
+          ["EXPIRE", cacheKey, 7200],   // 2 hours, aligned with slot
         ]),
       });
     } catch (_) { /* non-fatal */ }
