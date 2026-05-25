@@ -4303,10 +4303,10 @@
         </div>
         <div class="mkt-date">${today}</div>
       </div>
-      ${regimeBanner}
       <div class="brief-card" id="market-brief">
         <div class="brief-loading">正在生成今日市场简报…</div>
       </div>
+      ${regimeBanner}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
@@ -4410,13 +4410,14 @@
 
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend });
       fetchSectorData();
-      fetchMarketBrief();
+      const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
+      fetchMarketBrief(false, { vix, fg, rsi, regime: regime?.regime ?? "" });
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
     }
   }
 
-  async function fetchMarketBrief(force = false) {
+  async function fetchMarketBrief(force = false, mktCtx = null) {
     const el = $("#market-brief");
     if (!el) return;
 
@@ -4426,7 +4427,13 @@
     else el.innerHTML = `<div class="brief-loading">正在生成今日市场简报…</div>`;
 
     try {
-      const url = "/api/market-summary" + (force ? "?force=1" : "");
+      const params = new URLSearchParams();
+      if (force) params.set("force", "1");
+      if (mktCtx?.vix  != null) params.set("vix",    mktCtx.vix);
+      if (mktCtx?.fg   != null) params.set("fg",     mktCtx.fg);
+      if (mktCtx?.rsi  != null) params.set("rsi",    mktCtx.rsi);
+      if (mktCtx?.regime)       params.set("regime", mktCtx.regime);
+      const url = "/api/market-summary?" + params.toString();
       const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -4455,7 +4462,7 @@
           </div>` : ""}`;
 
       // Wire refresh button
-      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true));
+      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
     } catch (e) {
       el.innerHTML = `
         <div class="brief-head">
@@ -4464,7 +4471,7 @@
           <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
         </div>
         <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;
-      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true));
+      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
     }
   }
 

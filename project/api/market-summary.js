@@ -53,7 +53,7 @@ export default async function handler(req, res) {
   }
 
   const today     = new Date().toISOString().slice(0, 10);
-  const cacheKey  = `trendo:market_brief:${today}`;
+  const cacheKey  = `trendo:market_brief:${today}`; // one per calendar day
   const force     = req.query.force === "1";
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
@@ -109,16 +109,30 @@ export default async function handler(req, res) {
   }
 
   // ── 3. Build Claude prompt ────────────────────────────────────────────────
+  const vix    = req.query.vix    ? parseFloat(req.query.vix)   : null;
+  const fg     = req.query.fg     ? parseInt(req.query.fg)      : null;
+  const rsi    = req.query.rsi    ? parseFloat(req.query.rsi)   : null;
+  const regime = req.query.regime || null;
+
+  const mktBlock = (vix != null || fg != null || rsi != null) ? `
+实时市场数据：
+- VIX（波动率指数）: ${vix ?? "N/A"}${vix != null ? (vix >= 30 ? "（高波动，市场恐慌）" : vix >= 20 ? "（中等波动）" : "（低波动，市场平稳）") : ""}
+- 恐惧贪婪指数 (Fear & Greed): ${fg ?? "N/A"}${fg != null ? (fg <= 25 ? "（极度恐惧）" : fg <= 45 ? "（恐惧）" : fg <= 55 ? "（中性）" : fg <= 75 ? "（贪婪）" : "（极度贪婪）") : ""}
+- VOO RSI (14): ${rsi ?? "N/A"}${rsi != null ? (rsi >= 70 ? "（超买）" : rsi <= 30 ? "（超卖）" : "（正常区间）") : ""}
+- 当前市场状态: ${regime ?? "N/A"}
+
+` : "";
+
   const newsText = headlines
     .map((h, i) => `${i + 1}. ${h.title}\n${h.summary}`)
     .join("\n\n");
 
   const prompt =
-    `你是一位专业的美股波段交易员助手。请分析以下今日市场新闻，` +
-    `用2-3句简洁的中文总结对交易者最重要的信息，重点关注：` +
-    `①市场整体情绪与方向，②主要风险因素，③值得关注的板块机会。` +
-    `语言直接专业，不要加任何前缀或标题，直接输出总结。\n\n` +
-    `新闻内容：\n${newsText}`;
+    `你是一位专业的美股波段交易员助手。请综合分析以下实时市场数据和今日新闻，` +
+    `用2-3句简洁的中文给出对交易者最有价值的判断，重点关注：` +
+    `①结合数据和新闻的市场整体情绪与方向，②主要风险因素，③值得关注的板块机会。` +
+    `语言直接专业，融合数字与事件，不要加任何前缀或标题，直接输出总结。\n\n` +
+    `${mktBlock}新闻内容：\n${newsText}`;
 
   // ── 4. Call Claude Haiku ──────────────────────────────────────────────────
   let summary = "";
