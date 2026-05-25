@@ -4304,6 +4304,9 @@
         <div class="mkt-date">${today}</div>
       </div>
       ${regimeBanner}
+      <div class="brief-card" id="market-brief">
+        <div class="brief-loading">正在生成今日市场简报…</div>
+      </div>
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
@@ -4407,8 +4410,58 @@
 
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend });
       fetchSectorData();
+      fetchMarketBrief();
     } catch (e) {
       el.innerHTML = `<div class="mkt-loading">Error: ${e.message}</div>`;
+    }
+  }
+
+  async function fetchMarketBrief(force = false) {
+    const el = $("#market-brief");
+    if (!el) return;
+
+    // Show spinner
+    const refreshBtn = el.querySelector(".brief-refresh");
+    if (refreshBtn) refreshBtn.classList.add("spinning");
+    else el.innerHTML = `<div class="brief-loading">正在生成今日市场简报…</div>`;
+
+    try {
+      const url = "/api/market-summary" + (force ? "?force=1" : "");
+      const res = await fetch(url, { signal: AbortSignal.timeout(25000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { summary, headlines, updatedAt, cached } = await res.json();
+
+      const timeStr = updatedAt
+        ? new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+        : "—";
+      const cacheTag = cached ? `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">已缓存</span>` : "";
+
+      el.innerHTML = `
+        <div class="brief-head">
+          <span class="brief-badge">AI</span>
+          <span class="brief-title">今日简报 · Daily Brief</span>
+          ${cacheTag}
+          <span class="brief-time">${timeStr} 更新</span>
+          <button class="brief-refresh" title="重新生成">↻</button>
+        </div>
+        <div class="brief-summary">${summary}</div>
+        ${headlines?.length ? `
+          <div class="brief-divider"></div>
+          <div class="brief-headlines">
+            ${headlines.map(h => `<div class="brief-hl">${h}</div>`).join("")}
+          </div>` : ""}`;
+
+      // Wire refresh button
+      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true));
+    } catch (e) {
+      el.innerHTML = `
+        <div class="brief-head">
+          <span class="brief-badge">AI</span>
+          <span class="brief-title">今日简报 · Daily Brief</span>
+          <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
+        </div>
+        <div class="brief-error">加载失败，点击右上角重试</div>`;
+      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true));
     }
   }
 
