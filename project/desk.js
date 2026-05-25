@@ -4448,7 +4448,8 @@
         const r    = h.rMult   != null ? h.rMult.toFixed(1)   : "0";
         const d    = h.days    ?? 0;
         const s    = h.status  || "ok";
-        const bx   = h.bx?.overall?.score != null ? h.bx.overall.score.toFixed(1) : "";
+        const bxRaw = h.bx?.overall?.score;
+        const bx    = bxRaw != null && !isNaN(+bxRaw) ? (+bxRaw).toFixed(1) : "";
         const earn = h.earnings || "";
         return `${h.sym}:${pnl}:${r}:${d}:${s}:${bx}:${earn}`;
       }).join(",");
