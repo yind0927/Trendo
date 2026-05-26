@@ -1253,7 +1253,7 @@
     const periodRanges = {
       week:  _weekStr,
       month: `${MO_S[_now.getMonth()]} ${_now.getFullYear()}`,
-      all:   "所有时间"
+      all:   "All Time"
     };
 
     // BX bars breakdown
