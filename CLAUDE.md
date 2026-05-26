@@ -43,12 +43,14 @@ project/
   sw.js           — Service Worker（PWA 自动更新）
   manifest.json   — PWA manifest
   api/
-    quote.js      — 实时价格（Finnhub → Yahoo Finance → Polygon 降级链）
-    history.js    — 历史日线数据（Yahoo Finance）
-    holdings.js   — ETF 成分股静态数据（top 20，手动维护）
-    earnings.js   — 财报日期（Finnhub → Yahoo 降级）
-    feargreed.js  — CNN 恐慌贪婪指数代理
-    data.js       — 跨设备云同步（Upstash Redis）
+    quote.js           — 实时价格（Finnhub → Yahoo Finance → Polygon 降级链）
+    history.js         — 历史日线数据（Yahoo Finance）
+    holdings.js        — ETF 成分股静态数据（top 20，手动维护）
+    earnings.js        — 财报日期（Finnhub → Yahoo 降级）
+    feargreed.js       — CNN 恐慌贪婪指数代理
+    data.js            — 跨设备云同步（Upstash Redis）
+    market-summary.js  — 市场日报 AI 简报（Claude Sonnet 4.6，含新闻+市场数据）
+    holdings-brief.js  — 持仓分析 AI 简报（Claude Sonnet 4.6，含个股新闻+市场环境）
 ```
 
 ---
@@ -130,6 +132,10 @@ trendo_v4_sim_close_pending  → SIM_CLOSE_PENDING[]
 trendo_v4_daily_pnl          → dailyPnlLog {}
 trendo_v4_savedAt            → ISO时间戳（防止旧云数据覆盖本地）
 trendo_sync_key              → 云同步密钥
+trendo_brief_v1_market       → 市场简报缓存 { summary, headlines, updatedAt, _date }
+trendo_brief_v1_holdings     → 持仓分析缓存 { summary, updatedAt, hasNews, _date }
+trendo_brief_collapsed       → 市场简报收起状态 "0"|"1"
+trendo_holdings_brief_collapsed → 持仓分析收起状态 "0"|"1"
 ```
 
 ---
@@ -295,6 +301,103 @@ const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
 - **VOO RSI**：`/api/history?sym=VOO` → `calcRSI(closes)` + `calcRSI(closes.slice(0,-1))` 得昨日RSI
 - **板块ETF**：`XLK XLY XLV XLF XLB XLP XLE XLI COPX ITA` 各自 `/api/history`
 - 板块得分：`calcEtfStats(closes, vooCloses)` → `{ score, scorePrev }`，昨日得分用于排名变化列
+- **大盘指数**：`SPY QQQ DIA IWM` 通过 `/api/quote` 实时拉取，计算日涨跌幅传入市场简报
+
+---
+
+## AI 简报系统（v7.6）
+
+### 两个简报模块
+
+| 模块 | 位置 | API 文件 | 触发 |
+|---|---|---|---|
+| 市场日报 | Market页顶部 `#market-brief` | `api/market-summary.js` | 手动点击 |
+| 持仓分析 | Dashboard持仓列表与动态之间 `#holdings-brief` | `api/holdings-brief.js` | 手动点击 |
+
+### 缓存架构（两层）
+
+```
+localStorage（浏览器端）
+  键：trendo_brief_v1_market / trendo_brief_v1_holdings
+  有效期：当天（_date字段与今日本地日期对比，跨日自动失效）
+  作用：页面加载零延迟展示，无API调用
+
+Redis（服务端，Upstash）
+  键：trendo:market_brief:YYYY-MM-DD:SLOT（2小时slot）
+      trendo:holdings_brief:YYYY-MM-DD:SLOT:sortedSyms（2小时slot+持仓指纹）
+  TTL：7200秒
+  作用：用户点击时去重，同一slot内命中不调Claude
+```
+
+### 触发逻辑
+
+```
+页面加载 → initMarketBriefCard() / initHoldingsBriefCard()
+  ├─ localStorage有当日缓存 → 直接渲染，不调API
+  └─ 无缓存 → 显示"生成简报/生成分析"按钮
+
+用户点击生成/↻
+  → fetchMarketBrief(force) / fetchHoldingsBrief(force)
+    ├─ force=false → API先查Redis → 命中返回（不调Claude）
+    │                             → 未命中调Claude → 存Redis
+    └─ force=true  → 跳过Redis → 直接调Claude → 存Redis
+  → 结果存localStorage（带_date）→ 渲染
+```
+
+### 数据传递（desk.js）
+
+```js
+let _lastMktCtx = null; // 全局，fetchMarketData()时赋值
+
+// fetchMarketData完成后：
+const mktCtx = { vix, fg, rsi, regime, vixTrend, indices };
+_lastMktCtx = mktCtx;
+fetchSectorData().then(sectors => {
+  _lastMktCtx = { ...mktCtx, sectors };
+  initMarketBriefCard(_lastMktCtx);
+});
+
+// fetchHoldingsBrief()里读取_lastMktCtx，编码为URL params传入API
+// 持仓编码格式：sym:pnlPct:rMult:days:status:earningsDate（6字段，无BX）
+```
+
+### API 设计要点
+
+**market-summary.js**
+- 新闻源：Finnhub（主）→ Yahoo RSS（降级，周末/节假日时自动切换）
+- 市场数据：idx（SPY/QQQ/DIA/IWM日涨跌）+ vix + fg + rsi + regime + sect
+- 输出格式：【今日总结】【驱动因素】【板块与资金】【风险与机会】，≤300字
+
+**holdings-brief.js**
+- 个股新闻：Finnhub `company-news` 并行拉取每只持仓近4天（Promise.allSettled）
+- 市场环境：接收idx/vix/fg/regime/sect URL params
+- 输出格式：【持仓概览】【重点关注】【今日操作建议】，≤180字
+- 分析重点：持仓时间效率、P&L vs 市场匹配度、个股催化剂、财报风险
+
+### 共享渲染函数（desk.js）
+
+```js
+_briefAgeTag(updatedAt)          // 生成"X分钟前"标签HTML
+_saveBrief(key, data)            // 存localStorage（带_date）
+_loadBrief(key)                  // 读localStorage（跨日返回null）
+_briefSummaryHTML(summary)       // 将【标题】转为带class的div
+_renderMarketBrief(el, data, mktCtx)   // 渲染市场简报卡片
+_renderHoldingsBrief(el, data)         // 渲染持仓分析卡片
+initMarketBriefCard(mktCtx)      // 初始化：读缓存或显示生成按钮
+initHoldingsBriefCard()          // 初始化：读缓存或显示生成按钮
+```
+
+### CSS 组件
+
+```css
+.brief-card        — 卡片容器（border-left: 3px solid var(--accent)）
+.brief-badge       — AI徽章（var(--accent)背景）
+.brief-gen-btn     — 生成按钮（outlined teal，悬停填充）
+.brief-toggle      — 收起/展开箭头（15px，旋转动画）
+.brief-refresh     — ↻ 刷新按钮（spinning动画类）
+.brief-section-title — 【标题】样式（accent色，mono字体）
+.mkt-module-sep    — 模块间分隔线（Market页）
+```
 
 ---
 
@@ -352,9 +455,10 @@ Dashboard 和 Sim 页均使用此组件，替代旧版 §01/§02 样式标题。
 ## API 环境变量
 
 ```
-FINNHUB_API_KEY      — 实时行情（主要）
+ANTHROPIC_API_KEY    — Claude API（市场简报 + 持仓分析，大小写严格）
+FINNHUB_API_KEY      — 实时行情（主要）+ 个股新闻
 POLYGON_API_KEY      — 加密货币行情 + 股票备用
-KV_REST_API_URL      — Upstash Redis URL（跨设备同步）
+KV_REST_API_URL      — Upstash Redis URL（跨设备同步 + AI简报服务端缓存）
 KV_REST_API_TOKEN    — Upstash Redis Token
 ```
 
@@ -385,6 +489,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v7.1 | 模拟仓挂单系统（市价单/限价单），F&G/RSI昨日变化，板块排名日变化，统一双语页面标题(20px)，Watchlist→Preparation，6态市场状态系统(优先级匹配)，抛售/偏热更名，手册触发条件列 |
 | v7.2 | 移除顶部时钟模块，修复响应式根因(body min-width)，新增769–1290px紧凑断点，导航选中改为下划线设计，搜索框简化，持仓数动态关联，市价单/限价单开盘时段门控(isUSMarketOpen)，美股交易日计算(calcTradingDays+usMarketHolidays)，持仓天数改为实时交易日，抽屉天数动态渲染，修复密码页闪屏，手机端挂单队列移至overview上方，FAB按当前页面切换开仓上下文，`.sim-section-label`双语区块标题(ssl-zh/ssl-en/ssl-rule/ssl-meta)，Sim页模拟分析/模拟仓持仓区块标题，Dashboard页持仓总结/持仓列表区块标题，Analytics权益曲线改用真实数据(histPnlLog+dailyPnlLog)，周/月/年切换，修复轴标签拉伸(SVG text→HTML)，修复悬浮tooltip日P&L误差，BX Bars与P&L日历同行排列，Dashboard页标题更新(持仓/持仓总结/持仓列表) |
 | v7.5 | 密码页重设计（平台logo内联+玻璃质感输入框+Geist 800字标+页面入场动画），浮盈亏列移至止盈与状态之间，BX表单Score/Slope支持两位小数，页面切换淡入+上移动画(page-enter) |
+| v7.6 | AI简报系统：Market页市场日报（Claude Sonnet 4.6，结构化4段式）+ Dashboard页持仓分析（含个股新闻+市场环境）。手动触发设计：页面加载读localStorage，跨日自动重置为生成按钮，Redis 2小时服务端缓存去重，↻强制重生成。徽章/边框颜色统一为accent teal。`_lastMktCtx`全局传递市场上下文。 |
 
 ---
 
