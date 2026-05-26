@@ -1238,9 +1238,23 @@
     const winRatePct = total > 0 ? (wins / total * 100).toFixed(1) : null;
     const avgR   = total > 0 ? (data.reduce((s,h) => s + (h.rMult || 0), 0) / total).toFixed(2) : null;
     const avgDays = total > 0 ? (data.reduce((s,h) => s + (h.days || 1), 0) / total).toFixed(1) : null;
+    const totalPnl = total > 0 ? Math.round(data.reduce((s,h) => s + (h.pnlFinal ?? h.pnlDollar ?? 0), 0)) : null;
 
     const periodTitles = { week: "本周复盘", month: "本月复盘", all: "全部复盘" };
-    const periodRanges = { week: "Apr 21 – Apr 24", month: "Apr 2026", all: "所有时间" };
+
+    // Dynamic date ranges — computed fresh each render
+    const MO_S = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const _now = new Date();
+    const _wStart = new Date(_now); _wStart.setDate(_now.getDate() - (_now.getDay() || 7) + 1); // Mon
+    const _wEnd   = new Date(_wStart); _wEnd.setDate(_wStart.getDate() + 4); // Fri
+    const _weekStr = _wStart.getMonth() === _wEnd.getMonth()
+      ? `${MO_S[_wStart.getMonth()]} ${_wStart.getDate()} – ${_wEnd.getDate()}`
+      : `${MO_S[_wStart.getMonth()]} ${_wStart.getDate()} – ${MO_S[_wEnd.getMonth()]} ${_wEnd.getDate()}`;
+    const periodRanges = {
+      week:  _weekStr,
+      month: `${MO_S[_now.getMonth()]} ${_now.getFullYear()}`,
+      all:   "所有时间"
+    };
 
     // BX bars breakdown
     const buckets = { "0-5": [], "5-15": [], "15+": [] };
@@ -1274,10 +1288,35 @@
         </div>`;
     }
 
+    // Total P&L badge
+    const pnlBadgeHTML = totalPnl !== null
+      ? `<span class="review-pnl-badge ${totalPnl >= 0 ? "up" : "down"}">${totalPnl >= 0 ? "+" : ""}$${Math.abs(totalPnl).toLocaleString("en-US")}</span>`
+      : "";
+
+    // Recent closed trades list (sorted by closedAt desc, max 6)
+    const recentTrades = [...data]
+      .sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt))
+      .slice(0, 6);
+    const tradesHTML = recentTrades.length === 0
+      ? `<div style="color:var(--fg-3);font-size:12px;padding:10px 0;text-align:center">暂无交易记录</div>`
+      : recentTrades.map(h => {
+          const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
+          const cls = pnl >= 0 ? "up" : "down";
+          const rVal = h.rMult != null ? ((h.rMult >= 0 ? "+" : "") + h.rMult.toFixed(1) + "R") : "—";
+          const dateStr = h.closedAt ? h.closedAt.slice(5, 10).replace("-", "/") : "—";
+          return `
+            <div class="review-trade-row">
+              <span class="review-trade-sym">${h.sym}</span>
+              <span class="review-trade-date">${dateStr}</span>
+              <span class="review-trade-r ${cls}">${rVal}</span>
+              <span class="review-trade-pnl ${cls}">${fmt.signed(Math.round(pnl))}</span>
+            </div>`;
+        }).join("");
+
     const reviewPanel = $("#review-panel");
     reviewPanel.innerHTML = `
       <div class="panel-head">
-        <div class="panel-title">${periodTitles[reviewPeriod]} <span class="count">${periodRanges[reviewPeriod]}</span></div>
+        <div class="panel-title">${periodTitles[reviewPeriod]} <span class="count">${periodRanges[reviewPeriod]}</span>${pnlBadgeHTML}</div>
         <div style="margin-left:auto;display:flex;gap:4px">
           <button class="filter-chip ${reviewPeriod === "week"  ? "active" : ""}" data-period="week">本周</button>
           <button class="filter-chip ${reviewPeriod === "month" ? "active" : ""}" data-period="month">本月</button>
@@ -1308,6 +1347,13 @@
         ${total === 0
           ? `<div style="color:var(--fg-3);font-size:12px;padding:14px 0;text-align:center">暂无已平仓数据<br><span style="font-size:10.5px;margin-top:4px;display:block">平仓后将在此显示 BX Bars 分布统计</span></div>`
           : Object.entries(buckets).map(([b, pos]) => bxReviewRow(b, pos)).join("")}
+      </div>
+      <div class="panel-head" style="border-top:1px solid var(--line); border-bottom:0">
+        <div class="panel-title" style="font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-2);font-weight:500">最近平仓</div>
+        ${recentTrades.length < data.length ? `<span style="margin-left:auto;font-size:10.5px;color:var(--fg-3);font-family:var(--f-mono)">显示最近 ${recentTrades.length} / ${data.length} 笔</span>` : ""}
+      </div>
+      <div style="padding:8px 16px 14px">
+        ${tradesHTML}
       </div>
     `;
 
