@@ -1805,6 +1805,21 @@
   .bx-review-fill { height: 100%; border-radius: 3px; transition: width .4s; min-width: 3px; }
   .bx-review-meta { display: flex; justify-content: space-between; }
 
+  /* -- Review: period P&L badge -- */
+  .review-pnl-badge { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:20px; font-size:11px; font-family:var(--f-mono); font-weight:600; vertical-align:middle; }
+  .review-pnl-badge.up   { background:color-mix(in oklch,var(--up) 15%,transparent); color:var(--up); }
+  .review-pnl-badge.down { background:color-mix(in oklch,var(--down) 15%,transparent); color:var(--down); }
+
+  /* -- Review: recent trades list -- */
+  .review-trade-row { display:flex; align-items:center; gap:6px; padding:5px 0; font-size:11.5px; }
+  .review-trade-row + .review-trade-row { border-top:1px solid color-mix(in oklch,var(--line) 40%,transparent); }
+  .review-trade-sym  { font-family:var(--f-mono); font-weight:600; min-width:52px; color:var(--fg-1); }
+  .review-trade-date { font-family:var(--f-mono); font-size:10.5px; color:var(--fg-3); flex:1; }
+  .review-trade-r    { font-family:var(--f-mono); font-size:10.5px; min-width:38px; text-align:right; }
+  .review-trade-pnl  { font-family:var(--f-mono); font-size:11px; font-weight:600; min-width:64px; text-align:right; }
+  .review-trade-r.up, .review-trade-pnl.up   { color:var(--up); }
+  .review-trade-r.down, .review-trade-pnl.down { color:var(--down); }
+
   /* ============ MEDIUM: 769px – 1200px (e.g. browser with sidebar open) ============ */
   @media (max-width: 1290px) and (min-width: 769px) {
     .topbar { gap: 8px; padding: 10px 16px; }
