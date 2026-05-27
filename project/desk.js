@@ -3590,6 +3590,62 @@
             }).join("")}
           </div>
         </div>
+
+        <div class="analytics-card" style="flex:1">
+          <div class="analytics-card-title">R 倍数分布 · R-Multiple</div>
+          <div class="analytics-card-sub">出场质量 · 按区间统计</div>
+          ${(() => {
+            const closedWithR = closed.filter(h => h.rMult != null);
+            if (!closedWithR.length) return `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无 R 倍数数据</div>`;
+            const rBuckets = [
+              { label: "< 0R",  sub: "亏损",  color: "var(--down)",                             check: r => r < 0 },
+              { label: "0 – 1R", sub: "保本",  color: "var(--fg-3)",                             check: r => r >= 0 && r < 1 },
+              { label: "1 – 2R", sub: "达标",  color: "var(--up)",                               check: r => r >= 1 && r < 2 },
+              { label: "2R +",  sub: "优秀",  color: "oklch(0.82 0.19 145)",                    check: r => r >= 2 },
+            ];
+            const bucketData = rBuckets.map(b => ({ ...b, pos: closedWithR.filter(h => b.check(h.rMult)) }));
+            const maxCnt = Math.max(1, ...bucketData.map(b => b.pos.length));
+            const sumR   = closedWithR.reduce((s, h) => s + h.rMult, 0);
+            const avgR   = (sumR / closedWithR.length).toFixed(2);
+            const sorted = [...closedWithR].map(h => h.rMult).sort((a, b) => a - b);
+            const mid    = sorted.length;
+            const medR   = (mid % 2 === 0
+              ? (sorted[mid/2-1] + sorted[mid/2]) / 2
+              : sorted[Math.floor(mid/2)]).toFixed(2);
+            const avgCls = parseFloat(avgR) >= 1 ? "up" : parseFloat(avgR) >= 0 ? "" : "down";
+            const rows = bucketData.map(b => {
+              const cnt  = b.pos.length;
+              const barW = Math.round(cnt / maxCnt * 100);
+              return `<div style="display:flex;align-items:center;gap:10px">
+                <div style="flex-shrink:0;width:52px;text-align:right">
+                  <span style="font-family:var(--f-mono);font-size:11px;font-weight:600;color:${b.color}">${b.label}</span>
+                  <div style="font-size:9.5px;color:var(--fg-3);margin-top:1px">${b.sub}</div>
+                </div>
+                <div style="flex:1">
+                  <div style="height:6px;background:var(--bg-3);border-radius:4px;overflow:hidden;margin-bottom:3px">
+                    <div style="height:100%;border-radius:4px;background:${b.color};width:${barW}%;min-width:${cnt>0?3:0}px;transition:width .4s"></div>
+                  </div>
+                  <div style="font-size:10px;color:var(--fg-2);font-family:var(--f-mono)">${cnt > 0 ? `${cnt} 笔 · ${Math.round(cnt/closedWithR.length*100)}%` : "—"}</div>
+                </div>
+              </div>`;
+            }).join("");
+            return `<div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">${rows}</div>
+              <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:20px">
+                <div>
+                  <div style="font-size:10px;color:var(--fg-3);margin-bottom:2px">平均 R</div>
+                  <div class="mono ${avgCls}" style="font-size:14px;font-weight:700">${parseFloat(avgR) >= 0 ? "+" : ""}${avgR}R</div>
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--fg-3);margin-bottom:2px">中位 R</div>
+                  <div class="mono" style="font-size:14px;font-weight:700;color:var(--fg-1)">${parseFloat(medR) >= 0 ? "+" : ""}${medR}R</div>
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--fg-3);margin-bottom:2px">样本</div>
+                  <div class="mono" style="font-size:14px;font-weight:700;color:var(--fg-1)">${closedWithR.length} 笔</div>
+                </div>
+              </div>`;
+          })()}
+        </div>
       </div>
       ${pnlCalendarHTML(calYear, calMonth)}
 
