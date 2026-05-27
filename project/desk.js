@@ -767,7 +767,7 @@
     const keyFn = {
       tk: h => h.sym, bxbars: h => h.bx.dailyBars, cost: h => h.cost, last: h => h.last,
       qty: h => h.qty, pnl: h => h.pnlDollar, stop: h => h.stop, target: h => h.target,
-      entry: h => h.entry || "", progstatus: h => progressBucket(h),
+      progstatus: h => progressBucket(h),
     }[sortKey] || (h => h.pnlDollar);
     rows.sort((a, b) => {
       const va = keyFn(a), vb = keyFn(b);
@@ -778,10 +778,10 @@
 
     // body
     const cols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
-    $("#tbody").innerHTML = rows.map((h, i) => {
+    const colSpan = cols.length + 1; // +1 for actions column
+    const makeHoldingRow = (h, i) => {
       const isSel = selectedSym === h.sym ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
-      // Open: archive + delete; Closed: delete only
       const actions = activeTab === "open"
         ? `<td style="width:60px;padding:6px 4px"><div class="row-actions">
              <button class="close-pos-btn" data-sym="${h.sym}" title="平仓 (归档)"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
@@ -791,7 +791,29 @@
              <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
            </div></td>`;
       return `<tr class="${isSel}" data-sym="${h.sym}" data-idx="${i}">${cells}${actions}</tr>`;
-    }).join("");
+    };
+
+    if (activeTab === "open") {
+      // Group by entry date — same pattern as sim holdings
+      const groups = {};
+      rows.forEach(h => {
+        const d = h.entry?.slice(0, 10) || "—";
+        (groups[d] = groups[d] || []).push(h);
+      });
+      const thisYear = new Date().getFullYear();
+      $("#tbody").innerHTML = Object.keys(groups)
+        .sort((a, b) => b.localeCompare(a))
+        .map(date => {
+          const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
+          const label = dt
+            ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) })
+            : "—";
+          const hdr = `<tr class="date-group-hdr"><td colspan="${colSpan}">${label}</td></tr>`;
+          return hdr + groups[date].map(h => makeHoldingRow(h, rows.indexOf(h))).join("");
+        }).join("");
+    } else {
+      $("#tbody").innerHTML = rows.map((h, i) => makeHoldingRow(h, i)).join("");
+    }
 
     $$("#tbody tr").forEach(tr => {
       tr.addEventListener("click", e => {
