@@ -767,7 +767,7 @@
     const keyFn = {
       tk: h => h.sym, bxbars: h => h.bx.dailyBars, cost: h => h.cost, last: h => h.last,
       qty: h => h.qty, pnl: h => h.pnlDollar, stop: h => h.stop, target: h => h.target,
-      progstatus: h => progressBucket(h),
+      entry: h => h.entry || "", progstatus: h => progressBucket(h),
     }[sortKey] || (h => h.pnlDollar);
     rows.sort((a, b) => {
       const va = keyFn(a), vb = keyFn(b);

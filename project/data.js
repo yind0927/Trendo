@@ -39,6 +39,7 @@ window.BUCKET_STATUS = {
 window.COLS = [
   { id: "tk",         label: "Ticker",  r: false, on: true, locked: true },
   { id: "bxbars",     label: "BX Bars", r: false, on: true },
+  { id: "entry",      label: "入场日",  r: false, on: true },
   { id: "cost",       label: "入场价",  r: true,  on: true },
   { id: "last",       label: "最新价",  r: true,  on: true },
   { id: "qty",        label: "数量",    r: true,  on: true },
