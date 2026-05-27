@@ -3590,8 +3590,8 @@
             }).join("")}
           </div>
         </div>
-        ${pnlCalendarHTML(calYear, calMonth, "flex:2;margin-bottom:0")}
       </div>
+      ${pnlCalendarHTML(calYear, calMonth)}
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
@@ -5202,6 +5202,7 @@
   renderOverview();
   renderTable();
   renderBottom();
+  if (HOLDINGS.length > 0) initHoldingsBriefCard();
   wireControls();
   wireTweaks();
   wireTableTabs();
