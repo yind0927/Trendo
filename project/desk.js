@@ -4555,7 +4555,7 @@
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
-        fetch("/api/history?symbols=%5EGSPC,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
+        fetch("/api/history?symbols=SPY,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
 
@@ -4579,8 +4579,8 @@
 
       // RSI from SPX history (today + yesterday)
       let rsi = 0, rsiPrev = null;
-      if (histRes.status === "fulfilled" && histRes.value?.results?.["^GSPC"]) {
-        const raw = histRes.value.results["^GSPC"];
+      if (histRes.status === "fulfilled" && histRes.value?.results?.["SPY"]) {
+        const raw = histRes.value.results["SPY"];
         const closes = Object.keys(raw).sort().map(k => raw[k]);
         const r = calcRSI(closes);
         if (r != null) rsi = r;
