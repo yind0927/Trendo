@@ -2593,13 +2593,18 @@
       } else if (mOpen > 0) {
         mStats = `${mOpen}笔持仓中`;
       }
+      // Open positions first (entry-date desc), closed at bottom (closedAt desc)
+      const orderedItems = [
+        ...items.filter(x => x.from === "open"),
+        ...items.filter(x => x.from === "closed"),
+      ];
       return `<div class="jm-group">
         <div class="jm-header">
           <span class="jm-title">${label}</span>
           <span class="jm-rule"></span>
           ${mStats ? `<span class="jm-stats">${mStats}</span>` : ""}
         </div>
-        ${items.map(({ h, from }) => journalCardHTML(h, from)).join("")}
+        ${orderedItems.map(({ h, from }) => journalCardHTML(h, from)).join("")}
       </div>`;
     }).join("");
 
@@ -3067,6 +3072,7 @@
           return hdr + groups[date].map(h => makeRow(h, rows.indexOf(h))).join("");
         }).join("");
     } else {
+      rows.sort((a, b) => (b.closedAt || b.entry || "").localeCompare(a.closedAt || a.entry || ""));
       const prevTab = activeTab;
       activeTab = "closed";
       tbody.innerHTML = rows.map((h, i) => makeRow(h, i)).join("");
