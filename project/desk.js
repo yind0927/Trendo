@@ -3345,8 +3345,6 @@
   }
 
   function generatePortfolioCurve(period) {
-    const totalPnlDollar = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
-    const currentValue   = totalNotional + totalPnlDollar;
     const today    = new Date();
     const todayStr = today.toISOString().slice(0, 10);
     const liveTodayPnl = HOLDINGS.reduce((s, h) => s + ((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0), 0);
@@ -3362,28 +3360,45 @@
       return days;
     };
 
-    const buildCurve = days => {
-      const v = new Array(days.length);
-      v[v.length - 1] = currentValue;
-      for (let i = v.length - 2; i >= 0; i--) v[i] = v[i + 1] - getDayPnl(days[i + 1]);
-      return v;
+    // Forward-accumulate cumulative P&L so each date's value is independent of future
+    // positions. The old backward approach (anchored at currentValue) caused retroactive
+    // curve shifts whenever a new position was added, because currentValue grew by the
+    // new position's unrealized P&L while getDayPnl only included it from entry onward.
+    const allLogDates = [...new Set([
+      ...Object.keys(histPnlLog), ...Object.keys(dailyPnlLog), todayStr
+    ])].sort();
+    let runCum = 0;
+    const cumMap = {};
+    for (const d of allLogDates) {
+      runCum += getDayPnl(d);
+      cumMap[d] = runCum;
+    }
+
+    // Portfolio value at date d = totalNotional + cumulative P&L through d
+    const portfolioAt = d => {
+      let c = 0;
+      for (const k of allLogDates) {
+        if (k > d) break;
+        c = cumMap[k];
+      }
+      return totalNotional + c;
     };
 
     if (period === "week") {
-      const days        = getTradingDays(5);
-      const labels      = days.map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d + "T12:00:00Z").getUTCDay()]);
+      const days         = getTradingDays(5);
+      const labels       = days.map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d + "T12:00:00Z").getUTCDay()]);
       const dailyChanges = days.map(d => getDayPnl(d));
-      return { values: buildCurve(days), labels, dailyChanges };
+      return { values: days.map(d => portfolioAt(d)), labels, dailyChanges };
     }
 
     if (period === "month") {
-      const days        = getTradingDays(22);
-      const labels      = days.map(d => { const [,m,dy] = d.split("-"); return `${+m}/${+dy}`; });
+      const days         = getTradingDays(22);
+      const labels       = days.map(d => { const [,m,dy] = d.split("-"); return `${+m}/${+dy}`; });
       const dailyChanges = days.map(d => getDayPnl(d));
-      return { values: buildCurve(days), labels, dailyChanges };
+      return { values: days.map(d => portfolioAt(d)), labels, dailyChanges };
     }
 
-    // year: 12 monthly cumulative endpoint values
+    // year: 12 monthly cumulative endpoint values — forward-accumulated from totalNotional
     const merged = Object.assign({}, dailyPnlLog, histPnlLog);
     const monthPnls = Array.from({length: 12}, (_, i) => {
       const d = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
@@ -3393,8 +3408,8 @@
         .reduce((s, [, v]) => s + v, 0);
     });
     const cums = new Array(13);
-    cums[12] = currentValue;
-    for (let i = 11; i >= 0; i--) cums[i] = cums[i + 1] - monthPnls[i];
+    cums[0] = totalNotional;
+    for (let i = 0; i < 12; i++) cums[i + 1] = cums[i] + monthPnls[i];
     const labels = Array.from({length: 12}, (_, i) =>
       new Date(today.getFullYear(), today.getMonth() - 11 + i, 1).toLocaleDateString("en-US", { month: "short" })
     );
