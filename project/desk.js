@@ -3072,7 +3072,6 @@
           return hdr + groups[date].map(h => makeRow(h, rows.indexOf(h))).join("");
         }).join("");
     } else {
-      rows.sort((a, b) => (b.closedAt || b.entry || "").localeCompare(a.closedAt || a.entry || ""));
       const prevTab = activeTab;
       activeTab = "closed";
       tbody.innerHTML = rows.map((h, i) => makeRow(h, i)).join("");
@@ -3153,7 +3152,9 @@
     }
     if (!hasClosed) { el.innerHTML = ""; return; }
 
-    const sorted = [...SIM_CLOSED].sort((a, b) => (b.pnlFinal ?? 0) - (a.pnlFinal ?? 0));
+    const sorted = [...SIM_CLOSED].sort((a, b) =>
+      (b.closedAt || b.entry || "").localeCompare(a.closedAt || a.entry || "")
+    );
 
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
       sorted.map(h => {
