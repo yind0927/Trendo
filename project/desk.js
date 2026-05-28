@@ -3347,6 +3347,10 @@
   function generatePortfolioCurve(period) {
     const today    = new Date();
     const todayStr = today.toISOString().slice(0, 10);
+    const allPos   = [...HOLDINGS, ...CLOSED_POSITIONS];
+
+    const livePnl      = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
+    const liveValue    = totalNotional + livePnl;
     const liveTodayPnl = HOLDINGS.reduce((s, h) => s + ((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0), 0);
 
     const getDayPnl = d => d === todayStr ? liveTodayPnl : (histPnlLog[d] ?? dailyPnlLog[d] ?? 0);
@@ -3360,28 +3364,43 @@
       return days;
     };
 
-    // Forward-accumulate cumulative P&L so each date's value is independent of future
-    // positions. The old backward approach (anchored at currentValue) caused retroactive
-    // curve shifts whenever a new position was added, because currentValue grew by the
-    // new position's unrealized P&L while getDayPnl only included it from entry onward.
-    const allLogDates = [...new Set([
-      ...Object.keys(histPnlLog), ...Object.keys(dailyPnlLog), todayStr
-    ])].sort();
-    let runCum = 0;
-    const cumMap = {};
-    for (const d of allLogDates) {
-      runCum += getDayPnl(d);
-      cumMap[d] = runCum;
-    }
+    // Pre-sort histCache keys per symbol once for O(log n) binary-search price lookup
+    const sortedKeys = {};
+    Object.keys(histCache).forEach(sym => {
+      sortedKeys[sym] = Object.keys(histCache[sym]).sort();
+    });
 
-    // Portfolio value at date d = totalNotional + cumulative P&L through d
-    const portfolioAt = d => {
-      let c = 0;
-      for (const k of allLogDates) {
-        if (k > d) break;
-        c = cumMap[k];
+    // Nearest price on or before date d using binary search
+    const priceAt = (ySym, d) => {
+      const cache = histCache[ySym];
+      if (!cache) return null;
+      if (cache[d] != null) return cache[d];
+      const keys = sortedKeys[ySym] || [];
+      let lo = 0, hi = keys.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (keys[mid] <= d) lo = mid; else hi = mid - 1;
       }
-      return totalNotional + c;
+      return (keys.length && keys[lo] <= d) ? cache[keys[lo]] : null;
+    };
+
+    // Direct portfolio value: totalNotional + Σ(price_at_D - cost)×qty for open positions on D.
+    // Computing from absolute prices (not cumulative daily deltas) avoids drift from missing
+    // dates in Yahoo Finance history and retroactive shifts when new positions are added.
+    const portfolioAt = d => {
+      if (d >= todayStr) return liveValue;
+      let pnl = 0;
+      allPos.forEach(pos => {
+        const entryDate = pos.entry?.slice(0, 10);
+        const closeDate = pos.closedAt?.slice(0, 10);
+        if (!entryDate || d < entryDate) return;
+        if (closeDate && d > closeDate) return;
+        const ySym  = pos.kind === "crypto" ? `${pos.sym}-USD` : pos.sym;
+        const price = priceAt(ySym, d);
+        if (price == null) return;
+        pnl += (price - pos.cost) * pos.qty;
+      });
+      return totalNotional + pnl;
     };
 
     if (period === "week") {
@@ -3398,22 +3417,18 @@
       return { values: days.map(d => portfolioAt(d)), labels, dailyChanges };
     }
 
-    // year: 12 monthly cumulative endpoint values — forward-accumulated from totalNotional
-    const merged = Object.assign({}, dailyPnlLog, histPnlLog);
-    const monthPnls = Array.from({length: 12}, (_, i) => {
-      const d = new Date(today.getFullYear(), today.getMonth() - 11 + i, 1);
-      const y = d.getFullYear(), m = d.getMonth();
-      return Object.entries(merged)
-        .filter(([date]) => { const [dy, dm] = date.split("-").map(Number); return dy === y && dm - 1 === m; })
-        .reduce((s, [, v]) => s + v, 0);
+    // year: portfolio value at the last trading day of each of the 12 calendar months
+    const monthEndValues = Array.from({length: 12}, (_, i) => {
+      const d = new Date(today.getFullYear(), today.getMonth() - 11 + i + 1, 0); // last day of month
+      if (d >= today) return liveValue;
+      while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+      return portfolioAt(d.toISOString().slice(0, 10));
     });
-    const cums = new Array(13);
-    cums[0] = totalNotional;
-    for (let i = 0; i < 12; i++) cums[i + 1] = cums[i] + monthPnls[i];
+    const monthPnls = monthEndValues.map((v, i) => v - (i === 0 ? totalNotional : monthEndValues[i - 1]));
     const labels = Array.from({length: 12}, (_, i) =>
       new Date(today.getFullYear(), today.getMonth() - 11 + i, 1).toLocaleDateString("en-US", { month: "short" })
     );
-    return { values: cums.slice(1), labels, dailyChanges: monthPnls };
+    return { values: monthEndValues, labels, dailyChanges: monthPnls };
   }
 
   function portfolioCurveSVG(points, labels, h, chartId) {
