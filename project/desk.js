@@ -38,7 +38,9 @@
     const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
     const todaySign = fmt.sign(todayPnl);
 
-    const portfolioValue = totalNotional + totalPnlDollar;
+    // Include realized P&L from closed positions in total portfolio value
+    const realizedPnl   = CLOSED_POSITIONS.reduce((s, h) => s + (h.pnlFinal || 0), 0);
+    const portfolioValue = totalNotional + totalPnlDollar + realizedPnl;
 
     const opc = $("#open-pos-count"); if (opc) opc.textContent = HOLDINGS.length;
 
@@ -47,7 +49,7 @@
       <div class="ov-card" id="nav-card">
         <div class="label" style="justify-content:space-between">总资产<button class="nav-edit-btn" title="编辑基准总额"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>
         <div class="value">$${portfolioValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
-        <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${totalPnlDollar >= 0 ? "+" : ""}${fmt.signed(totalPnlDollar)}</span></span></div>
+        <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${totalPnlDollar >= 0 ? "+" : ""}${fmt.signed(totalPnlDollar)} 浮</span>${realizedPnl !== 0 ? ` <span class="${fmt.sign(realizedPnl)}" style="font-size:10.5px">${realizedPnl >= 0 ? "+" : ""}${fmt.signed(realizedPnl)} 已</span>` : ""}</span></div>
       </div>
       ${card({
         label: "总浮盈 / 浮亏", info: false,
@@ -1035,8 +1037,13 @@
     renderTable();
   }
 
-  function drawerHTML(h) {
+  function drawerHTML(h, isSim = false) {
     const isClosed = activeTab === "closed";
+    const closedArr = isSim ? SIM_CLOSED : CLOSED_POSITIONS;
+    // Partial close records for this symbol (for open positions that have been partially exited)
+    const partialCloses = isClosed ? [] : closedArr
+      .filter(c => c.sym === h.sym && c.exitReason === "partial")
+      .sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
     // Status badge
     let badgeColor, badgeTxt;
     if (isClosed) {
@@ -1151,6 +1158,14 @@
                 <span class="exec-price mono">$${price(h.cost)}</span>
                 <span class="exec-qty muted">${h.qty} 股</span>
               </div>`}
+            ${partialCloses.map(c => `
+              <div class="exec-item">
+                <span class="exec-type" style="background:color-mix(in oklch,var(--warn) 18%,transparent);color:var(--warn)">减仓</span>
+                <span class="exec-date">${fmt.date(c.closedAt)}</span>
+                <span class="exec-price mono">$${price(c.closePrice)}</span>
+                <span class="exec-qty muted">${c.qty} 股</span>
+                <span class="exec-qty muted ${fmt.sign(c.pnlFinal)}" style="margin-left:auto">${fmt.signed(c.pnlFinal)}</span>
+              </div>`).join("")}
             ${h.closedAt ? `
               <div class="exec-item">
                 <span class="exec-type" style="background:color-mix(in oklch,var(--fg-3) 18%,transparent);color:var(--fg-2)">平仓</span>
@@ -3187,7 +3202,7 @@
     const isClosed = context === "closed";
     const prevTab = activeTab;
     activeTab = isClosed ? "closed" : "open";
-    $("#drawer").innerHTML = drawerHTML(h);
+    $("#drawer").innerHTML = drawerHTML(h, true);
     activeTab = prevTab;
     wireBX(h);
     if (!isClosed) {
