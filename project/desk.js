@@ -2957,6 +2957,7 @@
     const closedTotal = SIM_CLOSED.length;
     const wins = SIM_CLOSED.filter(h => (h.pnlFinal || 0) > 0).length;
     const realizedPnl = SIM_CLOSED.reduce((s, h) => s + (h.pnlFinal || 0), 0);
+    const winRate = closedTotal > 0 ? (wins / closedTotal * 100).toFixed(0) + "%" : "—";
     const nav = simNotional + pnl + realizedPnl;
     const navSign = fmt.sign(pnl);
     el.innerHTML = `
