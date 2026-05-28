@@ -360,6 +360,49 @@
     }
   }
 
+  function wireClosedDrawerEdits(h, isSim = false) {
+    const dr = $("#drawer");
+    $$("[data-closed-field]", dr).forEach(el => {
+      el.addEventListener("focus", () => {
+        el.textContent = el.textContent.replace(/^\$/, "");
+        document.execCommand("selectAll", false, null);
+      });
+      el.addEventListener("blur", () => {
+        const v = parseFloat(el.textContent.trim().replace(/[^0-9.-]/g, ""));
+        if (isNaN(v) || v <= 0) { el.textContent = `$${price(h.closePrice ?? h.last)}`; return; }
+        h.closePrice = v;
+        h.pnlFinal   = Math.round((v - h.cost) * h.qty);
+        h.pnlDollar  = h.pnlFinal;
+        h.pnlPct     = h.cost > 0 ? (v - h.cost) / h.cost : 0;
+        h.rMult      = h.risk1R > 0 ? (v - h.cost) / h.risk1R : 0;
+        saveToStorage();
+        if (isSim) { renderSimTable(); renderSimOverview(); } else { renderTable(); renderOverview(); }
+        el.textContent = `$${price(v)}`;
+        // Update hero price display
+        const pnlSign = fmt.sign(h.pnlFinal);
+        const heroP   = $(".hero-price .p", dr);
+        const heroPct = $(".hero-price .pct", dr);
+        const heroPnl = $(".hero-price .pnl", dr);
+        if (heroP)   heroP.textContent   = `$${price(v)}`;
+        if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct);      heroPct.className = `pct ${pnlSign}`; }
+        if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlFinal); heroPnl.className = `pnl ${pnlSign}`; }
+        // Update P&L cell in kv-grid
+        const pnlCell = $(".kv-grid .v.big", dr);
+        if (pnlCell) { pnlCell.textContent = fmt.signed(h.pnlFinal); pnlCell.className = `v big ${pnlSign}`; }
+        const rCell = $$(".kv-grid .v.big", dr)[1];
+        if (rCell)  { rCell.textContent = fmt.rMult(h.rMult);        rCell.className   = `v big ${fmt.sign(h.rMult)}`; }
+      });
+      el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
+    });
+    // Journal note
+    const drawerNote = $(".drawer-journal-note", dr);
+    if (drawerNote) {
+      autoResizeTA(drawerNote);
+      drawerNote.addEventListener("input", () => autoResizeTA(drawerNote));
+      drawerNote.addEventListener("blur", () => { h.journalNote = drawerNote.value; saveToStorage(); });
+    }
+  }
+
   function wireBX(h) {
     const dr = $("#drawer");
 
@@ -966,6 +1009,8 @@
       wireDrawerEdits(h);
       wireDrawerCloseButton();
       wireAddToPosition(h, HOLDINGS, totalNotional, () => { renderTable(); renderOverview(); });
+    } else {
+      wireClosedDrawerEdits(h, false);
     }
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
@@ -1104,7 +1149,7 @@
           ${isClosed ? `
           <div class="kv-grid">
             <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}</div></div>
-            <div><div class="k">出场价格</div><div class="v mono">$${price(h.closePrice ?? h.last)}</div></div>
+            <div><div class="k">出场价格<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit-closed mono" data-closed-field="closePrice" contenteditable="true" spellcheck="false">$${price(h.closePrice ?? h.last)}</span></div></div>
             <div><div class="k">盈亏金额</div><div class="v big ${fmt.sign(pnlAmt)}">${fmt.signed(pnlAmt)}</div></div>
             <div><div class="k">盈亏百分比</div><div class="v ${fmt.sign(pnlAmt)}">${fmt.pct(h.pnlPct)}</div></div>
             <div><div class="k">R 倍数</div><div class="v big ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</div></div>
@@ -3209,6 +3254,8 @@
       wireSimDrawerEdits(h);
       wireSimDrawerCloseButton();
       wireAddToPosition(h, SIM_HOLDINGS, simNotional, () => { renderSimTable(); renderSimOverview(); });
+    } else {
+      wireClosedDrawerEdits(h, true);
     }
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
