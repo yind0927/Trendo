@@ -2953,12 +2953,11 @@
     const label = $("#sim-analytics-label");
     if (label) label.style.display = hasAny ? "" : "none";
     const pnl = SIM_HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
-    const nav = simNotional + pnl;
     const open = SIM_HOLDINGS.length;
     const closedTotal = SIM_CLOSED.length;
     const wins = SIM_CLOSED.filter(h => (h.pnlFinal || 0) > 0).length;
     const realizedPnl = SIM_CLOSED.reduce((s, h) => s + (h.pnlFinal || 0), 0);
-    const winRate = closedTotal > 0 ? (wins / closedTotal * 100).toFixed(0) + "%" : "—";
+    const nav = simNotional + pnl + realizedPnl;
     const navSign = fmt.sign(pnl);
     el.innerHTML = `
       <div class="sim-card">
@@ -2968,8 +2967,8 @@
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
         </div>
-        <div class="sim-card-value ${pnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</div>
-        <div class="sim-card-sub">基准 ${fmt.usd(simNotional)}</div>
+        <div class="sim-card-value ${pnl + realizedPnl >= 0 ? 'up' : 'down'}">${fmt.usd(Math.round(nav))}</div>
+        <div class="sim-card-sub">基准 ${fmt.usd(simNotional)}${pnl !== 0 ? ` <span class="${fmt.sign(pnl)}" style="font-size:10px">${fmt.signed(Math.round(pnl))} 浮</span>` : ""}${realizedPnl !== 0 ? ` <span class="${fmt.sign(realizedPnl)}" style="font-size:10px">${fmt.signed(Math.round(realizedPnl))} 已</span>` : ""}</div>
       </div>
       <div class="sim-card">
         <div class="sim-card-label">模拟浮盈亏</div>
