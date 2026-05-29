@@ -2263,7 +2263,7 @@
   }
   .page-enter { animation: page-in .22s cubic-bezier(.22,1,.36,1) both; }
 </style>
-<script>try{if(sessionStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
+<script>try{if(localStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
 </head>
 <body data-density="medium" data-font="sans" data-theme="dark">
 
@@ -3207,7 +3207,7 @@ if ("serviceWorker" in navigator) {
 
   function unlock() {
     document.documentElement.classList.add("authed");
-    sessionStorage.setItem(SESSION_KEY, "1");
+    localStorage.setItem(SESSION_KEY, "1");
   }
 
   async function tryUnlock() {
@@ -3223,7 +3223,7 @@ if ("serviceWorker" in navigator) {
     }
   }
 
-  if (sessionStorage.getItem(SESSION_KEY) === "1") {
+  if (localStorage.getItem(SESSION_KEY) === "1") {
     document.documentElement.classList.add("authed");
   } else {
     document.getElementById("auth-submit-btn").addEventListener("click", tryUnlock);
