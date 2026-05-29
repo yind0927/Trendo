@@ -1271,6 +1271,32 @@
     });
   }
 
+  // Group partial/full closes of the same position into one trade record.
+  // Key: sym + entry + cost — all records sharing these belong to one trade.
+  function groupTrades(closedArr) {
+    const map = new Map();
+    for (const h of closedArr) {
+      const key = `${h.sym}|${h.entry}|${h.cost}`;
+      if (!map.has(key)) map.set(key, { ...h, _pnl: 0, _qty: 0, _lastClose: "" });
+      const t = map.get(key);
+      t._pnl += (h.pnlFinal ?? 0);
+      t._qty += (h.qty ?? 0);
+      if ((h.closedAt || "") > (t._lastClose || "")) t._lastClose = h.closedAt || "";
+    }
+    return [...map.values()].map(t => {
+      const risk1R = (t.cost && t.stop && t.cost > t.stop) ? (t.cost - t.stop) * t._qty : 0;
+      return {
+        ...t,
+        pnlFinal:  t._pnl,
+        pnlDollar: t._pnl,
+        closedAt:  t._lastClose,
+        qty:       t._qty,
+        rMult:     risk1R > 0 ? Math.round(t._pnl / risk1R * 10) / 10 : (t.rMult ?? 0),
+        days:      calcTradingDays(t.entry, t._lastClose),
+      };
+    });
+  }
+
   // ============ EVENTS CALENDAR ============
   function renderEvents() {
     const el = document.getElementById("events");
@@ -1313,14 +1339,14 @@
   }
 
   function renderBottom() {
-    const data = getReviewData();
+    const data = groupTrades(getReviewData());
     const total = data.length;
-    const wins  = data.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
+    const wins  = data.filter(h => (h.pnlFinal ?? 0) > 0).length;
     const losses = total - wins;
     const winRatePct = total > 0 ? (wins / total * 100).toFixed(1) : null;
     const avgR   = total > 0 ? (data.reduce((s,h) => s + (h.rMult || 0), 0) / total).toFixed(2) : null;
     const avgDays = total > 0 ? (data.reduce((s,h) => s + (h.days || 1), 0) / total).toFixed(1) : null;
-    const totalPnl = total > 0 ? Math.round(data.reduce((s,h) => s + (h.pnlFinal ?? h.pnlDollar ?? 0), 0)) : null;
+    const totalPnl = total > 0 ? Math.round(data.reduce((s,h) => s + (h.pnlFinal ?? 0), 0)) : null;
 
     const periodTitles = { week: "本周复盘", month: "本月复盘", all: "全部复盘" };
 
@@ -2602,16 +2628,16 @@
       return dB.localeCompare(dA);
     });
 
-    // Top stats bar (all-time closed)
-    const allClosed = CLOSED_POSITIONS;
-    const wins = allClosed.filter(h => (h.pnlFinal ?? 0) > 0);
-    const totalPnl = allClosed.reduce((s, h) => s + (h.pnlFinal ?? 0), 0);
-    const winRate = allClosed.length ? Math.round(wins.length / allClosed.length * 100) : null;
-    const statsBar = allClosed.length > 0 ? `
+    // Top stats bar (all-time closed, grouped by trade)
+    const allClosedTrades = groupTrades(CLOSED_POSITIONS);
+    const wins = allClosedTrades.filter(t => t.pnlFinal > 0);
+    const totalPnl = allClosedTrades.reduce((s, t) => s + t.pnlFinal, 0);
+    const winRate = allClosedTrades.length ? Math.round(wins.length / allClosedTrades.length * 100) : null;
+    const statsBar = allClosedTrades.length > 0 ? `
       <div class="j-statsbar">
         <div class="j-statsbar-item">
           <span class="j-statsbar-label">已平仓</span>
-          <span class="j-statsbar-value">${allClosed.length} 笔</span>
+          <span class="j-statsbar-value">${allClosedTrades.length} 笔</span>
         </div>
         <div class="j-statsbar-sep"></div>
         <div class="j-statsbar-item">
@@ -2644,12 +2670,13 @@
       const [yr, mo] = key.split("-");
       const label = key === "0000-00" ? "未知日期" : `${yr}年 ${MO_ZH[parseInt(mo) - 1]}`;
       const mClosed = items.filter(x => x.from === "closed");
-      const mWins   = mClosed.filter(x => (x.h.pnlFinal ?? 0) > 0);
-      const mPnl    = mClosed.reduce((s, x) => s + (x.h.pnlFinal ?? 0), 0);
+      const mTrades = groupTrades(mClosed.map(x => x.h));
+      const mWins   = mTrades.filter(t => t.pnlFinal > 0);
+      const mPnl    = mTrades.reduce((s, t) => s + t.pnlFinal, 0);
       const mOpen   = items.filter(x => x.from === "open").length;
       let mStats = "";
-      if (mClosed.length > 0) {
-        mStats = `${mClosed.length}笔 · ${mWins.length}胜${mClosed.length - mWins.length}负 · ${fmt.signed(Math.round(mPnl))}`;
+      if (mTrades.length > 0) {
+        mStats = `${mTrades.length}笔 · ${mWins.length}胜${mTrades.length - mWins.length}负 · ${fmt.signed(Math.round(mPnl))}`;
       } else if (mOpen > 0) {
         mStats = `${mOpen}笔持仓中`;
       }
@@ -3619,24 +3646,25 @@
     const aContent = $("#analytics-content");
     if (!aContent) return;
 
-    const closed = CLOSED_POSITIONS;
+    const closedRaw = CLOSED_POSITIONS; // raw records — used for P&L calendar (each event on its date)
+    const closed = groupTrades(closedRaw); // grouped trades — used for stats, BX, R-mult
     const open   = HOLDINGS;
     const total  = closed.length;
-    const wins   = closed.filter(h => (h.pnlFinal ?? 0) > 0);
-    const losses = closed.filter(h => (h.pnlFinal ?? 0) <= 0);
-    const totalPnl  = closed.reduce((s, h) => s + (h.pnlFinal ?? 0), 0);
-    const grossWin  = wins.reduce((s, h) => s + (h.pnlFinal ?? 0), 0);
-    const grossLoss = Math.abs(losses.reduce((s, h) => s + (h.pnlFinal ?? 0), 0));
+    const wins   = closed.filter(t => t.pnlFinal > 0);
+    const losses = closed.filter(t => t.pnlFinal <= 0);
+    const totalPnl  = closed.reduce((s, t) => s + t.pnlFinal, 0);
+    const grossWin  = wins.reduce((s, t) => s + t.pnlFinal, 0);
+    const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnlFinal, 0));
     const winRate   = total > 0 ? (wins.length / total * 100).toFixed(1) : null;
     const pfStr     = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (wins.length > 0 ? "∞" : null);
     const avgWin    = wins.length > 0 ? Math.round(grossWin / wins.length) : null;
     const avgLoss   = losses.length > 0 ? Math.round(grossLoss / losses.length) : null;
-    const avgHold   = total > 0 ? (closed.reduce((s, h) => s + (h.days || 0), 0) / total).toFixed(1) : null;
-    const avgWinDays  = wins.length > 0   ? Math.round(wins.reduce((s, h) => s + (h.days || 0), 0) / wins.length) : null;
-    const avgLossDays = losses.length > 0 ? Math.round(losses.reduce((s, h) => s + (h.days || 0), 0) / losses.length) : null;
+    const avgHold   = total > 0 ? (closed.reduce((s, t) => s + (t.days || 0), 0) / total).toFixed(1) : null;
+    const avgWinDays  = wins.length > 0   ? Math.round(wins.reduce((s, t) => s + (t.days || 0), 0) / wins.length) : null;
+    const avgLossDays = losses.length > 0 ? Math.round(losses.reduce((s, t) => s + (t.days || 0), 0) / losses.length) : null;
     const holdRatio   = avgWinDays !== null && avgLossDays > 0 ? (avgWinDays / avgLossDays).toFixed(1) : null;
 
-    const sortedC = [...closed].sort((a, b) => a.closedAt.localeCompare(b.closedAt));
+    const sortedC = [...closedRaw].sort((a, b) => (a.closedAt||"").localeCompare(b.closedAt||""));
     const totalPnlDollar = open.reduce((s, h) => s + (h.pnlDollar || 0), 0);
     const currentPortfolioValue = totalNotional + totalPnlDollar;
     const curveData = generatePortfolioCurve(equityPeriod);
@@ -3848,28 +3876,40 @@
     const closed = CLOSED_POSITIONS;
     if (!closed.length) return `<div class="eq-empty">暂无已平仓记录</div>`;
 
-    const rows = [];
+    // Group partial closes into trades (sym + entry + cost)
+    const tradeMap = new Map();
     for (const h of closed) {
-      const ySym   = h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
+      const key = `${h.sym}|${h.entry}|${h.cost}`;
+      if (!tradeMap.has(key)) tradeMap.set(key, []);
+      tradeMap.get(key).push(h);
+    }
+
+    const rows = [];
+    for (const [, records] of tradeMap) {
+      const h0 = records[0];
+      const ySym   = h0.kind === "crypto" ? `${h0.sym}-USD` : h0.sym;
       const prices = histCache[ySym];
       if (!prices) continue;
 
-      const entryDate = h.entry?.slice(0, 10);
-      const closeDate = h.closedAt?.slice(0, 10);
-      if (!entryDate || !closeDate || !h.qty || !h.cost) continue;
+      const entryDate = h0.entry?.slice(0, 10);
+      const lastClose = records.reduce((mx, r) => (r.closedAt || "") > mx ? (r.closedAt || "") : mx, "");
+      const closeDate = lastClose.slice(0, 10);
+      if (!entryDate || !closeDate || !h0.cost) continue;
 
       const datesInRange = Object.keys(prices).filter(d => d > entryDate && d <= closeDate);
       if (!datesInRange.length) continue;
 
       const peakPrice = Math.max(...datesInRange.map(d => prices[d]));
-      if (peakPrice <= h.cost) continue; // never went profitable
+      if (peakPrice <= h0.cost) continue;
 
-      const peakPnl     = (peakPrice - h.cost) * h.qty;
-      const actualPnl   = h.pnlFinal ?? 0;
+      const totalQty  = records.reduce((s, r) => s + (r.qty ?? 0), 0);
+      const peakPnl   = (peakPrice - h0.cost) * totalQty;
+      const actualPnl = records.reduce((s, r) => s + (r.pnlFinal ?? 0), 0);
       const leftOnTable = peakPnl - actualPnl;
       const efficiency  = Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100);
+      const isPartial   = records.length > 1;
 
-      rows.push({ h, peakPnl, actualPnl, leftOnTable, efficiency });
+      rows.push({ h: { ...h0, closedAt: closeDate }, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt: records.length });
     }
 
     if (!rows.length) {
@@ -3905,14 +3945,15 @@
         </div>
       </div>`;
 
-    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency }) => {
+    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }) => {
       const actualW   = Math.max(0, Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100));
       const actualCls = actualPnl >= 0 ? "up" : "down";
       const chip      = effCls(efficiency);
+      const trancheTag = isPartial ? `<span style="font-size:9.5px;color:var(--fg-3);margin-left:6px">${trancheCnt}次出场</span>` : "";
       return `<div class="eq-row">
         <div class="eq-row-header">
           <div>
-            <span class="eq-sym">${h.sym}</span>
+            <span class="eq-sym">${h.sym}</span>${trancheTag}
             <span class="eq-dates">${h.entry?.slice(0,10)} → ${h.closedAt?.slice(0,10)}</span>
           </div>
           <span class="eq-eff-chip ${chip}">${effLabel(efficiency)}</span>
