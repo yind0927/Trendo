@@ -33,8 +33,12 @@
     const eqLabel  = eqCount + (etfCount > 0 ? `+${etfCount}ETF` : "") + " 美股";
     const pnlSign = fmt.sign(totalPnlDollar);
 
-    // Today PnL: open positions only (last vs prevClose)
-    const todayPnl = HOLDINGS.reduce((s, h) => s + Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0)), 0);
+    // Today PnL: open positions only (today-opened use cost as baseline, older use prevClose)
+    const _todayStr = new Date().toISOString().slice(0, 10);
+    const todayPnl = HOLDINGS.reduce((s, h) => {
+      const base = (h.entry === _todayStr) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+      return s + Math.round(((h.last || 0) - base) * (h.qty || 0));
+    }, 0);
     const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
     const todaySign = fmt.sign(todayPnl);
 
@@ -79,10 +83,12 @@
     const label = $("#daily-sources-label");
     if (!el) return;
 
+    const _todayStr2 = new Date().toISOString().slice(0, 10);
     const rows = HOLDINGS
       .map(h => {
-        const today = Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0));
-        const todayPct = h.prevClose ? ((h.last - h.prevClose) / h.prevClose * 100) : 0;
+        const base = (h.entry === _todayStr2) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+        const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
+        const todayPct = base ? ((h.last - base) / base * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
       })
       .sort((a, b) => b.today - a.today);
@@ -2983,10 +2989,12 @@
     const el = $("#sim-daily-sources");
     const label = $("#sim-daily-sources-label");
     if (!el) return;
+    const _todayStr3 = new Date().toISOString().slice(0, 10);
     const rows = SIM_HOLDINGS
       .map(h => {
-        const today = Math.round(((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0));
-        const todayPct = h.prevClose ? ((h.last - h.prevClose) / h.prevClose * 100) : 0;
+        const base = (h.entry === _todayStr3) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+        const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
+        const todayPct = base ? ((h.last - base) / base * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
       })
       .sort((a, b) => b.today - a.today);
