@@ -33,10 +33,11 @@
     const eqLabel  = eqCount + (etfCount > 0 ? `+${etfCount}ETF` : "") + " 美股";
     const pnlSign = fmt.sign(totalPnlDollar);
 
-    // Today PnL: open positions only (today-opened use cost as baseline, older use prevClose)
-    const _todayStr = new Date().toISOString().slice(0, 10);
+    // Today PnL: open positions only.
+    // Baseline = prevClose for older positions; cost for positions entered on/after last trading day.
+    const _lastTD = getLastTradingDayStr();
     const todayPnl = HOLDINGS.reduce((s, h) => {
-      const base = (h.entry === _todayStr) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+      const base = (h.entry >= _lastTD) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
       return s + Math.round(((h.last || 0) - base) * (h.qty || 0));
     }, 0);
     const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
@@ -83,10 +84,10 @@
     const label = $("#daily-sources-label");
     if (!el) return;
 
-    const _todayStr2 = new Date().toISOString().slice(0, 10);
+    const _lastTD2 = getLastTradingDayStr();
     const rows = HOLDINGS
       .map(h => {
-        const base = (h.entry === _todayStr2) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+        const base = (h.entry >= _lastTD2) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
         const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
         const todayPct = base ? ((h.last - base) / base * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
@@ -680,6 +681,18 @@
   }
 
   // ============ TRADING DAYS CALCULATOR ============
+  // Returns "YYYY-MM-DD" of the most recently completed US trading day.
+  // Before 20:00 UTC (4pm ET) treat today as not yet closed → use yesterday.
+  function getLastTradingDayStr() {
+    const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const d = new Date(); d.setHours(0,0,0,0);
+    const utcMins = new Date().getUTCHours() * 60 + new Date().getUTCMinutes();
+    if (utcMins < 20 * 60) d.setDate(d.getDate() - 1);
+    const hols = new Set([...usMarketHolidays(d.getFullYear()), ...usMarketHolidays(d.getFullYear() - 1)]);
+    while (d.getDay() === 0 || d.getDay() === 6 || hols.has(f(d))) d.setDate(d.getDate() - 1);
+    return f(d);
+  }
+
   function usMarketHolidays(y) {
     const f = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const obs = (m, day) => {
@@ -2989,10 +3002,10 @@
     const el = $("#sim-daily-sources");
     const label = $("#sim-daily-sources-label");
     if (!el) return;
-    const _todayStr3 = new Date().toISOString().slice(0, 10);
+    const _lastTD3 = getLastTradingDayStr();
     const rows = SIM_HOLDINGS
       .map(h => {
-        const base = (h.entry === _todayStr3) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+        const base = (h.entry >= _lastTD3) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
         const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
         const todayPct = base ? ((h.last - base) / base * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
