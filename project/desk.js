@@ -4788,14 +4788,27 @@
     else el.innerHTML = `<div class="brief-loading">正在分析持仓…</div>`;
 
     try {
-      // Encode: sym:pnlPct:rMult:days:status:earnings
+      // Encode: sym:pnlPct:rMult:days:status:earnings:trimInfo
+      // trimInfo format: "{trimPct}p{avgR}R" e.g. "33p+1.5R" = 33% already closed at avg +1.5R
       const holdStr = HOLDINGS.map(h => {
         const pnl  = h.pnlPct  != null ? h.pnlPct.toFixed(1)  : "0";
         const r    = h.rMult   != null ? h.rMult.toFixed(1)   : "0";
         const d    = h.days    ?? 0;
         const s    = h.status  || "ok";
         const earn = h.earnings || "";
-        return `${h.sym}:${pnl}:${r}:${d}:${s}:${earn}`;
+        // Partial close info: look up same sym+entry+cost in CLOSED_POSITIONS
+        const partials = CLOSED_POSITIONS.filter(c =>
+          c.sym === h.sym && c.entry === h.entry && c.cost === h.cost && c.exitReason === "partial"
+        );
+        let trim = "";
+        if (partials.length > 0) {
+          const closedQty = partials.reduce((s, c) => s + (c.qty || 0), 0);
+          const origQty   = closedQty + (h.qty || 0);
+          const trimPct   = origQty > 0 ? Math.round(closedQty / origQty * 100) : 0;
+          const avgR      = partials.reduce((s, c) => s + (c.rMult || 0), 0) / partials.length;
+          trim = `${trimPct}p${avgR >= 0 ? "+" : ""}${avgR.toFixed(1)}R`;
+        }
+        return `${h.sym}:${pnl}:${r}:${d}:${s}:${earn}:${trim}`;
       }).join(",");
 
       const params = new URLSearchParams({ h: holdStr });

@@ -119,9 +119,15 @@ export default async function handler(req, res) {
   }
 
   // ── 2. Parse holdings ─────────────────────────────────────────────────────
-  // Format: sym:pnlPct:rMult:days:status:earningsDate
+  // Format: sym:pnlPct:rMult:days:status:earningsDate:trimInfo
+  // trimInfo: "{pct}p{+/-R}R" e.g. "33p+1.5R" = 33% already closed at avg +1.5R
   const holdings = holdingsStr.split(",").map(s => {
-    const [sym, pnl, r, days, status, earn] = s.split(":");
+    const [sym, pnl, r, days, status, earn, trim] = s.split(":");
+    let trimPct = null, trimR = null;
+    if (trim) {
+      const m = trim.match(/^(\d+)p([+-]?\d+\.?\d*)R$/);
+      if (m) { trimPct = parseInt(m[1]); trimR = parseFloat(m[2]); }
+    }
     return {
       sym,
       pnlPct:   pnl  != null ? parseFloat(pnl)  : null,
@@ -129,6 +135,7 @@ export default async function handler(req, res) {
       days:     days != null ? parseInt(days)    : null,
       status:   status || "ok",
       earnings: earn && earn !== "" ? earn : null,
+      trimPct, trimR,
     };
   }).filter(h => h.sym);
 
@@ -167,10 +174,13 @@ export default async function handler(req, res) {
     const daysStr = h.days    != null ? `持仓${h.days}天` : "";
     const stStr   = statusMap[h.status] || h.status;
     const earnStr = h.earnings ? ` [财报${h.earnings}]` : "";
+    const trimStr = h.trimPct != null
+      ? ` [已减仓${h.trimPct}%@${h.trimR >= 0 ? "+" : ""}${h.trimR}R，剩余${100 - h.trimPct}%]`
+      : "";
     const newsLines = newsMap[h.sym]?.length
       ? `\n      近期动态：${newsMap[h.sym].join("；")}`
       : "";
-    return `  ${h.sym}：${pnlStr} / ${rStr} / ${daysStr} · ${stStr}${earnStr}${newsLines}`;
+    return `  ${h.sym}：${pnlStr} / ${rStr} / ${daysStr} · ${stStr}${earnStr}${trimStr}${newsLines}`;
   }).join("\n");
 
   const prompt =
