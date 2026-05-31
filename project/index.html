@@ -1823,7 +1823,7 @@
   /* ============ HOLDINGS CARD VIEW ============ */
   #holdings-cards {
     display: none; /* shown in card mode */
-    flex-direction: column; gap: 8px; padding: 10px 0 4px;
+    flex-direction: column; gap: 0; padding: 8px 0 4px;
   }
   .hc-card {
     background: var(--bg-1); border: 1px solid var(--line);
@@ -2027,6 +2027,11 @@
     /* Overview: 3 cards per row; alloc card spans last 2 cols on row 2 */
     .overview { grid-template-columns: repeat(3, 1fr) !important; }
     .overview > .ov-alloc { grid-column: 2 / span 2; }
+    /* Sim panel-head: tabs+search on row 1, filters on row 2 */
+    #sim-view .panel-head { flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+    #sim-view .panel-head .panel-title { flex-shrink: 0; }
+    #sim-view .panel-head .sim-search { margin-left: auto; flex-shrink: 0; }
+    #sim-view .panel-head .filters { flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; gap: 5px; }
   }
 
   /* ============ MEDIUM: 769px – 1024px (tablet / small laptop, no sidebar) ============ */
@@ -2925,8 +2930,8 @@
     </td><td><span class="status danger"><span class="dot"></span>计划失效</span></td></tr></tbody>
       </table>
     </div>
-  </section>
   <div id="holdings-cards"></div>
+  </section>
 
   <!-- ============ HOLDINGS BRIEF ============ -->
   <div id="holdings-brief" class="brief-card" style="display:none;margin-top:20px;margin-bottom:20px"></div>
