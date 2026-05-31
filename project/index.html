@@ -1828,6 +1828,76 @@
   .review-trade-r.up, .review-trade-pnl.up   { color:var(--up); }
   .review-trade-r.down, .review-trade-pnl.down { color:var(--down); }
 
+  /* ============ HOLDINGS CARD VIEW ============ */
+  #holdings-cards {
+    display: none; /* shown in card mode */
+    flex-direction: column; gap: 8px; padding: 10px 0 4px;
+  }
+  .hc-card {
+    background: var(--bg-1); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px 14px;
+    cursor: pointer; transition: background .12s, border-color .12s;
+  }
+  .hc-card:hover { background: var(--bg-2); border-color: var(--line-strong); }
+  .hc-card:active { background: var(--bg-3); }
+  .hc-top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .hc-head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+  .hc-actions { display: flex; gap: 4px; }
+  .hc-action {
+    all: unset; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 5px; color: var(--fg-3);
+    transition: color .12s, background .12s;
+  }
+  .hc-action:hover { color: var(--fg-0); background: var(--bg-3); }
+  .hc-body { display: flex; flex-direction: column; gap: 7px; }
+  .hc-pnl-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .hc-pnl { font-family: var(--f-mono); font-size: 15px; font-weight: 700; }
+  .hc-pct { font-family: var(--f-mono); font-size: 12px; }
+  .hc-r   { font-family: var(--f-mono); font-size: 12px; font-weight: 600; }
+  .hc-sep { font-size: 10px; opacity: .5; }
+  .hc-days { font-size: 11px; color: var(--fg-3); }
+  .hc-pnl.up, .hc-pct.up, .hc-r.up   { color: var(--up); }
+  .hc-pnl.down, .hc-pct.down, .hc-r.down { color: var(--down); }
+  .hc-prog-wrap {
+    height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden;
+    display: flex;
+  }
+  .hc-prog-fill { height: 100%; border-radius: 2px; transition: width .3s; min-width: 2px; }
+  .hc-price-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 11px; font-family: var(--f-mono); color: var(--fg-3);
+  }
+  .hc-cur-price { color: var(--fg-1); font-weight: 600; }
+  .hc-date-hdr {
+    font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-3);
+    letter-spacing: 0.08em; padding: 8px 2px 2px; margin-top: 4px;
+    border-top: 1px solid var(--line);
+  }
+  .hc-date-hdr:first-child { border-top: none; margin-top: 0; padding-top: 2px; }
+  .hc-empty { text-align: center; color: var(--fg-3); padding: 32px 20px; font-size: 13px; }
+  /* view toggle button in section label */
+  .hc-view-toggle {
+    all: unset; cursor: pointer; margin-left: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 5px; color: var(--fg-3);
+    transition: color .12s, background .12s;
+  }
+  .hc-view-toggle:hover { color: var(--accent); background: var(--accent-dim); }
+  /* Pull-to-refresh indicator */
+  #ptr-indicator {
+    height: 0; overflow: hidden; opacity: 0;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--bg-1); border-bottom: 1px solid var(--line);
+    font-size: 11.5px; color: var(--fg-2);
+    transition: height 0.22s ease, opacity 0.22s ease;
+  }
+  #ptr-indicator.ptr-ready { color: var(--accent); }
+  @keyframes ptr-spin { to { transform: rotate(360deg); } }
+  #ptr-indicator.ptr-spinning .ptr-icon { animation: ptr-spin 0.8s linear infinite; }
+
   /* ============ SIDEBAR ============ */
   #sidebar {
     display: none; /* shown only on desktop via media query below */
@@ -2704,6 +2774,10 @@
 </script>
 
 <div id="desk-view">
+<div id="ptr-indicator" aria-hidden="true">
+  <svg class="ptr-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.8L1 10"/></svg>
+  <span id="ptr-text">下拉刷新</span>
+</div>
 <main>
   <div class="page-header" style="margin-bottom:8px">
     <div class="page-title">
@@ -2736,6 +2810,7 @@
     <span class="ssl-en">Positions</span>
     <span class="ssl-rule"></span>
     <span class="ssl-meta"><span id="open-pos-count">0</span> 笔 · 实时</span>
+    <button class="hc-view-toggle" id="holdings-view-toggle"></button>
   </div>
   <section class="panel">
     <div class="panel-head">
@@ -2884,6 +2959,7 @@
       </table>
     </div>
   </section>
+  <div id="holdings-cards"></div>
 
   <!-- ============ HOLDINGS BRIEF ============ -->
   <div id="holdings-brief" class="brief-card" style="display:none;margin-top:20px;margin-bottom:20px"></div>

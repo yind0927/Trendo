@@ -499,6 +499,7 @@
 
   let sortKey = "pnl", sortDir = -1, filter = "all", closedFilter = "all", query = "", selectedSym = null;
   let activeTab = "open";
+  let holdingsViewMode = localStorage.getItem("trendo_holdings_view") || "list";
   let totalNotional = 60000;
   let reviewPeriod = "week";
   let pendingCloseSym = null;
@@ -840,67 +841,85 @@
       return 0;
     });
 
-    // body
-    const cols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
-    const colSpan = cols.length + 1; // +1 for actions column
-    const makeHoldingRow = (h, i) => {
-      const isSel = selectedSym === h.sym ? "selected" : "";
-      const cells = cols.map(c => renderCell(h, c.id)).join("");
-      const actions = activeTab === "open"
-        ? `<td style="width:60px;padding:6px 4px"><div class="row-actions">
-             <button class="close-pos-btn" data-sym="${h.sym}" title="平仓 (归档)"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
-             <button class="delete-btn" data-sym="${h.sym}" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-           </div></td>`
-        : `<td style="width:40px;padding:6px 4px"><div class="row-actions">
-             <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-           </div></td>`;
-      return `<tr class="${isSel}" data-sym="${h.sym}" data-idx="${i}">${cells}${actions}</tr>`;
-    };
-
-    if (activeTab === "open") {
-      // Group by entry date — same pattern as sim holdings
-      const groups = {};
-      rows.forEach(h => {
-        const d = h.entry?.slice(0, 10) || "—";
-        (groups[d] = groups[d] || []).push(h);
-      });
-      const thisYear = new Date().getFullYear();
-      $("#tbody").innerHTML = Object.keys(groups)
-        .sort((a, b) => b.localeCompare(a))
-        .map(date => {
-          const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
-          const label = dt
-            ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) })
-            : "—";
-          const hdr = `<tr class="date-group-hdr"><td colspan="${colSpan}">${label}</td></tr>`;
-          return hdr + groups[date].map(h => makeHoldingRow(h, rows.indexOf(h))).join("");
-        }).join("");
-    } else {
-      $("#tbody").innerHTML = rows.map((h, i) => makeHoldingRow(h, i)).join("");
+    // update toggle icon
+    const _vtBtn = document.getElementById("holdings-view-toggle");
+    if (_vtBtn) {
+      _vtBtn.title = holdingsViewMode === "card" ? "切换为列表视图" : "切换为卡片视图";
+      _vtBtn.innerHTML = holdingsViewMode === "card"
+        ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`
+        : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>`;
     }
 
-    $$("#tbody tr").forEach(tr => {
-      tr.addEventListener("click", e => {
-        if (e.target.closest(".close-pos-btn, .delete-btn")) return;
-        openDrawer(rows[parseInt(tr.dataset.idx)]);
-      });
-    });
+    // show/hide containers
+    const _hw = document.getElementById("holdings")?.parentElement;
+    const _hc = document.getElementById("holdings-cards");
+    if (holdingsViewMode === "card") {
+      if (_hw) _hw.style.display = "none";
+      if (_hc) _hc.style.display = "flex";
+      renderHoldingsCards(rows);
+    } else {
+      if (_hw) _hw.style.display = "";
+      if (_hc) _hc.style.display = "none";
 
-    // Archive button: open close-position modal
-    $$(".close-pos-btn").forEach(btn => {
-      btn.addEventListener("click", e => {
-        e.stopPropagation();
-        openCloseModal(btn.dataset.sym);
-      });
-    });
+      // body
+      const cols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
+      const colSpan = cols.length + 1; // +1 for actions column
+      const makeHoldingRow = (h, i) => {
+        const isSel = selectedSym === h.sym ? "selected" : "";
+        const cells = cols.map(c => renderCell(h, c.id)).join("");
+        const actions = activeTab === "open"
+          ? `<td style="width:60px;padding:6px 4px"><div class="row-actions">
+               <button class="close-pos-btn" data-sym="${h.sym}" title="平仓 (归档)"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
+               <button class="delete-btn" data-sym="${h.sym}" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+             </div></td>`
+          : `<td style="width:40px;padding:6px 4px"><div class="row-actions">
+               <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+             </div></td>`;
+        return `<tr class="${isSel}" data-sym="${h.sym}" data-idx="${i}">${cells}${actions}</tr>`;
+      };
 
-    // Delete button: open delete confirmation modal
-    $$(".delete-btn").forEach(btn => {
-      btn.addEventListener("click", e => {
-        e.stopPropagation();
-        openDeleteModal(btn.dataset.sym, btn.dataset.from || "open");
+      if (activeTab === "open") {
+        const groups = {};
+        rows.forEach(h => {
+          const d = h.entry?.slice(0, 10) || "—";
+          (groups[d] = groups[d] || []).push(h);
+        });
+        const thisYear = new Date().getFullYear();
+        $("#tbody").innerHTML = Object.keys(groups)
+          .sort((a, b) => b.localeCompare(a))
+          .map(date => {
+            const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
+            const label = dt
+              ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) })
+              : "—";
+            const hdr = `<tr class="date-group-hdr"><td colspan="${colSpan}">${label}</td></tr>`;
+            return hdr + groups[date].map(h => makeHoldingRow(h, rows.indexOf(h))).join("");
+          }).join("");
+      } else {
+        $("#tbody").innerHTML = rows.map((h, i) => makeHoldingRow(h, i)).join("");
+      }
+
+      $$("#tbody tr").forEach(tr => {
+        tr.addEventListener("click", e => {
+          if (e.target.closest(".close-pos-btn, .delete-btn")) return;
+          openDrawer(rows[parseInt(tr.dataset.idx)]);
+        });
       });
-    });
+
+      $$(".close-pos-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          openCloseModal(btn.dataset.sym);
+        });
+      });
+
+      $$(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          openDeleteModal(btn.dataset.sym, btn.dataset.from || "open");
+        });
+      });
+    }
 
     // counts
     const rc = $("#row-count"); if (rc) rc.textContent = rows.length;
@@ -923,6 +942,102 @@
       $("#c-rk").textContent   = data.filter(h => ["Pullback", "Near Stop"].includes(progressBucket(h))).length;
       $("#c-tg").textContent   = data.filter(h => progressBucket(h) === "Near Target").length;
     }
+  }
+
+  function holdingCard(h) {
+    const isClosed = activeTab === "closed";
+    const bucket = progressBucket(h);
+    const bs = BUCKET_STATUS[bucket] || { label: "—", cls: "ok", color: "var(--accent)" };
+    const pnl = isClosed ? (h.pnlFinal ?? h.pnlDollar ?? 0) : (h.pnlDollar ?? 0);
+    const pct = h.pnlPct ?? 0;
+    const rVal = h.rMult ?? 0;
+    const pnlSign = fmt.sign(pnl);
+    const rSign = fmt.sign(rVal);
+    const displayPrice = isClosed ? (h.closePrice ?? h.last) : h.last;
+
+    let progPct = 0;
+    let progColor = "var(--accent)";
+    if (!isClosed && h.cost && h.stop && h.target && h.last) {
+      if (h.last >= h.cost) {
+        progPct = Math.min(1, (h.last - h.cost) / (h.target - h.cost));
+      } else {
+        progPct = -Math.min(1, (h.cost - h.last) / (h.cost - h.stop));
+      }
+      progColor = bs.color;
+    }
+
+    const statusLabel = isClosed ? (pnl > 0 ? "盈利" : "亏损") : bs.label.split(" · ")[0];
+    const statusCls   = isClosed ? (pnl > 0 ? "ok" : "danger") : bs.cls;
+
+    const actions = !isClosed
+      ? `<button class="hc-action close-pos-btn" data-sym="${h.sym}" title="平仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
+         <button class="hc-action delete-btn" data-sym="${h.sym}" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`
+      : `<button class="hc-action delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+
+    return `<div class="hc-card" data-sym="${h.sym}">
+      <div class="hc-top">
+        <div class="tk">
+          <div class="avatar${h.kind === "crypto" ? " crypto" : ""}">
+            ${logoImg(h)}${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}
+          </div>
+          <div class="meta">
+            <div class="sym">${h.sym}</div>
+            <div class="nm">${h.name}</div>
+          </div>
+        </div>
+        <div class="hc-head-right">
+          <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
+          <div class="hc-actions">${actions}</div>
+        </div>
+      </div>
+      <div class="hc-body">
+        <div class="hc-pnl-row">
+          <span class="hc-pnl ${pnlSign}">${fmt.signed(pnl)}</span>
+          <span class="hc-pct ${pnlSign}">${fmt.pct(pct)}</span>
+          <span class="hc-sep muted">·</span>
+          <span class="hc-r ${rSign}">${(rVal >= 0 ? "+" : "−") + Math.abs(rVal).toFixed(1)}R</span>
+          <span class="hc-sep muted">·</span>
+          <span class="hc-days muted">${h.days ?? 0}天</span>
+        </div>
+        ${!isClosed ? `<div class="hc-prog-wrap">
+          <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};${progPct<0?"margin-left:auto":""}"></div>
+        </div>` : ""}
+        <div class="hc-price-row">
+          <span>入 $${price(h.cost)}</span>
+          ${!isClosed ? `<span>损 $${price(h.stop)}</span><span>盈 $${price(h.target)}</span>` : ""}
+          <span class="hc-cur-price" style="margin-left:auto">$${price(displayPrice)}</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderHoldingsCards(rows) {
+    const el = document.getElementById("holdings-cards");
+    if (!el) return;
+    if (!rows.length) { el.innerHTML = `<div class="hc-empty">暂无持仓</div>`; return; }
+    if (activeTab === "open") {
+      const groups = {};
+      rows.forEach(h => { const d = h.entry?.slice(0, 10) || "—"; (groups[d] = groups[d] || []).push(h); });
+      const thisYear = new Date().getFullYear();
+      el.innerHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
+        const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
+        const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
+        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h)).join("");
+      }).join("");
+    } else {
+      el.innerHTML = rows.map(h => holdingCard(h)).join("");
+    }
+    el.querySelectorAll(".hc-card").forEach(card => {
+      card.addEventListener("click", e => {
+        if (e.target.closest(".hc-action")) return;
+        const h = rows.find(r => r.sym === card.dataset.sym);
+        if (h) openDrawer(h);
+      });
+    });
+    el.querySelectorAll(".close-pos-btn").forEach(btn =>
+      btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); }));
+    el.querySelectorAll(".delete-btn").forEach(btn =>
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); }));
   }
 
   function renderCell(h, id) {
@@ -5436,6 +5551,62 @@
     }).join("");
     track.innerHTML = html + html;
   }
+  function wireHoldingsViewToggle() {
+    const btn = document.getElementById("holdings-view-toggle");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      holdingsViewMode = holdingsViewMode === "list" ? "card" : "list";
+      localStorage.setItem("trendo_holdings_view", holdingsViewMode);
+      renderTable();
+    });
+  }
+
+  function initPullToRefresh() {
+    if (window.innerWidth > 768) return;
+    const ptrEl = document.getElementById("ptr-indicator");
+    const ptrTxt = document.getElementById("ptr-text");
+    if (!ptrEl) return;
+    const THRESHOLD = 65;
+    let startY = 0, pulling = false;
+
+    document.addEventListener("touchstart", e => {
+      startY = e.touches[0].clientY;
+      pulling = window.scrollY <= 0;
+    }, { passive: true });
+
+    document.addEventListener("touchmove", e => {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0) return;
+      const prog = Math.min(dy / THRESHOLD, 1);
+      ptrEl.style.opacity = prog.toFixed(2);
+      ptrEl.style.height = Math.min(dy * 0.45, 40) + "px";
+      if (ptrTxt) ptrTxt.textContent = dy >= THRESHOLD ? "释放以刷新" : "下拉刷新";
+      ptrEl.classList.toggle("ptr-ready", dy >= THRESHOLD);
+    }, { passive: true });
+
+    document.addEventListener("touchend", () => {
+      if (!pulling) return;
+      pulling = false;
+      const wasReady = ptrEl.classList.contains("ptr-ready");
+      ptrEl.classList.remove("ptr-ready");
+      if (!wasReady) {
+        ptrEl.style.opacity = "0";
+        ptrEl.style.height = "0";
+        return;
+      }
+      ptrEl.classList.add("ptr-spinning");
+      if (ptrTxt) ptrTxt.textContent = "正在刷新…";
+      ptrEl.style.height = "38px";
+      ptrEl.style.opacity = "1";
+      fetchPrices().finally(() => {
+        ptrEl.classList.remove("ptr-spinning");
+        ptrEl.style.opacity = "0";
+        ptrEl.style.height = "0";
+      });
+    }, { passive: true });
+  }
+
   loadFromStorage();
 
   // Retroactively stamp existing data saved before savedAt tracking was added.
@@ -5456,6 +5627,8 @@
   renderTable();
   renderBottom();
   if (HOLDINGS.length > 0) initHoldingsBriefCard();
+  wireHoldingsViewToggle();
+  initPullToRefresh();
   wireControls();
   wireTweaks();
   wireTableTabs();
