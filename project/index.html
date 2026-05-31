@@ -1924,19 +1924,14 @@
   }
   .sb-wm {
     display: flex; flex-direction: column; gap: 3px;
-    overflow: hidden; max-width: 180px; opacity: 1;
+    overflow: hidden; max-width: 160px; opacity: 1;
     transition: max-width 0.26s cubic-bezier(0.4,0,0.2,1), opacity 0.18s ease;
   }
   .sb-bt {
     font-size: 18px; font-weight: 800; letter-spacing: -0.035em; font-style: italic;
-    font-family: var(--f-sans); line-height: 1;
+    font-family: var(--f-sans); line-height: 1; white-space: nowrap;
     background: linear-gradient(180deg, var(--fg-0) 0%, color-mix(in oklch, var(--accent) 30%, var(--fg-1)) 100%);
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
-  }
-  .sb-tag {
-    font-family: var(--f-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--accent); border: 1px solid var(--accent-line); border-radius: 3px;
-    padding: 2px 5px; background: var(--accent-dim); display: inline-block; width: fit-content;
   }
   .sb-nav {
     flex: 1; padding: 10px 8px;
@@ -2677,7 +2672,6 @@
     </div>
     <div class="sb-wm">
       <div class="sb-bt">Trendo</div>
-      <div class="sb-tag">Thesis</div>
     </div>
     <button class="sb-toggle" id="sb-toggle" title="折叠 / 展开侧边栏" aria-label="Toggle sidebar">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
