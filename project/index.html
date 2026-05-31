@@ -73,7 +73,11 @@
 
     --radius: 10px;
     --radius-sm: 7px;
+    --sb-w: 220px; /* sidebar width; overridden to 60px when collapsed */
   }
+
+  /* sidebar collapse token */
+  body[data-sb="collapsed"] { --sb-w: 60px; }
 
   /* density modes */
   body[data-density="compact"]{
@@ -1828,12 +1832,11 @@
   #sidebar {
     display: none; /* shown only on desktop via media query below */
     flex-direction: column;
-    width: 220px;
+    width: var(--sb-w);
     flex-shrink: 0;
     background: var(--bg-1);
     border-right: 1px solid var(--line);
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden; /* .sb-nav scrolls internally */
   }
   .sb-brand-row {
     display: flex; align-items: center; gap: 11px;
@@ -1861,7 +1864,8 @@
   .sb-nav {
     flex: 1; padding: 10px 8px;
     display: flex; flex-direction: column; gap: 1px;
-    overflow-y: auto;
+    overflow-y: auto; overflow-x: hidden;
+    min-height: 0; /* allow flex shrink */
   }
   /* Override navlink defaults inside sidebar */
   #sidebar .navlink {
@@ -1886,15 +1890,8 @@
   .sb-bottom {
     padding: 10px 8px 14px; border-top: 1px solid var(--line);
     display: flex; flex-direction: column; gap: 6px;
+    flex-shrink: 0;
   }
-  .sb-btn-row { display: flex; gap: 4px; }
-  .sb-util-btn {
-    all: unset; cursor: pointer; flex: 1;
-    display: flex; align-items: center; justify-content: center; gap: 5px;
-    padding: 7px 8px; border-radius: 7px; font-size: 11.5px; color: var(--fg-2);
-    background: var(--bg-2); border: 1px solid var(--line); transition: background .12s, color .12s;
-  }
-  .sb-util-btn:hover { color: var(--fg-0); background: var(--bg-3); }
   .sb-open-btn {
     all: unset; cursor: pointer; width: 100%; box-sizing: border-box;
     display: flex; align-items: center; justify-content: center; gap: 7px;
@@ -1904,6 +1901,36 @@
   }
   .sb-open-btn:hover { opacity: .88; transform: translateY(-1px); }
 
+  /* Sidebar collapse toggle button */
+  .sb-toggle {
+    all: unset; cursor: pointer; margin-left: auto; flex-shrink: 0;
+    width: 26px; height: 26px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--fg-3); transition: background .12s, color .12s;
+  }
+  .sb-toggle:hover { background: oklch(1 0 0 / .08); color: var(--fg-1); }
+  .sb-toggle svg { transition: transform 0.2s ease; }
+
+  /* Collapsed sidebar state (icon-only, 60px wide via --sb-w) */
+  body[data-sb="collapsed"] .sb-wm { display: none; }
+  body[data-sb="collapsed"] .sb-lbl { display: none; }
+  body[data-sb="collapsed"] .sb-brand-row {
+    padding: 14px 0 10px;
+    flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  }
+  body[data-sb="collapsed"] .sb-toggle { margin-left: 0; }
+  body[data-sb="collapsed"] .sb-toggle svg { transform: rotate(180deg); }
+  body[data-sb="collapsed"] #sidebar .navlink {
+    justify-content: center; padding: 9px 0; gap: 0;
+  }
+  body[data-sb="collapsed"] .sb-bottom {
+    align-items: center; padding: 10px 0 14px; gap: 6px;
+  }
+  body[data-sb="collapsed"] .sb-open-btn {
+    padding: 9px; width: 42px; justify-content: center; gap: 0;
+  }
+  body[data-sb="collapsed"] .sb-open-txt { display: none; }
+
   /* ============ DESKTOP LAYOUT (sidebar visible) ============ */
   @media (min-width: 1025px) {
     /* Two-column root: fixed sidebar + scrollable content */
@@ -1911,19 +1938,29 @@
       display: flex;
       position: fixed; top: 0; left: 0;
       height: 100vh; z-index: 45;
+      width: var(--sb-w);
+      transition: width 0.2s ease;
     }
-    /* Shift all page content to the right of the sidebar */
+    /* Shift all page content right of the sidebar (with smooth transition) */
     .sticky-header,
     #desk-view, #sim-view, #analytics-view,
     #journal-view, #watchlist-view, #market-view {
-      margin-left: 220px;
+      margin-left: var(--sb-w) !important;
+      margin-right: 0 !important;
+      transition: margin-left 0.2s ease;
     }
-    /* Topbar: hide brand + nav (sidebar owns them), search gets more room */
+    /* Prevent centered-content views from staying viewport-centered */
+    #sim-view, #analytics-view, #market-view {
+      max-width: none !important;
+    }
+    /* Topbar: hide brand + nav (sidebar owns them) */
     .topbar .brand   { display: none; }
     .topbar .navbar  { display: none; }
     .topbar { padding: 10px 24px; gap: 14px; }
-    .topbar .search  { width: 300px; }
-    main { padding: 24px 48px 40px; }
+    .topbar .search  { width: 280px; }
+    main { padding: 20px 32px 40px; }
+    /* Overview grid: less cramped with sidebar taking 220px */
+    .overview { grid-template-columns: 1.3fr 1fr 1fr 1fr 260px !important; }
   }
 
   /* ============ MEDIUM: 769px – 1024px (tablet / small laptop, no sidebar) ============ */
@@ -2578,6 +2615,9 @@
       <div class="sb-bt">Trendo</div>
       <div class="sb-tag">Thesis</div>
     </div>
+    <button class="sb-toggle" id="sb-toggle" title="折叠 / 展开侧边栏" aria-label="Toggle sidebar">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
   </div>
 
   <!-- Navigation -->
@@ -2610,32 +2650,36 @@
 
   <!-- Bottom actions -->
   <div class="sb-bottom">
-    <div class="sb-btn-row">
-      <button class="sb-util-btn" id="sb-sync-btn" title="跨设备同步">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-        同步
-      </button>
-      <button class="sb-util-btn" id="sb-settings-btn" title="Settings">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h8"/><circle cx="18" cy="6" r="2.3"/><circle cx="8" cy="18" r="2.3"/></svg>
-        设置
-      </button>
-    </div>
     <button class="sb-open-btn" id="sb-new-pos-btn">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
-      Open Position
+      <span class="sb-open-txt">Open Position</span>
     </button>
   </div>
 </aside>
 <script>
-  // Wire sidebar proxy buttons to existing topbar controls
-  document.addEventListener("DOMContentLoaded", () => {
-    const sbSync = document.getElementById("sb-sync-btn");
-    const sbSet  = document.getElementById("sb-settings-btn");
-    const sbNew  = document.getElementById("sb-new-pos-btn");
-    if (sbSync) sbSync.addEventListener("click", () => document.getElementById("sync-btn")?.click());
-    if (sbSet)  sbSet.addEventListener("click",  () => document.getElementById("tweaks-toggle")?.click());
-    if (sbNew)  sbNew.addEventListener("click",  () => document.getElementById("new-pos-btn")?.click());
-  });
+  // Sidebar: restore collapse state before paint, wire toggle, proxy Open Position
+  (function() {
+    if (localStorage.getItem("trendo_sb_collapsed") === "1") {
+      document.body.setAttribute("data-sb", "collapsed");
+    }
+    document.addEventListener("DOMContentLoaded", () => {
+      const toggle = document.getElementById("sb-toggle");
+      if (toggle) {
+        toggle.addEventListener("click", () => {
+          const collapsed = document.body.getAttribute("data-sb") === "collapsed";
+          if (collapsed) {
+            document.body.removeAttribute("data-sb");
+            localStorage.setItem("trendo_sb_collapsed", "0");
+          } else {
+            document.body.setAttribute("data-sb", "collapsed");
+            localStorage.setItem("trendo_sb_collapsed", "1");
+          }
+        });
+      }
+      const sbNew = document.getElementById("sb-new-pos-btn");
+      if (sbNew) sbNew.addEventListener("click", () => document.getElementById("new-pos-btn")?.click());
+    });
+  })();
 </script>
 
 <div id="desk-view">
