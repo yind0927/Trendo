@@ -191,6 +191,27 @@ return day >= 1 && day <= 5 && mins >= 13*60+30 && mins < 21*60;
 - 结束日：若传入 `endStr` 用平仓日；否则用最后已收盘交易日（UTC 20:00前用昨天，之后用今天，再向前跳过周末/假日）
 - 用于 `recomputeHolding`（开仓实时更新）、`drawerHTML`（抽屉展示）、`closePosition`（平仓记录）
 
+### getLastTradingDayStr()
+
+返回最近已收盘美股交易日的 `"YYYY-MM-DD"` 字符串。
+- UTC 20:00 前（美东4pm前）：今天未收盘，取昨天
+- 向前跳过周末和节假日
+- **用于今日盈亏基准判断**：`h.entry >= getLastTradingDayStr()` 时用入场价（cost）作基准，否则用 prevClose
+
+### groupTrades(closedArr)
+
+将 `CLOSED_POSITIONS` 按 `sym + entry + cost` 分组，合并同一交易的多次减仓记录为一笔交易。
+```js
+// 返回数组，每项包含：
+// pnlFinal: 所有减仓 pnlFinal 之和
+// closedAt: 最晚的 closedAt
+// qty:      所有减仓 qty 之和
+// rMult:    totalPnl / (cost - stop) / totalQty 重新计算
+// days:     calcTradingDays(entry, lastClosedAt)
+```
+**用于**：`renderBottom()` 胜率、Journal 统计栏、月份分组统计、`renderAnalytics()` 所有指标、`exitQualityHTML()` 出场效率。
+P&L 日历仍使用原始 `CLOSED_POSITIONS`（每次平仓事件显示在对应日期）。
+
 ### closePosition(sym, closePrice, closeDate, closeQty)
 
 - closeQty < pos.qty → 部分平仓：创建已平仓记录 + 减少现有qty + recompute
@@ -358,7 +379,9 @@ fetchSectorData().then(sectors => {
 });
 
 // fetchHoldingsBrief()里读取_lastMktCtx，编码为URL params传入API
-// 持仓编码格式：sym:pnlPct:rMult:days:status:earningsDate（6字段，无BX）
+// 持仓编码格式：sym:pnlPct:rMult:days:status:earningsDate:trimInfo（7字段）
+// trimInfo 格式："{pct}p{avgR}R"，如 "33p+1.5R" = 已减仓33%@平均+1.5R
+// 无减仓时 trimInfo 为空字符串
 ```
 
 ### API 设计要点
@@ -490,6 +513,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v7.2 | 移除顶部时钟模块，修复响应式根因(body min-width)，新增769–1290px紧凑断点，导航选中改为下划线设计，搜索框简化，持仓数动态关联，市价单/限价单开盘时段门控(isUSMarketOpen)，美股交易日计算(calcTradingDays+usMarketHolidays)，持仓天数改为实时交易日，抽屉天数动态渲染，修复密码页闪屏，手机端挂单队列移至overview上方，FAB按当前页面切换开仓上下文，`.sim-section-label`双语区块标题(ssl-zh/ssl-en/ssl-rule/ssl-meta)，Sim页模拟分析/模拟仓持仓区块标题，Dashboard页持仓总结/持仓列表区块标题，Analytics权益曲线改用真实数据(histPnlLog+dailyPnlLog)，周/月/年切换，修复轴标签拉伸(SVG text→HTML)，修复悬浮tooltip日P&L误差，BX Bars与P&L日历同行排列，Dashboard页标题更新(持仓/持仓总结/持仓列表) |
 | v7.5 | 密码页重设计（平台logo内联+玻璃质感输入框+Geist 800字标+页面入场动画），浮盈亏列移至止盈与状态之间，BX表单Score/Slope支持两位小数，页面切换淡入+上移动画(page-enter) |
 | v7.6 | AI简报系统：Market页市场日报（Claude Sonnet 4.6，结构化4段式）+ Dashboard页持仓分析（含个股新闻+市场环境）。手动触发设计：页面加载读localStorage，跨日自动重置为生成按钮，Redis 2小时服务端缓存去重，↻强制重生成。徽章/边框颜色统一为accent teal。`_lastMktCtx`全局传递市场上下文。 |
+| v7.7 | **多处 bug 修复与分析优化**：分批平仓记录合并（`groupTrades()`，按sym+entry+cost分组），胜率/Analytics指标/Journal统计/出场效率均按交易笔数而非记录数计算；exitQualityHTML按交易组计算峰值和实际盈亏，多批次显示"N次出场"标签。今日盈亏基准修复（`getLastTradingDayStr()`），周末/节假日后不再把开仓前涨跌计入。Auth token改为localStorage（后台切换不再要求重新输密码）。AI持仓简报增加第7字段trimInfo（已减仓比例和平均出场R），让AI分析考虑部分平仓。Market RSI数据源改为SPY。模拟仓NAV含已实现盈亏。已平仓抽屉展示减仓记录+支持出场价内联编辑（wireClosedDrawerEdits）。播报条速度60s→50s。 |
 
 ---
 
