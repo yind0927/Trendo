@@ -974,7 +974,7 @@
          <button class="hc-action delete-btn" data-sym="${h.sym}" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`
       : `<button class="hc-action delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
 
-    return `<div class="hc-card" data-sym="${h.sym}">
+    return `<div class="hc-card" data-sym="${h.sym}" style="border-left-color:${bs.color}">
       <div class="hc-top">
         <div class="tk">
           <div class="avatar${h.kind === "crypto" ? " crypto" : ""}">
