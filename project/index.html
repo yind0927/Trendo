@@ -1824,8 +1824,110 @@
   .review-trade-r.up, .review-trade-pnl.up   { color:var(--up); }
   .review-trade-r.down, .review-trade-pnl.down { color:var(--down); }
 
-  /* ============ MEDIUM: 769px – 1200px (e.g. browser with sidebar open) ============ */
-  @media (max-width: 1290px) and (min-width: 769px) {
+  /* ============ SIDEBAR ============ */
+  #sidebar {
+    display: none; /* shown only on desktop via media query below */
+    flex-direction: column;
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .sb-brand-row {
+    display: flex; align-items: center; gap: 11px;
+    padding: 18px 14px 16px;
+    border-bottom: 1px solid var(--line);
+    text-decoration: none; color: inherit;
+  }
+  .sb-logo {
+    width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+    box-shadow: 0 0 0 1px oklch(1 0 0 / .08), 0 8px 20px -8px oklch(0.78 0.14 var(--accent-h) / .5);
+    overflow: hidden;
+  }
+  .sb-wm { display: flex; flex-direction: column; gap: 3px; }
+  .sb-bt {
+    font-size: 18px; font-weight: 800; letter-spacing: -0.035em; font-style: italic;
+    font-family: var(--f-sans); line-height: 1;
+    background: linear-gradient(180deg, var(--fg-0) 0%, color-mix(in oklch, var(--accent) 30%, var(--fg-1)) 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .sb-tag {
+    font-family: var(--f-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid var(--accent-line); border-radius: 3px;
+    padding: 2px 5px; background: var(--accent-dim); display: inline-block; width: fit-content;
+  }
+  .sb-nav {
+    flex: 1; padding: 10px 8px;
+    display: flex; flex-direction: column; gap: 1px;
+    overflow-y: auto;
+  }
+  /* Override navlink defaults inside sidebar */
+  #sidebar .navlink {
+    display: flex !important; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 8px;
+    font-size: 13px; font-weight: 500; color: var(--fg-2);
+    text-decoration: none; transition: background .13s, color .13s;
+    width: 100%; box-sizing: border-box;
+    position: static;
+  }
+  #sidebar .navlink::after { display: none !important; }
+  #sidebar .navlink:hover { color: var(--fg-0); background: oklch(1 0 0 / .05); }
+  #sidebar .navlink.active {
+    background: var(--accent-dim); color: var(--accent); font-weight: 600;
+  }
+  #sidebar .navlink .nav-icon {
+    display: block !important; width: 16px; height: 16px; flex-shrink: 0; stroke-width: 2;
+  }
+  .sb-lbl { flex: 1; display: flex; align-items: center; gap: 7px; }
+  .sb-zh { font-size: 10px; opacity: 0.5; font-family: var(--f-mono); font-weight: 400; }
+  #sidebar .navlink.active .sb-zh { opacity: 0.7; }
+  .sb-bottom {
+    padding: 10px 8px 14px; border-top: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .sb-btn-row { display: flex; gap: 4px; }
+  .sb-util-btn {
+    all: unset; cursor: pointer; flex: 1;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+    padding: 7px 8px; border-radius: 7px; font-size: 11.5px; color: var(--fg-2);
+    background: var(--bg-2); border: 1px solid var(--line); transition: background .12s, color .12s;
+  }
+  .sb-util-btn:hover { color: var(--fg-0); background: var(--bg-3); }
+  .sb-open-btn {
+    all: unset; cursor: pointer; width: 100%; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+    color: oklch(0.13 0.012 250); background: var(--accent);
+    transition: opacity .15s, transform .12s;
+  }
+  .sb-open-btn:hover { opacity: .88; transform: translateY(-1px); }
+
+  /* ============ DESKTOP LAYOUT (sidebar visible) ============ */
+  @media (min-width: 1025px) {
+    /* Two-column root: fixed sidebar + scrollable content */
+    #sidebar {
+      display: flex;
+      position: fixed; top: 0; left: 0;
+      height: 100vh; z-index: 45;
+    }
+    /* Shift all page content to the right of the sidebar */
+    .sticky-header,
+    #desk-view, #sim-view, #analytics-view,
+    #journal-view, #watchlist-view, #market-view {
+      margin-left: 220px;
+    }
+    /* Topbar: hide brand + nav (sidebar owns them), search gets more room */
+    .topbar .brand   { display: none; }
+    .topbar .navbar  { display: none; }
+    .topbar { padding: 10px 24px; gap: 14px; }
+    .topbar .search  { width: 300px; }
+    main { padding: 24px 48px 40px; }
+  }
+
+  /* ============ MEDIUM: 769px – 1024px (tablet / small laptop, no sidebar) ============ */
+  @media (max-width: 1024px) and (min-width: 769px) {
     .topbar { gap: 8px; padding: 10px 16px; }
     .wordmark .tagline { display: none; }
     .navbar { margin-left: 6px; padding-left: 10px; gap: 8px; }
@@ -2437,6 +2539,104 @@
   </div>
 </div>
 </div><!-- /.sticky-header -->
+
+<!-- ============ DESKTOP SIDEBAR (hidden on mobile/tablet) ============ -->
+<aside id="sidebar">
+  <!-- Brand -->
+  <div class="sb-brand-row">
+    <div class="sb-logo">
+      <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
+        <defs>
+          <linearGradient id="sbGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="oklch(0.86 0.13 var(--accent-h))"/>
+            <stop offset="0.55" stop-color="oklch(0.60 0.17 calc(var(--accent-h) + 20))"/>
+            <stop offset="1" stop-color="oklch(0.28 0.14 calc(var(--accent-h) + 70))"/>
+          </linearGradient>
+          <linearGradient id="sbSheen" x1="0" y1="0" x2="0" y2="40">
+            <stop offset="0" stop-color="oklch(1 0 0 / .28)"/>
+            <stop offset="0.6" stop-color="oklch(1 0 0 / 0)"/>
+          </linearGradient>
+          <linearGradient id="sbArea" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="oklch(0.12 0.012 250 / .55)"/>
+            <stop offset="1" stop-color="oklch(0.12 0.012 250 / 0)"/>
+          </linearGradient>
+        </defs>
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#sbGrad)"/>
+        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#sbSheen)"/>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="10.5" fill="none" stroke="oklch(1 0 0 / .22)"/>
+        <g stroke="oklch(0.12 0.012 250 / .12)" stroke-width="0.6">
+          <line x1="7" y1="14" x2="33" y2="14"/><line x1="7" y1="22" x2="33" y2="22"/><line x1="7" y1="30" x2="33" y2="30"/>
+        </g>
+        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9 L 33 33 L 7 33 Z" fill="url(#sbArea)"/>
+        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9" fill="none" stroke="oklch(0.10 0.012 250)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <g fill="oklch(0.10 0.012 250)"><circle cx="13" cy="24" r="1.4"/><circle cx="18" cy="26" r="1.4"/><circle cx="24" cy="18" r="1.4"/></g>
+        <circle cx="30" cy="12" r="2.6" fill="oklch(0.95 0.10 var(--accent-h))" stroke="oklch(0.10 0.012 250)" stroke-width="1.2"/>
+        <g stroke="oklch(0.10 0.012 250)" stroke-width="1.6" stroke-linecap="round" fill="none"><path d="M 32 10 L 35 7"/><path d="M 35 7 L 32.5 7"/><path d="M 35 7 L 35 9.5"/></g>
+      </svg>
+    </div>
+    <div class="sb-wm">
+      <div class="sb-bt">Trendo</div>
+      <div class="sb-tag">Thesis</div>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="sb-nav" aria-label="sidebar navigation">
+    <a class="navlink active" href="#" data-page="desk">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span class="sb-lbl">Dashboard <span class="sb-zh">持仓</span></span>
+    </a>
+    <a class="navlink" href="#" data-page="sim">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      <span class="sb-lbl">Simulation <span class="sb-zh">模拟仓</span></span>
+    </a>
+    <a class="navlink" href="#" data-page="market">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      <span class="sb-lbl">Market <span class="sb-zh">市场</span></span>
+    </a>
+    <a class="navlink" href="#" data-page="analytics">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
+      <span class="sb-lbl">Analytics <span class="sb-zh">分析</span></span>
+    </a>
+    <a class="navlink" href="#" data-page="journal">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span class="sb-lbl">Journal <span class="sb-zh">日志</span></span>
+    </a>
+    <a class="navlink" href="#" data-page="watchlist">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <span class="sb-lbl">Preparation <span class="sb-zh">准备</span></span>
+    </a>
+  </nav>
+
+  <!-- Bottom actions -->
+  <div class="sb-bottom">
+    <div class="sb-btn-row">
+      <button class="sb-util-btn" id="sb-sync-btn" title="跨设备同步">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+        同步
+      </button>
+      <button class="sb-util-btn" id="sb-settings-btn" title="Settings">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h10M4 12h16M4 18h8"/><circle cx="18" cy="6" r="2.3"/><circle cx="8" cy="18" r="2.3"/></svg>
+        设置
+      </button>
+    </div>
+    <button class="sb-open-btn" id="sb-new-pos-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+      Open Position
+    </button>
+  </div>
+</aside>
+<script>
+  // Wire sidebar proxy buttons to existing topbar controls
+  document.addEventListener("DOMContentLoaded", () => {
+    const sbSync = document.getElementById("sb-sync-btn");
+    const sbSet  = document.getElementById("sb-settings-btn");
+    const sbNew  = document.getElementById("sb-new-pos-btn");
+    if (sbSync) sbSync.addEventListener("click", () => document.getElementById("sync-btn")?.click());
+    if (sbSet)  sbSet.addEventListener("click",  () => document.getElementById("tweaks-toggle")?.click());
+    if (sbNew)  sbNew.addEventListener("click",  () => document.getElementById("new-pos-btn")?.click());
+  });
+</script>
 
 <div id="desk-view">
 <main>
