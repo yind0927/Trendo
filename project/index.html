@@ -73,7 +73,7 @@
 
     --radius: 10px;
     --radius-sm: 7px;
-    --sb-w: 220px; /* sidebar width; overridden to 60px when collapsed */
+    --sb-w: 256px; /* sidebar width; overridden to 60px when collapsed */
   }
 
   /* sidebar collapse token */
@@ -1970,27 +1970,6 @@
   }
   .sb-zh { font-size: 10px; opacity: 0.5; font-family: var(--f-mono); font-weight: 400; }
   #sidebar .navlink.active .sb-zh { opacity: 0.7; }
-  .sb-bottom {
-    padding: 10px 8px 14px; border-top: 1px solid var(--line);
-    display: flex; flex-direction: column; gap: 6px;
-    flex-shrink: 0;
-    transition: padding 0.24s cubic-bezier(0.4,0,0.2,1);
-  }
-  .sb-open-btn {
-    all: unset; cursor: pointer; width: 100%; box-sizing: border-box;
-    display: flex; align-items: center; justify-content: center; gap: 7px;
-    padding: 9px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
-    color: oklch(0.13 0.012 250); background: var(--accent);
-    transition: opacity .15s, transform .12s,
-                gap 0.26s cubic-bezier(0.4,0,0.2,1),
-                padding 0.24s cubic-bezier(0.4,0,0.2,1);
-  }
-  .sb-open-txt {
-    overflow: hidden; white-space: nowrap;
-    max-width: 150px; opacity: 1;
-    transition: max-width 0.26s cubic-bezier(0.4,0,0.2,1), opacity 0.18s ease;
-  }
-  .sb-open-btn:hover { opacity: .88; transform: translateY(-1px); }
 
   /* Sidebar collapse toggle button */
   .sb-toggle {
@@ -2005,7 +1984,6 @@
   /* Collapsed sidebar state (icon-only, 60px wide via --sb-w) */
   body[data-sb="collapsed"] .sb-wm { max-width: 0; opacity: 0; }
   body[data-sb="collapsed"] .sb-lbl { max-width: 0; opacity: 0; }
-  body[data-sb="collapsed"] .sb-open-txt { max-width: 0; opacity: 0; }
   body[data-sb="collapsed"] .sb-brand-row {
     padding: 14px 0 10px; gap: 0;
     flex-direction: column; align-items: center; justify-content: center;
@@ -2014,12 +1992,6 @@
   body[data-sb="collapsed"] .sb-toggle svg { transform: rotate(180deg); }
   body[data-sb="collapsed"] #sidebar .navlink {
     justify-content: center; padding: 9px 0; gap: 0;
-  }
-  body[data-sb="collapsed"] .sb-bottom {
-    align-items: center; padding: 10px 0 14px; gap: 6px;
-  }
-  body[data-sb="collapsed"] .sb-open-btn {
-    padding: 9px; width: 42px; justify-content: center; gap: 0;
   }
 
   /* ============ DESKTOP LAYOUT (sidebar visible) ============ */
@@ -2741,12 +2713,6 @@
   </nav>
 
   <!-- Bottom actions -->
-  <div class="sb-bottom">
-    <button class="sb-open-btn" id="sb-new-pos-btn">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
-      <span class="sb-open-txt">Open Position</span>
-    </button>
-  </div>
 </aside>
 <script>
   // Sidebar: restore collapse state before paint, wire toggle, proxy Open Position
@@ -2768,8 +2734,6 @@
           }
         });
       }
-      const sbNew = document.getElementById("sb-new-pos-btn");
-      if (sbNew) sbNew.addEventListener("click", () => document.getElementById("new-pos-btn")?.click());
     });
   })();
 </script>
