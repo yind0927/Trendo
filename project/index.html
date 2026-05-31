@@ -1927,9 +1927,15 @@
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
   .sb-tag {
-    font-family: var(--f-mono); font-size: 9px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--fg-3); border: 1px solid var(--line); border-radius: 4px;
-    padding: 2px 6px; display: inline-block; width: fit-content;
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .sb-tag::before, .sb-tag::after {
+    content: ""; height: 1px; background: var(--accent); width: 12px; flex-shrink: 0; opacity: 0.7;
+  }
+  .sb-tag span {
+    font-family: var(--f-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); border: 1px solid var(--accent-line); border-radius: 4px;
+    padding: 2px 6px; background: var(--accent-dim);
   }
   .sb-nav {
     flex: 1; padding: 10px 8px;
@@ -2670,7 +2676,7 @@
     </div>
     <div class="sb-wm">
       <div class="sb-bt">Trendo</div>
-      <div class="sb-tag">Thesis</div>
+      <div class="sb-tag"><span>Thesis</span></div>
     </div>
     <button class="sb-toggle" id="sb-toggle" title="折叠 / 展开侧边栏" aria-label="Toggle sidebar">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
