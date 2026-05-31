@@ -1550,7 +1550,7 @@
   table.sim-holdings tbody tr:hover .delete-btn { opacity: 1; }
 
   /* JOURNAL VIEW */
-  #journal-view { max-width: 860px; margin: 0 auto; padding: 24px 20px 60px; }
+  #journal-view { padding: 24px 20px 60px; }
   .journal-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 16px; flex-wrap: wrap; }
   .journal-filters-row { display: flex; gap: 6px; }
 
@@ -2012,7 +2012,8 @@
       transition: margin-left 0.28s cubic-bezier(0.4,0,0.2,1);
     }
     /* Prevent centered-content views from staying viewport-centered */
-    #sim-view, #analytics-view, #market-view {
+    #sim-view, #analytics-view, #market-view,
+    #journal-view, #watchlist-view {
       max-width: none !important;
     }
     /* Topbar: hide brand + nav (sidebar owns them) */
@@ -2021,6 +2022,8 @@
     .topbar { padding: 10px 24px; gap: 14px; }
     .topbar .search  { width: 280px; }
     main { padding: 20px 32px 40px; }
+    #journal-view { padding: 20px 32px 40px; }
+    #watchlist-view .journal-topbar { padding: 20px 32px 0; }
     /* Overview: 3 cards per row; alloc card spans last 2 cols on row 2 */
     .overview { grid-template-columns: repeat(3, 1fr) !important; }
     .overview > .ov-alloc { grid-column: 2 / span 2; }
@@ -3104,7 +3107,7 @@
 
 <!-- ============ WATCHLIST VIEW ============ -->
 <div id="watchlist-view" style="display:none">
-  <div class="journal-topbar" style="max-width:960px;margin:0 auto;padding:24px 20px 0">
+  <div class="journal-topbar" style="padding:24px 20px 0">
     <div class="page-title">
       <span class="page-title-en">Preparation</span>
       <span class="page-title-zh">预备</span>
