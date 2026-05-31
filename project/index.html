@@ -1882,10 +1882,11 @@
   .hc-view-toggle {
     all: unset; cursor: pointer; margin-left: 4px;
     display: inline-flex; align-items: center; justify-content: center;
-    width: 22px; height: 22px; border-radius: 5px; color: var(--fg-3);
-    transition: color .12s, background .12s;
+    width: 26px; height: 22px; border-radius: 5px; color: var(--fg-2);
+    border: 1px solid var(--line); background: var(--bg-2);
+    transition: color .12s, background .12s, border-color .12s;
   }
-  .hc-view-toggle:hover { color: var(--accent); background: var(--accent-dim); }
+  .hc-view-toggle:hover { color: var(--accent); background: var(--accent-dim); border-color: var(--accent-line); }
   /* Pull-to-refresh indicator */
   #ptr-indicator {
     height: 0; overflow: hidden; opacity: 0;
@@ -2810,7 +2811,7 @@
     <span class="ssl-en">Positions</span>
     <span class="ssl-rule"></span>
     <span class="ssl-meta"><span id="open-pos-count">0</span> 笔 · 实时</span>
-    <button class="hc-view-toggle" id="holdings-view-toggle"></button>
+    <button class="hc-view-toggle" id="holdings-view-toggle" title="切换为卡片视图"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></button>
   </div>
   <section class="panel">
     <div class="panel-head">
