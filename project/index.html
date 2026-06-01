@@ -2474,6 +2474,24 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .page-enter { animation: page-in .22s cubic-bezier(.22,1,.36,1) both; }
+
+  /* ── Touch devices: neutralise sticky row/card hover effects ── */
+  @media (hover: none) {
+    table.holdings tbody tr:hover,
+    table.sim-holdings tbody tr:hover { background: transparent; }
+    table.holdings tbody tr:hover::before,
+    table.sim-holdings tbody tr:hover::before { background: transparent !important; }
+    table.holdings tbody tr:hover .close-pos-btn,
+    table.holdings tbody tr:hover .delete-btn,
+    table.sim-holdings tbody tr:hover .close-pos-btn,
+    table.sim-holdings tbody tr:hover .delete-btn,
+    table.sim-holdings tbody tr:hover .sim-restore-btn { opacity: 0; }
+    .hc-card:hover { background: var(--bg-2); border-color: var(--line); }
+    #sidebar .navlink:hover { color: var(--fg-2); background: transparent; }
+    .sb-toggle:hover { background: transparent; }
+    .sect-table tr:hover td { background: transparent; }
+    .hld-row:hover { background: transparent; }
+  }
 </style>
 <script>try{if(localStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
 </head>
