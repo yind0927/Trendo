@@ -998,6 +998,7 @@
           <span class="hc-r ${rSign}">${(rVal >= 0 ? "+" : "−") + Math.abs(rVal).toFixed(1)}R</span>
           <span class="hc-sep muted">·</span>
           <span class="hc-days muted">${h.days ?? 0}天</span>
+          ${!isClosed && h.bx?.dailyBars ? `<span class="hc-sep muted">·</span><span class="hc-bx muted">BX ${h.bx.dailyBars}</span>` : ""}
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};${progPct<0?"margin-left:auto":""}"></div>
