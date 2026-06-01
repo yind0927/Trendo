@@ -945,7 +945,7 @@
     }
   }
 
-  function holdingCard(h) {
+  function holdingCard(h, opts = {}) {
     const isClosed = activeTab === "closed";
     const bucket = progressBucket(h);
     const bs = BUCKET_STATUS[bucket] || { label: "—", cls: "ok", color: "var(--accent)" };
@@ -970,12 +970,19 @@
     const statusLabel = isClosed ? (pnl > 0 ? "盈利" : "亏损") : bs.label.split(" · ")[0];
     const statusCls   = isClosed ? (pnl > 0 ? "ok" : "danger") : bs.cls;
 
+    const flagBtn = opts.sim && !isClosed
+      ? `<button class="hc-action sim-flag-btn ${h.flagged ? 'flagged' : ''}" data-sym="${h.sym}" title="候选标记"><svg width="11" height="11" viewBox="0 0 24 24" fill="${h.flagged ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>`
+      : "";
+
     const actions = !isClosed
-      ? `<button class="hc-action close-pos-btn" data-sym="${h.sym}" title="平仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
+      ? `${flagBtn}<button class="hc-action close-pos-btn" data-sym="${h.sym}" title="平仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
          <button class="hc-action delete-btn" data-sym="${h.sym}" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`
       : `<button class="hc-action delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
 
-    return `<div class="hc-card" data-sym="${h.sym}">
+        const selectedCls = opts.selected ? " selected" : "";
+    const flaggedCls  = opts.sim && h.flagged ? " sim-flagged" : "";
+
+    return `<div class="hc-card${selectedCls}${flaggedCls}" data-sym="${h.sym}">
       <div class="hc-top">
         <div class="tk">
           <div class="avatar${h.kind === "crypto" ? " crypto" : ""}">
@@ -1055,10 +1062,10 @@
       el.innerHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
         const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
         const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
-        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h)).join("");
+        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h, { sim: true, selected: simSelectedSym === h.sym })).join("");
       }).join("");
     } else {
-      el.innerHTML = rows.map(h => holdingCard(h)).join("");
+      el.innerHTML = rows.map(h => holdingCard(h, { sim: true, selected: simSelectedSym === h.sym })).join("");
     }
     activeTab = prevTab;
     el.querySelectorAll(".hc-card").forEach(card => {
@@ -1068,6 +1075,15 @@
         if (h) openSimDrawer(h, simActiveTab);
       });
     });
+    el.querySelectorAll(".sim-flag-btn").forEach(btn =>
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const h = SIM_HOLDINGS.find(x => x.sym === btn.dataset.sym);
+        if (!h) return;
+        h.flagged = !h.flagged;
+        saveToStorage();
+        renderSimTable();
+      }));
     el.querySelectorAll(".close-pos-btn").forEach(btn =>
       btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); }));
     el.querySelectorAll(".delete-btn").forEach(btn =>

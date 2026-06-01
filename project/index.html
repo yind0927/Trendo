@@ -1831,6 +1831,8 @@
   }
   .hc-card:hover { background: var(--bg-3); border-color: var(--line-strong); }
   .hc-card:active { background: var(--bg-3); }
+  .hc-card.selected { background: var(--accent-dim); border-color: var(--accent-line); box-shadow: inset 3px 0 0 var(--accent); }
+  .hc-card.sim-flagged { box-shadow: inset 3px 0 0 var(--warn); border-color: oklch(0.80 0.15 75 / .3); }
   .hc-top {
     display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
     margin-bottom: 10px;
@@ -1843,6 +1845,7 @@
     transition: color .12s, background .12s;
   }
   .hc-action:hover { color: var(--fg-0); background: var(--bg-3); }
+  .hc-action.sim-flag-btn.flagged { color: var(--warn); }
   .hc-body { display: flex; flex-direction: column; gap: 10px; }
   .hc-pnl-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .hc-pnl { font-family: var(--f-mono); font-size: 15px; font-weight: 700; }
