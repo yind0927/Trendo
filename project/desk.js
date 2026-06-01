@@ -3903,7 +3903,7 @@
     }).join("");
 
     aContent.innerHTML = `
-      <div class="page-header">
+      <div class="page-topbar">
         <div class="page-title">
           <span class="page-title-en">Analytics</span>
           <span class="page-title-zh">分析</span>
@@ -4754,7 +4754,7 @@
       return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">EMA10 <span style="color:${clr};font-weight:700">${ema10} ${arr}</span></span>`;
     })();
     el.innerHTML = `
-      <div class="page-header">
+      <div class="page-topbar">
         <div class="page-title">
           <span class="page-title-en">Market</span>
           <span class="page-title-zh">市场</span>
