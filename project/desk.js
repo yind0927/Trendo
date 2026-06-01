@@ -2393,10 +2393,19 @@
       bgSlider.addEventListener("input", e => {
         const level = +e.target.value;
         applyBgL(level);
-        $("#bg-l-val").textContent = level;
+        $("#bg-l-val").textContent = level === 14 ? "默认" : level < 14 ? "深" + level : "浅" + level;
         localStorage.setItem("trendo_ui_bg_l", level);
       });
     }
+
+    // Click-outside closes tweaks panel
+    document.addEventListener("click", e => {
+      const tweaksEl = $("#tweaks");
+      if (!tweaksEl?.classList.contains("open")) return;
+      if (!tweaksEl.contains(e.target) && !$("#tweaks-toggle")?.contains(e.target)) {
+        tweaksEl.classList.remove("open");
+      }
+    });
 
     // theme toggle (dark / light)
     const tt = $("#theme-toggle");
@@ -2419,9 +2428,11 @@
       $("#hue-val").textContent = hue + "°";
     }
     const bgL = +(sv("trendo_ui_bg_l") || 14);
+    if (bgSlider) bgSlider.value = bgL;
     if (bgL !== 14) {
       applyBgL(bgL);
-      if (bgSlider) { bgSlider.value = bgL; $("#bg-l-val").textContent = bgL; }
+      const bgLVal = $("#bg-l-val");
+      if (bgLVal) bgLVal.textContent = bgL < 14 ? "深" + bgL : "浅" + bgL;
     }
     const tape = sv("trendo_ui_tape");
     if (tape === "hide") {
