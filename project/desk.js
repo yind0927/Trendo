@@ -2832,12 +2832,6 @@
       }
     }
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
-    // iOS Safari caches position:fixed elements as a snapshot while the page
-    // is scrolled; class-based background/color changes don't invalidate the
-    // cache until scroll-to-top. A sub-1 opacity change forces the compositor
-    // to re-render the entire sidebar subtree with the new styles immediately.
-    const sb = document.getElementById("sidebar");
-    if (sb) { sb.style.opacity = "0.9999"; requestAnimationFrame(() => { sb.style.opacity = ""; }); }
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
     if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }

@@ -1958,16 +1958,23 @@
     padding: 9px 10px; border-radius: 8px;
     font-size: 13px; font-weight: 500; color: var(--fg-2);
     text-decoration: none; width: 100%; box-sizing: border-box;
-    position: static;
-    transition: background .13s, color .13s,
+    position: relative;
+    transition: color .13s,
                 gap 0.26s cubic-bezier(0.4,0,0.2,1),
                 padding 0.24s cubic-bezier(0.4,0,0.2,1);
   }
-  #sidebar .navlink::after { display: none !important; }
-  #sidebar .navlink:hover { color: var(--fg-0); background: oklch(1 0 0 / .05); }
-  #sidebar .navlink.active {
-    background: var(--accent-dim); color: var(--accent); font-weight: 600;
+  /* Active background via ::before opacity — runs on compositor thread in
+     Chrome/Safari, bypassing main↔compositor sync delays on fixed elements */
+  #sidebar .navlink::before {
+    content: ''; position: absolute; inset: 0; border-radius: 8px;
+    pointer-events: none;
+    opacity: 0; transition: opacity 0.13s;
   }
+  #sidebar .navlink:hover::before { background: oklch(1 0 0 / .05); opacity: 1; }
+  #sidebar .navlink.active::before { background: var(--accent-dim); opacity: 1; }
+  #sidebar .navlink::after { display: none !important; }
+  #sidebar .navlink:hover { color: var(--fg-0); }
+  #sidebar .navlink.active { color: var(--accent); font-weight: 600; }
   #sidebar .navlink .nav-icon {
     display: block !important; width: 16px; height: 16px; flex-shrink: 0; stroke-width: 2;
   }
