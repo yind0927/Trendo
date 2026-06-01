@@ -2832,6 +2832,10 @@
       }
     }
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
+    // Force immediate repaint on iOS Safari: position:fixed sidebar defers
+    // style-change repaints until scroll; offsetHeight flushes the paint queue.
+    const sb = document.getElementById("sidebar");
+    if (sb) void sb.offsetHeight;
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
     if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
