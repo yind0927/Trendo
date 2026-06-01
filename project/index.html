@@ -16,7 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="Trendo">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@300;400;500;600;700&amp;family=Epilogue:wght@300;400;500;600;700;800&amp;display=swap">
 <style>
   :root {
     /* --- Palette: cool-dark, subtly blue-tinted --- */
@@ -90,6 +90,8 @@
   }
 
   /* font mode */
+  body[data-font="plex"] { --f-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
+  body[data-font="epilogue"] { --f-sans: "Epilogue", ui-sans-serif, system-ui, sans-serif; }
   body[data-font="mono"]{
     --f-sans: "JetBrains Mono", ui-monospace, monospace;
   }
@@ -2500,7 +2502,7 @@
 </style>
 <script>try{if(localStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
 </head>
-<body data-density="medium" data-font="sans" data-theme="dark">
+<body data-density="medium" data-font="geist" data-theme="dark">
 
 <!-- persistent tweak defaults for host-side rewriting -->
 <script id="tweak-defaults" type="application/json">
@@ -2638,10 +2640,11 @@
           </div>
         </div>
         <div class="group">
-          <div class="gl">字体风格</div>
+          <div class="gl">字体</div>
           <div class="seg" data-seg="font">
-            <button data-val="sans" class="active">Sans-heavy</button>
-            <button data-val="mono">Mono-heavy</button>
+            <button data-val="geist" class="active">Geist</button>
+            <button data-val="plex">IBM Plex</button>
+            <button data-val="epilogue">Epilogue</button>
           </div>
         </div>
         <div class="group">

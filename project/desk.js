@@ -2400,7 +2400,9 @@
     const sv = k => localStorage.getItem(k);
     const t = sv("trendo_ui_theme");   if (t) { document.body.dataset.theme = t;   setSegActive("theme", t); }
     const d = sv("trendo_ui_density"); if (d) { document.body.dataset.density = d; setSegActive("density", d); }
-    const f = sv("trendo_ui_font");    if (f) { document.body.dataset.font = f;    setSegActive("font", f); }
+    const f = sv("trendo_ui_font");
+    const fv = f === "sans" ? "geist" : (f || "geist"); // migrate legacy "sans" value
+    document.body.dataset.font = fv; setSegActive("font", fv);
     const hue = sv("trendo_ui_hue");
     if (hue) {
       document.documentElement.style.setProperty("--accent-h", hue);
@@ -2419,7 +2421,7 @@
 
   function persist() {
     localStorage.setItem("trendo_ui_density", document.body.dataset.density || "medium");
-    localStorage.setItem("trendo_ui_font",    document.body.dataset.font    || "sans");
+    localStorage.setItem("trendo_ui_font",    document.body.dataset.font    || "geist");
     localStorage.setItem("trendo_ui_theme",   document.body.dataset.theme   || "dark");
     const hs = $("#hue-slider");
     if (hs) localStorage.setItem("trendo_ui_hue", hs.value);
