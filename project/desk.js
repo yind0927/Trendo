@@ -2347,16 +2347,6 @@
       $$("button", seg).forEach(b => b.classList.toggle("active", b.dataset.val === String(val)));
     }
 
-    function applyBgL(level) { // level: integer 10–24
-      const L = level / 100;
-      const r = document.documentElement;
-      r.style.setProperty("--bg-0", `oklch(${L} 0.012 250)`);
-      r.style.setProperty("--bg-1", `oklch(${(L + 0.035).toFixed(3)} 0.012 250)`);
-      r.style.setProperty("--bg-2", `oklch(${(L + 0.070).toFixed(3)} 0.012 250)`);
-      r.style.setProperty("--bg-3", `oklch(${(L + 0.115).toFixed(3)} 0.014 250)`);
-      r.style.setProperty("--bg-4", `oklch(${(L + 0.160).toFixed(3)} 0.014 250)`);
-    }
-
     $$(".seg").forEach(seg => {
       seg.addEventListener("click", e => {
         if (e.target.tagName !== "BUTTON") return;
@@ -2388,16 +2378,6 @@
       persist();
     });
 
-    const bgSlider = $("#bg-l-slider");
-    if (bgSlider) {
-      bgSlider.addEventListener("input", e => {
-        const level = +e.target.value;
-        applyBgL(level);
-        $("#bg-l-val").textContent = level === 14 ? "默认" : level < 14 ? "深" + level : "浅" + level;
-        localStorage.setItem("trendo_ui_bg_l", level);
-      });
-    }
-
     // Click-outside closes tweaks panel
     document.addEventListener("click", e => {
       const tweaksEl = $("#tweaks");
@@ -2426,13 +2406,6 @@
       document.documentElement.style.setProperty("--accent-h", hue);
       hueSlider.value = hue;
       $("#hue-val").textContent = hue + "°";
-    }
-    const bgL = +(sv("trendo_ui_bg_l") || 14);
-    if (bgSlider) bgSlider.value = bgL;
-    if (bgL !== 14) {
-      applyBgL(bgL);
-      const bgLVal = $("#bg-l-val");
-      if (bgLVal) bgLVal.textContent = bgL < 14 ? "深" + bgL : "浅" + bgL;
     }
     const tape = sv("trendo_ui_tape");
     if (tape === "hide") {
