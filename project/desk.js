@@ -518,6 +518,7 @@
   let simActiveTab = "open";
   let simSortKey = "pnl", simSortDir = -1;
   let simFilter = "all", simClosedFilter = "all", simQuery = "";
+  let simHoldingsViewMode = localStorage.getItem("trendo_sim_holdings_view") || "list";
   let simSelectedSym = null;
   let simNotional = 100000;
   let newPositionContext = "desk"; // "desk" | "sim"
@@ -1033,6 +1034,38 @@
         if (e.target.closest(".hc-action")) return;
         const h = rows.find(r => r.sym === card.dataset.sym);
         if (h) openDrawer(h);
+      });
+    });
+    el.querySelectorAll(".close-pos-btn").forEach(btn =>
+      btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); }));
+    el.querySelectorAll(".delete-btn").forEach(btn =>
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); }));
+  }
+
+  function renderSimHoldingsCards(rows) {
+    const el = document.getElementById("sim-holdings-cards");
+    if (!el) return;
+    if (!rows.length) { el.innerHTML = '<div class="hc-empty">暂无持仓</div>'; return; }
+    const prevTab = activeTab;
+    activeTab = simActiveTab;
+    if (simActiveTab === "open") {
+      const groups = {};
+      rows.forEach(h => { const d = h.entry?.slice(0, 10) || "—"; (groups[d] = groups[d] || []).push(h); });
+      const thisYear = new Date().getFullYear();
+      el.innerHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
+        const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
+        const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
+        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h)).join("");
+      }).join("");
+    } else {
+      el.innerHTML = rows.map(h => holdingCard(h)).join("");
+    }
+    activeTab = prevTab;
+    el.querySelectorAll(".hc-card").forEach(card => {
+      card.addEventListener("click", e => {
+        if (e.target.closest(".hc-action")) return;
+        const h = rows.find(r => r.sym === card.dataset.sym);
+        if (h) openSimDrawer(h, simActiveTab);
       });
     });
     el.querySelectorAll(".close-pos-btn").forEach(btn =>
@@ -3255,6 +3288,27 @@
       const va = keyFn(a), vb = keyFn(b);
       return va < vb ? -simSortDir : va > vb ? simSortDir : 0;
     });
+
+    // Toggle icon
+    const _svtBtn = document.getElementById("sim-holdings-view-toggle");
+    if (_svtBtn) {
+      _svtBtn.title = simHoldingsViewMode === "card" ? "切换为列表视图" : "切换为卡片视图";
+      _svtBtn.innerHTML = simHoldingsViewMode === "card"
+        ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`
+        : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>`;
+    }
+
+    // Card / list branch
+    const _stw = tbody.parentElement;
+    const _shc = document.getElementById("sim-holdings-cards");
+    if (simHoldingsViewMode === "card") {
+      if (_stw) _stw.style.display = "none";
+      if (_shc) _shc.style.display = "flex";
+      renderSimHoldingsCards(rows);
+      return;
+    }
+    if (_stw) _stw.style.display = "";
+    if (_shc) _shc.style.display = "none";
 
     // Body
     const cols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
@@ -5562,6 +5616,16 @@
     });
   }
 
+  function wireSimHoldingsViewToggle() {
+    const btn = document.getElementById("sim-holdings-view-toggle");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      simHoldingsViewMode = simHoldingsViewMode === "list" ? "card" : "list";
+      localStorage.setItem("trendo_sim_holdings_view", simHoldingsViewMode);
+      renderSimTable();
+    });
+  }
+
   function initPullToRefresh() {
     if (window.innerWidth > 768) return;
     const ptrEl = document.getElementById("ptr-indicator");
@@ -5629,6 +5693,7 @@
   renderBottom();
   if (HOLDINGS.length > 0) initHoldingsBriefCard();
   wireHoldingsViewToggle();
+  wireSimHoldingsViewToggle();
   initPullToRefresh();
   wireControls();
   wireTweaks();

@@ -1819,7 +1819,7 @@
   .review-trade-r.down, .review-trade-pnl.down { color:var(--down); }
 
   /* ============ HOLDINGS CARD VIEW ============ */
-  #holdings-cards {
+  #holdings-cards, #sim-holdings-cards {
     display: none; /* shown in card mode */
     flex-direction: column; gap: 8px; padding: 12px 16px 16px;
   }
@@ -2027,7 +2027,7 @@
     .overview { grid-template-columns: repeat(3, 1fr) !important; }
     .overview > .ov-alloc { grid-column: 2 / span 2; }
     /* Sim panel-head: tabs+search on row 1, filters on row 2 */
-    #sim-view .panel-head { flex-wrap: wrap; align-items: center; gap: 14px 10px; }
+    #sim-view .panel-head { flex-wrap: wrap; align-items: center; gap: 12px 10px; }
     #sim-view .panel-head .panel-title { flex-shrink: 0; }
     #sim-view .panel-head .sim-search { margin-left: auto; flex-shrink: 0; }
     #sim-view .panel-head .filters { flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; gap: 5px; }
@@ -3036,6 +3036,7 @@
     <span class="ssl-zh">持仓列表</span>
     <span class="ssl-en">Positions</span>
     <span class="ssl-rule"></span>
+    <button class="hc-view-toggle" id="sim-holdings-view-toggle" title="切换为卡片视图"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg></button>
   </div>
   <section class="panel">
     <div class="panel-head">
@@ -3068,6 +3069,7 @@
         <tbody id="sim-tbody"></tbody>
       </table>
     </div>
+    <div id="sim-holdings-cards"></div>
   </section>
 
   <!-- § 分析复盘 Analytics -->
