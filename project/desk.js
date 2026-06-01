@@ -2375,6 +2375,7 @@
       const h = e.target.value;
       document.documentElement.style.setProperty("--accent-h", h);
       $("#hue-val").textContent = h + "°";
+      applySidebarActiveColor(currentPage);
       persist();
     });
 
@@ -2805,6 +2806,19 @@
   }
 
   // ============ PAGE SWITCHING ============
+  // Apply sidebar navlink color via inline style (bypasses Chrome's deferred
+  // repaint of position:fixed elements for CSS class-based color changes).
+  function applySidebarActiveColor(page) {
+    const links = $$(`#sidebar .navlink[data-page]`);
+    if (!links.length) return;
+    const h = document.documentElement.style.getPropertyValue("--accent-h").trim() || "195";
+    const accent = `oklch(0.78 0.12 ${h})`;
+    links.forEach(a => {
+      a.style.color      = a.dataset.page === page ? accent : "";
+      a.style.fontWeight = a.dataset.page === page ? "600"  : "";
+    });
+  }
+
   function switchPage(page) {
     currentPage = page;
     const VIEWS = { desk: "desk-view", journal: "journal-view", sim: "sim-view", analytics: "analytics-view", watchlist: "watchlist-view", market: "market-view" };
@@ -2832,6 +2846,7 @@
       }
     }
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
+    applySidebarActiveColor(page);
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
     if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
