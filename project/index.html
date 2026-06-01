@@ -2652,6 +2652,27 @@
           </div>
         </div>
         <div class="group">
+          <div class="gl">背景明度 <span class="mono muted" id="bg-l-val" style="float:right">14</span></div>
+          <div class="hue-row">
+            <input type="range" min="10" max="24" value="14" step="1" id="bg-l-slider">
+          </div>
+        </div>
+        <div class="group">
+          <div class="gl">价格播报条</div>
+          <div class="seg" data-seg="tape">
+            <button data-val="show" class="active">显示</button>
+            <button data-val="hide">隐藏</button>
+          </div>
+        </div>
+        <div class="group">
+          <div class="gl">价格刷新间隔</div>
+          <div class="seg" data-seg="refresh">
+            <button data-val="15">15 秒</button>
+            <button data-val="30" class="active">30 秒</button>
+            <button data-val="60">60 秒</button>
+          </div>
+        </div>
+        <div class="group">
           <div class="gl">主表显示字段</div>
           <div class="cols-list" id="cols-list"></div>
         </div>

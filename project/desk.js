@@ -526,6 +526,7 @@
   let pendingDeleteCtx = "desk";
   let lastPriceFetch = 0;
   const PRICE_INTERVAL_MS = 30000;
+  let priceIntervalMs = +(localStorage.getItem("trendo_refresh_interval") || 30) * 1000;
   let _lastMktCtx = null; // cached market context for holdings brief
 
   // ============ CLOUD SYNC (Upstash) ============
@@ -2340,6 +2341,22 @@
     $("#tweaks-toggle").addEventListener("click", () => $("#tweaks").classList.toggle("open"));
     $("#tweaks-close").addEventListener("click", () => $("#tweaks").classList.remove("open"));
 
+    function setSegActive(segKey, val) {
+      const seg = document.querySelector(`.seg[data-seg="${segKey}"]`);
+      if (!seg) return;
+      $$("button", seg).forEach(b => b.classList.toggle("active", b.dataset.val === String(val)));
+    }
+
+    function applyBgL(level) { // level: integer 10–24
+      const L = level / 100;
+      const r = document.documentElement;
+      r.style.setProperty("--bg-0", `oklch(${L} 0.012 250)`);
+      r.style.setProperty("--bg-1", `oklch(${(L + 0.035).toFixed(3)} 0.012 250)`);
+      r.style.setProperty("--bg-2", `oklch(${(L + 0.070).toFixed(3)} 0.012 250)`);
+      r.style.setProperty("--bg-3", `oklch(${(L + 0.115).toFixed(3)} 0.014 250)`);
+      r.style.setProperty("--bg-4", `oklch(${(L + 0.160).toFixed(3)} 0.014 250)`);
+    }
+
     $$(".seg").forEach(seg => {
       seg.addEventListener("click", e => {
         if (e.target.tagName !== "BUTTON") return;
@@ -2347,41 +2364,87 @@
         e.target.classList.add("active");
         const key = seg.dataset.seg, val = e.target.dataset.val;
         if (key === "density") document.body.dataset.density = val;
-        if (key === "font") document.body.dataset.font = val;
-        if (key === "theme") document.body.dataset.theme = val;
+        if (key === "font")    document.body.dataset.font = val;
+        if (key === "theme")   document.body.dataset.theme = val;
+        if (key === "tape") {
+          const tapeEl = document.querySelector(".tape");
+          if (tapeEl) tapeEl.style.display = val === "hide" ? "none" : "";
+          localStorage.setItem("trendo_ui_tape", val);
+        }
+        if (key === "refresh") {
+          priceIntervalMs = +val * 1000;
+          lastPriceFetch = 0;
+          localStorage.setItem("trendo_refresh_interval", val);
+        }
         persist();
       });
     });
 
-    const slider = $("#hue-slider");
-    slider.addEventListener("input", e => {
+    const hueSlider = $("#hue-slider");
+    hueSlider.addEventListener("input", e => {
       const h = e.target.value;
       document.documentElement.style.setProperty("--accent-h", h);
       $("#hue-val").textContent = h + "°";
       persist();
     });
 
+    const bgSlider = $("#bg-l-slider");
+    if (bgSlider) {
+      bgSlider.addEventListener("input", e => {
+        const level = +e.target.value;
+        applyBgL(level);
+        $("#bg-l-val").textContent = level;
+        localStorage.setItem("trendo_ui_bg_l", level);
+      });
+    }
+
     // theme toggle (dark / light)
     const tt = $("#theme-toggle");
     if (tt) tt.addEventListener("click", () => {
       const cur = document.body.dataset.theme || "dark";
       document.body.dataset.theme = cur === "dark" ? "light" : "dark";
-      // reflect into theme segmented control if present
-      const seg = document.querySelector('.seg[data-seg="theme"]');
-      if (seg) {
-        $$("button", seg).forEach(b => b.classList.toggle("active", b.dataset.val === document.body.dataset.theme));
-      }
+      setSegActive("theme", document.body.dataset.theme);
       persist();
     });
+
+    // ── Load saved prefs ──
+    const sv = k => localStorage.getItem(k);
+    const t = sv("trendo_ui_theme");   if (t) { document.body.dataset.theme = t;   setSegActive("theme", t); }
+    const d = sv("trendo_ui_density"); if (d) { document.body.dataset.density = d; setSegActive("density", d); }
+    const f = sv("trendo_ui_font");    if (f) { document.body.dataset.font = f;    setSegActive("font", f); }
+    const hue = sv("trendo_ui_hue");
+    if (hue) {
+      document.documentElement.style.setProperty("--accent-h", hue);
+      hueSlider.value = hue;
+      $("#hue-val").textContent = hue + "°";
+    }
+    const bgL = +(sv("trendo_ui_bg_l") || 14);
+    if (bgL !== 14) {
+      applyBgL(bgL);
+      if (bgSlider) { bgSlider.value = bgL; $("#bg-l-val").textContent = bgL; }
+    }
+    const tape = sv("trendo_ui_tape");
+    if (tape === "hide") {
+      const tapeEl = document.querySelector(".tape");
+      if (tapeEl) tapeEl.style.display = "none";
+      setSegActive("tape", "hide");
+    }
+    const ri = sv("trendo_refresh_interval");
+    if (ri) setSegActive("refresh", ri);
   }
 
   function persist() {
+    localStorage.setItem("trendo_ui_density", document.body.dataset.density || "medium");
+    localStorage.setItem("trendo_ui_font",    document.body.dataset.font    || "sans");
+    localStorage.setItem("trendo_ui_theme",   document.body.dataset.theme   || "dark");
+    const hs = $("#hue-slider");
+    if (hs) localStorage.setItem("trendo_ui_hue", hs.value);
     try {
       const state = {
         density: document.body.dataset.density,
         font: document.body.dataset.font,
         theme: document.body.dataset.theme,
-        accentHue: +$("#hue-slider").value,
+        accentHue: hs ? +hs.value : 195,
         hiddenCols: COLS.filter(c => !c.on).map(c => c.id),
       };
       window.parent.postMessage({ type: "__edit_mode_set_keys", edits: state }, "*");
@@ -2408,7 +2471,7 @@
     if (lu) lu.textContent = "更新于 " + hh + ":" + mm + ":" + ss;
 
     const now = Date.now();
-    if (now - lastPriceFetch >= PRICE_INTERVAL_MS) {
+    if (now - lastPriceFetch >= priceIntervalMs) {
       lastPriceFetch = now;
       fetchPrices();
     }
