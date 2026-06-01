@@ -889,12 +889,15 @@
   .navlink:hover{ color: var(--fg-0); background: oklch(1 0 0 / .05); }
   .navlink .nav-icon { display: none; }
   .navlink.active{ color: var(--fg-0); font-weight: 600; }
-  .navlink.active::after{
+  .navlink::after{
     content: ""; position: absolute; left: 8px; right: 8px; bottom: -11px;
     height: 2px; background: var(--accent);
     border-radius: 2px 2px 0 0;
     box-shadow: 0 0 8px var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
   }
+  .navlink.active::after{ opacity: 1; }
 
   .topbar .search{
     margin-left: auto; width: 320px;
