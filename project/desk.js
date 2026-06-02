@@ -4426,12 +4426,11 @@
       }
       } // end !isWknd
 
-      // Entry chips: ● dot + ticker, colored by floating PnL
+      // Entry chips: ● dot + ticker, always accent color (entry event, not P&L)
       let entryHTML = "";
       if (!isWknd && entries.length) {
         const chips = entries.slice(0, 2).map(e => {
-          const col = e.pnl == null ? "var(--fg-3)"
-                    : e.pnl >= 0   ? "var(--up)" : "var(--down)";
+          const col = "var(--accent)";
           return `<div class="cal-entry-chip">
             <div class="cal-entry-dot" style="background:${col}"></div>
             <span class="cal-entry-sym" style="color:${col}">${e.sym.slice(0, 4)}</span>
