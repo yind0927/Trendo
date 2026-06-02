@@ -2034,7 +2034,9 @@
       const newNav = parseFloat($("#equity-nav").value);
       if (newNav > 0) {
         totalNotional = newNav;
+        HOLDINGS.forEach(h => recomputeHolding(h, newNav));
         saveToStorage();
+        renderTable();
         renderOverview();
         closeModal("equity-modal");
       }
