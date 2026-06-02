@@ -1784,7 +1784,9 @@
     });
     closeBtn.addEventListener("click", () => { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); });
     cancelBtn.addEventListener("click", () => { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); });
-    $("#new-position-modal").addEventListener("click", e => { if (e.target === e.currentTarget) { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); } });
+    let _npMousedownOnBg = false;
+    $("#new-position-modal").addEventListener("mousedown", e => { _npMousedownOnBg = e.target === e.currentTarget; });
+    $("#new-position-modal").addEventListener("click", e => { if (_npMousedownOnBg && e.target === e.currentTarget) { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); } });
 
     // Kind segmented control
     const kindSeg = $("#form-kind-seg");
@@ -1863,9 +1865,13 @@
     const formBxToggle = $("#form-bx-toggle"), formBxBody = $("#form-bx-body");
     if (formBxToggle && formBxBody) {
       formBxToggle.addEventListener("click", () => {
+        const fd = $("#form-date");
+        const savedDate = fd?.value;
         const open = formBxBody.style.display !== "none";
         formBxBody.style.display = open ? "none" : "";
         formBxToggle.classList.toggle("open", !open);
+        // Chrome may trigger autofill and clear the date when new inputs become visible
+        if (!open && fd && savedDate) requestAnimationFrame(() => { if (!fd.value) fd.value = savedDate; });
       });
     }
 
@@ -2019,7 +2025,9 @@
 
     $("#equity-close").addEventListener("click", () => closeModal("equity-modal"));
     $("#equity-cancel").addEventListener("click", () => closeModal("equity-modal"));
-    $("#equity-modal").addEventListener("click", e => { if (e.target === e.currentTarget) closeModal("equity-modal"); });
+    let _eqMousedownOnBg = false;
+    $("#equity-modal").addEventListener("mousedown", e => { _eqMousedownOnBg = e.target === e.currentTarget; });
+    $("#equity-modal").addEventListener("click", e => { if (_eqMousedownOnBg && e.target === e.currentTarget) closeModal("equity-modal"); });
 
     $("#equity-form").addEventListener("submit", e => {
       e.preventDefault();
@@ -2125,7 +2133,9 @@
     $("#close-pos-cancel-btn").addEventListener("click", closeFn);
 
     const backdrop = $("#close-pos-modal");
-    backdrop.addEventListener("click", e => { if (e.target === backdrop) { pendingCloseSym = null; closeModal("close-pos-modal"); } });
+    let _cpMousedownOnBg = false;
+    backdrop.addEventListener("mousedown", e => { _cpMousedownOnBg = e.target === backdrop; });
+    backdrop.addEventListener("click", e => { if (_cpMousedownOnBg && e.target === backdrop) { pendingCloseSym = null; closeModal("close-pos-modal"); } });
 
     $("#close-pos-confirm-btn").addEventListener("click", () => {
       if (!pendingCloseSym) return;
@@ -2319,6 +2329,22 @@
       if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("#search-input").focus(); }
       if (e.key === "n" && !e.ctrlKey && !e.metaKey && !e.altKey && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
         e.preventDefault(); $("#new-pos-btn")?.click();
+      }
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") &&
+          !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName) &&
+          !document.querySelector(".modal.open")) {
+        const isSim = currentPage === "sim";
+        const tbodySel = isSim ? "#sim-tbody" : "#tbody";
+        const trs = $$(`${tbodySel} tr[data-idx]`);
+        if (!trs.length) return;
+        e.preventDefault();
+        const curSym = isSim ? simSelectedSym : selectedSym;
+        const curIdx = trs.findIndex(tr => tr.dataset.sym === curSym);
+        const nextIdx = e.key === "ArrowDown"
+          ? (curIdx + 1) % trs.length
+          : (curIdx <= 0 ? trs.length - 1 : curIdx - 1);
+        trs[nextIdx].click();
+        trs[nextIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
     });
   }
