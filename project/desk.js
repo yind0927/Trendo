@@ -608,6 +608,9 @@
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
+    // Recalculate size% from qty after cloud data replaces HOLDINGS
+    HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
+    SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
@@ -681,6 +684,9 @@
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
+    // Recalculate size% from qty after load (qty is source of truth)
+    HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
+    SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
   }
 
   // ============ TRADING DAYS CALCULATOR ============
