@@ -769,7 +769,7 @@
   // ============ DERIVED FIELD RECOMPUTE ============
   function recomputeHolding(h, notional) {
     const base = notional ?? totalNotional;
-    h.qty = Math.round((h.size / 100 * base) / h.cost);
+    h.size = base > 0 ? (h.qty * h.cost / base) * 100 : h.size;
     h.pnlDollar = Math.round((h.last - h.cost) * h.qty);
     h.pnlPct = h.cost > 0 ? (h.last - h.cost) / h.cost : 0;
     h.risk1R = h.stop ? h.cost - h.stop : 0;
