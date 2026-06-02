@@ -2326,12 +2326,13 @@
         if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
         $("#tweaks").classList.remove("open");
       }
-      if (e.key === "/" && document.activeElement.tagName !== "INPUT") { e.preventDefault(); $("#search-input").focus(); }
-      if (e.key === "n" && !e.ctrlKey && !e.metaKey && !e.altKey && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA") {
+      if (e.key === "/" && document.activeElement.tagName !== "INPUT" && !document.activeElement.isContentEditable) { e.preventDefault(); $("#search-input").focus(); }
+      if (e.key === "n" && !e.ctrlKey && !e.metaKey && !e.altKey && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "TEXTAREA" && !document.activeElement.isContentEditable) {
         e.preventDefault(); $("#new-pos-btn")?.click();
       }
       if ((e.key === "ArrowDown" || e.key === "ArrowUp") &&
           !["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName) &&
+          !document.activeElement.isContentEditable &&
           !document.querySelector(".modal.open")) {
         const isSim = currentPage === "sim";
         const tbodySel = isSim ? "#sim-tbody" : "#tbody";
