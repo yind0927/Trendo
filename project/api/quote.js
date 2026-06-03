@@ -63,14 +63,30 @@ export default async function handler(req, res) {
         // Prefer Finnhub's real-time last and prevClose (unadjusted, accurate for daily P&L).
         // Fall back to Yahoo's prevClose only when Finnhub has none (e.g. OTC stocks).
         const last      = fh?.last      ?? yh?.last      ?? null;
-        const prevClose = fh?.prevClose ?? yh?.prevClose ?? null;
+        let   prevClose = fh?.prevClose ?? yh?.prevClose ?? null;
+
+        // When we have a current price but no prevClose (e.g. OTC stocks where Finnhub
+        // omits d.pc and Yahoo returns non-USD), use Polygon's previous-day bar for prevClose.
+        // We must NOT let Polygon overwrite `last` here — we only want its prevClose.
+        if (last && !prevClose && polygonKey) {
+          try {
+            const pr  = await fetch(
+              `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            const pd  = await pr.json();
+            const bar = pd.results?.[0];
+            if (bar?.c > 0) prevClose = bar.c;
+          } catch (_) {}
+        }
+
         const changePct = prevClose && last ? ((last - prevClose) / prevClose) * 100
                         : fh?.changePct ?? null;
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
         return;
       }
 
-      // 3) Polygon prev-day — yesterday's close only (last resort)
+      // 3) Polygon prev-day — yesterday's close only (last resort: both Finnhub AND Yahoo failed)
       if (polygonKey) {
         try {
           const r = await fetch(
