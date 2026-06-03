@@ -1,7 +1,10 @@
 // Vercel serverless function — real-time market data
 // Stocks/ETFs strategy:
 //   Finnhub (real-time last) + Yahoo Finance 2-day (accurate prevClose) run in PARALLEL.
-//   Finnhub wins for `last`; Yahoo wins for `prevClose` (time-series is more reliable for OTC).
+//   Yahoo wins for `prevClose`: derivedPc (2nd-to-last close in time series) gives the
+//   "session before yesterday" close, so pre-market the display shows yesterday's completed
+//   session change rather than 0% (no movement yet vs yesterday's close).
+//   Finnhub wins for `last` (more real-time).
 //   Polygon /prev is the last resort when both fail.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
 
@@ -51,7 +54,13 @@ export default async function handler(req, res) {
           const closes      = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
           const validCloses = closes.filter(c => c != null);
           const derivedPc   = validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
-          const pc = meta.previousClose ?? meta.chartPreviousClose ?? derivedPc ?? null;
+          // Prefer derivedPc (2nd-to-last bar close) over meta.previousClose.
+          // During active trading only 1 bar is complete so derivedPc is null and we
+          // fall back to meta.previousClose — same value either way.
+          // Pre-market / after-hours the series has 2 complete bars, so derivedPc gives
+          // the close BEFORE yesterday's session, which is the correct base for showing
+          // yesterday's completed daily change (matching broker behaviour).
+          const pc = derivedPc ?? meta.previousClose ?? meta.chartPreviousClose ?? null;
           return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
         })(),
       ]);
@@ -60,10 +69,13 @@ export default async function handler(req, res) {
       const yh = yhResult.status  === "fulfilled" ? yhResult.value  : null;
 
       if (fh || yh) {
-        // Prefer Finnhub's real-time last and prevClose (unadjusted, accurate for daily P&L).
-        // Fall back to Yahoo's prevClose only when Finnhub has none (e.g. OTC stocks).
+        // Finnhub wins for `last` (more real-time).
+        // Yahoo wins for `prevClose`: its derivedPc gives "session-before-last" close so
+        // pre-market we show the completed session's change, not 0%.
+        // During active trading derivedPc is null → Yahoo falls back to meta.previousClose
+        // which equals Finnhub's d.pc anyway, so there's no conflict.
         const last      = fh?.last      ?? yh?.last      ?? null;
-        let   prevClose = fh?.prevClose ?? yh?.prevClose ?? null;
+        let   prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
 
         // When we have a current price but no prevClose (e.g. OTC stocks where Finnhub
         // omits d.pc and Yahoo returns non-USD), use Polygon's previous-day bar for prevClose.
