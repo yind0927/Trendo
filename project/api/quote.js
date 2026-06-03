@@ -51,7 +51,8 @@ export default async function handler(req, res) {
         );
         const d    = await r.json();
         const meta = d.chart?.result?.[0]?.meta;
-        if (meta?.regularMarketPrice > 0) {
+        // Skip non-USD quotes — foreign OTC stocks (e.g. F-suffix) may return CAD price
+        if (meta?.regularMarketPrice > 0 && (meta.currency ?? "USD") === "USD") {
           const existing = results[sym];
           const last = existing?.last > 0 ? existing.last : meta.regularMarketPrice;
           const pc   = meta.previousClose ?? meta.chartPreviousClose ?? null;
