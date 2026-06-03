@@ -31,12 +31,14 @@ export default async function handler(req, res) {
           );
           const d = await r.json();
           if (d.c > 0) {
+            const pc = d.pc > 0 ? d.pc : null;
             results[sym] = {
               last:      d.c,
-              prevClose: d.pc || null,
-              changePct: d.pc > 0 ? ((d.c - d.pc) / d.pc) * 100 : (d.dp ?? null),
+              prevClose: pc,
+              changePct: pc ? ((d.c - pc) / pc) * 100 : (d.dp ?? null),
             };
-            return;
+            if (pc != null) return; // complete data — skip Yahoo
+            // prevClose missing (e.g. OTC) — fall through to Yahoo to fill it in
           }
         } catch (_) {}
       }
@@ -50,13 +52,14 @@ export default async function handler(req, res) {
         const d    = await r.json();
         const meta = d.chart?.result?.[0]?.meta;
         if (meta?.regularMarketPrice > 0) {
-          const last = meta.regularMarketPrice;
+          const existing = results[sym];
+          const last = existing?.last > 0 ? existing.last : meta.regularMarketPrice;
           const pc   = meta.previousClose ?? meta.chartPreviousClose ?? null;
           results[sym] = {
             last,
             prevClose: pc,
             changePct: pc ? ((last - pc) / pc) * 100 : null,
-            name: meta.shortName || meta.longName || null,
+            name: meta.shortName || meta.longName || existing?.name || null,
           };
           return;
         }
