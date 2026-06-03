@@ -1,8 +1,8 @@
 // Vercel serverless function — real-time market data
-// Stocks/ETFs priority:
-//   1. Finnhub /api/v1/quote       (real-time, needs FINNHUB_API_KEY)
-//   2. Yahoo Finance chart API     (today's price, no key required)
-//   3. Polygon /prev               (yesterday's close, last resort)
+// Stocks/ETFs strategy:
+//   Finnhub (real-time last) + Yahoo Finance 2-day (accurate prevClose) run in PARALLEL.
+//   Finnhub wins for `last`; Yahoo wins for `prevClose` (time-series is more reliable for OTC).
+//   Polygon /prev is the last resort when both fail.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
 
 export default async function handler(req, res) {
@@ -22,53 +22,52 @@ export default async function handler(req, res) {
   if (stocks.length) {
     await Promise.all(stocks.slice(0, 50).map(async sym => {
 
-      // 1) Finnhub — real-time, single call (needs FINNHUB_API_KEY)
-      if (finnhubKey) {
-        try {
+      // Run Finnhub and Yahoo Finance in parallel for each symbol.
+      // Finnhub gives real-time `last`; Yahoo 2-day series gives accurate `prevClose`.
+      const [fhResult, yhResult] = await Promise.allSettled([
+
+        // 1) Finnhub — real-time price
+        (async () => {
+          if (!finnhubKey) return null;
           const r = await fetch(
             `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${finnhubKey}`,
             { signal: AbortSignal.timeout(5000) }
           );
           const d = await r.json();
-          if (d.c > 0) {
-            const pc = d.pc > 0 ? d.pc : null;
-            results[sym] = {
-              last:      d.c,
-              prevClose: pc,
-              changePct: pc ? ((d.c - pc) / pc) * 100 : (d.dp ?? null),
-            };
-            if (pc != null) return; // complete data — skip Yahoo
-            // prevClose missing (e.g. OTC) — fall through to Yahoo to fill it in
-          }
-        } catch (_) {}
-      }
+          if (d.c > 0) return { last: d.c, prevClose: d.pc > 0 ? d.pc : null, changePct: d.dp ?? null };
+          return null;
+        })(),
 
-      // 2) Yahoo Finance — today's price, no API key needed
-      try {
-        const r = await fetch(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
-          { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
-        );
-        const d    = await r.json();
-        const meta = d.chart?.result?.[0]?.meta;
-        // Skip non-USD quotes — foreign OTC stocks (e.g. F-suffix) may return CAD price
-        if (meta?.regularMarketPrice > 0 && (meta.currency ?? "USD") === "USD") {
-          const existing = results[sym];
-          const last = existing?.last > 0 ? existing.last : meta.regularMarketPrice;
-          // Derive prevClose: meta fields first, then second-to-last bar in time series
-          const closes = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+        // 2) Yahoo Finance — 2-day series for reliable prevClose
+        (async () => {
+          const r = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
+            { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
+          );
+          const d    = await r.json();
+          const meta = d.chart?.result?.[0]?.meta;
+          // Skip non-USD quotes (foreign OTC stocks may return CAD price)
+          if (!(meta?.regularMarketPrice > 0) || (meta.currency ?? "USD") !== "USD") return null;
+          const closes      = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
           const validCloses = closes.filter(c => c != null);
-          const derivedPc = validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
+          const derivedPc   = validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
           const pc = meta.previousClose ?? meta.chartPreviousClose ?? derivedPc ?? null;
-          results[sym] = {
-            last,
-            prevClose: pc,
-            changePct: pc ? ((last - pc) / pc) * 100 : null,
-            name: meta.shortName || meta.longName || existing?.name || null,
-          };
-          return;
-        }
-      } catch (_) {}
+          return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
+        })(),
+      ]);
+
+      const fh = fhResult.status  === "fulfilled" ? fhResult.value  : null;
+      const yh = yhResult.status  === "fulfilled" ? yhResult.value  : null;
+
+      if (fh || yh) {
+        // Prefer Finnhub's real-time last; prefer Yahoo's prevClose (time-series is more accurate)
+        const last      = fh?.last      ?? yh?.last      ?? null;
+        const prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
+        const changePct = prevClose && last ? ((last - prevClose) / prevClose) * 100
+                        : fh?.changePct ?? null;
+        results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
+        return;
+      }
 
       // 3) Polygon prev-day — yesterday's close only (last resort)
       if (polygonKey) {
