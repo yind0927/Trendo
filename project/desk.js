@@ -2629,6 +2629,7 @@
       if (!results) return;
 
       let changed = false;
+      let needsRender = false;
       all.forEach(h => {
         const q = results[h.sym];
         if (!q) return;
@@ -2645,7 +2646,7 @@
         }
         if (q.changePct != null) {
           h.changePct = q.changePct;
-          changed = true;
+          needsRender = true; // daily P&L display only — does NOT trigger save/sync
         }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
@@ -2728,6 +2729,8 @@
       if (changed) {
         recordDailyPnl();
         saveToStorage();
+      }
+      if (changed || needsRender) {
         renderTape();
         renderOverview();
         renderTable();
