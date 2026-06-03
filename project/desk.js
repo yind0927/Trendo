@@ -2605,7 +2605,8 @@
       ...SIM_CLOSE_PENDING.map(p => p.sym),
     ];
 
-    const allSyms = [...all.map(h => h.sym), ...pendingSyms];
+    // Pending symbols go first so they are never truncated by the 50-symbol API limit
+    const allSyms = [...pendingSyms, ...all.map(h => h.sym)];
     if (!allSyms.length) return;
 
     const stocks  = [...new Set(allSyms.filter(sym => {
@@ -2657,7 +2658,7 @@
       const executed = [];
       SIM_PENDING.forEach(order => {
         const q = results[order.sym];
-        if (!q?.last) return;
+        if (q == null || q.last == null) return;
         const execPrice = q.last;
         const shouldExecute = isUSMarketOpen() && (
           order.orderType === "market" ||
@@ -2702,7 +2703,7 @@
       const closedIds = [];
       SIM_CLOSE_PENDING.forEach(order => {
         const q = results[order.sym];
-        if (!q?.last) return;
+        if (q == null || q.last == null) return;
         const execPrice = q.last;
         const shouldClose = isUSMarketOpen() && (
           order.orderType === "market" ||
@@ -3102,12 +3103,21 @@
     if (!hasAny) { section.style.display = "none"; return; }
     section.style.display = "";
 
+    const mktOpen = isUSMarketOpen();
+    const hdr = $("#sim-pending-header");
+    if (hdr) hdr.innerHTML = `挂单队列 · Pending Orders ${mktOpen
+      ? `<span class="pending-mkt-badge open">开盘中</span>`
+      : `<span class="pending-mkt-badge closed">休市</span>`}`;
+    const mktBadge = mktOpen
+      ? `<span class="pending-mkt-badge open">开盘中</span>`
+      : `<span class="pending-mkt-badge closed">休市</span>`;
+
     const openCards = SIM_PENDING.map(order => {
       const typeLabel = order.orderType === "market" ? "市价单" : "限价单";
       const typeCls   = order.orderType === "market" ? "market" : "limit";
       const priceHint = order.orderType === "limit"
         ? `限价 $${order.limitPrice?.toFixed(2)} · `
-        : "下次更新自动成交 · ";
+        : mktOpen ? "等待成交 · " : "等待开盘 · ";
       const stopTarget = order.stop && order.target
         ? `止损 $${order.stop} / 止盈 $${order.target}` : "";
       return `

@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
   // ── Stocks + ETFs ─────────────────────────────────────────────────
   if (stocks.length) {
-    await Promise.all(stocks.slice(0, 50).map(async sym => {
+    await Promise.all(stocks.slice(0, 80).map(async sym => {
 
       // Run Finnhub and Yahoo Finance in parallel for each symbol.
       // Finnhub gives real-time `last`; Yahoo 2-day series gives accurate `prevClose`.

@@ -1469,6 +1469,9 @@
   .pending-order-badge.market      { background: var(--accent-dim); color: var(--accent); }
   .pending-order-badge.limit       { background: var(--warn-dim);   color: var(--warn); }
   .pending-order-badge.close-order { background: oklch(0.58 0.23 18 / .15); color: var(--down); }
+  .pending-mkt-badge { display:inline-flex;align-items:center;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:none; }
+  .pending-mkt-badge.open   { background: oklch(0.78 0.17 145 / .15); color: var(--up); }
+  .pending-mkt-badge.closed { background: var(--bg-3); color: var(--fg-3); }
   .pending-order-sym { font-family: var(--f-mono); font-weight: 700; font-size: 13px; }
   .pending-order-detail { font-size: 11.5px; color: var(--fg-2); flex: 1; }
   .pending-order-cancel { background: none; border: none; cursor: pointer; color: var(--fg-3); font-size: 15px; padding: 2px 4px; }
@@ -3066,7 +3069,7 @@
 
   <!-- 挂单队列 -->
   <div id="sim-pending-section" style="display:none;margin:0 0 12px">
-    <div style="font-size:11px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 2px">挂单队列 · Pending Orders</div>
+    <div id="sim-pending-header" style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 2px">挂单队列 · Pending Orders</div>
     <div id="sim-pending-list"></div>
   </div>
 
