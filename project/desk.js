@@ -85,9 +85,8 @@
 
     const rows = HOLDINGS
       .map(h => {
-        const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
-        const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
-        const todayPct = base ? ((h.last - base) / base * 100) : 0;
+        const todayPct = h.changePct ?? 0;
+        const today = Math.round((h.last || 0) * todayPct / (100 + todayPct) * (h.qty || 0));
         return { sym: h.sym, name: h.name, today, todayPct };
       })
       .sort((a, b) => b.today - a.today);
@@ -2635,6 +2634,10 @@
             changed = true;
           }
         }
+        if (q.changePct != null) {
+          h.changePct = q.changePct;
+          changed = true;
+        }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
           changed = true;
@@ -3271,9 +3274,8 @@
     if (!el) return;
     const rows = SIM_HOLDINGS
       .map(h => {
-        const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
-        const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
-        const todayPct = base ? ((h.last - base) / base * 100) : 0;
+        const todayPct = h.changePct ?? 0;
+        const today = Math.round((h.last || 0) * todayPct / (100 + todayPct) * (h.qty || 0));
         return { sym: h.sym, name: h.name, today, todayPct };
       })
       .sort((a, b) => b.today - a.today);
@@ -5710,9 +5712,9 @@
       const p = h.last >= 1000
         ? h.last.toLocaleString("en-US", { maximumFractionDigits: 0 })
         : h.last.toFixed(2);
-      // daily change vs prevClose; fall back to position P&L if prevClose unavailable
-      const base = h.prevClose > 0 ? h.prevClose : h.cost;
-      const c = +((h.last - base) / base * 100).toFixed(2);
+      const c = h.changePct != null ? +h.changePct.toFixed(2)
+        : h.prevClose > 0 ? +((h.last - h.prevClose) / h.prevClose * 100).toFixed(2)
+        : +((h.last - h.cost) / h.cost * 100).toFixed(2);
       return { s: h.sym, p, c };
     });
     const html = items.map(i => {
