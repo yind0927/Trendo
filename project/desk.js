@@ -2626,9 +2626,14 @@
         if (!q) return;
         const notional = SIM_HOLDINGS.includes(h) ? simNotional : totalNotional;
         if (q.name && h.name === h.sym) { h.name = q.name; changed = true; }
+        // Update prevClose only during market hours or when uninitialized.
+        // Outside market hours, freeze it so the last session's daily change stays visible
+        // (matching how brokers continue showing yesterday's change until today opens).
         if (q.prevClose != null && q.prevClose !== h.prevClose) {
-          h.prevClose = q.prevClose;
-          changed = true;
+          if (!(h.prevClose > 0) || isUSMarketOpen()) {
+            h.prevClose = q.prevClose;
+            changed = true;
+          }
         }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
