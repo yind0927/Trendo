@@ -33,11 +33,10 @@
     const eqLabel  = eqCount + (etfCount > 0 ? `+${etfCount}ETF` : "") + " 美股";
     const pnlSign = fmt.sign(totalPnlDollar);
 
-    // Today PnL: open positions only.
-    // Baseline = cost for positions entered today; prevClose for all earlier positions.
-    const _todayStr = new Date().toISOString().slice(0, 10);
+    // Today PnL: use prevClose as base (matches industry-standard daily change).
+    // Fall back to cost only when prevClose not yet fetched (e.g. brand-new position).
     const todayPnl = HOLDINGS.reduce((s, h) => {
-      const base = (h.entry >= _todayStr) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+      const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
       return s + Math.round(((h.last || 0) - base) * (h.qty || 0));
     }, 0);
     const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
@@ -84,10 +83,9 @@
     const label = $("#daily-sources-label");
     if (!el) return;
 
-    const _todayStr2 = new Date().toISOString().slice(0, 10);
     const rows = HOLDINGS
       .map(h => {
-        const base = (h.entry >= _todayStr2) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+        const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
         const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
         const todayPct = base ? ((h.last - base) / base * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
@@ -3266,10 +3264,9 @@
     const el = $("#sim-daily-sources");
     const label = $("#sim-daily-sources-label");
     if (!el) return;
-    const _todayStr3 = new Date().toISOString().slice(0, 10);
     const rows = SIM_HOLDINGS
       .map(h => {
-        const base = (h.entry >= _todayStr3) ? (h.cost || h.last || 0) : (h.prevClose || h.last || 0);
+        const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
         const today = Math.round(((h.last || 0) - base) * (h.qty || 0));
         const todayPct = base ? ((h.last - base) / base * 100) : 0;
         return { sym: h.sym, name: h.name, today, todayPct };
