@@ -60,9 +60,10 @@ export default async function handler(req, res) {
       const yh = yhResult.status  === "fulfilled" ? yhResult.value  : null;
 
       if (fh || yh) {
-        // Prefer Finnhub's real-time last; prefer Yahoo's prevClose (time-series is more accurate)
+        // Prefer Finnhub's real-time last and prevClose (unadjusted, accurate for daily P&L).
+        // Fall back to Yahoo's prevClose only when Finnhub has none (e.g. OTC stocks).
         const last      = fh?.last      ?? yh?.last      ?? null;
-        const prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
+        const prevClose = fh?.prevClose ?? yh?.prevClose ?? null;
         const changePct = prevClose && last ? ((last - prevClose) / prevClose) * 100
                         : fh?.changePct ?? null;
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
