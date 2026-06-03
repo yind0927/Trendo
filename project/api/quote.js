@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       // 2) Yahoo Finance — today's price, no API key needed
       try {
         const r = await fetch(
-          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`,
+          `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
           { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
         );
         const d    = await r.json();
@@ -55,7 +55,11 @@ export default async function handler(req, res) {
         if (meta?.regularMarketPrice > 0 && (meta.currency ?? "USD") === "USD") {
           const existing = results[sym];
           const last = existing?.last > 0 ? existing.last : meta.regularMarketPrice;
-          const pc   = meta.previousClose ?? meta.chartPreviousClose ?? null;
+          // Derive prevClose: meta fields first, then second-to-last bar in time series
+          const closes = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+          const validCloses = closes.filter(c => c != null);
+          const derivedPc = validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
+          const pc = meta.previousClose ?? meta.chartPreviousClose ?? derivedPc ?? null;
           results[sym] = {
             last,
             prevClose: pc,
