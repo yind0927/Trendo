@@ -356,6 +356,8 @@
         if (heroP) heroP.textContent = `$${price(h.last)}`;
         if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct); heroPct.className = `pct ${pnlSign}`; }
         if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlDollar); heroPnl.className = `pnl ${pnlSign}`; }
+        const heroR = $(".hero-price .hero-r", dr);
+        if (heroR && h.rMult != null) { heroR.textContent = fmt.rMult(h.rMult); heroR.className = `hero-r ${fmt.sign(h.rMult)}`; }
         // Update level bar
         const lb = $(".levelbar", dr);
         if (lb) { const tmp = document.createElement("div"); tmp.innerHTML = levelBar(h); lb.replaceWith(tmp.firstElementChild); }
@@ -400,6 +402,8 @@
         if (heroP)   heroP.textContent   = `$${price(v)}`;
         if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct);      heroPct.className = `pct ${pnlSign}`; }
         if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlFinal); heroPnl.className = `pnl ${pnlSign}`; }
+        const heroR = $(".hero-price .hero-r", dr);
+        if (heroR && h.rMult != null) { heroR.textContent = fmt.rMult(h.rMult); heroR.className = `hero-r ${fmt.sign(h.rMult)}`; }
         // Update P&L cell in kv-grid
         const pnlCell = $(".kv-grid .v.big", dr);
         if (pnlCell) { pnlCell.textContent = fmt.signed(h.pnlFinal); pnlCell.className = `v big ${pnlSign}`; }
@@ -1323,6 +1327,7 @@
           ${isClosed ? `<span class="muted" style="font-size:11px;font-family:var(--f-mono);align-self:center">平仓价</span>` : ""}
           <span class="pct ${pnlSign}">${fmt.pct(pnlPct)}</span>
           <span class="pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>
+          ${h.rMult != null ? `<span class="hero-r ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</span>` : ""}
           <span class="muted" style="font-family:var(--f-mono);font-size:11px;margin-left:auto">${isClosed ? `平仓 ${fmt.date(h.closedAt)}` : `持仓 ${dispDays}d · since ${fmt.date(h.entry)}`}</span>
         </div>
         ${levelBar(h)}
@@ -3682,6 +3687,8 @@
         if (heroP) heroP.textContent = `$${price(h.last)}`;
         if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct); heroPct.className = `pct ${pnlSign}`; }
         if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlDollar); heroPnl.className = `pnl ${pnlSign}`; }
+        const heroR = $(".hero-price .hero-r", dr);
+        if (heroR && h.rMult != null) { heroR.textContent = fmt.rMult(h.rMult); heroR.className = `hero-r ${fmt.sign(h.rMult)}`; }
         const lb = $(".levelbar", dr);
         if (lb) { const tmp = document.createElement("div"); tmp.innerHTML = levelBar(h); lb.replaceWith(tmp.firstElementChild); }
         const rCell = $(".kv-grid .v.big", dr);
