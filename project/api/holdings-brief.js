@@ -74,7 +74,7 @@ async function fetchCompanyNews(sym, token, days = 4) {
     if (!Array.isArray(articles)) return [];
     return articles
       .filter(a => a.headline && a.headline.length > 10)
-      .slice(0, 2)
+      .slice(0, 3)
       .map(a => a.headline.trim());
   } catch (_) {
     return [];
@@ -146,7 +146,7 @@ export default async function handler(req, res) {
   const newsMap = {};
   if (finnhubKey) {
     const results = await Promise.allSettled(
-      holdings.map(h => fetchCompanyNews(h.sym, finnhubKey, 4))
+      holdings.map(h => fetchCompanyNews(h.sym, finnhubKey, 5))
     );
     holdings.forEach((h, i) => {
       if (results[i].status === "fulfilled" && results[i].value.length) {
@@ -184,7 +184,7 @@ export default async function handler(req, res) {
   }).join("\n");
 
   const prompt =
-`你是一位专业的美股波段交易员助手。请结合当前市场环境${hasNews ? "、最新个股动态" : ""}和持仓数据，给出今日持仓分析。
+`你是一位专业的美股波段交易员助手。请结合当前市场环境${hasNews ? "、最新个股动态" : ""}和持仓数据，给出今日持仓深度分析。
 
 ${marketBlock ? `【当前市场环境】\n${marketBlock}\n\n` : ""}【当前持仓（${holdings.length}只）】
 ${holdingsText}
@@ -192,15 +192,15 @@ ${holdingsText}
 请严格按以下格式输出，不加Markdown符号：
 
 【持仓概览】
-（一句话：整体盈亏状态、盈亏比分布、与当前市场环境的匹配度）
+（整体盈亏状态：盈利/亏损比例、平均持仓天数、整体R倍数水平；判断当前持仓结构与市场状态的匹配度）
 
 【重点关注】
-（列出2-3个需关注的持仓，重点分析：持仓时间是否合理、盈利/亏损相对于持仓天数的效率、有无近期利空/利好消息、财报风险）
+（逐一分析有异常的持仓，包括：①时间效率——持仓天数多但盈利少的"僵尸仓"；②风险敞口——接近止损或R值负值的持仓；③催化剂——近期有重大新闻或财报临近的持仓；④动量异常——盈利超预期可考虑减仓锁利的持仓。每条分析需包含具体数据支撑。）
 
 【今日操作建议】
-（1-2条具体可执行建议：结合市场状态和个股动态，明确说哪只应止盈/减仓/持有/止损，给出数据驱动的理由）
+（2-3条具体可执行操作，格式：[持仓名称] → [操作]，并说明触发条件或理由。结合市场状态和个股动态，给出明确的止盈/减仓/持有/止损建议，优先级从高到低排列。）
 
-语言直接专业，数据驱动，总字数180字以内，不废话。`;
+语言直接专业，数据驱动，总字数300字以内，不废话，不重复持仓数据。`;
 
   // ── 5. Claude Sonnet ──────────────────────────────────────────────────────
   let summary = "";
@@ -214,7 +214,7 @@ ${holdingsText}
       },
       body: JSON.stringify({
         model:      "claude-sonnet-4-6",
-        max_tokens: 500,
+        max_tokens: 900,
         messages:   [{ role: "user", content: prompt }],
       }),
       signal: AbortSignal.timeout(30000),
