@@ -2348,17 +2348,38 @@
           !document.activeElement.isContentEditable &&
           !document.querySelector(".modal.open")) {
         const isSim = currentPage === "sim";
+        const curSym = isSim ? simSelectedSym : selectedSym;
+
+        // Try list-mode rows first
         const tbodySel = isSim ? "#sim-tbody" : "#tbody";
         const trs = $$(`${tbodySel} tr[data-idx]`);
-        if (!trs.length) return;
-        e.preventDefault();
-        const curSym = isSim ? simSelectedSym : selectedSym;
-        const curIdx = trs.findIndex(tr => tr.dataset.sym === curSym);
-        const nextIdx = e.key === "ArrowDown"
-          ? (curIdx + 1) % trs.length
-          : (curIdx <= 0 ? trs.length - 1 : curIdx - 1);
-        trs[nextIdx].click();
-        trs[nextIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+
+        if (trs.length) {
+          e.preventDefault();
+          const curIdx = trs.findIndex(tr => tr.dataset.sym === curSym);
+          const nextIdx = e.key === "ArrowDown"
+            ? (curIdx + 1) % trs.length
+            : (curIdx <= 0 ? trs.length - 1 : curIdx - 1);
+          trs[nextIdx].click();
+          trs[nextIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else if (curSym) {
+          // Card mode — navigate through the data array directly
+          e.preventDefault();
+          const data = isSim
+            ? (simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED)
+            : (activeTab === "open" ? HOLDINGS : CLOSED_POSITIONS);
+          const curIdx = data.findIndex(h => h.sym === curSym);
+          if (data.length) {
+            const nextIdx = e.key === "ArrowDown"
+              ? (curIdx + 1) % data.length
+              : (curIdx <= 0 ? data.length - 1 : curIdx - 1);
+            if (isSim) openSimDrawer(data[nextIdx], simActiveTab);
+            else        openDrawer(data[nextIdx]);
+            const cardSel = isSim ? "#sim-holdings-cards" : "#holdings-cards";
+            document.querySelector(`${cardSel} [data-sym="${data[nextIdx].sym}"]`)
+              ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
+        }
       }
     });
   }
