@@ -1,10 +1,11 @@
 // Vercel serverless function — real-time market data
 // Stocks/ETFs:
 //   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
-//   changePct → Finnhub d.dp (same source as last, always consistent) with Yahoo fallback
-//   prevClose → Yahoo derivedPc (session-before-last, for holdings table) or meta.previousClose
-//   NOTE: never use Yahoo chartPreviousClose for changePct — it is the close before the
-//         chart period (3 days ago for range=2d), not yesterday's close.
+//   prevClose → Yahoo derivedPc (genuine last completed session close), Finnhub d.pc,
+//               or Polygon /prev as last resort
+//   changePct → computed ONCE as (last - prevClose) / prevClose, so price and % always
+//               share the same two numbers and stay self-consistent. We never trust
+//               Finnhub d.dp/d.pc for the % — off-market they collapse change to 0.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
 
 export default async function handler(req, res) {
@@ -36,12 +37,9 @@ export default async function handler(req, res) {
             { signal: AbortSignal.timeout(5000) }
           );
           const d = await r.json();
-          // Compute changePct from d.c / d.pc rather than trusting d.dp:
-          // Finnhub can return d.dp=0 during off-market hours even when d.c ≠ d.pc.
-          if (d.c > 0) {
-            const changePct = d.pc > 0 ? (d.c - d.pc) / d.pc * 100 : null;
-            return { last: d.c, prevClose: d.pc > 0 ? d.pc : null, changePct };
-          }
+          // Only take Finnhub's real-time `last` and `pc`. We do NOT trust Finnhub for the
+          // % change: during off-market hours it can set d.pc === d.c (change collapses to 0).
+          if (d.c > 0) return { last: d.c, prevClose: d.pc > 0 ? d.pc : null };
           return null;
         })(),
 
@@ -61,12 +59,7 @@ export default async function handler(req, res) {
           // derivedPc = 2nd-to-last close in the series (session-before-last close).
           // Used only for prevClose on the holding object (holdings table display).
           const pc = derivedPc ?? meta.previousClose ?? null;
-          // previousClose: the standard "official previous close" from exchange metadata.
-          // Used only as changePct fallback. NOTE: do NOT fall back to chartPreviousClose
-          // here — chartPreviousClose is the close before the chart period (3 days ago for
-          // range=2d), which would produce a wildly wrong % change.
-          const previousClose = meta.previousClose ?? null;
-          return { last: meta.regularMarketPrice, prevClose: pc, previousClose, name: meta.shortName || meta.longName || null };
+          return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
         })(),
       ]);
 
@@ -97,17 +90,14 @@ export default async function handler(req, res) {
           } catch (_) {}
         }
 
-        // changePct: Finnhub d.dp is the primary source.
-        // d.dp = (d.c - d.pc) / d.pc — computed from the exact same d.c used for `last`,
-        // so price and % are always consistent with each other and match standard financial
-        // apps (Bloomberg, TradingView, etc.) which all use the same formula.
-        // Yahoo fallback: use meta.previousClose only (never chartPreviousClose — that is
-        // the close before the chart period = 3 days ago for range=2d, giving wrong %).
-        const changePct = fh?.changePct != null
-          ? fh.changePct
-          : (yh?.last != null && yh?.previousClose != null)
-            ? (yh.last - yh.previousClose) / yh.previousClose * 100
-            : null;
+        // changePct is computed ONCE from the exact `last` and `prevClose` we return.
+        // This guarantees price and % are always self-consistent (they share the same two
+        // numbers) and never relies on Finnhub's d.dp/d.pc, which collapse to 0 off-market.
+        // prevClose here = Yahoo derivedPc (the genuine last completed session close), so the
+        // result matches what standard stock apps display for the daily change.
+        const changePct = (last != null && prevClose > 0)
+          ? (last - prevClose) / prevClose * 100
+          : null;
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
         return;
       }
