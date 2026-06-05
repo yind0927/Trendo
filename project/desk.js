@@ -686,6 +686,9 @@
     // Recalculate size% from qty after load (qty is source of truth)
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
+    // changePct is ephemeral market data — reset on every load so stale values from
+    // a previous session never appear before the first price fetch completes.
+    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.changePct = null; });
   }
 
   // ============ TRADING DAYS CALCULATOR ============

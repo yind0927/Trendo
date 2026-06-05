@@ -97,15 +97,12 @@ export default async function handler(req, res) {
           } catch (_) {}
         }
 
-        // changePct = today's live % change vs yesterday's official close.
-        // Use (last - yahoo.officialPrevClose) / officialPrevClose as the primary formula:
-        //   - Yahoo meta.previousClose always reflects the last completed regular session
-        //     (Friday's close on Monday morning, today's close in after-hours, etc.)
-        //   - Finnhub d.dp is unreliable during pre-market: d.pc is the close BEFORE the
-        //     last trade (Thursday if last trade = Friday), making d.dp show Friday's
-        //     session change on Monday morning instead of 0%.
-        const changePct = (last != null && yh?.officialPrevClose != null)
-          ? (last - yh.officialPrevClose) / yh.officialPrevClose * 100
+        // changePct: use Yahoo's own consistent data (regularMarketPrice / previousClose).
+        // Mixing Finnhub's real-time last with Yahoo's prevClose causes drift because the
+        // two sources can differ by cents, making the % look off vs what Yahoo Finance shows.
+        // Yahoo's regularMarketPrice + previousClose are always internally consistent.
+        const changePct = (yh?.last != null && yh?.officialPrevClose != null)
+          ? (yh.last - yh.officialPrevClose) / yh.officialPrevClose * 100
           : fh?.changePct ?? null;
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
         return;
