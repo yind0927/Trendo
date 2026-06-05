@@ -34,13 +34,7 @@
     const pnlSign = fmt.sign(totalPnlDollar);
 
     const todayPnl = HOLDINGS.reduce((s, h) => {
-      let pct;
-      if (h.changePct != null) {
-        pct = h.changePct;
-      } else {
-        const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
-        pct = base ? ((h.last || 0) - base) / base * 100 : 0;
-      }
+      const pct = h.changePct ?? 0;
       return s + Math.round((h.last || 0) * pct / (100 + pct) * (h.qty || 0));
     }, 0);
     const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
@@ -89,13 +83,7 @@
 
     const rows = HOLDINGS
       .map(h => {
-        let todayPct;
-        if (h.changePct != null) {
-          todayPct = h.changePct;
-        } else {
-          const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
-          todayPct = base ? ((h.last || 0) - base) / base * 100 : 0;
-        }
+        const todayPct = h.changePct ?? 0;
         const today = Math.round((h.last || 0) * todayPct / (100 + todayPct) * (h.qty || 0));
         return { sym: h.sym, name: h.name, today, todayPct };
       })
@@ -3321,13 +3309,7 @@
     if (!el) return;
     const rows = SIM_HOLDINGS
       .map(h => {
-        let todayPct;
-        if (h.changePct != null) {
-          todayPct = h.changePct;
-        } else {
-          const base = h.prevClose > 0 ? h.prevClose : (h.cost || h.last || 0);
-          todayPct = base ? ((h.last || 0) - base) / base * 100 : 0;
-        }
+        const todayPct = h.changePct ?? 0;
         const today = Math.round((h.last || 0) * todayPct / (100 + todayPct) * (h.qty || 0));
         return { sym: h.sym, name: h.name, today, todayPct };
       })
@@ -5767,9 +5749,7 @@
       const p = h.last >= 1000
         ? h.last.toLocaleString("en-US", { maximumFractionDigits: 0 })
         : h.last.toFixed(2);
-      const c = h.changePct != null ? +h.changePct.toFixed(2)
-        : h.prevClose > 0 ? +((h.last - h.prevClose) / h.prevClose * 100).toFixed(2)
-        : +((h.last - h.cost) / h.cost * 100).toFixed(2);
+      const c = +(h.changePct ?? 0).toFixed(2);
       return { s: h.sym, p, c };
     });
     const html = items.map(i => {

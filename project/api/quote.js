@@ -92,14 +92,13 @@ export default async function handler(req, res) {
           } catch (_) {}
         }
 
-        // Finnhub's d.dp is always (current - yesterday's official close) / yesterday's close,
-        // correct for "today's live change" regardless of session (pre-market / regular / AH).
-        // Yahoo's derivedPc is the session-before-last close — kept in prevClose so the
-        // holdings table shows yesterday's completed session move, but must NOT be used
-        // to derive changePct or it shows the wrong day's change in the tape / daily P&L.
+        // changePct = today's live % change from yesterday's official close.
+        // Only use Finnhub's d.dp (authoritative) or derive from Finnhub's own d.pc.
+        // Never use Yahoo's prevClose here: during pre-market it is the session-before-last
+        // close (derivedPc), which would give yesterday's change, not today's.
         const changePct = fh?.changePct != null
           ? fh.changePct
-          : (prevClose && last ? ((last - prevClose) / prevClose) * 100 : null);
+          : (fh?.prevClose && last ? ((last - fh.prevClose) / fh.prevClose * 100) : null);
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
         return;
       }
