@@ -61,7 +61,12 @@ export default async function handler(req, res) {
           // the close BEFORE yesterday's session, which is the correct base for showing
           // yesterday's completed daily change (matching broker behaviour).
           const pc = derivedPc ?? meta.previousClose ?? meta.chartPreviousClose ?? null;
-          return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
+          // officialPrevClose = the last completed regular session close.
+          // Yahoo updates this correctly across weekends/holidays — on Monday morning it
+          // equals Friday's close, so (last - officialPrevClose) gives 0% before trading
+          // starts rather than showing Friday's session change (the Finnhub d.dp bug).
+          const officialPrevClose = meta.previousClose ?? meta.chartPreviousClose ?? null;
+          return { last: meta.regularMarketPrice, prevClose: pc, officialPrevClose, name: meta.shortName || meta.longName || null };
         })(),
       ]);
 
@@ -92,13 +97,16 @@ export default async function handler(req, res) {
           } catch (_) {}
         }
 
-        // changePct = today's live % change from yesterday's official close.
-        // Only use Finnhub's d.dp (authoritative) or derive from Finnhub's own d.pc.
-        // Never use Yahoo's prevClose here: during pre-market it is the session-before-last
-        // close (derivedPc), which would give yesterday's change, not today's.
-        const changePct = fh?.changePct != null
-          ? fh.changePct
-          : (fh?.prevClose && last ? ((last - fh.prevClose) / fh.prevClose * 100) : null);
+        // changePct = today's live % change vs yesterday's official close.
+        // Use (last - yahoo.officialPrevClose) / officialPrevClose as the primary formula:
+        //   - Yahoo meta.previousClose always reflects the last completed regular session
+        //     (Friday's close on Monday morning, today's close in after-hours, etc.)
+        //   - Finnhub d.dp is unreliable during pre-market: d.pc is the close BEFORE the
+        //     last trade (Thursday if last trade = Friday), making d.dp show Friday's
+        //     session change on Monday morning instead of 0%.
+        const changePct = (last != null && yh?.officialPrevClose != null)
+          ? (last - yh.officialPrevClose) / yh.officialPrevClose * 100
+          : fh?.changePct ?? null;
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
         return;
       }
