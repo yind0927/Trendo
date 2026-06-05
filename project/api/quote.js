@@ -92,8 +92,14 @@ export default async function handler(req, res) {
           } catch (_) {}
         }
 
-        const changePct = prevClose && last ? ((last - prevClose) / prevClose) * 100
-                        : fh?.changePct ?? null;
+        // Finnhub's d.dp is always (current - yesterday's official close) / yesterday's close,
+        // correct for "today's live change" regardless of session (pre-market / regular / AH).
+        // Yahoo's derivedPc is the session-before-last close — kept in prevClose so the
+        // holdings table shows yesterday's completed session move, but must NOT be used
+        // to derive changePct or it shows the wrong day's change in the tape / daily P&L.
+        const changePct = fh?.changePct != null
+          ? fh.changePct
+          : (prevClose && last ? ((last - prevClose) / prevClose) * 100 : null);
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
         return;
       }
