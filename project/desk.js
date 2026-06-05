@@ -1327,8 +1327,8 @@
           ${isClosed ? `<span class="muted" style="font-size:11px;font-family:var(--f-mono);align-self:center">平仓价</span>` : ""}
           <span class="pct ${pnlSign}">${fmt.pct(pnlPct)}</span>
           <span class="pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>
-          ${h.rMult != null ? `<span class="hero-r ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</span>` : ""}
-          <span class="muted" style="font-family:var(--f-mono);font-size:11px;margin-left:auto">${isClosed ? `平仓 ${fmt.date(h.closedAt)}` : `持仓 ${dispDays}d · since ${fmt.date(h.entry)}`}</span>
+          <span class="hero-r ${h.rMult != null ? fmt.sign(h.rMult) : ''}">${h.rMult != null ? fmt.rMult(h.rMult) : "—"}</span>
+          <span class="hero-date muted">${isClosed ? `平仓 ${fmt.date(h.closedAt)}` : `持仓 ${dispDays}d · since ${fmt.date(h.entry)}`}</span>
         </div>
         ${levelBar(h)}
         ${!isClosed ? `<div class="drawer-actions">
