@@ -36,7 +36,12 @@ export default async function handler(req, res) {
             { signal: AbortSignal.timeout(5000) }
           );
           const d = await r.json();
-          if (d.c > 0) return { last: d.c, prevClose: d.pc > 0 ? d.pc : null, changePct: d.dp ?? null };
+          // Compute changePct from d.c / d.pc rather than trusting d.dp:
+          // Finnhub can return d.dp=0 during off-market hours even when d.c ≠ d.pc.
+          if (d.c > 0) {
+            const changePct = d.pc > 0 ? (d.c - d.pc) / d.pc * 100 : null;
+            return { last: d.c, prevClose: d.pc > 0 ? d.pc : null, changePct };
+          }
           return null;
         })(),
 
