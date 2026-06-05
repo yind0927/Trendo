@@ -1,11 +1,10 @@
 // Vercel serverless function — real-time market data
-// Stocks/ETFs strategy:
-//   Finnhub (real-time last) + Yahoo Finance 2-day (accurate prevClose) run in PARALLEL.
-//   Yahoo wins for `prevClose`: derivedPc (2nd-to-last close in time series) gives the
-//   "session before yesterday" close, so pre-market the display shows yesterday's completed
-//   session change rather than 0% (no movement yet vs yesterday's close).
-//   Finnhub wins for `last` (more real-time).
-//   Polygon /prev is the last resort when both fail.
+// Stocks/ETFs:
+//   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
+//   changePct → Finnhub d.dp (same source as last, always consistent) with Yahoo fallback
+//   prevClose → Yahoo derivedPc (session-before-last, for holdings table) or meta.previousClose
+//   NOTE: never use Yahoo chartPreviousClose for changePct — it is the close before the
+//         chart period (3 days ago for range=2d), not yesterday's close.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
 
 export default async function handler(req, res) {
@@ -54,19 +53,15 @@ export default async function handler(req, res) {
           const closes      = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
           const validCloses = closes.filter(c => c != null);
           const derivedPc   = validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
-          // Prefer derivedPc (2nd-to-last bar close) over meta.previousClose.
-          // During active trading only 1 bar is complete so derivedPc is null and we
-          // fall back to meta.previousClose — same value either way.
-          // Pre-market / after-hours the series has 2 complete bars, so derivedPc gives
-          // the close BEFORE yesterday's session, which is the correct base for showing
-          // yesterday's completed daily change (matching broker behaviour).
-          const pc = derivedPc ?? meta.previousClose ?? meta.chartPreviousClose ?? null;
-          // officialPrevClose = the last completed regular session close.
-          // Yahoo updates this correctly across weekends/holidays — on Monday morning it
-          // equals Friday's close, so (last - officialPrevClose) gives 0% before trading
-          // starts rather than showing Friday's session change (the Finnhub d.dp bug).
-          const officialPrevClose = meta.previousClose ?? meta.chartPreviousClose ?? null;
-          return { last: meta.regularMarketPrice, prevClose: pc, officialPrevClose, name: meta.shortName || meta.longName || null };
+          // derivedPc = 2nd-to-last close in the series (session-before-last close).
+          // Used only for prevClose on the holding object (holdings table display).
+          const pc = derivedPc ?? meta.previousClose ?? null;
+          // previousClose: the standard "official previous close" from exchange metadata.
+          // Used only as changePct fallback. NOTE: do NOT fall back to chartPreviousClose
+          // here — chartPreviousClose is the close before the chart period (3 days ago for
+          // range=2d), which would produce a wildly wrong % change.
+          const previousClose = meta.previousClose ?? null;
+          return { last: meta.regularMarketPrice, prevClose: pc, previousClose, name: meta.shortName || meta.longName || null };
         })(),
       ]);
 
@@ -97,13 +92,17 @@ export default async function handler(req, res) {
           } catch (_) {}
         }
 
-        // changePct: use Yahoo's own consistent data (regularMarketPrice / previousClose).
-        // Mixing Finnhub's real-time last with Yahoo's prevClose causes drift because the
-        // two sources can differ by cents, making the % look off vs what Yahoo Finance shows.
-        // Yahoo's regularMarketPrice + previousClose are always internally consistent.
-        const changePct = (yh?.last != null && yh?.officialPrevClose != null)
-          ? (yh.last - yh.officialPrevClose) / yh.officialPrevClose * 100
-          : fh?.changePct ?? null;
+        // changePct: Finnhub d.dp is the primary source.
+        // d.dp = (d.c - d.pc) / d.pc — computed from the exact same d.c used for `last`,
+        // so price and % are always consistent with each other and match standard financial
+        // apps (Bloomberg, TradingView, etc.) which all use the same formula.
+        // Yahoo fallback: use meta.previousClose only (never chartPreviousClose — that is
+        // the close before the chart period = 3 days ago for range=2d, giving wrong %).
+        const changePct = fh?.changePct != null
+          ? fh.changePct
+          : (yh?.last != null && yh?.previousClose != null)
+            ? (yh.last - yh.previousClose) / yh.previousClose * 100
+            : null;
         results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
         return;
       }
