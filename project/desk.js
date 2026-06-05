@@ -686,9 +686,9 @@
     // Recalculate size% from qty after load (qty is source of truth)
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
-    // changePct is ephemeral market data — reset on every load so stale values from
-    // a previous session never appear before the first price fetch completes.
-    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.changePct = null; });
+    // Compute changePct from persisted last + prevClose so the tape / daily P&L show real
+    // values instantly on first paint (from cache), instead of +0.00% until the first fetch.
+    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.changePct = computeChangePct(h); });
   }
 
   // ============ TRADING DAYS CALCULATOR ============
@@ -783,6 +783,17 @@
     h.risk1R = h.stop ? h.cost - h.stop : 0;
     h.rMult = h.risk1R !== 0 ? (h.last - h.cost) / h.risk1R : 0;
     if (h.entry) h.days = calcTradingDays(h.entry);
+  }
+
+  // Today's % change for the ticker tape / daily P&L modules.
+  // Derived from the holding's own last + prevClose (the SAME two numbers we display),
+  // so price and % are always self-consistent. prevClose is persisted and frozen outside
+  // market hours, so this stays correct even when a single fetch cycle flakes — no more
+  // "+0.00% then loads one by one" gradual population.
+  function computeChangePct(h) {
+    return (h.prevClose > 0 && h.last > 0)
+      ? (h.last - h.prevClose) / h.prevClose * 100
+      : null;
   }
 
   // ============ MODAL MANAGEMENT ============
@@ -2661,14 +2672,17 @@
             changed = true;
           }
         }
-        if (q.changePct != null) {
-          h.changePct = q.changePct;
-          needsRender = true; // daily P&L display only — does NOT trigger save/sync
-        }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
           changed = true;
           recomputeHolding(h, notional);
+        }
+        // Recompute changePct from this holding's own last + prevClose (not the per-cycle
+        // server value, which can flake to 0 off-market). Keeps the tape stable & consistent.
+        const cp = computeChangePct(h);
+        if (cp !== h.changePct) {
+          h.changePct = cp;
+          needsRender = true; // daily P&L display only — does NOT trigger save/sync
         }
       });
 
