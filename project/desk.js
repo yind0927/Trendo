@@ -33,10 +33,7 @@
     const eqLabel  = eqCount + (etfCount > 0 ? `+${etfCount}ETF` : "") + " 美股";
     const pnlSign = fmt.sign(totalPnlDollar);
 
-    const todayPnl = HOLDINGS.reduce((s, h) => {
-      const pct = h.changePct ?? 0;
-      return s + Math.round((h.last || 0) * pct / (100 + pct) * (h.qty || 0));
-    }, 0);
+    const todayPnl = HOLDINGS.reduce((s, h) => s + todayPnlOf(h), 0);
     const totalPrevValue = HOLDINGS.reduce((s, h) => s + (h.prevClose || h.cost || 0) * (h.qty || 0), 0);
     const todayPct = totalPrevValue > 0 ? todayPnl / totalPrevValue : 0;
     const todaySign = fmt.sign(todayPnl);
@@ -84,8 +81,8 @@
 
     const rows = HOLDINGS
       .map(h => {
-        const todayPct = h.changePct ?? 0;
-        const today = Math.round((h.last || 0) * todayPct / (100 + todayPct) * (h.qty || 0));
+        const today = todayPnlOf(h);
+        const todayPct = computeChangePct(h) ?? 0;
         return { sym: h.sym, name: h.name, today, todayPct };
       })
       .sort((a, b) => b.today - a.today);
@@ -795,6 +792,17 @@
     return (h.prevClose > 0 && h.last > 0)
       ? (h.last - h.prevClose) / h.prevClose * 100
       : null;
+  }
+
+  // Today's dollar P&L for ONE holding — computed directly as (last - prevClose) * qty.
+  // Both the "今日盈亏" card and the per-stock breakdown use this single helper, so the
+  // card total is always exactly the sum of the rows shown. Computing from prevClose
+  // directly (instead of reconstructing via changePct) keeps $ and % self-consistent even
+  // when changePct came from a different source (e.g. crypto server todaysChangePerc).
+  function todayPnlOf(h) {
+    return (h.prevClose > 0 && h.last > 0 && h.qty)
+      ? Math.round((h.last - h.prevClose) * h.qty)
+      : 0;
   }
 
   // ============ MODAL MANAGEMENT ============
@@ -3327,8 +3335,8 @@
     if (!el) return;
     const rows = SIM_HOLDINGS
       .map(h => {
-        const todayPct = h.changePct ?? 0;
-        const today = Math.round((h.last || 0) * todayPct / (100 + todayPct) * (h.qty || 0));
+        const today = todayPnlOf(h);
+        const todayPct = computeChangePct(h) ?? 0;
         return { sym: h.sym, name: h.name, today, todayPct };
       })
       .sort((a, b) => b.today - a.today);
