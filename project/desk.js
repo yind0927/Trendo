@@ -4973,13 +4973,13 @@
       return { headline: "⚠️ 止盈 / 禁新仓", color: "#f97316",
         detail: `情绪极端过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。` };
     if (sent.tilt === "accumulate")
-      return { headline: "🔄 分批建仓", color: "#22c55e",
+      return { headline: "📥 分批建仓", color: "#22c55e",
         detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。` };
     if (sent.tilt === "scale")
       return { headline: "🔄 小幅加仓", color: "#3b82f6",
         detail: `${sent.desc}。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
     if (sent.tilt === "hold")
-      return { headline: "持仓观望", color: "#eab308",
+      return { headline: "⏸️ 持仓观望", color: "#eab308",
         detail: `情绪偏热，持有现有仓位不加码。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
     return { headline: "✅ 正常进攻", color: "#22c55e",
       detail: `三轴健康，可正常布局。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
