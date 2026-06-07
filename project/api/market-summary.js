@@ -1,6 +1,6 @@
 // GET /api/market-summary
 // Fetches market news, enriches with real market data, summarises with Claude Sonnet.
-// Cached in Upstash Redis per 2-hour slot.
+// Cached in Upstash Redis per 12-hour slot.
 
 // ── Helper: parse RSS XML items ───────────────────────────────────────────────
 function parseRssItems(xml, limit = 12) {
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
 
   const now      = new Date();
   const today    = now.toISOString().slice(0, 10);
-  const slot     = Math.floor(now.getUTCHours() / 2);
+  const slot     = Math.floor(now.getUTCHours() / 12);
   const cacheKey = `trendo:market_brief:${today}:${slot}`;
   const force    = req.query.force === "1";
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
@@ -139,7 +139,7 @@ export default async function handler(req, res) {
       });
       const [{ result }] = await r.json();
       if (result) {
-        res.setHeader("Cache-Control", "s-maxage=7200, stale-while-revalidate=3600");
+        res.setHeader("Cache-Control", "s-maxage=43200, stale-while-revalidate=7200");
         return res.json({ ...JSON.parse(result), cached: true });
       }
     } catch (_) {}
@@ -249,12 +249,12 @@ ${newsText}
         method: "POST", headers: kvHeaders,
         body: JSON.stringify([
           ["SET",    cacheKey, JSON.stringify(result)],
-          ["EXPIRE", cacheKey, 7200],
+          ["EXPIRE", cacheKey, 43200],
         ]),
       });
     } catch (_) {}
   }
 
-  res.setHeader("Cache-Control", "s-maxage=7200, stale-while-revalidate=3600");
+  res.setHeader("Cache-Control", "s-maxage=43200, stale-while-revalidate=7200");
   res.json({ ...result, cached: false });
 }

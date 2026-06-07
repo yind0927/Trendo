@@ -1,6 +1,6 @@
 // GET /api/holdings-brief
 // Analyses current holdings with company news + market context via Claude Sonnet.
-// Cached per 2-hour slot + holdings fingerprint (sorted sym list).
+// Cached per 12-hour slot + holdings fingerprint (sorted sym list).
 
 // ── Helper: build market context block ───────────────────────────────────────
 function buildMarketBlock(q) {
@@ -97,8 +97,8 @@ export default async function handler(req, res) {
   const force     = req.query.force === "1";
   const now       = new Date();
   const today     = now.toISOString().slice(0, 10);
-  const slot      = Math.floor(now.getUTCHours() / 2);
-  // Cache key: date + 2hr slot + sorted symbols (busts when portfolio changes)
+  const slot      = Math.floor(now.getUTCHours() / 12);
+  // Cache key: date + 12hr slot + sorted symbols (busts when portfolio changes)
   const syms      = holdingsStr.split(",").map(s => s.split(":")[0]).sort().join("-");
   const cacheKey  = `trendo:holdings_brief:${today}:${slot}:${syms.slice(0, 40)}`;
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
@@ -112,7 +112,7 @@ export default async function handler(req, res) {
       });
       const [{ result }] = await r.json();
       if (result) {
-        res.setHeader("Cache-Control", "s-maxage=7200");
+        res.setHeader("Cache-Control", "s-maxage=43200");
         return res.json({ ...JSON.parse(result), cached: true });
       }
     } catch (_) {}
@@ -245,12 +245,12 @@ ${holdingsText}
         method: "POST", headers: kvHeaders,
         body: JSON.stringify([
           ["SET",    cacheKey, JSON.stringify(result)],
-          ["EXPIRE", cacheKey, 7200],
+          ["EXPIRE", cacheKey, 43200],
         ]),
       });
     } catch (_) {}
   }
 
-  res.setHeader("Cache-Control", "s-maxage=7200");
+  res.setHeader("Cache-Control", "s-maxage=43200");
   res.json({ ...result, cached: false });
 }
