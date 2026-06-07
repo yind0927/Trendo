@@ -4891,45 +4891,132 @@
       </div>`;
   }
 
-  function mkStrategyHTML(vix, fg, rsi, vixTrend = "flat") {
-    const r = getCurrentRegime(vix, fg, rsi, vixTrend);
+  function getCurrentRegime(vix, fg, rsi, vixTrend = "flat") {
+    return MKT_REGIMES.find(r => r.condition({ vix, fg, rsi, vixTrend }));
+  }
+
+  // ============ THREE-AXIS MARKET MODEL ============
+  // VIX 管"开多少(仓位)"，趋势管"哪个方向"，情绪极端(FGI/RSI)管"何时止盈/反向"。
+  // 三个轴独立评分，最后合并，避免用单一 VIX 在周期边界给出自相矛盾的信号。
+
+  function calcSMA(closes, period) {
+    if (!closes || closes.length < period) return null;
+    const slice = closes.slice(-period);
+    return +(slice.reduce((a, b) => a + b, 0) / period).toFixed(2);
+  }
+
+  // 轴A：方向（趋势）—— SPY 价格 vs 50MA / 200MA。决定"有没有做多资格"。
+  function getDirectionAxis(price, ma50, ma200) {
+    if (price == null || ma50 == null)
+      return { id: "unknown", label: "未知", color: "var(--fg-3)", desc: "趋势数据不足", eligible: true };
+    if (ma200 == null)
+      return price > ma50
+        ? { id: "tailwind", label: "顺风", color: "#22c55e", desc: "价格 > 50MA，趋势偏多", eligible: true }
+        : { id: "headwind", label: "逆风", color: "#ef4444", desc: "价格跌破 50MA", eligible: false };
+    const deathCross = ma50 < ma200;
+    if (deathCross || price < ma200)
+      return { id: "headwind", label: "逆风", color: "#ef4444",
+        desc: deathCross ? "50/200 死叉，长期趋势走弱" : "价格跌破 200MA，回避新多单", eligible: false };
+    if (price > ma50 && ma50 > ma200)
+      return { id: "tailwind", label: "顺风", color: "#22c55e", desc: "价格 > 50MA > 200MA，多头结构完整", eligible: true };
+    return { id: "neutral", label: "中性", color: "#eab308", desc: "价格在均线间回调，方向待确认", eligible: true };
+  }
+
+  // 轴B：风险容量（VIX）—— 仓位上限 + 止损宽度。只管"多少"，不管"买不买"。
+  function getRiskAxis(vix) {
+    if (vix < 15)  return { id: "full",    label: "充裕", color: "#22c55e", posMax: 100, stop: "宽松 −8%" };
+    if (vix < 20)  return { id: "normal",  label: "正常", color: "#3b82f6", posMax: 75,  stop: "正常 −6%" };
+    if (vix < 30)  return { id: "reduced", label: "收缩", color: "#f97316", posMax: 50,  stop: "收紧 −4%" };
+    return            { id: "minimal", label: "极小", color: "#ef4444", posMax: 25,  stop: "极紧 −3%" };
+  }
+
+  // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
+  function getSentimentAxis(fg, rsi, vixTrend = "flat") {
+    if (fg > 75 || rsi > 72)
+      return { id: "euphoria", label: "过热", color: "#ef4444", tilt: "trim",
+        desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
+    if (fg >= 60 || rsi >= 65)
+      return { id: "warm", label: "偏热", color: "#f97316", tilt: "hold",
+        desc: "可持仓，不加仓，盯紧止损" };
+    if (fg < 25 && rsi < 38)
+      return { id: "panic", label: "极端恐惧", color: "#22c55e", tilt: "accumulate",
+        desc: vixTrend === "down" ? "分批建仓候选，VIX 已回落" : "分批建仓候选，待 VIX 回落确认" };
+    if (fg < 35 || rsi < 45)
+      return { id: "cool", label: "偏冷", color: "#3b82f6", tilt: "scale",
+        desc: "可小幅分批加仓，不追高" };
+    return { id: "neutral", label: "中性", color: "var(--fg-3)", tilt: "normal", desc: "正常操作" };
+  }
+
+  // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
+  function combineAxes(dir, risk, sent) {
+    if (!dir.eligible)
+      return { headline: "❌ 禁止新多仓", color: "#ef4444",
+        detail: `方向轴逆风（${dir.desc}）。无论 VIX 多低都不新开多仓，优先保护现有仓位、严格执行止损。` };
+    if (sent.tilt === "trim")
+      return { headline: "⚠️ 止盈 / 禁新仓", color: "#f97316",
+        detail: `情绪过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。` };
+    if (sent.tilt === "accumulate")
+      return { headline: "🔄 分批建仓", color: "#22c55e",
+        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。` };
+    if (sent.tilt === "scale")
+      return { headline: "🔄 小幅加仓", color: "#3b82f6",
+        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
+    if (sent.tilt === "hold")
+      return { headline: "持仓观望", color: "#eab308",
+        detail: `情绪偏热，持有现有仓位不加码。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
+    return { headline: "✅ 正常进攻", color: "#22c55e",
+      detail: `三轴健康，可正常布局。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
+  }
+
+  function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend }) {
+    const dir  = getDirectionAxis(price, ma50, ma200);
+    const risk = getRiskAxis(vix);
+    const sent = getSentimentAxis(fg, rsi, vixTrend);
+    const combined = combineAxes(dir, risk, sent);
+    return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 };
+  }
+
+  function mkAxesHTML(axes) {
+    if (!axes) return "";
+    const { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 } = axes;
+    const maNote = (ma50 != null && ma200 != null)
+      ? `50MA ${ma50} · 200MA ${ma200}`
+      : (ma50 != null ? `50MA ${ma50}` : "数据不足");
     return `
-      <div class="mkt-strategy">
-        <div class="mkt-section-label">今日策略</div>
-        <div class="mkt-strat-grid">
-          <div class="mkt-strat-card" style="border-color:${r.color}40;background:${r.color}10">
-            <div class="mkt-strat-sub">操作方向</div>
-            <div class="mkt-strat-main" style="color:${r.color}">${r.regime}</div>
-            <div class="mkt-strat-sub" style="margin-top:4px">${r.meaning}</div>
+      <div class="mkt-axes">
+        <div class="mkt-section-label">三轴市场模型 · 综合建议</div>
+        <div class="mkt-combine" style="border-color:${combined.color}55;background:${combined.color}12">
+          <div class="mkt-combine-head" style="color:${combined.color}">${combined.headline}</div>
+          <div class="mkt-combine-detail">${combined.detail}</div>
+        </div>
+        <div class="mkt-axis-grid">
+          <div class="mkt-axis-card" style="border-color:${dir.color}40">
+            <div class="mkt-axis-top"><span class="mkt-axis-name">方向 · 趋势</span><span class="mkt-axis-val" style="color:${dir.color}">${dir.label}</span></div>
+            <div class="mkt-axis-meta">${price != null ? `SPY ${price}` : ""} <span class="mkt-axis-dim">${maNote}</span></div>
+            <div class="mkt-axis-desc">${dir.desc}</div>
+            <div class="mkt-axis-gate ${dir.eligible ? "ok" : "block"}">${dir.eligible ? "✓ 有做多资格" : "✕ 禁止新多仓"}</div>
           </div>
-          <div class="mkt-strat-card" style="border-color:var(--line)">
-            <div class="mkt-strat-sub">建议仓位</div>
-            <div class="mkt-strat-main">${r.posSize}</div>
+          <div class="mkt-axis-card" style="border-color:${risk.color}40">
+            <div class="mkt-axis-top"><span class="mkt-axis-name">风险容量 · VIX</span><span class="mkt-axis-val" style="color:${risk.color}">${risk.posMax}%</span></div>
+            <div class="mkt-axis-meta">VIX ${vix} <span class="mkt-axis-dim">容量 ${risk.label}</span></div>
+            <div class="mkt-axis-desc">仓位上限 ${risk.posMax}% · 止损 ${risk.stop}</div>
+            <div class="mkt-axis-gate dim">决定"开多少"</div>
           </div>
-          <div class="mkt-strat-card" style="border-color:var(--line)">
-            <div class="mkt-strat-sub">止损幅度</div>
-            <div class="mkt-strat-main">${r.stopRule}</div>
+          <div class="mkt-axis-card" style="border-color:${sent.color}40">
+            <div class="mkt-axis-top"><span class="mkt-axis-name">情绪 · FGI/RSI</span><span class="mkt-axis-val" style="color:${sent.color}">${sent.label}</span></div>
+            <div class="mkt-axis-meta">FGI ${fg} · RSI ${rsi} <span class="mkt-axis-dim">${sent.tilt === "trim" ? "减仓倾斜" : sent.tilt === "accumulate" || sent.tilt === "scale" ? "加仓倾斜" : "中性"}</span></div>
+            <div class="mkt-axis-desc">${sent.desc}</div>
+            <div class="mkt-axis-gate dim">决定"何时止盈/反向"</div>
           </div>
         </div>
       </div>`;
   }
 
-  function getCurrentRegime(vix, fg, rsi, vixTrend = "flat") {
-    return MKT_REGIMES.find(r => r.condition({ vix, fg, rsi, vixTrend }));
-  }
-
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
-    const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
-    const regimeBanner = regime ? `
-      <div class="mkt-regime-bar" style="border-color:${regime.color}40;background:${regime.color}12">
-        <span class="mkt-regime-label">当前市场状态</span>
-        <span class="mkt-regime-name" style="color:${regime.color}">${regime.regime}</span>
-        <span class="mkt-regime-action">${regime.action}</span>
-      </div>` : "";
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
       const clr = trend === "up" ? "#ef4444" : trend === "down" ? "#22c55e" : "var(--fg-3)";
@@ -4947,7 +5034,7 @@
         <div class="brief-loading">正在生成今日市场简报…</div>
       </div>
       <div class="mkt-module-sep"></div>
-      ${regimeBanner}
+      ${mkAxesHTML(axes)}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
@@ -4956,8 +5043,12 @@
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
-      ${mkPlaybookHTML(vix, fg, rsi, vixTrend)}
-      ${mkStrategyHTML(vix, fg, rsi, vixTrend)}
+      <div class="mkt-playbook-ref">
+        <details>
+          <summary>旧版 6 态参考手册 · Legacy Playbook</summary>
+          ${mkPlaybookHTML(vix, fg, rsi, vixTrend)}
+        </details>
+      </div>
       <div id="sector-rotation" class="sect-section"></div>`;
   }
 
@@ -4966,7 +5057,8 @@
     if (!el) return;
     el.innerHTML = `<div class="mkt-loading"><span>Loading market data…</span></div>`;
     try {
-      const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
+      // 400 calendar days ≈ 270 trading days — enough for SPY 200MA (direction axis).
+      const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 400); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=SPY,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
@@ -4993,6 +5085,8 @@
 
       // RSI from SPX history (today + yesterday)
       let rsi = 0, rsiPrev = null;
+      // SPY price + moving averages for the direction axis (轴A)
+      let spyPrice = null, spyMA50 = null, spyMA200 = null;
       if (histRes.status === "fulfilled" && histRes.value?.results?.["SPY"]) {
         const raw = histRes.value.results["SPY"];
         const closes = Object.keys(raw).sort().map(k => raw[k]);
@@ -5002,6 +5096,9 @@
           const rp = calcRSI(closes.slice(0, -1));
           if (rp != null) rsiPrev = rp;
         }
+        spyPrice = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
+        spyMA50  = calcSMA(closes, 50);
+        spyMA200 = calcSMA(closes, 200);
       }
 
       // VIX / VXN EMA10 + trend direction
@@ -5060,9 +5157,13 @@
         }
       }
 
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend });
-      const regime = getCurrentRegime(vix, fg, rsi, vixTrend);
-      const mktCtx = { vix, fg, rsi, regime: regime?.regime ?? "", vixTrend, indices };
+      const axes = buildAxes({ price: spyPrice, ma50: spyMA50, ma200: spyMA200, vix, fg, rsi, vixTrend });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes });
+      // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
+      const mktCtx = {
+        vix, fg, rsi, regime: axes.combined.headline, vixTrend, indices,
+        direction: axes.dir.label, posMax: axes.risk.posMax, sentiment: axes.sent.label,
+      };
       _lastMktCtx = mktCtx;
       fetchSectorData()
         .then(sectors => { _lastMktCtx = { ...mktCtx, sectors }; initMarketBriefCard(_lastMktCtx); })
@@ -5275,6 +5376,9 @@
       if (mktCtx?.rsi    != null) params.set("rsi",      mktCtx.rsi);
       if (mktCtx?.regime)         params.set("regime",   mktCtx.regime);
       if (mktCtx?.vixTrend)       params.set("vixTrend", mktCtx.vixTrend);
+      if (mktCtx?.direction)      params.set("dir",      mktCtx.direction);
+      if (mktCtx?.posMax != null) params.set("posmax",   mktCtx.posMax);
+      if (mktCtx?.sentiment)      params.set("senti",    mktCtx.sentiment);
       if (mktCtx?.indices && Object.keys(mktCtx.indices).length)
         params.set("idx", Object.entries(mktCtx.indices).map(([s, v]) => `${s}:${v}`).join(","));
       if (mktCtx?.sectors?.length)

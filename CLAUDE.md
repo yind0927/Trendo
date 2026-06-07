@@ -267,7 +267,31 @@ Closed tab 按 `pnlFinal ?? pnlDollar` 判断盈利/亏损。
 
 ---
 
-## 市场状态系统（Market 页，v7.1）
+## 三轴市场模型（Market 页，v7.8）
+
+取代旧版"单一 VIX 瀑布"作为主推荐。核心理念：**VIX 管"开多少(仓位)"，趋势管"哪个方向"，情绪极端(FGI/RSI)管"何时止盈/反向"**，三轴独立评分后合并，避免单指标在周期边界给出自相矛盾信号。
+
+```js
+// 轴A 方向（趋势）getDirectionAxis(price, ma50, ma200) → 决定 eligible（做多资格）
+//   顺风: price > 50MA > 200MA          eligible=true
+//   逆风: 50/200死叉 或 price < 200MA    eligible=false（无论 VIX 多低都禁新多仓）
+//   中性: 均线间回调                      eligible=true
+// 轴B 风险容量（VIX）getRiskAxis(vix) → posMax + 止损宽度（只管"多少"）
+//   <15→100% · 15-20→75% · 20-30→50% · ≥30→25%
+// 轴C 情绪（FGI+RSI）getSentimentAxis(fg, rsi, vixTrend) → tilt 倾斜
+//   过热 FGI>75||RSI>72 → trim（减仓）   偏热 FGI≥60||RSI≥65 → hold
+//   偏冷 FGI<35||RSI<45 → scale（小幅加） 极端恐惧 FGI<25&&RSI<38 → accumulate（分批进，等VIX回落）
+// combineAxes(dir,risk,sent) → { headline, color, detail } 综合建议
+//   方向逆风=闸门（禁新仓）> 情绪过热=止盈倾斜 > 加仓倾斜 > 正常进攻
+```
+
+- `buildAxes({price,ma50,ma200,vix,fg,rsi,vixTrend})` 在 `fetchMarketData` 中调用，结果传入 `renderMarket(data.axes)`。
+- `mkAxesHTML(axes)` 渲染：综合建议横幅 + 三轴卡片（方向/风险容量/情绪）。
+- SPY 价格/50MA/200MA 来自 `/api/history?symbols=SPY...&from=`（v7.8 起 `from` 改为 **400 天**以满足 200MA）。
+- 旧 `MKT_REGIMES` 6 态保留为 `<details>` 折叠的"旧版参考手册"（`mkPlaybookHTML`），`mkStrategyHTML` 已删除。
+- AI 简报：`_lastMktCtx.regime` 改为综合建议 headline，并新增 `direction/posMax/sentiment` 传入 `market-summary.js`（URL params `dir/posmax/senti`），prompt 增加三轴框架解释。
+
+## 市场状态系统（Market 页，v7.1，旧版参考）
 
 ### MKT_REGIMES — 优先级顺序匹配（first match wins）
 
@@ -514,6 +538,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v7.5 | 密码页重设计（平台logo内联+玻璃质感输入框+Geist 800字标+页面入场动画），浮盈亏列移至止盈与状态之间，BX表单Score/Slope支持两位小数，页面切换淡入+上移动画(page-enter) |
 | v7.6 | AI简报系统：Market页市场日报（Claude Sonnet 4.6，结构化4段式）+ Dashboard页持仓分析（含个股新闻+市场环境）。手动触发设计：页面加载读localStorage，跨日自动重置为生成按钮，Redis 2小时服务端缓存去重，↻强制重生成。徽章/边框颜色统一为accent teal。`_lastMktCtx`全局传递市场上下文。 |
 | v7.7 | **多处 bug 修复与分析优化**：分批平仓记录合并（`groupTrades()`，按sym+entry+cost分组），胜率/Analytics指标/Journal统计/出场效率均按交易笔数而非记录数计算；exitQualityHTML按交易组计算峰值和实际盈亏，多批次显示"N次出场"标签。今日盈亏基准修复（`getLastTradingDayStr()`），周末/节假日后不再把开仓前涨跌计入。Auth token改为localStorage（后台切换不再要求重新输密码）。AI持仓简报增加第7字段trimInfo（已减仓比例和平均出场R），让AI分析考虑部分平仓。Market RSI数据源改为SPY。模拟仓NAV含已实现盈亏。已平仓抽屉展示减仓记录+支持出场价内联编辑（wireClosedDrawerEdits）。播报条速度60s→50s。 |
+| v7.8 | **三轴市场模型**（取代单一VIX瀑布作主推荐）：轴A方向(SPY vs 50/200MA，决定做多资格)×轴B风险容量(VIX→仓位上限/止损)×轴C情绪(FGI/RSI→减仓/加仓倾斜)，`buildAxes/combineAxes/mkAxesHTML`，方向逆风为闸门、情绪过热触发止盈倾斜。SPY history `from` 延长至400天供200MA。旧6态手册折叠为`<details>`参考，删除`mkStrategyHTML`。AI简报传入dir/posmax/senti并在prompt加入三轴框架。**今日盈亏修复**：卡片%分母改为持仓昨收市值(非totalNotional)；`todayPnlOf(h)`统一卡片与逐股分解(`(last-prevClose)*qty`直算)；移除prevClose休市冻结(与last脱钩导致跨天涨跌被当单日，-23%虚高)。 |
 
 ---
 

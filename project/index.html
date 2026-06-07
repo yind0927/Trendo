@@ -2273,6 +2273,28 @@
   .mkt-regime-action { font-size: 12px; color: var(--fg-2); margin-left: auto; }
   .mkt-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px 20px; color: var(--fg-3); font-size: 14px; }
 
+  /* Three-axis market model */
+  .mkt-axes { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; }
+  .mkt-combine { border: 1px solid; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .mkt-combine-head { font-size: 16px; font-weight: 800; margin-bottom: 4px; }
+  .mkt-combine-detail { font-size: 12.5px; color: var(--fg-2); line-height: 1.5; }
+  .mkt-axis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .mkt-axis-card { border: 1px solid; border-radius: 10px; padding: 11px 12px; display: flex; flex-direction: column; gap: 5px; }
+  .mkt-axis-top { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+  .mkt-axis-name { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--fg-3); font-family: var(--f-mono); text-transform: uppercase; }
+  .mkt-axis-val { font-size: 17px; font-weight: 800; white-space: nowrap; }
+  .mkt-axis-meta { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); }
+  .mkt-axis-dim { color: var(--fg-3); }
+  .mkt-axis-desc { font-size: 11.5px; color: var(--fg-1); line-height: 1.45; }
+  .mkt-axis-gate { font-size: 10px; font-weight: 700; font-family: var(--f-mono); margin-top: auto; padding-top: 3px; }
+  .mkt-axis-gate.ok { color: #22c55e; }
+  .mkt-axis-gate.block { color: #ef4444; }
+  .mkt-axis-gate.dim { color: var(--fg-3); }
+  .mkt-playbook-ref { margin-top: 16px; }
+  .mkt-playbook-ref summary { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 8px 0; list-style: revert; }
+  .mkt-playbook-ref summary:hover { color: var(--fg-2); }
+  .mkt-playbook-ref[class] details > .mkt-playbook { margin-top: 10px; }
+
   /* AI Market Brief card */
   .brief-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px; margin-bottom: 0; }
   .brief-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
@@ -2313,6 +2335,8 @@
     .mkt-chg { font-size: 12px; }
     .mkt-badge { font-size: 10px; padding: 3px 8px 3px 6px; }
     .mkt-strat-grid { grid-template-columns: 1fr; gap: 8px; }
+    .mkt-axis-grid { grid-template-columns: 1fr; gap: 8px; }
+    .mkt-combine-head { font-size: 15px; }
     .mkt-pb-table td:last-child { font-size: 11px; }
   }
 

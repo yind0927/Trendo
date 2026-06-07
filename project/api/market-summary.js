@@ -76,8 +76,17 @@ function buildMarketBlock(q) {
     lines.push(`VOO RSI(14)：${r}（${label}）`);
   }
 
-  // Regime
-  if (q.regime) lines.push(`当前市场状态：${q.regime}`);
+  // Three-axis model: direction (trend) / risk capacity (VIX posMax) / sentiment tilt
+  if (q.dir || q.posmax != null || q.senti) {
+    const parts = [];
+    if (q.dir)          parts.push(`方向轴=${q.dir}`);
+    if (q.posmax != null) parts.push(`风险容量=${q.posmax}%上限`);
+    if (q.senti)        parts.push(`情绪轴=${q.senti}`);
+    lines.push(`三轴模型：${parts.join(" · ")}`);
+  }
+
+  // Regime (combined recommendation from the three-axis model)
+  if (q.regime) lines.push(`综合操作建议：${q.regime}`);
 
   // Sectors
   if (q.sect) {
@@ -194,6 +203,7 @@ ${newsText}
 风险：（1-2个具体风险点）
 机会：（1-2个值得关注的板块或主线机会）
 
+分析时请遵循三轴框架：VIX 只决定仓位大小（多少），趋势方向决定能否做多，情绪极端（FGI/RSI）决定何时止盈或反向——低 VIX + 情绪过热时应提示止盈而非追高，方向逆风时无论 VIX 多低都不建议新多单。
 语言直接专业，融合具体数字，避免废话，总字数控制在300字以内。`;
 
   // ── 4. Claude Sonnet ──────────────────────────────────────────────────────
