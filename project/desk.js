@@ -4714,7 +4714,7 @@
       ]
     },
     rsi: {
-      label: "SPY RSI(14)", cap: 100,
+      label: "VOO RSI(14)", cap: 100,
       zones: [
         { max: 38,  color: "#22c55e", label: "极弱 · 分批进",   badge: "极弱" },
         { max: 45,  color: "#3b82f6", label: "偏弱 · 可加仓",   badge: "偏弱" },
@@ -4922,7 +4922,7 @@
     return +(slice.reduce((a, b) => a + b, 0) / period).toFixed(2);
   }
 
-  // 轴A：方向（趋势）—— SPY 价格 vs 50MA / 200MA。决定"有没有做多资格"。
+  // 轴A：方向（趋势）—— VOO 价格 vs 50MA / 200MA。决定"有没有做多资格"。
   function getDirectionAxis(price, ma50, ma200) {
     if (price == null || ma50 == null)
       return { id: "unknown", label: "未知", color: "var(--fg-3)", desc: "趋势数据不足", eligible: true };
@@ -5009,7 +5009,7 @@
         <div class="mkt-axis-grid">
           <div class="mkt-axis-card" style="border-color:${dir.color}40">
             <div class="mkt-axis-top"><span class="mkt-axis-name">方向 · 趋势</span><span class="mkt-axis-val" style="color:${dir.color}">${dir.label}</span></div>
-            <div class="mkt-axis-meta">${price != null ? `SPY ${price}` : ""} <span class="mkt-axis-dim">${maNote}</span></div>
+            <div class="mkt-axis-meta">${price != null ? `VOO ${price}` : ""} <span class="mkt-axis-dim">${maNote}</span></div>
             <div class="mkt-axis-desc">${dir.desc}</div>
             <div class="mkt-axis-gate ${dir.eligible ? "ok" : "block"}">${dir.eligible ? "✓ 有做多资格" : "✕ 禁止新多仓"}</div>
           </div>
@@ -5074,11 +5074,11 @@
     if (!el) return;
     el.innerHTML = `<div class="mkt-loading"><span>Loading market data…</span></div>`;
     try {
-      // 400 calendar days ≈ 270 trading days — enough for SPY 200MA (direction axis).
+      // 400 calendar days ≈ 270 trading days — enough for VOO 200MA (direction axis).
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 400); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
-        fetch("/api/history?symbols=SPY,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
+        fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
 
@@ -5100,12 +5100,12 @@
         }
       }
 
-      // RSI from SPX history (today + yesterday)
+      // RSI from VOO history (today + yesterday)
       let rsi = 0, rsiPrev = null;
-      // SPY price + moving averages for the direction axis (轴A)
-      let spyPrice = null, spyMA50 = null, spyMA200 = null;
-      if (histRes.status === "fulfilled" && histRes.value?.results?.["SPY"]) {
-        const raw = histRes.value.results["SPY"];
+      // VOO price + moving averages for the direction axis (轴A)
+      let benchPrice = null, benchMA50 = null, benchMA200 = null;
+      if (histRes.status === "fulfilled" && histRes.value?.results?.["VOO"]) {
+        const raw = histRes.value.results["VOO"];
         const closes = Object.keys(raw).sort().map(k => raw[k]);
         const r = calcRSI(closes);
         if (r != null) rsi = r;
@@ -5113,9 +5113,9 @@
           const rp = calcRSI(closes.slice(0, -1));
           if (rp != null) rsiPrev = rp;
         }
-        spyPrice = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
-        spyMA50  = calcSMA(closes, 50);
-        spyMA200 = calcSMA(closes, 200);
+        benchPrice = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
+        benchMA50  = calcSMA(closes, 50);
+        benchMA200 = calcSMA(closes, 200);
       }
 
       // VIX / VXN EMA10 + trend direction
@@ -5174,7 +5174,7 @@
         }
       }
 
-      const axes = buildAxes({ price: spyPrice, ma50: spyMA50, ma200: spyMA200, vix, fg, rsi, vixTrend });
+      const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend });
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {

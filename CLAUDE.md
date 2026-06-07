@@ -287,7 +287,7 @@ Closed tab 按 `pnlFinal ?? pnlDollar` 判断盈利/亏损。
 
 - `buildAxes({price,ma50,ma200,vix,fg,rsi,vixTrend})` 在 `fetchMarketData` 中调用，结果传入 `renderMarket(data.axes)`。
 - `mkAxesHTML(axes)` 渲染：综合建议横幅 + 三轴卡片（方向/风险容量/情绪）。
-- SPY 价格/50MA/200MA 来自 `/api/history?symbols=SPY...&from=`（v7.8 起 `from` 改为 **400 天**以满足 200MA）。
+- VOO 价格/50MA/200MA/RSI 来自 `/api/history?symbols=VOO...&from=`（v7.8 起 `from` 改为 **400 天**以满足 200MA；v7.9 起方向轴与 RSI 基准统一为 VOO）。
 - 旧 `MKT_REGIMES` 6 态保留为 `<details>` 折叠的"旧版参考手册"（`mkPlaybookHTML`），`mkStrategyHTML` 已删除。
 - AI 简报：`_lastMktCtx.regime` 改为综合建议 headline，并新增 `direction/posMax/sentiment` 传入 `market-summary.js`（URL params `dir/posmax/senti`），prompt 增加三轴框架解释。
 
