@@ -37,7 +37,8 @@
       const pct = h.changePct ?? 0;
       return s + Math.round((h.last || 0) * pct / (100 + pct) * (h.qty || 0));
     }, 0);
-    const todayPct = totalNotional > 0 ? todayPnl / totalNotional : 0;
+    const totalPrevValue = HOLDINGS.reduce((s, h) => s + (h.prevClose || h.cost || 0) * (h.qty || 0), 0);
+    const todayPct = totalPrevValue > 0 ? todayPnl / totalPrevValue : 0;
     const todaySign = fmt.sign(todayPnl);
 
     // Include realized P&L from closed positions in total portfolio value
