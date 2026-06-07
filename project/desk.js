@@ -2672,14 +2672,15 @@
         if (!q) return;
         const notional = SIM_HOLDINGS.includes(h) ? simNotional : totalNotional;
         if (q.name && h.name === h.sym) { h.name = q.name; changed = true; }
-        // Update prevClose only during market hours or when uninitialized.
-        // Outside market hours, freeze it so the last session's daily change stays visible
-        // (matching how brokers continue showing yesterday's change until today opens).
-        if (q.prevClose != null && q.prevClose !== h.prevClose) {
-          if (!(h.prevClose > 0) || isUSMarketOpen()) {
-            h.prevClose = q.prevClose;
-            changed = true;
-          }
+        // Keep prevClose in sync with `last` from the SAME fetch. The server's prevClose is
+        // the genuine last completed-session close (Yahoo derivedPc), so the daily change
+        // stays broker-like across pre-market / after-hours / weekends already.
+        // We must NOT freeze prevClose on its own: `last` updates every cycle, so a frozen
+        // prevClose drifts days apart from `last` over a closed market and inflates the
+        // "today" change (e.g. a 4-day move shown as a single day's -23%).
+        if (q.prevClose != null && q.prevClose > 0 && q.prevClose !== h.prevClose) {
+          h.prevClose = q.prevClose;
+          changed = true;
         }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
