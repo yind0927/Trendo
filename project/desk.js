@@ -4874,10 +4874,10 @@
       { label: "逆风", color: "#ef4444", cond: "50/200 死叉 或 价格 < 200MA", action: "禁止新多仓，严格执行止损" },
     ];
     const axisB = [
-      { label: "充裕", color: "#22c55e", cond: "VIX < 15",    action: "仓位上限 100% · 止损 −8%" },
-      { label: "正常", color: "#3b82f6", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −6%" },
-      { label: "收缩", color: "#f97316", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −4%" },
-      { label: "极小", color: "#ef4444", cond: "VIX ≥ 30",    action: "仓位上限 25%  · 止损 −3%" },
+      { label: "充裕", color: "#22c55e", cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
+      { label: "正常", color: "#3b82f6", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −8%" },
+      { label: "收缩", color: "#f97316", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −5%" },
+      { label: "极小", color: "#ef4444", cond: "VIX ≥ 30",    action: "仓位上限 25%  · 止损 −5%" },
     ];
     const axisC = [
       { label: "极端恐惧", color: "#22c55e", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
@@ -4941,10 +4941,10 @@
 
   // 轴B：风险容量（VIX）—— 仓位上限 + 止损宽度。只管"多少"，不管"买不买"。
   function getRiskAxis(vix) {
-    if (vix < 15)  return { id: "full",    label: "充裕", color: "#22c55e", posMax: 100, stop: "宽松 −8%" };
-    if (vix < 20)  return { id: "normal",  label: "正常", color: "#3b82f6", posMax: 75,  stop: "正常 −6%" };
-    if (vix < 30)  return { id: "reduced", label: "收缩", color: "#f97316", posMax: 50,  stop: "收紧 −4%" };
-    return            { id: "minimal", label: "极小", color: "#ef4444", posMax: 25,  stop: "极紧 −3%" };
+    if (vix < 15)  return { id: "full",    label: "充裕", color: "#22c55e", posMax: 100, stop: "宽松 −10%" };
+    if (vix < 20)  return { id: "normal",  label: "正常", color: "#3b82f6", posMax: 75,  stop: "正常 −8%" };
+    if (vix < 30)  return { id: "reduced", label: "收缩", color: "#f97316", posMax: 50,  stop: "收紧 −5%" };
+    return            { id: "minimal", label: "极小", color: "#ef4444", posMax: 25,  stop: "极紧 −5%" };
   }
 
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
