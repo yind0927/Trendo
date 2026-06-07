@@ -2253,7 +2253,9 @@
   .mkt-bar-ptr { position: absolute; top: 0; transform: translateX(-50%); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 7px solid var(--fg-0); }
   .mkt-playbook { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
   .mkt-playbook-title { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--fg-2); text-transform: uppercase; margin-bottom: 10px; }
-  .mkt-pb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .mkt-pb-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+  .mkt-pb-table th:nth-child(1), .mkt-pb-table td:nth-child(1) { width: 78px; }
+  .mkt-pb-table th:nth-child(2), .mkt-pb-table td:nth-child(2) { width: 38%; }
   .mkt-pb-table th { font-size: 9.5px; font-weight: 600; letter-spacing: 0.07em; color: var(--fg-3); text-align: left; padding: 0 6px 6px 6px; border-bottom: 1px solid var(--line); }
   .mkt-pb-table td { padding: 5px 6px; color: var(--fg-1); }
   .mkt-pb-table tr + tr td { border-top: 1px solid color-mix(in oklch,var(--line) 50%,transparent); }
