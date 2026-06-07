@@ -4708,7 +4708,7 @@
       zones: [
         { max: 25,  color: "#22c55e", label: "极端恐惧 · 分批进", badge: "极端恐惧" },
         { max: 35,  color: "#3b82f6", label: "偏冷 · 可加仓",     badge: "偏冷" },
-        { max: 60,  color: "var(--fg-3)", label: "中性 · 正常",   badge: "中性" },
+        { max: 60,  color: "#eab308", label: "中性 · 正常",       badge: "中性" },
         { max: 75,  color: "#f97316", label: "偏热 · 不追高",     badge: "偏热" },
         { max: 9999,color: "#ef4444", label: "极端过热 · 止盈",   badge: "极端过热" },
       ]
@@ -4718,7 +4718,7 @@
       zones: [
         { max: 38,  color: "#22c55e", label: "极弱 · 分批进",   badge: "极弱" },
         { max: 45,  color: "#3b82f6", label: "偏弱 · 可加仓",   badge: "偏弱" },
-        { max: 65,  color: "var(--fg-3)", label: "中性 · 正常", badge: "中性" },
+        { max: 65,  color: "#eab308", label: "中性 · 正常",     badge: "中性" },
         { max: 72,  color: "#f97316", label: "偏热 · 不追高",   badge: "偏热" },
         { max: 9999,color: "#ef4444", label: "超买 · 止盈",     badge: "超买" },
       ]
@@ -4882,7 +4882,7 @@
     const axisC = [
       { label: "极端恐惧", color: "#22c55e", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
       { label: "偏冷",     color: "#3b82f6", cond: "FGI < 35 或 RSI < 45", action: "可小幅加仓，不追高" },
-      { label: "中性",     color: "var(--fg-3)", cond: "FGI 35–60，RSI 45–65", action: "正常操作，按计划执行" },
+      { label: "中性",     color: "#eab308", cond: "FGI 35–60，RSI 45–65", action: "正常操作，按计划执行" },
       { label: "偏热",     color: "#f97316", cond: "FGI 60–75 或 RSI 65–72", action: "持仓不加码，盯紧止损" },
       { label: "极端过热", color: "#ef4444", cond: "FGI > 75 或 RSI > 72",   action: "禁止新仓，盈利仓减仓 1/3，收紧止损" },
     ];
@@ -4900,7 +4900,7 @@
       </div>`;
     return `
       <div class="mkt-playbook">
-        <div class="mkt-playbook-title">三轴操作参考手册</div>
+        <div class="mkt-playbook-title">市场模型详情</div>
         ${mkSection("轴A · 方向（趋势）", "决定有没有做多资格", axisA)}
         ${mkSection("轴B · 风险容量（VIX）", "决定开多少（仓位上限）", axisB)}
         ${mkSection("轴C · 情绪（FGI / RSI）", "决定何时止盈或分批进", axisC)}
@@ -4961,7 +4961,7 @@
     if (fg < 35 || rsi < 45)
       return { id: "cool", label: "偏冷", color: "#3b82f6", tilt: "scale",
         desc: "可小幅分批加仓，不追高" };
-    return { id: "neutral", label: "中性", color: "var(--fg-3)", tilt: "normal", desc: "正常操作" };
+    return { id: "neutral", label: "中性", color: "#eab308", tilt: "normal", desc: "正常操作" };
   }
 
   // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
@@ -5001,7 +5001,7 @@
       : (ma50 != null ? `50MA ${ma50}` : "数据不足");
     return `
       <div class="mkt-axes">
-        <div class="mkt-section-label">三轴市场模型 · 综合建议</div>
+        <div class="mkt-section-label">市场模型 · 综合建议</div>
         <div class="mkt-combine" style="border-color:${combined.color}55;background:${combined.color}12">
           <div class="mkt-combine-head" style="color:${combined.color}">${combined.headline}</div>
           <div class="mkt-combine-detail">${combined.detail}</div>
@@ -5062,7 +5062,7 @@
       </div>
       <div class="mkt-playbook-ref">
         <details>
-          <summary>三轴操作参考手册 · 点击展开</summary>
+          <summary>市场模型详情 · 点击展开</summary>
           ${mkPlaybookHTML()}
         </details>
       </div>
