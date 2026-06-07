@@ -11,7 +11,7 @@ const TIERS = [
   { id: "sharp",       label: "急跌",     lo: -8,   hi: -5 },  // -5% ~ -8%
   { id: "crash",       label: "崩跌",     lo: -100, hi: -8 },  // <= -8%
 ];
-const HORIZONS = [5, 10, 20, 60];
+const HORIZONS = [5, 10, 20, 50];
 
 const pct = (a, b) => (a - b) / b * 100;
 

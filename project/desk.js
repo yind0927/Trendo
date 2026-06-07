@@ -5431,7 +5431,7 @@
   // ── Drawdown analogs (历史回撤参考) ─────────────────────────────────────────
   const DRAWDOWN_LS = "trendo_drawdown_v1";
   const DD_TIER_ORDER = ["normal", "significant", "sharp", "crash"];
-  const DD_TIER_COLOR = { normal: "#eab308", significant: "#f97316", sharp: "#ef4444", crash: "#92400e" };
+  const DD_TIER_COLOR = { normal: "#eab308", significant: "#f97316", sharp: "#92400e", crash: "#ef4444" };
   const DD_TIER_RANGE = { normal: "−2~−3%", significant: "−3~−5%", sharp: "−5~−8%", crash: "≤−8%" };
 
   function _ddCell(c) {
@@ -5448,18 +5448,20 @@
       if (!t) return "";
       const hit = isMatchBench && tid === matchedTierId;
       return `<tr class="${hit ? "dd-hit" : ""}">
-        <td class="dd-tier">
-          <span class="dd-dot" style="background:${DD_TIER_COLOR[tid]}"></span>
-          <span>${t.label}</span>
-          <span class="dd-range">${DD_TIER_RANGE[tid]}</span>
-          <span class="dd-n">${t.count}次</span>
+        <td>
+          <div class="dd-tier">
+            <span class="dd-dot" style="background:${DD_TIER_COLOR[tid]}"></span>
+            <span class="dd-tier-name">${t.label}</span>
+            <span class="dd-range">${DD_TIER_RANGE[tid]}</span>
+          </div>
+          <div class="dd-n">${t.count}次</div>
         </td>
-        ${_ddCell(t.fwd[5])}${_ddCell(t.fwd[10])}${_ddCell(t.fwd[20])}${_ddCell(t.fwd[60])}
+        ${_ddCell(t.fwd[5])}${_ddCell(t.fwd[10])}${_ddCell(t.fwd[20])}${_ddCell(t.fwd[50])}
       </tr>`;
     }).join("");
     return `<div class="dd-bench-label">${benchName} · 近15年</div>
       <table class="dd-table">
-        <thead><tr><th>级别</th><th>5日</th><th>10日</th><th>20日</th><th>60日</th></tr></thead>
+        <thead><tr><th>级别</th><th>5日</th><th>10日</th><th>20日</th><th>50日</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
   }
