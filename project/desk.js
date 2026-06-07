@@ -5066,8 +5066,8 @@
           ${mkPlaybookHTML()}
         </details>
       </div>
-      <div class="mkt-module-sep"></div>
       <div class="brief-card dd-card" id="drawdown-card"></div>
+      <div class="mkt-module-sep"></div>
       <div id="sector-rotation" class="sect-section"></div>`;
   }
 
@@ -5429,7 +5429,7 @@
   }
 
   // ── Drawdown analogs (历史回撤参考) ─────────────────────────────────────────
-  const DRAWDOWN_LS = "trendo_drawdown_v1";
+  const DRAWDOWN_LS = "trendo_drawdown_v2";
   const DD_TIER_ORDER = ["normal", "significant", "sharp", "crash"];
   const DD_TIER_COLOR = { normal: "#eab308", significant: "#f97316", sharp: "#92400e", crash: "#ef4444" };
   const DD_TIER_RANGE = { normal: "−2~−3%", significant: "−3~−5%", sharp: "−5~−8%", crash: "≤−8%" };
@@ -5459,11 +5459,21 @@
         ${_ddCell(t.fwd[5])}${_ddCell(t.fwd[10])}${_ddCell(t.fwd[20])}${_ddCell(t.fwd[50])}
       </tr>`;
     }).join("");
-    return `<div class="dd-bench-label">${benchName} · 近15年</div>
+    const sy = stats._startYear;
+    const spanLabel = sy ? `${sy}年起 · ${new Date().getFullYear() - sy}年` : "";
+    // List crash (≤−8%) and sharp (−5~−8%) event dates — the small-sample, high-impact tiers
+    const evLine = (tid, name) => {
+      const evs = stats[tid]?.events;
+      if (!evs?.length) return "";
+      const txt = evs.slice().reverse().map(e => `${e.date}(${e.ret}%)`).join("、");
+      return `<div class="dd-events"><span style="color:${DD_TIER_COLOR[tid]}">${name}</span> ${txt}</div>`;
+    };
+    return `<div class="dd-bench-label">${benchName}${spanLabel ? " · " + spanLabel : ""}</div>
       <table class="dd-table">
         <thead><tr><th>级别</th><th>5日</th><th>10日</th><th>20日</th><th>50日</th></tr></thead>
         <tbody>${rows}</tbody>
-      </table>`;
+      </table>
+      ${evLine("crash", "崩跌")}${evLine("sharp", "急跌")}`;
   }
 
   function _renderDrawdown(el, data) {
@@ -5494,7 +5504,7 @@
           ${_ddBenchTable("VOO", stats?.VOO, matched?.tierId, matched?.bench === "VOO")}
           ${_ddBenchTable("QQQ", stats?.QQQ, matched?.tierId, matched?.bench === "QQQ")}
         </div>
-        <div class="dd-foot">数据：Yahoo Finance VOO/QQQ 近15年日线 · 单元格为后续 N 日中位涨跌与上涨胜率</div>
+        <div class="dd-foot">数据：Yahoo Finance（VOO 自2010年、QQQ 自1999年全历史）。某天单日跌幅落入某档后，<b>以当天收盘价为基准</b>，统计 N 个交易日后收盘价的涨跌幅；表内为所有同档历史样本的<b>中位数</b>与上涨概率（胜率）。样本少的档位（急跌/崩跌）仅供参考。</div>
       </div>`;
     if (localStorage.getItem("trendo_drawdown_collapsed") === "1") el.classList.add("collapsed");
     el.querySelector(".brief-toggle")?.addEventListener("click", () => {

@@ -25,7 +25,7 @@ function quantile(sorted, q) {
     : sorted[base];
 }
 
-async function fetchHistory(sym, years = 15) {
+async function fetchHistory(sym, years = 30) {
   const period1 = Math.floor(Date.now() / 1000) - years * 365 * 86400;
   const period2 = Math.floor(Date.now() / 1000) + 86400;
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
@@ -42,14 +42,20 @@ async function fetchHistory(sym, years = 15) {
     const data = await r.json();
     const chart = data?.chart?.result?.[0];
     if (!chart) return null;
-    return (chart.indicators?.quote?.[0]?.close || []).filter(c => c != null);
+    const ts  = chart.timestamp || [];
+    const raw = chart.indicators?.quote?.[0]?.close || [];
+    const dates = [], closes = [];
+    ts.forEach((t, i) => {
+      if (raw[i] != null) { dates.push(new Date(t * 1000).toISOString().slice(0, 10)); closes.push(raw[i]); }
+    });
+    return closes.length ? { dates, closes } : null;
   } catch (_) { return null; }
 }
 
-function analyze(closes) {
+function analyze(dates, closes) {
   const buckets = {};
   for (const t of TIERS) {
-    buckets[t.id] = { count: 0, fwd: {} };
+    buckets[t.id] = { count: 0, fwd: {}, events: [] };
     for (const h of HORIZONS) buckets[t.id].fwd[h] = [];
   }
   for (let i = 1; i < closes.length; i++) {
@@ -58,11 +64,12 @@ function analyze(closes) {
     const tier = TIERS.find(t => ret > t.lo && ret <= t.hi);
     if (!tier) continue;
     buckets[tier.id].count++;
+    buckets[tier.id].events.push({ date: dates[i], ret: +ret.toFixed(1) });
     for (const h of HORIZONS) {
       if (i + h < closes.length) buckets[tier.id].fwd[h].push(pct(closes[i + h], closes[i]));
     }
   }
-  const result = {};
+  const result = { _startYear: dates.length ? +dates[0].slice(0, 4) : null };
   for (const t of TIERS) {
     const b = buckets[t.id];
     const fwd = {};
@@ -76,7 +83,8 @@ function analyze(closes) {
         n:      arr.length,
       } : null;
     }
-    result[t.id] = { label: t.label, count: b.count, fwd };
+    // Keep the most recent events (sharp/crash are few; cap to bound payload size)
+    result[t.id] = { label: t.label, count: b.count, fwd, events: b.events.slice(-10) };
   }
   return result;
 }
@@ -98,7 +106,7 @@ function buildAiPrompt(q, matched, stats) {
   if (q.senti)  ctx.push(`情绪轴 ${q.senti}`);
   if (q.regime) ctx.push(`综合建议 ${q.regime}`);
   return `你是美股波段交易员助手。今日 ${matched.bench} 单日下跌 ${matched.drop}%，归入「${matched.label}」级别。
-近15年该级别（${matched.bench}，样本数据）后续走势统计：${fwdLine}。
+该级别（${matched.bench}，全历史样本，以下跌当日收盘价为基准）后续走势统计：${fwdLine}。
 当前市场环境：${ctx.join(" · ") || "暂无"}。
 
 请用中文输出，不要 Markdown 符号，总字数≤180字，严格按以下三段：
@@ -121,8 +129,8 @@ export default async function handler(req, res) {
   const wantAi       = req.query.gen === "1";
 
   const today    = new Date().toISOString().slice(0, 10);
-  const statsKey = `trendo:drawdown_stats:${today}`;
-  const aiKey    = `trendo:drawdown_ai:${today}`;
+  const statsKey = `trendo:drawdown_stats_v2:${today}`;
+  const aiKey    = `trendo:drawdown_ai_v2:${today}`;
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   const kvGet = async key => {
@@ -148,17 +156,17 @@ export default async function handler(req, res) {
   // ── 1. Stats (Redis-cached daily; history doesn't change intraday) ──────────
   let payload = force ? null : await kvGet(statsKey);
   if (!payload) {
-    const [vooCloses, qqqCloses] = await Promise.all([fetchHistory("VOO"), fetchHistory("QQQ")]);
-    if (!vooCloses && !qqqCloses)
+    const [voo, qqq] = await Promise.all([fetchHistory("VOO"), fetchHistory("QQQ")]);
+    if (!voo && !qqq)
       return res.status(502).json({ error: "Yahoo history unavailable for VOO/QQQ" });
 
     const stats = {
-      VOO: vooCloses ? analyze(vooCloses) : null,
-      QQQ: qqqCloses ? analyze(qqqCloses) : null,
+      VOO: voo ? analyze(voo.dates, voo.closes) : null,
+      QQQ: qqq ? analyze(qqq.dates, qqq.closes) : null,
     };
     const todayDrop = {
-      VOO: vooCloses && vooCloses.length > 1 ? +pct(vooCloses.at(-1), vooCloses.at(-2)).toFixed(2) : null,
-      QQQ: qqqCloses && qqqCloses.length > 1 ? +pct(qqqCloses.at(-1), qqqCloses.at(-2)).toFixed(2) : null,
+      VOO: voo && voo.closes.length > 1 ? +pct(voo.closes.at(-1), voo.closes.at(-2)).toFixed(2) : null,
+      QQQ: qqq && qqq.closes.length > 1 ? +pct(qqq.closes.at(-1), qqq.closes.at(-2)).toFixed(2) : null,
     };
     // Match on the more severe of the two
     let matched = null;
