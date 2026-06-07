@@ -5066,6 +5066,8 @@
           ${mkPlaybookHTML()}
         </details>
       </div>
+      <div class="mkt-module-sep"></div>
+      <div class="brief-card dd-card" id="drawdown-card"></div>
       <div id="sector-rotation" class="sect-section"></div>`;
   }
 
@@ -5182,6 +5184,7 @@
         direction: axes.dir.label, posMax: axes.risk.posMax, sentiment: axes.sent.label,
       };
       _lastMktCtx = mktCtx;
+      initDrawdownCard();
       fetchSectorData()
         .then(sectors => { _lastMktCtx = { ...mktCtx, sectors }; initMarketBriefCard(_lastMktCtx); })
         .catch(()    => initMarketBriefCard(mktCtx));
@@ -5422,6 +5425,131 @@
         </div>
         <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;
       el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
+    }
+  }
+
+  // ── Drawdown analogs (历史回撤参考) ─────────────────────────────────────────
+  const DRAWDOWN_LS = "trendo_drawdown_v1";
+  const DD_TIER_ORDER = ["normal", "significant", "sharp", "crash"];
+  const DD_TIER_COLOR = { normal: "#eab308", significant: "#f97316", sharp: "#ef4444", crash: "#92400e" };
+  const DD_TIER_RANGE = { normal: "−2~−3%", significant: "−3~−5%", sharp: "−5~−8%", crash: "≤−8%" };
+
+  function _ddCell(c) {
+    if (!c) return `<td class="dd-na">—</td>`;
+    const clr = c.median >= 0 ? "var(--up)" : "var(--down)";
+    return `<td><span class="dd-med" style="color:${clr}">${c.median >= 0 ? "+" : ""}${c.median}%</span>` +
+      `<span class="dd-win">胜率 ${c.win}%</span></td>`;
+  }
+
+  function _ddBenchTable(benchName, stats, matchedTierId, isMatchBench) {
+    if (!stats) return "";
+    const rows = DD_TIER_ORDER.map(tid => {
+      const t = stats[tid];
+      if (!t) return "";
+      const hit = isMatchBench && tid === matchedTierId;
+      return `<tr class="${hit ? "dd-hit" : ""}">
+        <td class="dd-tier">
+          <span class="dd-dot" style="background:${DD_TIER_COLOR[tid]}"></span>
+          <span>${t.label}</span>
+          <span class="dd-range">${DD_TIER_RANGE[tid]}</span>
+          <span class="dd-n">${t.count}次</span>
+        </td>
+        ${_ddCell(t.fwd[5])}${_ddCell(t.fwd[10])}${_ddCell(t.fwd[20])}${_ddCell(t.fwd[60])}
+      </tr>`;
+    }).join("");
+    return `<div class="dd-bench-label">${benchName} · 近15年</div>
+      <table class="dd-table">
+        <thead><tr><th>级别</th><th>5日</th><th>10日</th><th>20日</th><th>60日</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function _renderDrawdown(el, data) {
+    const { todayDrop, matched, stats, summary, updatedAt } = data;
+    const timeStr = updatedAt
+      ? new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
+    const dropTag = `VOO ${todayDrop?.VOO != null ? (todayDrop.VOO >= 0 ? "+" : "") + todayDrop.VOO + "%" : "—"} · QQQ ${todayDrop?.QQQ != null ? (todayDrop.QQQ >= 0 ? "+" : "") + todayDrop.QQQ + "%" : "—"}`;
+    const banner = matched
+      ? `<div class="dd-banner" style="border-color:${DD_TIER_COLOR[matched.tierId]}55;background:${DD_TIER_COLOR[matched.tierId]}14">
+           今日 <b>${matched.bench} ${matched.drop}%</b> → 归入 <b style="color:${DD_TIER_COLOR[matched.tierId]}">${matched.label}</b> 级别（下表高亮行）
+         </div>`
+      : `<div class="dd-banner dd-banner-calm">今日无显著单日下跌（${dropTag}），下表为历史参考</div>`;
+    const aiBlock = summary
+      ? `<div class="brief-summary dd-ai">${_briefSummaryHTML(summary)}</div>` : "";
+    el.innerHTML = `
+      <div class="brief-head">
+        <span class="brief-badge" style="background:var(--down)">历史</span>
+        <span class="brief-title">历史回撤参考 · Drawdown Analogs</span>
+        ${_briefAgeTag(updatedAt)}
+        <span class="brief-time">${timeStr} 更新</span>
+        <button class="brief-toggle" title="收起/展开">▾</button>
+        <button class="brief-refresh" title="重新生成">↻</button>
+      </div>
+      <div class="brief-body">
+        ${banner}
+        ${aiBlock}
+        <div class="dd-tables">
+          ${_ddBenchTable("VOO", stats?.VOO, matched?.tierId, matched?.bench === "VOO")}
+          ${_ddBenchTable("QQQ", stats?.QQQ, matched?.tierId, matched?.bench === "QQQ")}
+        </div>
+        <div class="dd-foot">数据：Yahoo Finance VOO/QQQ 近15年日线 · 单元格为后续 N 日中位涨跌与上涨胜率</div>
+      </div>`;
+    if (localStorage.getItem("trendo_drawdown_collapsed") === "1") el.classList.add("collapsed");
+    el.querySelector(".brief-toggle")?.addEventListener("click", () => {
+      const collapsed = el.classList.toggle("collapsed");
+      localStorage.setItem("trendo_drawdown_collapsed", collapsed ? "1" : "0");
+    });
+    el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchDrawdown(true));
+  }
+
+  function initDrawdownCard() {
+    const el = $("#drawdown-card");
+    if (!el) return;
+    const saved = _loadBrief(DRAWDOWN_LS);
+    if (saved?.stats) { _renderDrawdown(el, saved); return; }
+    el.innerHTML = `
+      <div class="brief-head">
+        <span class="brief-badge" style="background:var(--down)">历史</span>
+        <span class="brief-title">历史回撤参考 · Drawdown Analogs</span>
+        <button class="brief-gen-btn" style="margin-left:auto">生成分析</button>
+      </div>`;
+    el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchDrawdown(false));
+  }
+
+  async function fetchDrawdown(force = false) {
+    const el = $("#drawdown-card");
+    if (!el) return;
+    const refreshBtn = el.querySelector(".brief-refresh");
+    if (refreshBtn) refreshBtn.classList.add("spinning");
+    else el.innerHTML = `<div class="brief-loading">正在计算历史回撤情景…</div>`;
+
+    try {
+      const params = new URLSearchParams({ gen: "1" });
+      if (force) params.set("force", "1");
+      const ctx = _lastMktCtx;
+      if (ctx) {
+        if (ctx.vix    != null) params.set("vix",    ctx.vix);
+        if (ctx.direction)      params.set("dir",    ctx.direction);
+        if (ctx.sentiment)      params.set("senti",  ctx.sentiment);
+        if (ctx.regime)         params.set("regime", ctx.regime);
+      }
+      const res = await fetch("/api/drawdown-context?" + params.toString(), { signal: AbortSignal.timeout(35000) });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      _saveBrief(DRAWDOWN_LS, data);
+      _renderDrawdown(el, data);
+    } catch (e) {
+      el.innerHTML = `
+        <div class="brief-head">
+          <span class="brief-badge" style="background:var(--down)">历史</span>
+          <span class="brief-title">历史回撤参考 · Drawdown Analogs</span>
+          <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
+        </div>
+        <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;
+      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchDrawdown(true));
     }
   }
 

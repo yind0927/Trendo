@@ -2328,6 +2328,28 @@
   .brief-section-title { display: inline; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: var(--accent); font-family: var(--f-mono); }
   .brief-line { font-size: 13px; line-height: 1.55; color: var(--fg-1); padding: 1px 0; }
   .brief-line:not(:first-child) { margin-top: 3px; }
+  /* Drawdown analogs card */
+  .dd-card { border-left-color: var(--down); }
+  .dd-banner { font-size: 12px; line-height: 1.5; color: var(--fg-1); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; margin-bottom: 9px; }
+  .dd-banner-calm { color: var(--fg-3); background: var(--bg-2); border-color: var(--line); }
+  .dd-ai { margin-bottom: 11px; }
+  .dd-tables { display: flex; flex-direction: column; gap: 12px; }
+  .dd-bench-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); font-family: var(--f-mono); margin-bottom: 4px; }
+  .dd-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .dd-table th { font-size: 9px; font-weight: 600; letter-spacing: 0.06em; color: var(--fg-3); text-align: right; padding: 0 6px 5px; border-bottom: 1px solid var(--line); }
+  .dd-table th:first-child { text-align: left; width: 38%; }
+  .dd-table td { padding: 5px 6px; text-align: right; vertical-align: top; }
+  .dd-table tr + tr td { border-top: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
+  .dd-table tr.dd-hit td { background: color-mix(in oklch, var(--down) 9%, transparent); }
+  .dd-tier { text-align: left !important; display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; }
+  .dd-tier > span:nth-child(2) { font-size: 12px; font-weight: 700; color: var(--fg-1); }
+  .dd-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; align-self: center; }
+  .dd-range { font-size: 9.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .dd-n { font-size: 9.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .dd-med { display: block; font-size: 12.5px; font-weight: 700; font-family: var(--f-mono); }
+  .dd-win { display: block; font-size: 9.5px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
+  .dd-na { color: var(--fg-3); }
+  .dd-foot { font-size: 9.5px; color: var(--fg-3); line-height: 1.5; margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--line); }
   /* Module separator between brief and regime */
   .mkt-module-sep { height: 1px; background: linear-gradient(to right, var(--line), transparent); margin: 20px 0; }
   .mkt-refresh-btn { background: none; border: 1px solid var(--line); border-radius: 7px; color: var(--fg-2); font-size: 12px; padding: 5px 12px; cursor: pointer; margin-left: auto; display: block; margin-bottom: 12px; }
