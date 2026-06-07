@@ -4680,45 +4680,47 @@
   }
 
   // ============ MARKET PAGE ============
+  // Zone thresholds mirror the three-axis model boundaries exactly.
+  // VIX/VXN → 轴B risk capacity labels. FGI/RSI → 轴C sentiment labels.
   const MKT_ZONES = {
     vix: {
       label: "VIX", cap: 60,
       zones: [
-        { max: 12,  color: "#22c55e", label: "🟢 进攻", badge: "🟢 进攻" },
-        { max: 20,  color: "#84cc16", label: "🟡 稳健", badge: "🟡 稳健" },
-        { max: 30,  color: "#eab308", label: "🟠 谨慎", badge: "🟠 谨慎" },
-        { max: 50,  color: "#f97316", label: "🔶 避险", badge: "🔶 避险" },
-        { max: 9999,color: "#ef4444", label: "🔴 恐慌", badge: "🔴 恐慌" },
+        { max: 15,  color: "#22c55e", label: "充裕 · 100%上限",  badge: "充裕 100%" },
+        { max: 20,  color: "#3b82f6", label: "正常 · 75%上限",   badge: "正常 75%" },
+        { max: 30,  color: "#f97316", label: "收缩 · 50%上限",   badge: "收缩 50%" },
+        { max: 50,  color: "#ef4444", label: "极小 · 25%上限",   badge: "极小 25%" },
+        { max: 9999,color: "#92400e", label: "恐慌 · 清仓观望",  badge: "恐慌" },
       ]
     },
     vxn: {
-      label: "VXN", cap: 70,
+      label: "VXN (Nasdaq)", cap: 70,
       zones: [
-        { max: 15,  color: "#22c55e", label: "🟢 进攻", badge: "🟢 进攻" },
-        { max: 22,  color: "#84cc16", label: "🟡 稳健", badge: "🟡 稳健" },
-        { max: 32,  color: "#eab308", label: "🟠 谨慎", badge: "🟠 谨慎" },
-        { max: 55,  color: "#f97316", label: "🔶 避险", badge: "🔶 避险" },
-        { max: 9999,color: "#ef4444", label: "🔴 恐慌", badge: "🔴 恐慌" },
+        { max: 18,  color: "#22c55e", label: "充裕",   badge: "充裕" },
+        { max: 25,  color: "#3b82f6", label: "正常",   badge: "正常" },
+        { max: 35,  color: "#f97316", label: "收缩",   badge: "收缩" },
+        { max: 55,  color: "#ef4444", label: "极小",   badge: "极小" },
+        { max: 9999,color: "#92400e", label: "恐慌",   badge: "恐慌" },
       ]
     },
     fg: {
-      label: "贪婪恐惧指数", cap: 100,
+      label: "恐惧贪婪指数", cap: 100,
       zones: [
-        { max: 24,  color: "#ef4444", label: "极度恐惧", badge: "极度恐惧" },
-        { max: 44,  color: "#f97316", label: "恐惧",     badge: "恐惧" },
-        { max: 55,  color: "#eab308", label: "中性",     badge: "中性" },
-        { max: 75,  color: "#84cc16", label: "贪婪",     badge: "贪婪" },
-        { max: 9999,color: "#22c55e", label: "极度贪婪", badge: "极度贪婪" },
+        { max: 25,  color: "#22c55e", label: "极端恐惧 · 分批进", badge: "极端恐惧" },
+        { max: 35,  color: "#3b82f6", label: "偏冷 · 可加仓",     badge: "偏冷" },
+        { max: 60,  color: "var(--fg-3)", label: "中性 · 正常",   badge: "中性" },
+        { max: 75,  color: "#f97316", label: "偏热 · 不追高",     badge: "偏热" },
+        { max: 9999,color: "#ef4444", label: "极端过热 · 止盈",   badge: "极端过热" },
       ]
     },
     rsi: {
-      label: "标普500 RSI(14)", cap: 100,
+      label: "SPY RSI(14)", cap: 100,
       zones: [
-        { max: 30,  color: "#ef4444", label: "超卖",     badge: "超卖" },
-        { max: 50,  color: "#f97316", label: "弱势",     badge: "弱势" },
-        { max: 70,  color: "#84cc16", label: "稳健",     badge: "稳健" },
-        { max: 80,  color: "#eab308", label: "超买",     badge: "超买" },
-        { max: 9999,color: "#ef4444", label: "极度超买", badge: "极度超买" },
+        { max: 38,  color: "#22c55e", label: "极弱 · 分批进",   badge: "极弱" },
+        { max: 45,  color: "#3b82f6", label: "偏弱 · 可加仓",   badge: "偏弱" },
+        { max: 65,  color: "var(--fg-3)", label: "中性 · 正常", badge: "中性" },
+        { max: 72,  color: "#f97316", label: "偏热 · 不追高",   badge: "偏热" },
+        { max: 9999,color: "#ef4444", label: "超买 · 止盈",     badge: "超买" },
       ]
     }
   };
@@ -4864,30 +4866,45 @@
       </div>`;
   }
 
-  function mkPlaybookHTML(vix, fg, rsi, vixTrend = "flat") {
-    const current = getCurrentRegime(vix, fg, rsi, vixTrend);
-    const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
-    const ordered = displayOrder.map(id => MKT_REGIMES.find(r => r.id === id)).filter(Boolean);
-    const rows = ordered.map(r => {
-      const active = r.id === current?.id;
-      return `<tr class="${active ? "mkt-pb-active" : ""}">
-        <td style="color:${r.color};font-weight:700;white-space:nowrap">${r.regime}${active ? `<span class="mkt-now">当下</span>` : ""}</td>
-        <td>
-          <div style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3);margin-bottom:3px">${r.cond}</div>
-          <div style="font-size:12px;color:var(--fg-1)">${r.meaning}</div>
-        </td>
-        <td>${r.action}</td>
-      </tr>`;
-    }).join("");
+  function mkPlaybookHTML() {
+    // Three-axis reference handbook (replaces old 6-regime table).
+    const axisA = [
+      { label: "顺风", color: "#22c55e", cond: "价格 > 50MA > 200MA", action: "有做多资格，正常布局" },
+      { label: "中性", color: "#eab308", cond: "价格在 50/200MA 之间回调", action: "少开新仓，持有已有仓位" },
+      { label: "逆风", color: "#ef4444", cond: "50/200 死叉 或 价格 < 200MA", action: "禁止新多仓，严格执行止损" },
+    ];
+    const axisB = [
+      { label: "充裕", color: "#22c55e", cond: "VIX < 15",    action: "仓位上限 100% · 止损 −8%" },
+      { label: "正常", color: "#3b82f6", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −6%" },
+      { label: "收缩", color: "#f97316", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −4%" },
+      { label: "极小", color: "#ef4444", cond: "VIX ≥ 30",    action: "仓位上限 25%  · 止损 −3%" },
+    ];
+    const axisC = [
+      { label: "极端恐惧", color: "#22c55e", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
+      { label: "偏冷",     color: "#3b82f6", cond: "FGI < 35 或 RSI < 45", action: "可小幅加仓，不追高" },
+      { label: "中性",     color: "var(--fg-3)", cond: "FGI 35–60，RSI 45–65", action: "正常操作，按计划执行" },
+      { label: "偏热",     color: "#f97316", cond: "FGI 60–75 或 RSI 65–72", action: "持仓不加码，盯紧止损" },
+      { label: "极端过热", color: "#ef4444", cond: "FGI > 75 或 RSI > 72",   action: "禁止新仓，盈利仓减仓 1/3，收紧止损" },
+    ];
+    const mkSection = (title, sub, rows) => `
+      <div class="pb3-section">
+        <div class="pb3-section-head">${title} <span class="pb3-section-sub">${sub}</span></div>
+        <table class="mkt-pb-table">
+          <thead><tr><th>状态</th><th>触发条件</th><th>操作含义</th></tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td style="color:${r.color};font-weight:700;white-space:nowrap">${r.label}</td>
+            <td style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${r.cond}</td>
+            <td style="font-size:12px">${r.action}</td>
+          </tr>`).join("")}</tbody>
+        </table>
+      </div>`;
     return `
       <div class="mkt-playbook">
-        <div class="mkt-playbook-title">市场状态 · 操作手册</div>
-        <table class="mkt-pb-table">
-          <thead><tr>
-            <th>状态</th><th>触发条件 · 含义</th><th>操作建议</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <div class="mkt-playbook-title">三轴操作参考手册</div>
+        ${mkSection("轴A · 方向（趋势）", "决定有没有做多资格", axisA)}
+        ${mkSection("轴B · 风险容量（VIX）", "决定开多少（仓位上限）", axisB)}
+        ${mkSection("轴C · 情绪（FGI / RSI）", "决定何时止盈或分批进", axisC)}
+        <div class="pb3-tip">三轴合并规则：方向逆风 = 闸门（禁新多）&gt; 情绪极端过热 = 止盈优先 &gt; 情绪极端恐惧 = 分批进 &gt; 正常进攻</div>
       </div>`;
   }
 
@@ -4933,7 +4950,7 @@
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
   function getSentimentAxis(fg, rsi, vixTrend = "flat") {
     if (fg > 75 || rsi > 72)
-      return { id: "euphoria", label: "过热", color: "#ef4444", tilt: "trim",
+      return { id: "euphoria", label: "极端过热", color: "#ef4444", tilt: "trim",
         desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
     if (fg >= 60 || rsi >= 65)
       return { id: "warm", label: "偏热", color: "#f97316", tilt: "hold",
@@ -4954,7 +4971,7 @@
         detail: `方向轴逆风（${dir.desc}）。无论 VIX 多低都不新开多仓，优先保护现有仓位、严格执行止损。` };
     if (sent.tilt === "trim")
       return { headline: "⚠️ 止盈 / 禁新仓", color: "#f97316",
-        detail: `情绪过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。` };
+        detail: `情绪极端过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。` };
     if (sent.tilt === "accumulate")
       return { headline: "🔄 分批建仓", color: "#22c55e",
         detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。` };
@@ -5045,8 +5062,8 @@
       </div>
       <div class="mkt-playbook-ref">
         <details>
-          <summary>旧版 6 态参考手册 · Legacy Playbook</summary>
-          ${mkPlaybookHTML(vix, fg, rsi, vixTrend)}
+          <summary>三轴操作参考手册 · 点击展开</summary>
+          ${mkPlaybookHTML()}
         </details>
       </div>
       <div id="sector-rotation" class="sect-section"></div>`;
