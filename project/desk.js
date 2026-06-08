@@ -5200,17 +5200,24 @@
     const lbl = m < 5 ? "刚刚" : m < 60 ? `${m}分钟前` : `${Math.floor(m / 60)}小时前`;
     return `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${lbl}</span>`;
   }
-  function _todayLocal() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  // Cache slot aligned to Beijing 09:30 / 21:30 — same logic as the API
+  function _bjSlotKey() {
+    const bjMs = Date.now() + 8 * 3600 * 1000;
+    const bj   = new Date(bjMs);
+    const h = bj.getUTCHours(), m = bj.getUTCMinutes();
+    const eve = h > 21 || (h === 21 && m >= 30);
+    const mor = !eve && (h > 9  || (h === 9  && m >= 30));
+    if (eve) return bj.toISOString().slice(0, 10) + ":pm";
+    if (mor) return bj.toISOString().slice(0, 10) + ":am";
+    return new Date(bjMs - 86400000).toISOString().slice(0, 10) + ":pm";
   }
   function _saveBrief(key, data) {
-    try { localStorage.setItem(key, JSON.stringify({ ...data, _date: _todayLocal() })); } catch (_) {}
+    try { localStorage.setItem(key, JSON.stringify({ ...data, _slot: _bjSlotKey() })); } catch (_) {}
   }
   function _loadBrief(key) {
     try {
       const data = JSON.parse(localStorage.getItem(key) || "null");
-      if (!data || data._date !== _todayLocal()) return null; // expired — new day
+      if (!data || data._slot !== _bjSlotKey()) return null;
       return data;
     } catch { return null; }
   }

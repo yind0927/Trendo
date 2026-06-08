@@ -96,11 +96,21 @@ export default async function handler(req, res) {
 
   const force     = req.query.force === "1";
   const now       = new Date();
-  const today     = now.toISOString().slice(0, 10);
-  const slot      = Math.floor(now.getUTCHours() / 12);
-  // Cache key: date + 12hr slot + sorted symbols (busts when portfolio changes)
+
+  // Slot aligned to Beijing 09:30 / 21:30 (UTC+8)
+  function bjSlotKey(d) {
+    const bjMs  = d.getTime() + 8 * 3600 * 1000;
+    const bj    = new Date(bjMs);
+    const h = bj.getUTCHours(), m = bj.getUTCMinutes();
+    const eve = h > 21 || (h === 21 && m >= 30);
+    const mor = !eve && (h > 9  || (h === 9  && m >= 30));
+    if (eve) return `${bj.toISOString().slice(0, 10)}:pm`;
+    if (mor) return `${bj.toISOString().slice(0, 10)}:am`;
+    return `${new Date(bjMs - 86400000).toISOString().slice(0, 10)}:pm`;
+  }
+  // Cache key: BJ slot + sorted symbols (busts when portfolio changes)
   const syms      = holdingsStr.split(",").map(s => s.split(":")[0]).sort().join("-");
-  const cacheKey  = `trendo:holdings_brief:${today}:${slot}:${syms.slice(0, 40)}`;
+  const cacheKey  = `trendo:holdings_brief_bj:${bjSlotKey(now)}:${syms.slice(0, 40)}`;
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ────────────────────────────────────────────────────────

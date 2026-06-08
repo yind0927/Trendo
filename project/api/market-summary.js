@@ -124,12 +124,23 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const now      = new Date();
-  const today    = now.toISOString().slice(0, 10);
-  const slot     = Math.floor(now.getUTCHours() / 12);
-  const cacheKey = `trendo:market_brief:${today}:${slot}`;
   const force    = req.query.force === "1";
   const isCron   = req.query.cron === "1";
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
+
+  // Slot aligned to Beijing 09:30 / 21:30 (UTC+8)
+  // am = 09:30–21:29 BJ · pm = 21:30–09:29 BJ next day
+  function bjSlotKey(d) {
+    const bjMs  = d.getTime() + 8 * 3600 * 1000;
+    const bj    = new Date(bjMs);
+    const h = bj.getUTCHours(), m = bj.getUTCMinutes();
+    const eve = h > 21 || (h === 21 && m >= 30);
+    const mor = !eve && (h > 9  || (h === 9  && m >= 30));
+    if (eve) return `${bj.toISOString().slice(0, 10)}:pm`;
+    if (mor) return `${bj.toISOString().slice(0, 10)}:am`;
+    return `${new Date(bjMs - 86400000).toISOString().slice(0, 10)}:pm`; // before 09:30 → prev pm
+  }
+  const cacheKey = `trendo:market_brief_bj:${bjSlotKey(now)}`;
 
   // ── 1. Redis cache ────────────────────────────────────────────────────────
   if (!force && kvUrl && kvToken) {
