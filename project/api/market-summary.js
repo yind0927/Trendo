@@ -128,6 +128,7 @@ export default async function handler(req, res) {
   const slot     = Math.floor(now.getUTCHours() / 12);
   const cacheKey = `trendo:market_brief:${today}:${slot}`;
   const force    = req.query.force === "1";
+  const isCron   = req.query.cron === "1";
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ────────────────────────────────────────────────────────
@@ -141,6 +142,30 @@ export default async function handler(req, res) {
       if (result) {
         res.setHeader("Cache-Control", "s-maxage=43200, stale-while-revalidate=7200");
         return res.json({ ...JSON.parse(result), cached: true });
+      }
+    } catch (_) {}
+  }
+
+  // ── 1b. Cron self-enrichment: fetch VIX + FGI when called without market ctx ─
+  if (isCron && !req.query.vix) {
+    try {
+      const [vixRes, fgRes] = await Promise.allSettled([
+        fetch("https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=2d", {
+          headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
+          signal: AbortSignal.timeout(6000),
+        }).then(r => r.json()),
+        fetch("https://production.dataviz.cnn.io/index/feargreed/graphdata", {
+          headers: { "User-Agent": "Mozilla/5.0" },
+          signal: AbortSignal.timeout(6000),
+        }).then(r => r.json()),
+      ]);
+      if (vixRes.status === "fulfilled") {
+        const closes = vixRes.value?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter(Boolean) || [];
+        if (closes.length) req.query.vix = closes.at(-1).toFixed(2);
+      }
+      if (fgRes.status === "fulfilled") {
+        const score = fgRes.value?.fear_and_greed?.score;
+        if (score != null) req.query.fg = Math.round(score);
       }
     } catch (_) {}
   }
