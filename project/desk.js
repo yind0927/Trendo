@@ -4869,9 +4869,9 @@
   function mkPlaybookHTML() {
     // Three-axis reference handbook (replaces old 6-regime table).
     const axisA = [
-      { label: "顺风", color: "#22c55e", cond: "价格 > 50MA > 200MA", action: "有做多资格，正常布局" },
+      { label: "做多", color: "#22c55e", cond: "价格 > 50MA > 200MA", action: "有做多资格，正常布局" },
       { label: "中性", color: "#eab308", cond: "价格在 50/200MA 之间回调", action: "少开新仓，持有已有仓位" },
-      { label: "逆风", color: "#ef4444", cond: "50/200 死叉 或 价格 < 200MA", action: "禁止新多仓，严格执行止损" },
+      { label: "做空", color: "#ef4444", cond: "50/200 死叉 或 价格 < 200MA", action: "禁止新多仓，严格执行止损" },
     ];
     const axisB = [
       { label: "充裕", color: "#22c55e", cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
@@ -4928,14 +4928,14 @@
       return { id: "unknown", label: "未知", color: "var(--fg-3)", desc: "趋势数据不足", eligible: true };
     if (ma200 == null)
       return price > ma50
-        ? { id: "tailwind", label: "顺风", color: "#22c55e", desc: "价格 > 50MA，趋势偏多", eligible: true }
-        : { id: "headwind", label: "逆风", color: "#ef4444", desc: "价格跌破 50MA", eligible: false };
+        ? { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > 50MA，趋势偏多", eligible: true }
+        : { id: "headwind", label: "做空", color: "#ef4444", desc: "价格跌破 50MA", eligible: false };
     const deathCross = ma50 < ma200;
     if (deathCross || price < ma200)
-      return { id: "headwind", label: "逆风", color: "#ef4444",
+      return { id: "headwind", label: "做空", color: "#ef4444",
         desc: deathCross ? "50/200 死叉，长期趋势走弱" : "价格跌破 200MA，回避新多单", eligible: false };
     if (price > ma50 && ma50 > ma200)
-      return { id: "tailwind", label: "顺风", color: "#22c55e", desc: "价格 > 50MA > 200MA，多头结构完整", eligible: true };
+      return { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > 50MA > 200MA，多头结构完整", eligible: true };
     return { id: "neutral", label: "中性", color: "#eab308", desc: "价格在均线间回调，方向待确认", eligible: true };
   }
 
