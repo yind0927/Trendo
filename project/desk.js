@@ -1210,6 +1210,60 @@
   }
 
   // ============ DRAWER ============
+  function _drawerNavList(isSim) {
+    const tbodySel = isSim ? "#sim-tbody" : "#tbody";
+    const trs = $$(`${tbodySel} tr[data-idx]`);
+    if (trs.length) return { mode: "table", trs };
+    const data = isSim
+      ? (simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED)
+      : (activeTab === "open" ? HOLDINGS : CLOSED_POSITIONS);
+    return { mode: "data", data };
+  }
+
+  function updateDrawerNavCounter(isSim) {
+    const counter = $("#drawer-nav-counter");
+    if (!counter) return;
+    const curSym = isSim ? simSelectedSym : selectedSym;
+    const nav = _drawerNavList(isSim);
+    if (nav.mode === "table") {
+      const idx = nav.trs.findIndex(tr => tr.dataset.sym === curSym);
+      if (idx >= 0 && nav.trs.length > 1) { counter.textContent = `${idx + 1} / ${nav.trs.length}`; counter.style.display = ""; return; }
+    } else {
+      const idx = nav.data.findIndex(h => h.sym === curSym);
+      if (idx >= 0 && nav.data.length > 1) { counter.textContent = `${idx + 1} / ${nav.data.length}`; counter.style.display = ""; return; }
+    }
+    counter.style.display = "none";
+  }
+
+  function wireDrawerSwipe(isSim) {
+    const head = $(".drawer-head", $("#drawer"));
+    if (!head) return;
+    let tx0 = 0, ty0 = 0;
+    head.addEventListener("touchstart", e => {
+      tx0 = e.touches[0].clientX;
+      ty0 = e.touches[0].clientY;
+    }, { passive: true });
+    head.addEventListener("touchend", e => {
+      const dx = e.changedTouches[0].clientX - tx0;
+      const dy = e.changedTouches[0].clientY - ty0;
+      if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
+      const dir = dx < 0 ? 1 : -1;
+      const curSym = isSim ? simSelectedSym : selectedSym;
+      const nav = _drawerNavList(isSim);
+      if (nav.mode === "table") {
+        const curIdx = nav.trs.findIndex(tr => tr.dataset.sym === curSym);
+        const next = dir > 0 ? (curIdx + 1) % nav.trs.length : (curIdx <= 0 ? nav.trs.length - 1 : curIdx - 1);
+        nav.trs[next].click();
+      } else if (nav.data.length) {
+        const curIdx = nav.data.findIndex(h => h.sym === curSym);
+        const next = dir > 0 ? (curIdx + 1) % nav.data.length : (curIdx <= 0 ? nav.data.length - 1 : curIdx - 1);
+        if (isSim) openSimDrawer(nav.data[next], simActiveTab);
+        else openDrawer(nav.data[next]);
+      }
+    }, { passive: true });
+    updateDrawerNavCounter(isSim);
+  }
+
   function openDrawer(h) {
     if (!h) return;
     selectedSym = h.sym;
@@ -1223,6 +1277,7 @@
     } else {
       wireClosedDrawerEdits(h, false);
     }
+    wireDrawerSwipe(false);
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
@@ -1331,6 +1386,7 @@
           <span class="statlight" style="color:${badgeColor}; background: color-mix(in oklch, ${badgeColor} 15%, transparent);">
             <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
           </span>
+          <span id="drawer-nav-counter" class="drawer-nav-counter" style="display:none"></span>
           <button class="close" id="drawer-close" title="关闭 (Esc)">✕</button>
         </div>
         <div class="hero-price">
@@ -3656,6 +3712,7 @@
     } else {
       wireClosedDrawerEdits(h, true);
     }
+    wireDrawerSwipe(true);
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
