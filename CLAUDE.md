@@ -92,6 +92,9 @@ window.EVENTS            // 事件记录（Analytics）
   },
   setup, thesis,            // 交易计划描述
   journalNote,              // 日志备注
+  cc,                       // Covered Call 权利金记录 [{ id, date, premium(每股), shares }]
+                            // ccNet(h)=累计权利金，ccAdjCost(h)=cost−ccNet/qty（仅展示用，
+                            // 不改 h.cost，R倍数/止损距离仍基于原始成本）
 }
 ```
 
@@ -540,6 +543,7 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v7.6 | AI简报系统：Market页市场日报（Claude Sonnet 4.6，结构化4段式）+ Dashboard页持仓分析（含个股新闻+市场环境）。手动触发设计：页面加载读localStorage，跨日自动重置为生成按钮，Redis 2小时服务端缓存去重，↻强制重生成。徽章/边框颜色统一为accent teal。`_lastMktCtx`全局传递市场上下文。 |
 | v7.7 | **多处 bug 修复与分析优化**：分批平仓记录合并（`groupTrades()`，按sym+entry+cost分组），胜率/Analytics指标/Journal统计/出场效率均按交易笔数而非记录数计算；exitQualityHTML按交易组计算峰值和实际盈亏，多批次显示"N次出场"标签。今日盈亏基准修复（`getLastTradingDayStr()`），周末/节假日后不再把开仓前涨跌计入。Auth token改为localStorage（后台切换不再要求重新输密码）。AI持仓简报增加第7字段trimInfo（已减仓比例和平均出场R），让AI分析考虑部分平仓。Market RSI数据源改为SPY。模拟仓NAV含已实现盈亏。已平仓抽屉展示减仓记录+支持出场价内联编辑（wireClosedDrawerEdits）。播报条速度60s→50s。 |
 | v7.8 | **三轴市场模型**（取代单一VIX瀑布作主推荐）：轴A方向(SPY vs 50/200MA，决定做多资格)×轴B风险容量(VIX→仓位上限/止损)×轴C情绪(FGI/RSI→减仓/加仓倾斜)，`buildAxes/combineAxes/mkAxesHTML`，方向逆风为闸门、情绪过热触发止盈倾斜。SPY history `from` 延长至400天供200MA。旧6态手册折叠为`<details>`参考，删除`mkStrategyHTML`。AI简报传入dir/posmax/senti并在prompt加入三轴框架。**今日盈亏修复**：卡片%分母改为持仓昨收市值(非totalNotional)；`todayPnlOf(h)`统一卡片与逐股分解(`(last-prevClose)*qty`直算)；移除prevClose休市冻结(与last脱钩导致跨天涨跌被当单日，-23%虚高)。 |
+| v8.0 | **Covered Call 权利金记录**：抽屉"交易计划"区新增权利金记录块（+记录权利金弹窗：每股权利金/股数/日期，可删除），`ccNet/ccAdjCost` 计算调整后成本，入场成本显示 `$原始 → $调整后`，表格成本列和卡片入场价带 `cc` 标记显示调整后成本（title 显示原始成本+累计权利金）。h.cost 保持纯净，R/止损不受影响。**抽屉滑动切换**：手机端在抽屉头部左右滑动切换持仓卡片（50px阈值，横向位移需大于纵向），头部显示 `X / Y` 位置计数器，真实仓/模拟仓、列表/卡片模式均支持。 |
 | v7.9 | 综合建议6档加emoji(❌⚠️🔄⏫⏸️✅)。VIX风险轴止损放宽(充裕−10%/正常−8%/收缩·极小−5%)。市场模型详情三表用`table-layout:fixed`列对齐。**市场模型基准 SPY→VOO**(方向轴价格/50MA/200MA + RSI 统一为VOO)。**历史回撤参考**(`api/drawdown-context.js`)：VOO/QQQ近15年单日大跌分4档(普通−2~−3%/显著−3~−5%/急跌−5~−8%/崩跌≤−8%)，统计后续5/10/20/60交易日中位涨跌+胜率+p10尾部；当日跌幅自动匹配档位高亮，叠加Claude解读(历史规律/本次异同/操作建议)，含市场上下文(vix/dir/senti)。Redis按日缓存(统计`drawdown_stats`+解读`drawdown_ai`)，localStorage跨日重置。Market页`#drawdown-card`，手动触发，收起/展开。 |
 
 ---

@@ -783,6 +783,18 @@
     if (h.entry) h.days = calcTradingDays(h.entry);
   }
 
+  // ── Covered Call premium records ─────────────────────────────────────────
+  // h.cc = [{ id, date, premium (per share), shares }]
+  // Premiums lower the *effective* cost basis for display only — h.cost stays
+  // untouched so R-multiple / stop distance keep measuring the original plan.
+  function ccNet(h) {
+    return (h.cc || []).reduce((s, c) => s + (c.premium || 0) * (c.shares || 0), 0);
+  }
+  function ccAdjCost(h) {
+    const net = ccNet(h);
+    return net > 0 && h.qty > 0 ? h.cost - net / h.qty : h.cost;
+  }
+
   // Today's % change for the ticker tape / daily P&L modules.
   // Derived from the holding's own last + prevClose (the SAME two numbers we display),
   // so price and % are always self-consistent. prevClose is persisted and frozen outside
@@ -1039,7 +1051,7 @@
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};${progPct<0?"margin-left:auto":""}"></div>
         </div>` : ""}
         <div class="hc-price-row">
-          <span class="hc-entry-price">入 $${price(h.cost)}</span>
+          <span class="hc-entry-price">${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>入 $${price(ccAdjCost(h))}` : `入 $${price(h.cost)}`}</span>
           <span class="hc-price-arrow">→</span>
           <span class="hc-cur-price">$${price(displayPrice)}</span>
         </div>
@@ -1135,7 +1147,9 @@
         const lbl = v === "0-5" ? "开始" : (v === "5-15" ? "中间" : "延续");
         return `<td><span class="bx-bar-chip ${cls}">${v}<span class="bx-bar-sub">${lbl}</span></span></td>`;
       }
-      case "cost": return `<td class="right num muted" style="font-size:12px">$${price(h.cost)}</td>`;
+      case "cost": return ccNet(h) > 0
+        ? `<td class="right num muted" style="font-size:12px" title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"><span class="cc-tag">cc</span>$${price(ccAdjCost(h))}</td>`
+        : `<td class="right num muted" style="font-size:12px">$${price(h.cost)}</td>`;
       case "last": {
         const p = (activeTab === "closed" && h.closePrice != null) ? h.closePrice : h.last;
         return `<td class="right num" style="font-weight:600;font-size:12px">$${price(p)}</td>`;
@@ -1274,6 +1288,7 @@
       wireDrawerEdits(h);
       wireDrawerCloseButton();
       wireAddToPosition(h, HOLDINGS, totalNotional, () => { renderTable(); renderOverview(); });
+      wireCCRecords(h, false);
     } else {
       wireClosedDrawerEdits(h, false);
     }
@@ -1333,6 +1348,40 @@
           </div>`).join("");
       }
     };
+  }
+
+  function wireCCRecords(h, isSim) {
+    const btn = $("#drawer-cc-btn");
+    if (btn) {
+      btn.onclick = () => {
+        $("#cc-title").textContent = `记录权利金 · ${h.sym}`;
+        $("#cc-date").value = new Date().toISOString().slice(0, 10);
+        $("#cc-premium").value = "";
+        $("#cc-shares").value = h.qty || "";
+        openModal("cc-modal");
+      };
+      // onclick so re-wiring on each drawer open replaces the old handler
+      $("#cc-form").onsubmit = e => {
+        e.preventDefault();
+        const premium = parseFloat($("#cc-premium").value);
+        const shares  = parseInt($("#cc-shares").value);
+        const date    = $("#cc-date").value || new Date().toISOString().slice(0, 10);
+        if (!premium || !shares) { alert("请填写每股权利金和股数"); return; }
+        if (!Array.isArray(h.cc)) h.cc = [];
+        h.cc.push({ id: Date.now().toString(36), date, premium, shares });
+        saveToStorage();
+        closeModal("cc-modal");
+        if (isSim) openSimDrawer(h, simActiveTab); else openDrawer(h);
+      };
+    }
+    $$(".cc-del", $("#drawer")).forEach(del => {
+      del.addEventListener("click", e => {
+        e.stopPropagation();
+        h.cc = (h.cc || []).filter(c => c.id !== del.dataset.ccId);
+        saveToStorage();
+        if (isSim) openSimDrawer(h, simActiveTab); else openDrawer(h);
+      });
+    });
   }
 
   function wireDrawerCloseButton() {
@@ -1416,7 +1465,7 @@
           <h4><span class="idx">01</span>${isClosed ? "平仓记录" : "持仓概况"}</h4>
           ${isClosed ? `
           <div class="kv-grid">
-            <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}</div></div>
+            <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}${ccNet(h) > 0 ? `<span class="cc-adj">→ $${price(ccAdjCost(h))}</span>` : ""}</div></div>
             <div><div class="k">出场价格<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit-closed mono" data-closed-field="closePrice" contenteditable="true" spellcheck="false">$${price(h.closePrice ?? h.last)}</span></div></div>
             <div><div class="k">盈亏金额</div><div class="v big ${fmt.sign(pnlAmt)}">${fmt.signed(pnlAmt)}</div></div>
             <div><div class="k">盈亏百分比</div><div class="v ${fmt.sign(pnlAmt)}">${fmt.pct(h.pnlPct)}</div></div>
@@ -1424,7 +1473,7 @@
             <div><div class="k">持有天数</div><div class="v">${dispDays}<span class="sub">交易日</span></div></div>
           </div>` : `
           <div class="kv-grid">
-            <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}</div></div>
+            <div><div class="k">入场成本${ccNet(h) > 0 ? `<span class="edit-hint">CC调整后</span>` : ""}</div><div class="v mono">$${price(h.cost)}${ccNet(h) > 0 ? `<span class="cc-adj">→ $${price(ccAdjCost(h))}</span>` : ""}</div></div>
             <div><div class="k">现价<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit mono" data-pos-field="last" contenteditable="true" spellcheck="false">$${price(h.last)}</span></div></div>
             <div><div class="k">止损<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="stop" contenteditable="true" spellcheck="false">$${price(h.stop)}</span></div></div>
             <div><div class="k">目标<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="target" contenteditable="true" spellcheck="false">$${price(h.target)}</span></div></div>
@@ -1486,6 +1535,22 @@
                 <span class="exec-price mono">$${price(h.closePrice ?? h.last)}</span>
                 <span class="exec-qty muted">${h.qty} 股</span>
               </div>` : ""}
+          </div>
+
+          <div class="plan-subhead" style="display:flex;align-items:center;gap:8px">权利金记录 · Covered Call
+            ${ccNet(h) > 0 ? `<span class="cc-net mono">累计 +$${ccNet(h).toFixed(0)} · 成本 −${(ccNet(h) / h.qty / h.cost * 100).toFixed(1)}%</span>` : ""}
+            ${!isClosed ? `<button class="cc-add-btn" id="drawer-cc-btn" type="button">+ 记录权利金</button>` : ""}
+          </div>
+          <div class="exec-list" id="cc-list">
+            ${(h.cc || []).map(c => `
+              <div class="exec-item">
+                <span class="exec-type cc">权利金</span>
+                <span class="exec-date">${fmt.date(c.date)}</span>
+                <span class="exec-price mono">$${c.premium.toFixed(2)}/股</span>
+                <span class="exec-qty muted">${c.shares} 股</span>
+                <span class="exec-qty mono up" style="margin-left:auto">+$${(c.premium * c.shares).toFixed(0)}</span>
+                ${!isClosed ? `<button class="cc-del" data-cc-id="${c.id}" title="删除">✕</button>` : ""}
+              </div>`).join("") || `<div class="exec-item muted" style="font-size:11px">暂无记录</div>`}
           </div>
 
           <div class="plan-subhead">Journal 笔记</div>
@@ -3709,6 +3774,7 @@
       wireSimDrawerEdits(h);
       wireSimDrawerCloseButton();
       wireAddToPosition(h, SIM_HOLDINGS, simNotional, () => { renderSimTable(); renderSimOverview(); });
+      wireCCRecords(h, true);
     } else {
       wireClosedDrawerEdits(h, true);
     }
@@ -6206,6 +6272,8 @@
   wireNewPositionModal();
   $("#add-to-close")?.addEventListener("click",  () => closeModal("add-to-modal"));
   $("#add-to-cancel")?.addEventListener("click", () => closeModal("add-to-modal"));
+  $("#cc-close")?.addEventListener("click",  () => closeModal("cc-modal"));
+  $("#cc-cancel")?.addEventListener("click", () => closeModal("cc-modal"));
   wireEquityModal();
   wireClosePositionModal();
   wireDeleteModal();

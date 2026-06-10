@@ -1432,6 +1432,26 @@
   .exec-type { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 4px; flex-shrink: 0; }
   .exec-type.open { background: color-mix(in oklch, var(--accent) 15%, transparent); color: var(--accent); }
   .exec-type.add  { background: color-mix(in oklch, var(--up) 15%, transparent); color: var(--up); }
+  .exec-type.cc   { background: color-mix(in oklch, var(--warn) 15%, transparent); color: var(--warn); }
+  /* Covered Call premium — adjusted cost basis */
+  .cc-adj { color: var(--accent); margin-left: 6px; font-size: 0.92em; }
+  .cc-tag {
+    font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--warn); border: 1px solid color-mix(in oklch, var(--warn) 45%, transparent);
+    border-radius: 3px; padding: 0 3px; margin-right: 5px; vertical-align: 1px;
+  }
+  .cc-net { font-size: 10px; color: var(--up); font-weight: 500; }
+  .cc-add-btn {
+    all: unset; cursor: pointer; margin-left: auto; font-size: 10.5px; font-weight: 600;
+    color: var(--accent); border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+    border-radius: 5px; padding: 2px 8px; transition: background .15s;
+  }
+  .cc-add-btn:hover { background: color-mix(in oklch, var(--accent) 12%, transparent); }
+  .cc-del {
+    all: unset; cursor: pointer; color: var(--fg-3); font-size: 10px;
+    width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; flex-shrink: 0;
+  }
+  .cc-del:hover { color: var(--down); background: color-mix(in oklch, var(--down) 12%, transparent); }
   .exec-date  { color: var(--fg-2); font-size: 11px; flex: 1; }
   .exec-price { font-size: 12.5px; font-weight: 600; }
   .exec-qty   { font-size: 11px; }
@@ -3540,6 +3560,34 @@
       <div class="form-actions">
         <button type="button" id="add-to-cancel" class="btn">取消</button>
         <button type="submit" class="btn primary">确认加仓</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Covered Call premium record -->
+<div id="cc-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="cc-title">记录权利金</h2>
+      <button class="modal-close" id="cc-close">✕</button>
+    </div>
+    <form id="cc-form">
+      <div class="form-row">
+        <label>每股权利金 ($)</label>
+        <input type="number" id="cc-premium" step="0.01" min="0.01" required placeholder="如 1.25" class="form-input"/>
+      </div>
+      <div class="form-row">
+        <label>对应股数</label>
+        <input type="number" id="cc-shares" step="1" min="1" required placeholder="0" class="form-input"/>
+      </div>
+      <div class="form-row">
+        <label>记录日期</label>
+        <input type="date" id="cc-date" class="form-input"/>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="cc-cancel" class="btn">取消</button>
+        <button type="submit" class="btn primary">确认记录</button>
       </div>
     </form>
   </div>
