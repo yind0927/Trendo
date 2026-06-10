@@ -703,9 +703,12 @@
     // because the persisted value survives every reload. Wipe prevClose once so each
     // holding repopulates from the next quote fetch (correct %, or honest ±$0 if a
     // symbol's fetch fails). The flag prevents re-wiping on later loads.
-    if (!localStorage.getItem("trendo_prevclose_reset_v18")) {
+    // v21: re-wipe because a pre-mergeLive cloud sync could have written stale prevClose
+    // back into localStorage after the v18 wipe ran, and mergeLive then preserved it
+    // (l.prevClose > 0 was true). New flag forces another clean slate.
+    if (!localStorage.getItem("trendo_prevclose_reset_v21")) {
       [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; });
-      try { localStorage.setItem("trendo_prevclose_reset_v18", "1"); } catch (_) {}
+      try { localStorage.setItem("trendo_prevclose_reset_v21", "1"); } catch (_) {}
     }
     // Compute changePct from persisted last + prevClose so the tape / daily P&L show real
     // values instantly on first paint (from cache), instead of +0.00% until the first fetch.
