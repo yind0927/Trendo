@@ -41,12 +41,15 @@ function parseYahooResult(resp) {
   const lastClose  = closes.length ? closes[closes.length - 1] : null;
   const last       = meta.regularMarketPrice > 0 ? meta.regularMarketPrice : lastClose;
   if (!(last > 0)) return null;
-  // 2nd-to-last close = genuine last completed session close (so pre-market shows the
-  // completed session's change, not 0). Falls back to meta.previousClose (= yesterday).
+  // 2nd-to-last close in the series = genuine last completed session close, so daily change
+  // is broker-like across pre-market / after-hours (NOT 0). We do NOT fall back to
+  // meta.chartPreviousClose: that is the close BEFORE the chart range starts (days ago for
+  // range=5d), which inflates the daily change to a multi-day move (the +8~13% bug). When
+  // derivedPc is unavailable we use meta.previousClose (Yahoo's official prior-session close).
   const derivedPc  = closes.length >= 2 ? closes[closes.length - 2] : null;
   return {
     last,
-    prevClose: derivedPc ?? meta.previousClose ?? meta.chartPreviousClose ?? null,
+    prevClose: derivedPc ?? meta.previousClose ?? null,
     name:      meta.shortName || meta.longName || null,
   };
 }
@@ -55,7 +58,10 @@ function parseYahooResult(resp) {
 async function fetchYahooSpark(symbols) {
   const out = {};
   if (!symbols.length) return out;
-  const qs = `symbols=${encodeURIComponent(symbols.join(","))}&range=2d&interval=1d`;
+  // range=5d (not 2d): guarantees the close series holds >=2 trading-day bars so derivedPc
+  // (the 2nd-to-last close = yesterday's close) is reliably present. With range=2d a weekend
+  // or holiday could leave a single bar, dropping derivedPc and forcing a wrong fallback.
+  const qs = `symbols=${encodeURIComponent(symbols.join(","))}&range=5d&interval=1d`;
   for (const host of ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]) {
     try {
       const r = await fetch(`https://${host}/v8/finance/spark?${qs}`,
@@ -77,7 +83,7 @@ async function fetchYahooChart(sym) {
   for (const host of ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]) {
     try {
       const r = await fetch(
-        `https://${host}/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
+        `https://${host}/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`,
         { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(5000) });
       if (!r.ok) continue;
       const d = await r.json();
