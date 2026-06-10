@@ -1463,7 +1463,7 @@
           <h4><span class="idx">01</span>${isClosed ? "平仓记录" : "持仓概况"}</h4>
           ${isClosed ? `
           <div class="kv-grid">
-            <div><div class="k">入场成本</div><div class="v mono">$${price(h.cost)}${ccNet(h) > 0 ? `<span class="cc-adj">→ $${price(ccAdjCost(h))}</span>` : ""}</div></div>
+            <div><div class="k">入场成本${ccNet(h) > 0 ? `<span class="edit-hint">CC调整后</span>` : ""}</div><div class="v mono" ${ccNet(h) > 0 ? `title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"` : ""}>${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>$${price(ccAdjCost(h))}` : `$${price(h.cost)}`}</div></div>
             <div><div class="k">出场价格<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit-closed mono" data-closed-field="closePrice" contenteditable="true" spellcheck="false">$${price(h.closePrice ?? h.last)}</span></div></div>
             <div><div class="k">盈亏金额</div><div class="v big ${fmt.sign(pnlAmt)}">${fmt.signed(pnlAmt)}</div></div>
             <div><div class="k">盈亏百分比</div><div class="v ${fmt.sign(pnlAmt)}">${fmt.pct(h.pnlPct)}</div></div>
@@ -1471,7 +1471,7 @@
             <div><div class="k">持有天数</div><div class="v">${dispDays}<span class="sub">交易日</span></div></div>
           </div>` : `
           <div class="kv-grid">
-            <div><div class="k">入场成本${ccNet(h) > 0 ? `<span class="edit-hint">CC调整后</span>` : ""}</div><div class="v mono">$${price(h.cost)}${ccNet(h) > 0 ? `<span class="cc-adj">→ $${price(ccAdjCost(h))}</span>` : ""}</div></div>
+            <div><div class="k">入场成本${ccNet(h) > 0 ? `<span class="edit-hint">CC调整后</span>` : ""}</div><div class="v mono" ${ccNet(h) > 0 ? `title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"` : ""}>${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>$${price(ccAdjCost(h))}` : `$${price(h.cost)}`}</div></div>
             <div><div class="k">现价<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit mono" data-pos-field="last" contenteditable="true" spellcheck="false">$${price(h.last)}</span></div></div>
             <div><div class="k">止损<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="stop" contenteditable="true" spellcheck="false">$${price(h.stop)}</span></div></div>
             <div><div class="k">目标<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="target" contenteditable="true" spellcheck="false">$${price(h.target)}</span></div></div>
@@ -1558,7 +1558,8 @@
   }
 
   function levelBar(h) {
-    const vals = [h.stop, h.cost, h.last, h.target].sort((a, b) => a - b);
+    const dispCost = ccAdjCost(h);
+    const vals = [h.stop, dispCost, h.last, h.target].sort((a, b) => a - b);
     const lo = vals[0] * 0.98, hi = vals[3] * 1.02;
     const px = v => ((v - lo) / (hi - lo)) * 100;
     return `
@@ -1568,8 +1569,8 @@
           <span class="tag below" style="color:var(--down)">止损 $${price(h.stop)}</span>
           <div class="node"></div>
         </div>
-        <div class="marker entry" style="left:${px(h.cost)}%">
-          <span class="tag below">成本 $${price(h.cost)}</span>
+        <div class="marker entry" style="left:${px(dispCost)}%">
+          <span class="tag below">成本${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>` : ""} $${price(dispCost)}</span>
           <div class="node"></div>
         </div>
         <div class="marker now" style="left:${px(h.last)}%">
