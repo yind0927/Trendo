@@ -87,17 +87,17 @@
       })
       .sort((a, b) => b.today - a.today);
 
-    const hasData = rows.some(r => r.today !== 0);
-    if (label) label.style.display = hasData ? "" : "none";
-    if (!hasData) { el.innerHTML = ""; return; }
+    const hasData = rows.some(r => r.today !== 0 || r.todayPct !== 0);
+    if (label) label.style.display = HOLDINGS.length ? "" : "none";
+    if (!HOLDINGS.length) { el.innerHTML = ""; return; }
 
     const total = rows.reduce((s, r) => s + r.today, 0);
     const wins  = rows.filter(r => r.today > 0).length;
     const loses = rows.filter(r => r.today < 0).length;
     const tSign = total > 0 ? "up" : total < 0 ? "down" : "";
-    const tStr  = total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
+    const tStr  = !hasData ? "行情加载中…" : total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
     const metaEl = $("#daily-sources-meta");
-    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span> · ${wins}↑ ${loses}↓`;
+    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span>${hasData ? ` · ${wins}↑ ${loses}↓` : ""}`;
 
     const maxAbs = Math.max(...rows.map(r => Math.abs(r.today)), 1);
 
@@ -2772,8 +2772,10 @@
       ...SIM_CLOSE_PENDING.map(p => p.sym),
     ];
 
-    // Pending symbols go first so they are never truncated by the 50-symbol API limit
-    const allSyms = [...pendingSyms, ...all.map(h => h.sym)];
+    // Pending symbols go first so they are never truncated by the API limit.
+    // Watchlist symbols appended last (lowest priority, equity only).
+    const wlSyms = WATCHLIST.map(w => w.sym);
+    const allSyms = [...pendingSyms, ...all.map(h => h.sym), ...wlSyms];
     if (!allSyms.length) return;
 
     const stocks  = [...new Set(allSyms.filter(sym => {
@@ -2825,6 +2827,19 @@
           needsRender = true; // daily P&L display only — does NOT trigger save/sync
         }
       });
+
+      // Update watchlist live prices (last + prevClose + changePct only — no recompute)
+      let wlChanged = false;
+      WATCHLIST.forEach(w => {
+        const q = results[w.sym];
+        if (!q) return;
+        if (q.prevClose != null && q.prevClose > 0) w.prevClose = q.prevClose;
+        if (q.last != null && q.last > 0) w.last = q.last;
+        w.changePct = (w.prevClose > 0 && w.last > 0)
+          ? (w.last - w.prevClose) / w.prevClose * 100 : null;
+        wlChanged = true;
+      });
+      if (wlChanged && currentPage === "watchlist") renderWatchlist();
 
       // Auto-execute pending orders
       const executed = [];
@@ -3471,17 +3486,17 @@
         return { sym: h.sym, name: h.name, today, todayPct };
       })
       .sort((a, b) => b.today - a.today);
-    const hasData = rows.some(r => r.today !== 0);
-    if (label) label.style.display = hasData ? "" : "none";
-    if (!hasData) { el.innerHTML = ""; return; }
+    if (label) label.style.display = SIM_HOLDINGS.length ? "" : "none";
+    if (!SIM_HOLDINGS.length) { el.innerHTML = ""; return; }
 
+    const hasSimData = rows.some(r => r.today !== 0 || r.todayPct !== 0);
     const total = rows.reduce((s, r) => s + r.today, 0);
     const wins  = rows.filter(r => r.today > 0).length;
     const loses = rows.filter(r => r.today < 0).length;
     const tSign = total > 0 ? "up" : total < 0 ? "down" : "";
-    const tStr  = total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
+    const tStr  = !hasSimData ? "行情加载中…" : total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
     const metaEl = $("#sim-daily-sources-meta");
-    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span> · ${wins}↑ ${loses}↓`;
+    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span>${hasSimData ? ` · ${wins}↑ ${loses}↓` : ""}`;
 
     const maxAbs = Math.max(...rows.map(r => Math.abs(r.today)), 1);
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
@@ -4758,10 +4773,18 @@
           <span class="bx-chip-slope ${bxCls}" style="min-width:36px;text-align:center;font-size:12px">${slopeNumDisplay(item.bxSlope ?? 0)}</span>
           <span class="muted" style="font-size:9.5px">Slope</span>
         </div>
-        ${item.price ? `<div class="wl-price">
-          <span class="mono" style="font-size:13px;font-weight:600">$${price(item.price)}</span>
-          <span class="muted" style="font-size:9.5px">参考价</span>
-        </div>` : ""}
+        <div class="wl-price">
+          ${item.last > 0 ? `
+            <span class="mono" style="font-size:13px;font-weight:600">$${price(item.last)}</span>
+            ${item.changePct != null ? (() => {
+              const c = item.changePct; const cls = c >= 0 ? "up" : "down";
+              return `<span class="${cls}" style="font-size:11px;font-family:var(--f-mono)">${c >= 0 ? "+" : ""}${c.toFixed(2)}%</span>`;
+            })() : ""}
+          ` : item.price ? `
+            <span class="mono" style="font-size:13px;font-weight:600">$${price(item.price)}</span>
+            <span class="muted" style="font-size:9.5px">参考价</span>
+          ` : `<span class="muted" style="font-size:10px">—</span>`}
+        </div>
         <div class="wl-actions">
           <button class="btn primary wl-add-pos" data-idx="${idx}" style="font-size:11.5px;padding:6px 12px">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>入仓
