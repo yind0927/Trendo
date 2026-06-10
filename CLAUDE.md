@@ -285,7 +285,7 @@ Closed tab 按 `pnlFinal ?? pnlDollar` 判断盈利/亏损。
 //   <15→100% · 15-20→75% · 20-30→50% · ≥30→25%
 // 轴C 情绪（FGI+RSI）getSentimentAxis(fg, rsi, vixTrend) → tilt 倾斜
 //   过热 FGI>75||RSI>72 → trim（减仓）   偏热 FGI≥60||RSI≥65 → hold
-//   偏冷 FGI<35||RSI<45 → scale（小幅加） 极端恐惧 FGI<25&&RSI<38 → accumulate（分批进，等VIX回落）
+//   偏冷 FGI<40||RSI<45 → scale（小幅加） 极端恐惧 FGI<25&&RSI<38 → accumulate（分批进，等VIX回落）
 // combineAxes(dir,risk,sent) → { headline, color, detail } 综合建议
 //   方向逆风=闸门（禁新仓）> 情绪过热=止盈倾斜 > 加仓倾斜 > 正常进攻
 ```

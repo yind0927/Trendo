@@ -4839,7 +4839,7 @@
       label: "恐惧贪婪指数", cap: 100,
       zones: [
         { max: 25,  color: "#22c55e", label: "极端恐惧 · 分批进", badge: "极端恐惧" },
-        { max: 35,  color: "#3b82f6", label: "偏冷 · 可加仓",     badge: "偏冷" },
+        { max: 40,  color: "#3b82f6", label: "偏冷 · 可加仓",     badge: "偏冷" },
         { max: 60,  color: "#eab308", label: "中性 · 正常",       badge: "中性" },
         { max: 75,  color: "#f97316", label: "偏热 · 不追高",     badge: "偏热" },
         { max: 9999,color: "#ef4444", label: "极端过热 · 止盈",   badge: "极端过热" },
@@ -5013,8 +5013,8 @@
     ];
     const axisC = [
       { label: "极端恐惧", color: "#22c55e", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
-      { label: "偏冷",     color: "#3b82f6", cond: "FGI < 35 或 RSI < 45", action: "可小幅加仓，不追高" },
-      { label: "中性",     color: "#eab308", cond: "FGI 35–60，RSI 45–65", action: "正常操作，按计划执行" },
+      { label: "偏冷",     color: "#3b82f6", cond: "FGI < 40 或 RSI < 45", action: "可小幅加仓，不追高" },
+      { label: "中性",     color: "#eab308", cond: "FGI 40–60，RSI 45–65", action: "正常操作，按计划执行" },
       { label: "偏热",     color: "#f97316", cond: "FGI 60–75 或 RSI 65–72", action: "持仓不加码，盯紧止损" },
       { label: "极端过热", color: "#ef4444", cond: "FGI > 75 或 RSI > 72",   action: "禁止新仓，盈利仓减仓 1/3，收紧止损" },
     ];
@@ -5090,7 +5090,7 @@
     if (fg < 25 && rsi < 38)
       return { id: "panic", label: "极端恐惧", color: "#22c55e", tilt: "accumulate",
         desc: vixTrend === "down" ? "分批建仓候选，VIX 已回落" : "分批建仓候选，待 VIX 回落确认" };
-    if (fg < 35 || rsi < 45)
+    if (fg < 40 || rsi < 45)
       return { id: "cool", label: "偏冷", color: "#3b82f6", tilt: "scale",
         desc: "可小幅分批加仓，不追高" };
     return { id: "neutral", label: "中性", color: "#eab308", tilt: "normal", desc: "正常操作" };
