@@ -402,6 +402,18 @@
   @media (pointer: coarse) {
     .drawer-head{ touch-action: pan-y; }
   }
+  /* Swipe-to-switch content transition (mobile): the panel's own transform is reserved for
+     open/close, so we animate its direct children instead. */
+  @keyframes drawer-swipe-next {
+    from { opacity: 0; transform: translateX(26px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes drawer-swipe-prev {
+    from { opacity: 0; transform: translateX(-26px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .drawer.swipe-next > *{ animation: drawer-swipe-next .26s cubic-bezier(.2,.8,.2,1) both; }
+  .drawer.swipe-prev > *{ animation: drawer-swipe-prev .26s cubic-bezier(.2,.8,.2,1) both; }
 
   .hero-price{ display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;}
   .hero-price .p{ font-family: var(--f-mono); font-weight: 600; font-size: 28px; letter-spacing: -0.01em;}

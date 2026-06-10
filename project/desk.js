@@ -1251,6 +1251,24 @@
     counter.style.display = "none";
   }
 
+  // Direction of the last swipe ("next" | "prev"), consumed by _playDrawerSwipeAnim()
+  // on the next drawer render so list-click opens stay un-animated.
+  let _drawerSwipeDir = null;
+  let _drawerSwipeTimer = null;
+  function _playDrawerSwipeAnim() {
+    const dir = _drawerSwipeDir;
+    _drawerSwipeDir = null;
+    if (!dir) return;
+    const drawer = $("#drawer");
+    if (!drawer) return;
+    const cls = dir === "next" ? "swipe-next" : "swipe-prev";
+    drawer.classList.remove("swipe-next", "swipe-prev");
+    void drawer.offsetWidth; // reflow so the animation restarts on rapid swipes
+    drawer.classList.add(cls);
+    clearTimeout(_drawerSwipeTimer);
+    _drawerSwipeTimer = setTimeout(() => drawer.classList.remove("swipe-next", "swipe-prev"), 320);
+  }
+
   function wireDrawerSwipe(isSim) {
     const head = $(".drawer-head", $("#drawer"));
     if (!head) return;
@@ -1264,6 +1282,7 @@
       const dy = e.changedTouches[0].clientY - ty0;
       if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
       const dir = dx < 0 ? 1 : -1;
+      _drawerSwipeDir = dir > 0 ? "next" : "prev"; // swipe left → next, right → prev
       const curSym = isSim ? simSelectedSym : selectedSym;
       const nav = _drawerNavList(isSim);
       if (nav.mode === "table") {
@@ -1298,6 +1317,7 @@
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
+    _playDrawerSwipeAnim();
   }
 
   function wireAddToPosition(h, holdings, notional, onDone) {
@@ -3796,6 +3816,7 @@
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     $("#drawer").setAttribute("aria-hidden", "false");
+    _playDrawerSwipeAnim();
   }
 
   function closeSimDrawer() {
