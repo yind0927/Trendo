@@ -43,7 +43,7 @@ project/
   sw.js           — Service Worker（PWA 自动更新）
   manifest.json   — PWA manifest
   api/
-    quote.js           — 实时价格（Yahoo spark 批量1请求为主 + Finnhub 开盘时段实时last → Polygon兜底；兜底时 prevClose===last 且 changePct=null，客户端识别后不覆盖已有 prevClose）
+    quote.js           — 实时价格（每symbol并发 Finnhub实时last + Yahoo chart可靠prevClose，Yahoo query1→query2 失败重试 → Polygon兜底；prevClose=derivedPc??meta.previousClose，**绝不用 chartPreviousClose**（它是range起点前的收盘，会把单日涨幅算成多日导致虚高）；兜底 prevClose===last 且 changePct=null，客户端识别后不覆盖已有 prevClose）
     history.js         — 历史日线数据（Yahoo Finance）
     holdings.js        — ETF 成分股静态数据（top 20，手动维护）
     earnings.js        — 财报日期（Finnhub → Yahoo 降级）
