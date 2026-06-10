@@ -788,7 +788,7 @@
   // Premiums lower the *effective* cost basis for display only — h.cost stays
   // untouched so R-multiple / stop distance keep measuring the original plan.
   function ccNet(h) {
-    return (h.cc || []).reduce((s, c) => s + (c.premium || 0) * (c.shares || 0), 0);
+    return (h.cc || []).reduce((s, c) => s + (c.total || 0), 0);
   }
   function ccAdjCost(h) {
     const net = ccNet(h);
@@ -1356,19 +1356,17 @@
       btn.onclick = () => {
         $("#cc-title").textContent = `记录权利金 · ${h.sym}`;
         $("#cc-date").value = new Date().toISOString().slice(0, 10);
-        $("#cc-premium").value = "";
-        $("#cc-shares").value = h.qty || "";
+        $("#cc-total").value = "";
         openModal("cc-modal");
       };
       // onclick so re-wiring on each drawer open replaces the old handler
       $("#cc-form").onsubmit = e => {
         e.preventDefault();
-        const premium = parseFloat($("#cc-premium").value);
-        const shares  = parseInt($("#cc-shares").value);
-        const date    = $("#cc-date").value || new Date().toISOString().slice(0, 10);
-        if (!premium || !shares) { alert("请填写每股权利金和股数"); return; }
+        const total = parseFloat($("#cc-total").value);
+        const date  = $("#cc-date").value || new Date().toISOString().slice(0, 10);
+        if (!total || total <= 0) { alert("请填写权利金总额"); return; }
         if (!Array.isArray(h.cc)) h.cc = [];
-        h.cc.push({ id: Date.now().toString(36), date, premium, shares });
+        h.cc.push({ id: Date.now().toString(36), date, total });
         saveToStorage();
         closeModal("cc-modal");
         if (isSim) openSimDrawer(h, simActiveTab); else openDrawer(h);
@@ -1546,9 +1544,7 @@
               <div class="exec-item">
                 <span class="exec-type cc">权利金</span>
                 <span class="exec-date">${fmt.date(c.date)}</span>
-                <span class="exec-price mono">$${c.premium.toFixed(2)}/股</span>
-                <span class="exec-qty muted">${c.shares} 股</span>
-                <span class="exec-qty mono up" style="margin-left:auto">+$${(c.premium * c.shares).toFixed(0)}</span>
+                <span class="exec-price mono up" style="margin-left:auto">+$${(c.total || 0).toFixed(0)}</span>
                 ${!isClosed ? `<button class="cc-del" data-cc-id="${c.id}" title="删除">✕</button>` : ""}
               </div>`).join("") || `<div class="exec-item muted" style="font-size:11px">暂无记录</div>`}
           </div>
