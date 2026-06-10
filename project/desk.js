@@ -540,8 +540,8 @@
   async function syncPush() {
     if (!syncKey) return;
     const payload = {
-      holdings: HOLDINGS, closed: CLOSED_POSITIONS, notional: totalNotional,
-      watchlist: WATCHLIST, simHoldings: SIM_HOLDINGS, simClosed: SIM_CLOSED,
+      holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
+      watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
       simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog, savedAt: new Date().toISOString()
     };
     try {
@@ -592,25 +592,11 @@
 
   function applyCloudData(data) {
     if (!data) return;
-    // Live market data (last / prevClose / changePct) must NEVER come from the cloud — a
-    // cloud copy can carry a stale prevClose that resurrects a bogus multi-day % (INTC
-    // +8.82% while the broker shows -2.13%). Merge: keep the fresh in-memory market fields
-    // by symbol, and drop any cloud-stored prevClose so it repopulates from the next fetch.
-    const mergeLive = (cloudArr, localArr) => {
-      const live = {};
-      localArr.forEach(h => { live[h.sym] = h; });
-      return cloudArr.map(h => {
-        const l = live[h.sym];
-        if (l && l.prevClose > 0) return { ...h, last: l.last, prevClose: l.prevClose, changePct: l.changePct };
-        return { ...h, prevClose: null, changePct: null };
-      });
-    };
-    // Use Array.isArray checks — plain `if ([])` is always truthy, even for empty arrays
-    if (Array.isArray(data.holdings))    HOLDINGS.splice(0, HOLDINGS.length, ...mergeLive(data.holdings, HOLDINGS));
+    if (Array.isArray(data.holdings))    HOLDINGS.splice(0, HOLDINGS.length, ...data.holdings);
     if (Array.isArray(data.closed))      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
     if (data.notional != null)           totalNotional = data.notional;
     if (Array.isArray(data.watchlist))   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);
-    if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...mergeLive(data.simHoldings, SIM_HOLDINGS));
+    if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
     if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
     if (data.simNotional != null)        simNotional = data.simNotional;
     if (Array.isArray(data.simPending))      SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending);
@@ -621,6 +607,9 @@
     // Recalculate size% from qty after cloud data replaces HOLDINGS
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
+    // prevClose/changePct are never in cloud payload (stripped by noMarket in syncPush),
+    // but defensively clear them in case of old snapshots
+    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; h.changePct = null; });
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
@@ -646,14 +635,18 @@
     }
   }
 
+  // Strip live market fields before persisting — prevClose/changePct must only ever
+  // come from a fresh API call, never from stale localStorage or Redis snapshots.
+  const noMarket = arr => arr.map(h => { const c = {...h}; delete c.prevClose; delete c.changePct; return c; });
+
   // ============ PERSISTENCE ============
   function saveLocalOnly() {
     try {
-      localStorage.setItem("trendo_v4_holdings",     JSON.stringify(HOLDINGS));
+      localStorage.setItem("trendo_v4_holdings",     JSON.stringify(noMarket(HOLDINGS)));
       localStorage.setItem("trendo_v4_closed",       JSON.stringify(CLOSED_POSITIONS));
       localStorage.setItem("trendo_v4_notional",     String(totalNotional));
       localStorage.setItem("trendo_v4_watchlist",    JSON.stringify(WATCHLIST));
-      localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(SIM_HOLDINGS));
+      localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(noMarket(SIM_HOLDINGS)));
       localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
       localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
@@ -697,22 +690,9 @@
     // Recalculate size% from qty after load (qty is source of truth)
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
-    // One-time cleanup: older builds could persist a STALE prevClose (e.g. a spark-era
-    // chartPreviousClose from days ago). Paired with a fresh `last` it shows a bogus
-    // multi-day % that never self-heals (INTC +8.82% while the broker shows -2.13%),
-    // because the persisted value survives every reload. Wipe prevClose once so each
-    // holding repopulates from the next quote fetch (correct %, or honest ±$0 if a
-    // symbol's fetch fails). The flag prevents re-wiping on later loads.
-    // v21: re-wipe because a pre-mergeLive cloud sync could have written stale prevClose
-    // back into localStorage after the v18 wipe ran, and mergeLive then preserved it
-    // (l.prevClose > 0 was true). New flag forces another clean slate.
-    if (!localStorage.getItem("trendo_prevclose_reset_v21")) {
-      [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; });
-      try { localStorage.setItem("trendo_prevclose_reset_v21", "1"); } catch (_) {}
-    }
-    // Compute changePct from persisted last + prevClose so the tape / daily P&L show real
-    // values instantly on first paint (from cache), instead of +0.00% until the first fetch.
-    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.changePct = computeChangePct(h); });
+    // prevClose is never saved (noMarket strips it), so nothing to wipe.
+    // Any old localStorage snapshot that still has it gets cleared here permanently.
+    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; h.changePct = null; });
   }
 
   // ============ TRADING DAYS CALCULATOR ============
