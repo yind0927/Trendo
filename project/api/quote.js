@@ -1,18 +1,29 @@
 // Vercel serverless function — real-time market data
 // Stocks/ETFs:
-//   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
-//   prevClose → Yahoo derivedPc (genuine last completed session close), Finnhub d.pc,
-//               or Polygon /prev as last resort
+//   Yahoo spark (ONE batched request for all symbols) → last + prevClose for everyone.
+//   Old design fetched Yahoo per symbol: ~30 parallel hits per 30s cycle tripped Yahoo's
+//   rate limit alongside Finnhub's 60/min cap, dropping symbols onto the Polygon prev-day
+//   fallback where prevClose === last and the daily change flattens to ±0.
+//   Finnhub d.c still wins for `last` (more real-time), but only during US market hours —
+//   off-market it just repeats the session close Yahoo already gives us.
 //   changePct → computed ONCE as (last - prevClose) / prevClose, so price and % always
-//               share the same two numbers and stay self-consistent. We never trust
-//               Finnhub d.dp/d.pc for the % — off-market they collapse change to 0.
+//   share the same two numbers and stay self-consistent.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
+
+function isUSMarketHours() {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  if (day === 0 || day === 6) return false;
+  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
+  // 13:25–21:05 UTC — regular session with a small buffer either side
+  return mins >= 13 * 60 + 25 && mins < 21 * 60 + 5;
+}
 
 export default async function handler(req, res) {
   const finnhubKey = process.env.FINNHUB_API_KEY;
   const polygonKey = process.env.POLYGON_API_KEY;
 
-  const stocks  = (req.query.stocks || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+  const stocks  = (req.query.stocks || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 80);
   const cryptos = (req.query.crypto || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
 
   if (!stocks.length && !cryptos.length) {
@@ -23,15 +34,42 @@ export default async function handler(req, res) {
 
   // ── Stocks + ETFs ─────────────────────────────────────────────────
   if (stocks.length) {
-    await Promise.all(stocks.slice(0, 80).map(async sym => {
 
-      // Run Finnhub and Yahoo Finance in parallel for each symbol.
-      // Finnhub gives real-time `last`; Yahoo 2-day series gives accurate `prevClose`.
-      const [fhResult, yhResult] = await Promise.allSettled([
+    // 1) Yahoo spark — single batched request covering every symbol.
+    //    2-day daily series: 2nd-to-last close = genuine last completed session close,
+    //    so pre-market we show the completed session's change, not 0%.
+    const spark = {};
+    try {
+      const r = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${encodeURIComponent(stocks.join(","))}&range=2d&interval=1d`,
+        { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(6000) }
+      );
+      const d = await r.json();
+      (d.spark?.result || []).forEach(item => {
+        const resp = item.response?.[0];
+        const meta = resp?.meta;
+        // Skip non-USD quotes (foreign OTC stocks may return CAD price)
+        if (!(meta?.regularMarketPrice > 0) || (meta.currency ?? "USD") !== "USD") return;
+        const closes    = (resp.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
+        const derivedPc = closes.length >= 2 ? closes[closes.length - 2] : null;
+        spark[(item.symbol || meta.symbol || "").toUpperCase()] = {
+          last:      meta.regularMarketPrice,
+          prevClose: derivedPc ?? meta.previousClose ?? meta.chartPreviousClose ?? null,
+          name:      meta.shortName || meta.longName || null,
+        };
+      });
+    } catch (_) {}
 
-        // 1) Finnhub — real-time price
-        (async () => {
-          if (!finnhubKey) return null;
+    const marketOpen = isUSMarketHours();
+
+    await Promise.all(stocks.map(async sym => {
+
+      // 2) Finnhub — real-time `last`, market hours only (off-market d.c === session close,
+      //    which spark already provides; skipping keeps us under the 60 req/min cap).
+      //    Also used as fallback when spark missed this symbol entirely.
+      let fh = null;
+      if (finnhubKey && (marketOpen || !spark[sym])) {
+        try {
           const r = await fetch(
             `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${finnhubKey}`,
             { signal: AbortSignal.timeout(5000) }
@@ -39,39 +77,38 @@ export default async function handler(req, res) {
           const d = await r.json();
           // Only take Finnhub's real-time `last` and `pc`. We do NOT trust Finnhub for the
           // % change: during off-market hours it can set d.pc === d.c (change collapses to 0).
-          if (d.c > 0) return { last: d.c, prevClose: d.pc > 0 ? d.pc : null };
-          return null;
-        })(),
+          if (d.c > 0) fh = { last: d.c, prevClose: d.pc > 0 ? d.pc : null };
+        } catch (_) {}
+      }
 
-        // 2) Yahoo Finance — 2-day series for reliable prevClose
-        (async () => {
+      let yh = spark[sym] ?? null;
+
+      // 3) Per-symbol Yahoo chart — only when the spark batch missed this symbol AND
+      //    Finnhub failed too (rare: spark down or freshly listed ticker).
+      if (!yh && !fh) {
+        try {
           const r = await fetch(
             `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=2d`,
             { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(5000) }
           );
           const d    = await r.json();
           const meta = d.chart?.result?.[0]?.meta;
-          // Skip non-USD quotes (foreign OTC stocks may return CAD price)
-          if (!(meta?.regularMarketPrice > 0) || (meta.currency ?? "USD") !== "USD") return null;
-          const closes      = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
-          const validCloses = closes.filter(c => c != null);
-          const derivedPc   = validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
-          // derivedPc = 2nd-to-last close in the series (session-before-last close).
-          // Used only for prevClose on the holding object (holdings table display).
-          const pc = derivedPc ?? meta.previousClose ?? null;
-          return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
-        })(),
-      ]);
-
-      const fh = fhResult.status  === "fulfilled" ? fhResult.value  : null;
-      const yh = yhResult.status  === "fulfilled" ? yhResult.value  : null;
+          if (meta?.regularMarketPrice > 0 && (meta.currency ?? "USD") === "USD") {
+            const closes      = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+            const validCloses = closes.filter(c => c != null);
+            const derivedPc   = validCloses.length >= 2 ? validCloses[validCloses.length - 2] : null;
+            yh = {
+              last:      meta.regularMarketPrice,
+              prevClose: derivedPc ?? meta.previousClose ?? null,
+              name:      meta.shortName || meta.longName || null,
+            };
+          }
+        } catch (_) {}
+      }
 
       if (fh || yh) {
-        // Finnhub wins for `last` (more real-time).
-        // Yahoo wins for `prevClose`: its derivedPc gives "session-before-last" close so
-        // pre-market we show the completed session's change, not 0%.
-        // During active trading derivedPc is null → Yahoo falls back to meta.previousClose
-        // which equals Finnhub's d.pc anyway, so there's no conflict.
+        // Finnhub wins for `last` (more real-time); Yahoo wins for `prevClose`
+        // (its derived close is the genuine last completed session close).
         const last      = fh?.last      ?? yh?.last      ?? null;
         let   prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
 
@@ -90,11 +127,8 @@ export default async function handler(req, res) {
           } catch (_) {}
         }
 
-        // changePct is computed ONCE from the exact `last` and `prevClose` we return.
-        // This guarantees price and % are always self-consistent (they share the same two
-        // numbers) and never relies on Finnhub's d.dp/d.pc, which collapse to 0 off-market.
-        // prevClose here = Yahoo derivedPc (the genuine last completed session close), so the
-        // result matches what standard stock apps display for the daily change.
+        // changePct is computed ONCE from the exact `last` and `prevClose` we return,
+        // so price and % are always self-consistent.
         const changePct = (last != null && prevClose > 0)
           ? (last - prevClose) / prevClose * 100
           : null;
@@ -102,7 +136,9 @@ export default async function handler(req, res) {
         return;
       }
 
-      // 3) Polygon prev-day — yesterday's close only (last resort: both Finnhub AND Yahoo failed)
+      // 4) Polygon prev-day — yesterday's close only (last resort: every source failed).
+      //    prevClose === last here, so changePct stays null; the client treats this as a
+      //    price-only update and keeps its previously known prevClose.
       if (polygonKey) {
         try {
           const r = await fetch(

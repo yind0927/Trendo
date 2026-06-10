@@ -43,7 +43,7 @@ project/
   sw.js           — Service Worker（PWA 自动更新）
   manifest.json   — PWA manifest
   api/
-    quote.js           — 实时价格（Finnhub → Yahoo Finance → Polygon 降级链）
+    quote.js           — 实时价格（Yahoo spark 批量1请求为主 + Finnhub 开盘时段实时last → Polygon兜底；兜底时 prevClose===last 且 changePct=null，客户端识别后不覆盖已有 prevClose）
     history.js         — 历史日线数据（Yahoo Finance）
     holdings.js        — ETF 成分股静态数据（top 20，手动维护）
     earnings.js        — 财报日期（Finnhub → Yahoo 降级）

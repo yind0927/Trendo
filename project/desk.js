@@ -2772,12 +2772,8 @@
       ...SIM_CLOSE_PENDING.map(p => p.sym),
     ];
 
-    // Pending symbols go first so they are never truncated by the API limit.
-    // Watchlist symbols only ride along while on the Preparation page — adding them to
-    // every 30s cycle inflates the request enough to trip Finnhub's rate limit, which
-    // pushes holdings onto the Polygon fallback (prevClose === last → daily change 0).
-    const wlSyms = currentPage === "watchlist" ? WATCHLIST.map(w => w.sym) : [];
-    const allSyms = [...pendingSyms, ...all.map(h => h.sym), ...wlSyms];
+    // Pending symbols go first so they are never truncated by the API limit
+    const allSyms = [...pendingSyms, ...all.map(h => h.sym)];
     if (!allSyms.length) return;
 
     const stocks  = [...new Set(allSyms.filter(sym => {
@@ -2834,20 +2830,6 @@
           needsRender = true; // daily P&L display only — does NOT trigger save/sync
         }
       });
-
-      // Update watchlist live prices (last + prevClose + changePct only — no recompute)
-      let wlChanged = false;
-      WATCHLIST.forEach(w => {
-        const q = results[w.sym];
-        if (!q) return;
-        const isFlattened = q.changePct == null && q.prevClose === q.last;
-        if (q.prevClose != null && q.prevClose > 0 && !(isFlattened && w.prevClose > 0)) w.prevClose = q.prevClose;
-        if (q.last != null && q.last > 0) w.last = q.last;
-        w.changePct = (w.prevClose > 0 && w.last > 0)
-          ? (w.last - w.prevClose) / w.prevClose * 100 : null;
-        wlChanged = true;
-      });
-      if (wlChanged && currentPage === "watchlist") renderWatchlist();
 
       // Auto-execute pending orders
       const executed = [];
@@ -3097,7 +3079,7 @@
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
     if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
-    if (page === "watchlist") { renderWatchlist(); lastPriceFetch = 0; fetchPrices(); }
+    if (page === "watchlist") renderWatchlist();
     if (page === "market")    fetchMarketData();
     if (page === "desk" && HOLDINGS.length > 0) {
       fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
@@ -4781,18 +4763,10 @@
           <span class="bx-chip-slope ${bxCls}" style="min-width:36px;text-align:center;font-size:12px">${slopeNumDisplay(item.bxSlope ?? 0)}</span>
           <span class="muted" style="font-size:9.5px">Slope</span>
         </div>
-        <div class="wl-price">
-          ${item.last > 0 ? `
-            <span class="mono" style="font-size:13px;font-weight:600">$${price(item.last)}</span>
-            ${item.changePct != null ? (() => {
-              const c = item.changePct; const cls = c >= 0 ? "up" : "down";
-              return `<span class="${cls}" style="font-size:11px;font-family:var(--f-mono)">${c >= 0 ? "+" : ""}${c.toFixed(2)}%</span>`;
-            })() : ""}
-          ` : item.price ? `
-            <span class="mono" style="font-size:13px;font-weight:600">$${price(item.price)}</span>
-            <span class="muted" style="font-size:9.5px">参考价</span>
-          ` : `<span class="muted" style="font-size:10px">—</span>`}
-        </div>
+        ${item.price ? `<div class="wl-price">
+          <span class="mono" style="font-size:13px;font-weight:600">$${price(item.price)}</span>
+          <span class="muted" style="font-size:9.5px">参考价</span>
+        </div>` : ""}
         <div class="wl-actions">
           <button class="btn primary wl-add-pos" data-idx="${idx}" style="font-size:11.5px;padding:6px 12px">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>入仓
