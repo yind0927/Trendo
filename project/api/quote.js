@@ -1,14 +1,15 @@
 // Vercel serverless function — real-time market data
 // Stocks/ETFs (per symbol, Finnhub + Yahoo in parallel):
 //   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
-//   prevClose → Yahoo derivedPc (genuine last completed session close) →
-//               Yahoo meta.previousClose → Polygon /prev (last resort)
-//               NOTE: Finnhub d.pc is intentionally NOT used for prevClose. In practice
-//               d.pc can be stale by several sessions (e.g. INTC shows +8.82% off a
-//               ~99 d.pc while the real prevClose is ~110), producing a wrong multi-day %
-//               that is indistinguishable from a real move and never self-heals. Finnhub
-//               is only trusted for d.c (real-time last price). When Yahoo fails, Polygon
-//               /prev (adjusted daily bar) provides the correct previous close.
+//   prevClose → Yahoo raw close series (unadjusted, broker-matching) using timestamps to
+//               pick the correct bar whether market is open or closed → Polygon /prev
+//               NOTE: Finnhub d.pc and Yahoo meta.previousClose are intentionally NOT used.
+//               Finnhub d.pc can be stale by multiple sessions. Yahoo meta.previousClose is
+//               ADJUSTED for corporate actions (spin-offs, special dividends), so on an
+//               ex-distribution day it returns the adjusted basis (e.g. ~$99) while the
+//               broker compares to the actual previous session close (~$110) — causing a
+//               large phantom gain. The raw indicators.quote[0].close series is unadjusted
+//               and timestamp-indexed so we always select the true previous session close.
 //   changePct → computed ONCE from the final last + prevClose, so the ticker tape and the
 //               今日盈亏 module always show the same self-consistent number.
 //
@@ -65,14 +66,29 @@ export default async function handler(req, res) {
               const meta = d.chart?.result?.[0]?.meta;
               // Skip non-USD quotes (foreign OTC stocks may return CAD price)
               if (!(meta?.regularMarketPrice > 0) || (meta.currency ?? "USD") !== "USD") return null;
-              const closes = (d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
-              // meta.previousClose = Yahoo's official previous session close — matches brokers.
-              // derivedPc (2nd-to-last bar) is a fallback only: during non-trading hours the
-              // series may have fewer bars and closes[length-2] picks the wrong day; with
-              // adjusted prices (spin-off / dividend) historical bars can be far off the real
-              // previous close. chartPreviousClose is never used (it covers the entire range).
-              const derivedPc = closes.length >= 2 ? closes[closes.length - 2] : null;
-              const pc = (meta.previousClose > 0 ? meta.previousClose : null) ?? derivedPc ?? null;
+              // indicators.quote[0].close = RAW (unadjusted) closes — broker-matching.
+              // meta.previousClose = ADJUSTED by Yahoo for corporate actions (spin-off / special
+              // dividend): e.g. INTC after a ~$11 distribution Yahoo sets previousClose≈$99
+              // while the broker compares to the actual session close of ~$110. Never use it.
+              //
+              // Pick the right bar using timestamps: when today's session bar is present (last
+              // bar's date == today UTC), the previous close is closes[length-2]. When the series
+              // ends at yesterday (pre-market / market still open), it's closes[length-1].
+              const rawCloses = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
+              const timestamps = d.chart?.result?.[0]?.timestamp ?? [];
+              const validBars  = rawCloses
+                .map((c, i) => ({ c, ts: timestamps[i] }))
+                .filter(b => b.c != null);
+              let derivedPc = null;
+              if (validBars.length >= 1) {
+                const lastTs  = validBars[validBars.length - 1].ts;
+                const todayUTC = new Date().toISOString().slice(0, 10);
+                const lastUTC  = new Date(lastTs * 1000).toISOString().slice(0, 10);
+                derivedPc = lastUTC === todayUTC && validBars.length >= 2
+                  ? validBars[validBars.length - 2].c   // today in series → 2nd-to-last = yesterday
+                  : validBars[validBars.length - 1].c;  // today not in series → last = yesterday
+              }
+              const pc = derivedPc ?? null;
               return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
             } catch (_) { /* try next host */ }
           }

@@ -55,7 +55,7 @@ project/
   sw.js           — Service Worker（PWA 自动更新）
   manifest.json   — PWA manifest
   api/
-    quote.js           — 实时价格（每symbol并发 Finnhub实时last + Yahoo chart可靠prevClose，Yahoo query1→query2 失败重试 → Polygon /prev兜底；**prevClose来源链：Yahoo meta.previousClose（官方昨收，与券商一致）→ Yahoo derivedPc（closes倒数第2，仅fallback）→ Polygon /prev；Finnhub d.pc不用于prevClose（实测会返回数日前的旧收盘价，产生多日涨幅，如INTC +8.82%无法自愈）**；**绝不用 chartPreviousClose**；兜底 prevClose===last 且 changePct=null，客户端识别后不覆盖已有 prevClose）
+    quote.js           — 实时价格（每symbol并发 Finnhub实时last + Yahoo chart可靠prevClose，Yahoo query1→query2 失败重试 → Polygon /prev兜底；**prevClose来源链：Yahoo indicators.quote[0].close原始（未调整）收盘序列，用timestamp判断今日bar是否已收盘选正确的bar → Polygon /prev；Finnhub d.pc和Yahoo meta.previousClose均不用于prevClose：Finnhub d.pc可能滞后数日；meta.previousClose会针对公司行动（分拆/特别股息）做调整导致数值偏离券商显示值（如INTC在分拆日meta.previousClose≈$99，券商昨收≈$110，产生+8.82%虚高）**；兜底 prevClose===last 且 changePct=null）
     history.js         — 历史日线数据（Yahoo Finance）
     holdings.js        — ETF 成分股静态数据（top 20，手动维护）
     earnings.js        — 财报日期（Finnhub → Yahoo 降级）
