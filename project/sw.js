@@ -1,6 +1,8 @@
 // Trendo Service Worker — network-first, auto-update on deploy
 const CACHE = "trendo-v21";
-const PRECACHE = ["/", "/index.html", "/data.js", "/desk.js", "/logo.svg", "/icon-192.png", "/icon-512.png", "/manifest.json"];
+// JS is versioned via ?v= query in index.html — precache the same URLs so offline
+// fallback matches the real requests. Bump the version here AND in index.html together.
+const PRECACHE = ["/", "/index.html", "/data.js?v=21", "/desk.js?v=21", "/logo.svg", "/icon-192.png", "/icon-512.png", "/manifest.json"];
 
 self.addEventListener("install", e => {
   self.skipWaiting();

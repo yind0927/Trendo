@@ -31,6 +31,18 @@ git push -u origin main   # Vercel 自动触发部署，约30秒
 
 版本标签：`git tag v7.5 -m "说明" && git push origin v7.5`
 
+### ⚠️ 缓存破坏（每次改 desk.js / data.js 必做）
+
+`index.html` 用 `?v=N` 查询串引用脚本：`<script src="desk.js?v=21">`。浏览器 HTTP 缓存和
+Vercel CDN 边缘缓存按 URL 缓存，URL 不变就会一直返回旧 `desk.js`（即使逻辑已修复，用户清缓存
+也未必命中这些层 → 旧代码继续跑，表现为 last 更新但 prevClose 卡在旧值）。**改动 JS 后，三处版本号
+必须同步 +1**：
+1. `index.html` 两个 `<script src="...?v=N">`
+2. `sw.js` 顶部 `const CACHE = "trendo-vN"`
+3. `sw.js` 的 `PRECACHE` 数组里 `/desk.js?v=N`、`/data.js?v=N`
+
+`vercel.json` 已给 `/`、`/index.html`、`/sw.js` 设 `must-revalidate`，保证新版本号能被拉到。
+
 ---
 
 ## 文件结构
