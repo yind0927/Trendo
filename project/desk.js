@@ -592,12 +592,25 @@
 
   function applyCloudData(data) {
     if (!data) return;
+    // Live market data (last / prevClose / changePct) must NEVER come from the cloud — a
+    // cloud copy can carry a stale prevClose that resurrects a bogus multi-day % (INTC
+    // +8.82% while the broker shows -2.13%). Merge: keep the fresh in-memory market fields
+    // by symbol, and drop any cloud-stored prevClose so it repopulates from the next fetch.
+    const mergeLive = (cloudArr, localArr) => {
+      const live = {};
+      localArr.forEach(h => { live[h.sym] = h; });
+      return cloudArr.map(h => {
+        const l = live[h.sym];
+        if (l && l.prevClose > 0) return { ...h, last: l.last, prevClose: l.prevClose, changePct: l.changePct };
+        return { ...h, prevClose: null, changePct: null };
+      });
+    };
     // Use Array.isArray checks — plain `if ([])` is always truthy, even for empty arrays
-    if (Array.isArray(data.holdings))    HOLDINGS.splice(0, HOLDINGS.length, ...data.holdings);
+    if (Array.isArray(data.holdings))    HOLDINGS.splice(0, HOLDINGS.length, ...mergeLive(data.holdings, HOLDINGS));
     if (Array.isArray(data.closed))      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
     if (data.notional != null)           totalNotional = data.notional;
     if (Array.isArray(data.watchlist))   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);
-    if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
+    if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...mergeLive(data.simHoldings, SIM_HOLDINGS));
     if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
     if (data.simNotional != null)        simNotional = data.simNotional;
     if (Array.isArray(data.simPending))      SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending);
