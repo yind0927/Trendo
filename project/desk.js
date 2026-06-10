@@ -684,6 +684,16 @@
     // Recalculate size% from qty after load (qty is source of truth)
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
+    // One-time cleanup: older builds could persist a STALE prevClose (e.g. a spark-era
+    // chartPreviousClose from days ago). Paired with a fresh `last` it shows a bogus
+    // multi-day % that never self-heals (INTC +8.82% while the broker shows -2.13%),
+    // because the persisted value survives every reload. Wipe prevClose once so each
+    // holding repopulates from the next quote fetch (correct %, or honest ±$0 if a
+    // symbol's fetch fails). The flag prevents re-wiping on later loads.
+    if (!localStorage.getItem("trendo_prevclose_reset_v18")) {
+      [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; });
+      try { localStorage.setItem("trendo_prevclose_reset_v18", "1"); } catch (_) {}
+    }
     // Compute changePct from persisted last + prevClose so the tape / daily P&L show real
     // values instantly on first paint (from cache), instead of +0.00% until the first fetch.
     [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.changePct = computeChangePct(h); });
