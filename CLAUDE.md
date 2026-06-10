@@ -92,9 +92,10 @@ window.EVENTS            // 事件记录（Analytics）
   },
   setup, thesis,            // 交易计划描述
   journalNote,              // 日志备注
-  cc,                       // Covered Call 权利金记录 [{ id, date, premium(每股), shares }]
-                            // ccNet(h)=累计权利金，ccAdjCost(h)=cost−ccNet/qty（仅展示用，
-                            // 不改 h.cost，R倍数/止损距离仍基于原始成本）
+  cc,                       // Covered Call 权利金记录 [{ id, date, total(总额) }]
+                            // ccNet(h)=累计权利金，ccAdjCost(h)=cost−ccNet/qty（h.cost 不变）
+                            // 浮盈亏 pnlDollar/pnlPct 含权利金；全平时结入 pnlFinal；
+                            // 部分平仓记录不带 cc（留在剩余仓位上）；R倍数/止损仍基于原始成本
 }
 ```
 

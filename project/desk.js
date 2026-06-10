@@ -776,8 +776,10 @@
   function recomputeHolding(h, notional) {
     const base = notional ?? totalNotional;
     h.size = base > 0 ? (h.qty * h.cost / base) * 100 : h.size;
-    h.pnlDollar = Math.round((h.last - h.cost) * h.qty);
-    h.pnlPct = h.cost > 0 ? (h.last - h.cost) / h.cost : 0;
+    // Floating P&L includes accumulated CC premium (real income);
+    // rMult stays price-based so it keeps measuring the original plan.
+    h.pnlDollar = Math.round((h.last - h.cost) * h.qty + ccNet(h));
+    h.pnlPct = (h.cost > 0 && h.qty > 0) ? h.pnlDollar / (h.cost * h.qty) : 0;
     h.risk1R = h.stop ? h.cost - h.stop : 0;
     h.rMult = h.risk1R !== 0 ? (h.last - h.cost) / h.risk1R : 0;
     if (h.entry) h.days = calcTradingDays(h.entry);
@@ -1367,17 +1369,21 @@
         if (!total || total <= 0) { alert("请填写权利金总额"); return; }
         if (!Array.isArray(h.cc)) h.cc = [];
         h.cc.push({ id: Date.now().toString(36), date, total });
+        recomputeHolding(h, isSim ? simNotional : totalNotional);
         saveToStorage();
         closeModal("cc-modal");
-        if (isSim) openSimDrawer(h, simActiveTab); else openDrawer(h);
+        if (isSim) { renderSimOverview(); openSimDrawer(h, simActiveTab); }
+        else       { renderOverview();    openDrawer(h); }
       };
     }
     $$(".cc-del", $("#drawer")).forEach(del => {
       del.addEventListener("click", e => {
         e.stopPropagation();
         h.cc = (h.cc || []).filter(c => c.id !== del.dataset.ccId);
+        recomputeHolding(h, isSim ? simNotional : totalNotional);
         saveToStorage();
-        if (isSim) openSimDrawer(h, simActiveTab); else openDrawer(h);
+        if (isSim) { renderSimOverview(); openSimDrawer(h, simActiveTab); }
+        else       { renderOverview();    openDrawer(h); }
       });
     });
   }
@@ -2217,10 +2223,13 @@
 
   function updateClosePnlPreview(pos, closePrice, qty) {
     const q = qty ?? pos.qty;
-    const pnlDollar = (closePrice - pos.cost) * q;
-    const pnlPct = pos.cost > 0 ? (closePrice - pos.cost) / pos.cost : 0;
+    // Premium counts only on a full close — partial exits leave it on the remainder
+    const ccN = q >= pos.qty ? ccNet(pos) : 0;
+    const pnlDollar = (closePrice - pos.cost) * q + ccN;
+    const pnlPct = pos.cost > 0 ? pnlDollar / (pos.cost * q) : 0;
     const sign = pnlDollar >= 0 ? "up" : "down";
-    const partial = q < pos.qty ? ` <span style="font-size:11px;opacity:0.55;margin-left:6px">(${q}/${pos.qty} 股)</span>` : "";
+    const ccHint = ccN > 0 ? ` <span style="font-size:11px;opacity:0.55;margin-left:6px">(含权利金 +$${ccN.toFixed(0)})</span>` : "";
+    const partial = q < pos.qty ? ` <span style="font-size:11px;opacity:0.55;margin-left:6px">(${q}/${pos.qty} 股)</span>` : ccHint;
     const preview = $("#close-pos-pnl-preview");
     if (preview) {
       preview.innerHTML = `
@@ -2342,9 +2351,12 @@
     const cd  = closeDate || new Date().toISOString().slice(0, 10);
 
     if (qty < pos.qty) {
-      // Partial close — create a closed record for the sold portion
+      // Partial close — create a closed record for the sold portion.
+      // CC premium stays attached to the remaining open position (cc stripped
+      // here) and only rolls into pnlFinal on the final full close.
       const notional = isSim ? simNotional : totalNotional;
       const closedRecord = { ...pos, qty, closedAt: cd, closePrice: cp,
+        cc: undefined,
         days: calcTradingDays(pos.entry, cd),
         pnlDollar: Math.round((cp - pos.cost) * qty),
         pnlPct: pos.cost > 0 ? (cp - pos.cost) / pos.cost : 0,
@@ -2357,12 +2369,12 @@
       pos.size = notional > 0 ? (pos.qty * pos.cost / notional) * 100 : pos.size;
       recomputeHolding(pos, notional);
     } else {
-      // Full close
+      // Full close — accumulated CC premium settles into the final P&L
       pos.closedAt = cd;
       pos.closePrice = cp;
       pos.days = calcTradingDays(pos.entry, cd);
-      pos.pnlDollar = Math.round((cp - pos.cost) * pos.qty);
-      pos.pnlPct = pos.cost > 0 ? (cp - pos.cost) / pos.cost : 0;
+      pos.pnlDollar = Math.round((cp - pos.cost) * pos.qty + ccNet(pos));
+      pos.pnlPct = (pos.cost > 0 && pos.qty > 0) ? pos.pnlDollar / (pos.cost * pos.qty) : 0;
       pos.rMult = pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0;
       pos.pnlFinal = pos.pnlDollar;
       pos.exitReason = "manual";
