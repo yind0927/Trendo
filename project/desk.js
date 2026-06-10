@@ -2773,8 +2773,10 @@
     ];
 
     // Pending symbols go first so they are never truncated by the API limit.
-    // Watchlist symbols appended last (lowest priority, equity only).
-    const wlSyms = WATCHLIST.map(w => w.sym);
+    // Watchlist symbols only ride along while on the Preparation page — adding them to
+    // every 30s cycle inflates the request enough to trip Finnhub's rate limit, which
+    // pushes holdings onto the Polygon fallback (prevClose === last → daily change 0).
+    const wlSyms = currentPage === "watchlist" ? WATCHLIST.map(w => w.sym) : [];
     const allSyms = [...pendingSyms, ...all.map(h => h.sym), ...wlSyms];
     if (!allSyms.length) return;
 
@@ -2802,6 +2804,10 @@
       all.forEach(h => {
         const q = results[h.sym];
         if (!q) return;
+        // Polygon last-resort fallback returns prevClose === last with changePct null
+        // (it only knows yesterday's bar). Never let it overwrite a genuine prevClose —
+        // that flattens the daily change to ±$0 / 0.00% until the next clean fetch.
+        const isFlattened = q.changePct == null && q.prevClose === q.last;
         const notional = SIM_HOLDINGS.includes(h) ? simNotional : totalNotional;
         if (q.name && h.name === h.sym) { h.name = q.name; changed = true; }
         // Keep prevClose in sync with `last` from the SAME fetch. The server's prevClose is
@@ -2810,7 +2816,8 @@
         // We must NOT freeze prevClose on its own: `last` updates every cycle, so a frozen
         // prevClose drifts days apart from `last` over a closed market and inflates the
         // "today" change (e.g. a 4-day move shown as a single day's -23%).
-        if (q.prevClose != null && q.prevClose > 0 && q.prevClose !== h.prevClose) {
+        if (q.prevClose != null && q.prevClose > 0 && q.prevClose !== h.prevClose &&
+            !(isFlattened && h.prevClose > 0)) {
           h.prevClose = q.prevClose;
           changed = true;
         }
@@ -2833,7 +2840,8 @@
       WATCHLIST.forEach(w => {
         const q = results[w.sym];
         if (!q) return;
-        if (q.prevClose != null && q.prevClose > 0) w.prevClose = q.prevClose;
+        const isFlattened = q.changePct == null && q.prevClose === q.last;
+        if (q.prevClose != null && q.prevClose > 0 && !(isFlattened && w.prevClose > 0)) w.prevClose = q.prevClose;
         if (q.last != null && q.last > 0) w.last = q.last;
         w.changePct = (w.prevClose > 0 && w.last > 0)
           ? (w.last - w.prevClose) / w.prevClose * 100 : null;
@@ -3089,7 +3097,7 @@
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
     if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
-    if (page === "watchlist") renderWatchlist();
+    if (page === "watchlist") { renderWatchlist(); lastPriceFetch = 0; fetchPrices(); }
     if (page === "market")    fetchMarketData();
     if (page === "desk" && HOLDINGS.length > 0) {
       fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
