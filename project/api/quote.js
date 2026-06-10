@@ -2,15 +2,20 @@
 // Stocks/ETFs (per symbol, Finnhub + Yahoo in parallel):
 //   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
 //   prevClose → Yahoo derivedPc (genuine last completed session close) →
-//               Yahoo meta.previousClose → Finnhub d.pc → Polygon /prev (last resort)
+//               Yahoo meta.previousClose → Polygon /prev (last resort)
+//               NOTE: Finnhub d.pc is intentionally NOT used for prevClose. In practice
+//               d.pc can be stale by several sessions (e.g. INTC shows +8.82% off a
+//               ~99 d.pc while the real prevClose is ~110), producing a wrong multi-day %
+//               that is indistinguishable from a real move and never self-heals. Finnhub
+//               is only trusted for d.c (real-time last price). When Yahoo fails, Polygon
+//               /prev (adjusted daily bar) provides the correct previous close.
 //   changePct → computed ONCE from the final last + prevClose, so the ticker tape and the
 //               今日盈亏 module always show the same self-consistent number.
 //
 // The CLIENT splits its holdings into small chunks (~15 symbols) and calls this endpoint
 // once per chunk, so a single invocation never fires 130+ concurrent fetches (which got
 // Yahoo rate-limited and timed the function out → empty response → "行情加载中"). Each
-// chunk is small enough to finish well under Vercel's 10s limit. If Yahoo rate-limits a
-// symbol anyway, Finnhub's d.pc keeps prevClose populated so the change is never null.
+// chunk is small enough to finish well under Vercel's 10s limit.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
 
 export default async function handler(req, res) {
@@ -32,7 +37,9 @@ export default async function handler(req, res) {
 
       const [fhResult, yhResult] = await Promise.allSettled([
 
-        // 1) Finnhub — real-time price. d.c = last, d.pc = previous close (reliable fallback).
+        // 1) Finnhub — real-time price only. d.c = last.
+        //    d.pc is intentionally ignored: it can lag by multiple sessions and produces
+        //    a wrong multi-day % that looks like a valid daily move (see header comment).
         (async () => {
           if (!finnhubKey) return null;
           const r = await fetch(
@@ -40,7 +47,7 @@ export default async function handler(req, res) {
             { signal: AbortSignal.timeout(3500) }
           );
           const d = await r.json();
-          if (d.c > 0) return { last: d.c, prevClose: d.pc > 0 ? d.pc : null };
+          if (d.c > 0) return { last: d.c };
           return null;
         })(),
 
@@ -75,13 +82,14 @@ export default async function handler(req, res) {
       const yh = yhResult.status === "fulfilled" ? yhResult.value : null;
 
       if (fh || yh) {
-        // Finnhub wins for `last` (more real-time). Yahoo derivedPc wins for `prevClose`;
-        // when Yahoo is unavailable, Finnhub's d.pc keeps prevClose populated (never null).
+        // Finnhub wins for `last` (more real-time). Yahoo derivedPc is the sole source for
+        // `prevClose` from the Finnhub+Yahoo parallel fetch — Finnhub d.pc is excluded (see
+        // header comment). If Yahoo failed, prevClose stays null and Polygon /prev fills it.
         const last      = fh?.last      ?? yh?.last      ?? null;
-        let   prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
+        let   prevClose = yh?.prevClose ?? null;
 
-        // Polygon prev-day bar only if we still have no prevClose (rare: OTC where Finnhub
-        // omits d.pc and Yahoo returns non-USD). Never let it overwrite `last`.
+        // Polygon prev-day bar when Yahoo failed to supply prevClose (common when Yahoo is
+        // rate-limited or returns non-USD data). Never let it overwrite `last`.
         if (last && !(prevClose > 0) && polygonKey) {
           try {
             const pr  = await fetch(
