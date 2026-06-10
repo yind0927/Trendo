@@ -2805,15 +2805,38 @@
       return (h?.kind || "equity") === "crypto";
     }))];
 
-    const params = new URLSearchParams();
-    if (stocks.length)  params.set("stocks",  stocks.join(","));
-    if (cryptos.length) params.set("crypto",  cryptos.join(","));
+    // Split stocks into small chunks and call /api/quote once per chunk. With 60+ holdings,
+    // a single request makes the serverless function fire 130+ concurrent upstream fetches,
+    // which Yahoo rate-limits and which can blow Vercel's 10s limit → empty response →
+    // "行情加载中". ~22 symbols per request keeps each invocation small and fast; the
+    // requests run in parallel so total latency stays ~one request.
+    const CHUNK = 22;
+    const reqs = [];
+    for (let i = 0; i < stocks.length; i += CHUNK) {
+      const p = new URLSearchParams();
+      p.set("stocks", stocks.slice(i, i + CHUNK).join(","));
+      if (i === 0 && cryptos.length) p.set("crypto", cryptos.join(","));
+      reqs.push(p);
+    }
+    if (!stocks.length && cryptos.length) {
+      const p = new URLSearchParams();
+      p.set("crypto", cryptos.join(","));
+      reqs.push(p);
+    }
 
     try {
-      const res = await fetch(`/api/quote?${params}`);
-      if (!res.ok) return;
-      const { results } = await res.json();
-      if (!results) return;
+      const settled = await Promise.all(reqs.map(p =>
+        fetch(`/api/quote?${p}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      ));
+      // Merge every chunk's results into one map. Skip if every request failed.
+      const results = {};
+      let gotAny = false;
+      settled.forEach(j => {
+        if (j?.results) { Object.assign(results, j.results); gotAny = true; }
+      });
+      if (!gotAny) return;
 
       let changed = false;
       let needsRender = false;

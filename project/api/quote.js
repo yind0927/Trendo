@@ -1,12 +1,16 @@
 // Vercel serverless function — real-time market data
-// Stocks/ETFs:
-//   last + prevClose come together from a SINGLE Finnhub /quote call (d.c and d.pc),
-//   so the common path needs exactly one request per symbol and prevClose is always
-//   populated. Yahoo (chart) and Polygon (/prev) only fill the few symbols Finnhub
-//   misses — and both are CAPPED so we never fire a 60-way request storm that gets
-//   rate-limited (the bug that left prevClose null → "行情加载中" for everything).
-//   changePct is computed ONCE from the final last + prevClose, so the ticker tape and
-//   the "今日盈亏" module always show the same self-consistent number.
+// Stocks/ETFs (per symbol, Finnhub + Yahoo in parallel):
+//   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
+//   prevClose → Yahoo derivedPc (genuine last completed session close) →
+//               Yahoo meta.previousClose → Finnhub d.pc → Polygon /prev (last resort)
+//   changePct → computed ONCE from the final last + prevClose, so the ticker tape and the
+//               今日盈亏 module always show the same self-consistent number.
+//
+// The CLIENT splits its holdings into small chunks (~22 symbols) and calls this endpoint
+// once per chunk, so a single invocation never fires 130+ concurrent fetches (which got
+// Yahoo rate-limited and timed the function out → empty response → "行情加载中"). Each
+// chunk is small enough to finish well under Vercel's 10s limit. If Yahoo rate-limits a
+// symbol anyway, Finnhub's d.pc keeps prevClose populated so the change is never null.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
 
 export default async function handler(req, res) {
@@ -24,94 +28,92 @@ export default async function handler(req, res) {
 
   // ── Stocks + ETFs ─────────────────────────────────────────────────
   if (stocks.length) {
-    const syms = stocks.slice(0, 80);
+    await Promise.all(stocks.slice(0, 80).map(async sym => {
 
-    // Phase 1 — Finnhub: one call gives BOTH real-time last (d.c) and previous close (d.pc).
-    // d.pc is the official prior-session close, so (d.c - d.pc) / d.pc is the standard daily
-    // change shown by stock apps. We guard d.pc !== d.c so a rare flat/closed-market reading
-    // (pc collapsed to c) is treated as "missing" and filled by Yahoo below.
-    await Promise.all(syms.map(async sym => {
-      if (!finnhubKey) return;
-      try {
-        const r = await fetch(
-          `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${finnhubKey}`,
-          { signal: AbortSignal.timeout(4000) }
-        );
-        const d = await r.json();
-        if (d.c > 0) {
-          results[sym] = {
-            last: d.c,
-            prevClose: (d.pc > 0 && d.pc !== d.c) ? d.pc : null,
-            changePct: null,
-            name: null,
-          };
-        }
-      } catch (_) {}
-    }));
+      const [fhResult, yhResult] = await Promise.allSettled([
 
-    // Phase 2 — Yahoo chart fills symbols Finnhub missed entirely OR left without prevClose.
-    // CAPPED at 16 and only the gaps, so this is a handful of requests, not 60+.
-    const needYahoo = syms.filter(s => !results[s] || !(results[s].prevClose > 0)).slice(0, 16);
-    if (needYahoo.length) {
-      await Promise.all(needYahoo.map(async sym => {
-        for (const host of ["query1", "query2"]) {
+        // 1) Finnhub — real-time price. d.c = last, d.pc = previous close (reliable fallback).
+        (async () => {
+          if (!finnhubKey) return null;
+          const r = await fetch(
+            `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${finnhubKey}`,
+            { signal: AbortSignal.timeout(4500) }
+          );
+          const d = await r.json();
+          if (d.c > 0) return { last: d.c, prevClose: d.pc > 0 ? d.pc : null };
+          return null;
+        })(),
+
+        // 2) Yahoo chart — 5-day daily series for an accurate prevClose. Try query1 then
+        //    query2 (independent edges) on any failure (timeout / 429 / non-OK).
+        (async () => {
+          for (const host of ["query1", "query2"]) {
+            try {
+              const r = await fetch(
+                `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`,
+                { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(4500) }
+              );
+              if (!r.ok) continue;
+              const d    = await r.json();
+              const meta = d.chart?.result?.[0]?.meta;
+              // Skip non-USD quotes (foreign OTC stocks may return CAD price)
+              if (!(meta?.regularMarketPrice > 0) || (meta.currency ?? "USD") !== "USD") return null;
+              const closes = (d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
+              // derivedPc = 2nd-to-last daily close = genuine last completed-session close.
+              // We deliberately do NOT use meta.chartPreviousClose (close before the window
+              // starts), which would inflate the daily change into a multi-day move.
+              const derivedPc = closes.length >= 2 ? closes[closes.length - 2] : null;
+              const pc = derivedPc ?? (meta.previousClose > 0 ? meta.previousClose : null);
+              return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
+            } catch (_) { /* try next host */ }
+          }
+          return null;
+        })(),
+      ]);
+
+      const fh = fhResult.status === "fulfilled" ? fhResult.value : null;
+      const yh = yhResult.status === "fulfilled" ? yhResult.value : null;
+
+      if (fh || yh) {
+        // Finnhub wins for `last` (more real-time). Yahoo derivedPc wins for `prevClose`;
+        // when Yahoo is unavailable, Finnhub's d.pc keeps prevClose populated (never null).
+        const last      = fh?.last      ?? yh?.last      ?? null;
+        let   prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
+
+        // Polygon prev-day bar only if we still have no prevClose (rare: OTC where Finnhub
+        // omits d.pc and Yahoo returns non-USD). Never let it overwrite `last`.
+        if (last && !(prevClose > 0) && polygonKey) {
           try {
-            const r = await fetch(
-              `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`,
-              { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(4000) }
+            const pr  = await fetch(
+              `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
+              { signal: AbortSignal.timeout(4500) }
             );
-            if (!r.ok) continue; // 429 / 5xx → try the other edge host
-            const d    = await r.json();
-            const meta = d.chart?.result?.[0]?.meta;
-            // Skip non-USD quotes (foreign OTC stocks may return CAD price)
-            if (!(meta?.regularMarketPrice > 0) || (meta.currency ?? "USD") !== "USD") return;
-            const closes = (d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
-            // derivedPc = 2nd-to-last daily close = genuine last completed-session close.
-            // We deliberately do NOT use meta.chartPreviousClose (close before the window
-            // starts), which would inflate the daily change to a multi-day move.
-            const derivedPc = closes.length >= 2 ? closes[closes.length - 2] : null;
-            const pc = derivedPc ?? (meta.previousClose > 0 ? meta.previousClose : null);
-            const cur = results[sym] || { last: null, prevClose: null, changePct: null, name: null };
-            if (cur.last == null) cur.last = meta.regularMarketPrice;
-            if (pc > 0) cur.prevClose = pc;
-            if (cur.name == null) cur.name = meta.shortName || meta.longName || null;
-            results[sym] = cur;
-            return;
-          } catch (_) { /* try next host */ }
+            const pd  = await pr.json();
+            const bar = pd.results?.[0];
+            if (bar?.c > 0) prevClose = bar.c;
+          } catch (_) {}
         }
-      }));
-    }
 
-    // Phase 3 — Polygon prev-day close, CAPPED at 6, for whatever still lacks prevClose
-    // (free tier is 5 req/min, so the cap matters).
-    if (polygonKey) {
-      const needPoly = syms.filter(s => !results[s] || !(results[s].prevClose > 0)).slice(0, 6);
-      await Promise.all(needPoly.map(async sym => {
+        const changePct = (last != null && prevClose > 0)
+          ? (last - prevClose) / prevClose * 100
+          : null;
+        results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
+        return;
+      }
+
+      // 3) Polygon prev-day — last resort: both Finnhub AND Yahoo failed entirely.
+      if (polygonKey) {
         try {
           const r = await fetch(
             `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
-            { signal: AbortSignal.timeout(4000) }
+            { signal: AbortSignal.timeout(4500) }
           );
           const d   = await r.json();
           const bar = d.results?.[0];
-          if (bar?.c > 0) {
-            const cur = results[sym] || { last: bar.c, prevClose: null, changePct: null, name: null };
-            if (cur.last == null) cur.last = bar.c;
-            cur.prevClose = bar.c;
-            results[sym] = cur;
-          }
+          if (bar?.c) results[sym] = { last: bar.c, prevClose: bar.c, changePct: null };
         } catch (_) {}
-      }));
-    }
-
-    // changePct computed once, from the exact last + prevClose we return.
-    for (const sym of syms) {
-      const r = results[sym];
-      if (!r) continue;
-      r.changePct = (r.last > 0 && r.prevClose > 0)
-        ? (r.last - r.prevClose) / r.prevClose * 100
-        : null;
-    }
+      }
+    }));
   }
 
   // ── Crypto: Polygon snapshot ──────────────────────────────────────
