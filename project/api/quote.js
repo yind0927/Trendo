@@ -66,11 +66,13 @@ export default async function handler(req, res) {
               // Skip non-USD quotes (foreign OTC stocks may return CAD price)
               if (!(meta?.regularMarketPrice > 0) || (meta.currency ?? "USD") !== "USD") return null;
               const closes = (d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
-              // derivedPc = 2nd-to-last daily close = genuine last completed-session close.
-              // We deliberately do NOT use meta.chartPreviousClose (close before the window
-              // starts), which would inflate the daily change into a multi-day move.
+              // meta.previousClose = Yahoo's official previous session close — matches brokers.
+              // derivedPc (2nd-to-last bar) is a fallback only: during non-trading hours the
+              // series may have fewer bars and closes[length-2] picks the wrong day; with
+              // adjusted prices (spin-off / dividend) historical bars can be far off the real
+              // previous close. chartPreviousClose is never used (it covers the entire range).
               const derivedPc = closes.length >= 2 ? closes[closes.length - 2] : null;
-              const pc = derivedPc ?? (meta.previousClose > 0 ? meta.previousClose : null);
+              const pc = (meta.previousClose > 0 ? meta.previousClose : null) ?? derivedPc ?? null;
               return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
             } catch (_) { /* try next host */ }
           }
