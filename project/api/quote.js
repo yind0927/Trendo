@@ -2,10 +2,10 @@
 // Stocks/ETFs:
 //   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
 //   prevClose → Yahoo derivedPc (genuine last completed session close), Finnhub d.pc,
-//               or Polygon /prev as last resort
-//   changePct → computed ONCE as (last - prevClose) / prevClose, so price and % always
-//               share the same two numbers and stay self-consistent. We never trust
-//               Finnhub d.dp/d.pc for the % — off-market they collapse change to 0.
+//               or Polygon snapshot prevDay.c as last resort (one batch call, not per-symbol,
+//               to avoid rate-limiting Polygon with 60+ parallel requests)
+//   changePct → computed ONCE after all sources resolve, so price and % always
+//               share the same two numbers and stay self-consistent.
 // Crypto: Polygon snapshot (POLYGON_API_KEY)
 
 export default async function handler(req, res) {
@@ -23,10 +23,9 @@ export default async function handler(req, res) {
 
   // ── Stocks + ETFs ─────────────────────────────────────────────────
   if (stocks.length) {
+    // Phase 1: Finnhub (real-time last) + Yahoo (reliable prevClose) in parallel per symbol
     await Promise.all(stocks.slice(0, 80).map(async sym => {
 
-      // Run Finnhub and Yahoo Finance in parallel for each symbol.
-      // Finnhub gives real-time `last`; Yahoo 2-day series gives accurate `prevClose`.
       const [fhResult, yhResult] = await Promise.allSettled([
 
         // 1) Finnhub — real-time price
@@ -45,9 +44,8 @@ export default async function handler(req, res) {
 
         // 2) Yahoo Finance — 2-day series for reliable prevClose.
         //    Try query1, then query2 on any failure (timeout / 429 rate-limit / non-OK).
-        //    With 60+ holdings a single host gets rate-limited and the symbol would otherwise
-        //    fall through to the Polygon flatten (prevClose === last → ±$0). The second host
-        //    is an independent edge, so this recovers most rate-limited symbols.
+        //    With 60+ holdings a single host gets rate-limited; query2 is an independent edge
+        //    that often recovers rate-limited symbols.
         (async () => {
           for (const host of ["query1", "query2"]) {
             try {
@@ -74,60 +72,75 @@ export default async function handler(req, res) {
         })(),
       ]);
 
-      const fh = fhResult.status  === "fulfilled" ? fhResult.value  : null;
-      const yh = yhResult.status  === "fulfilled" ? yhResult.value  : null;
+      const fh = fhResult.status === "fulfilled" ? fhResult.value : null;
+      const yh = yhResult.status === "fulfilled" ? yhResult.value : null;
 
       if (fh || yh) {
         // Finnhub wins for `last` (more real-time).
         // Yahoo wins for `prevClose`: its derivedPc gives "session-before-last" close so
         // pre-market we show the completed session's change, not 0%.
-        // During active trading derivedPc is null → Yahoo falls back to meta.previousClose
-        // which equals Finnhub's d.pc anyway, so there's no conflict.
         const last      = fh?.last      ?? yh?.last      ?? null;
-        let   prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
-
-        // When we have a current price but no prevClose (e.g. OTC stocks where Finnhub
-        // omits d.pc and Yahoo returns non-USD), use Polygon's previous-day bar for prevClose.
-        // We must NOT let Polygon overwrite `last` here — we only want its prevClose.
-        if (last && !prevClose && polygonKey) {
-          try {
-            const pr  = await fetch(
-              `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
-              { signal: AbortSignal.timeout(5000) }
-            );
-            const pd  = await pr.json();
-            const bar = pd.results?.[0];
-            if (bar?.c > 0) prevClose = bar.c;
-          } catch (_) {}
-        }
-
-        // changePct is computed ONCE from the exact `last` and `prevClose` we return.
-        // This guarantees price and % are always self-consistent (they share the same two
-        // numbers) and never relies on Finnhub's d.dp/d.pc, which collapse to 0 off-market.
-        // prevClose here = Yahoo derivedPc (the genuine last completed session close), so the
-        // result matches what standard stock apps display for the daily change.
-        const changePct = (last != null && prevClose > 0)
-          ? (last - prevClose) / prevClose * 100
-          : null;
-        results[sym] = { last, prevClose, changePct, name: yh?.name ?? null };
-        return;
+        const prevClose = yh?.prevClose ?? fh?.prevClose ?? null;
+        // changePct computed in Phase 3 after Polygon fills any gaps
+        results[sym] = { last, prevClose, changePct: null, name: yh?.name ?? null };
       }
+      // If both failed, leave results[sym] undefined — Phase 2/3 will handle it
+    }));
 
-      // 3) Polygon prev-day — yesterday's close only (last resort: both Finnhub AND Yahoo failed)
-      if (polygonKey) {
+    // Phase 2: Batch Polygon snapshot for symbols that got a last price but no prevClose.
+    // One batch call instead of N individual /prev calls avoids hammering Polygon's rate limit.
+    if (polygonKey) {
+      const needPc = stocks.slice(0, 80).filter(s => results[s]?.last != null && !(results[s]?.prevClose > 0));
+      if (needPc.length) {
         try {
-          const r = await fetch(
-            `https://api.polygon.io/v2/aggs/ticker/${sym}/prev?adjusted=true&apiKey=${polygonKey}`,
-            { signal: AbortSignal.timeout(5000) }
+          const pr = await fetch(
+            `https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers` +
+            `?tickers=${needPc.join(",")}&apiKey=${polygonKey}`,
+            { signal: AbortSignal.timeout(8000) }
           );
-          const d   = await r.json();
-          const bar = d.results?.[0];
-          if (bar?.c) {
-            results[sym] = { last: bar.c, prevClose: bar.c, changePct: null };
+          if (pr.ok) {
+            const pd = await pr.json();
+            (pd.tickers || []).forEach(t => {
+              const pc = t.prevDay?.c;
+              if (pc > 0 && results[t.ticker]) {
+                results[t.ticker].prevClose = pc;
+              }
+            });
           }
         } catch (_) {}
       }
-    }));
+    }
+
+    // Phase 3: Polygon /prev for symbols where both Finnhub AND Yahoo returned nothing
+    if (polygonKey) {
+      const noData = stocks.slice(0, 80).filter(s => !results[s]);
+      if (noData.length) {
+        await Promise.all(noData.map(async sym => {
+          try {
+            const r = await fetch(
+              `https://api.polygon.io/v2/aggs/ticker/${sym}/prev?adjusted=true&apiKey=${polygonKey}`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            const d   = await r.json();
+            const bar = d.results?.[0];
+            if (bar?.c) {
+              // prevClose === last here: client detects this via changePct === null guard
+              results[sym] = { last: bar.c, prevClose: bar.c, changePct: null, name: null };
+            }
+          } catch (_) {}
+        }));
+      }
+    }
+
+    // Compute changePct for all stocks once all prevClose sources are resolved.
+    // This guarantees price and % share the same two numbers and are always self-consistent.
+    stocks.slice(0, 80).forEach(sym => {
+      const r = results[sym];
+      if (!r) return;
+      r.changePct = (r.last != null && r.prevClose > 0)
+        ? (r.last - r.prevClose) / r.prevClose * 100
+        : null;
+    });
   }
 
   // ── Crypto: Polygon snapshot ──────────────────────────────────────

@@ -2836,6 +2836,12 @@
             !(isFlattened && h.prevClose > 0)) {
           h.prevClose = q.prevClose;
           changed = true;
+        } else if (q.last != null && q.prevClose === null && h.prevClose != null) {
+          // Server returned a valid last price but couldn't get prevClose (Yahoo rate-limited
+          // and Polygon fallback also failed). Clear the stale prevClose so we show ±$0
+          // rather than stale spark-era values showing wrong inflated percentages.
+          h.prevClose = null;
+          changed = true;
         }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {
           h.last = q.last;
