@@ -2810,7 +2810,7 @@
     // which Yahoo rate-limits and which can blow Vercel's 10s limit → empty response →
     // "行情加载中". ~22 symbols per request keeps each invocation small and fast; the
     // requests run in parallel so total latency stays ~one request.
-    const CHUNK = 22;
+    const CHUNK = 15;
     const reqs = [];
     for (let i = 0; i < stocks.length; i += CHUNK) {
       const p = new URLSearchParams();
@@ -2855,9 +2855,16 @@
         // We must NOT freeze prevClose on its own: `last` updates every cycle, so a frozen
         // prevClose drifts days apart from `last` over a closed market and inflates the
         // "today" change (e.g. a 4-day move shown as a single day's -23%).
-        if (q.prevClose != null && q.prevClose > 0 && q.prevClose !== h.prevClose &&
-            !(isFlattened && h.prevClose > 0)) {
-          h.prevClose = q.prevClose;
+        const hasValidPrev = q.prevClose > 0 && !isFlattened;
+        if (hasValidPrev) {
+          if (q.prevClose !== h.prevClose) { h.prevClose = q.prevClose; changed = true; }
+        } else if (q.last != null && h.prevClose != null && !(isFlattened && h.prevClose > 0)) {
+          // Server returned a fresh `last` but no usable prevClose for this symbol. Our
+          // stored prevClose is from an earlier fetch; pairing it with the fresh `last`
+          // would show a bogus multi-day % (e.g. INTC +8.82% off a stale ~99 close while
+          // the real prevClose is ~110). Clear it so the row shows ±$0 until a complete
+          // quote (last + prevClose) arrives — never a wrong number.
+          h.prevClose = null;
           changed = true;
         }
         if (q.last != null && Math.abs(q.last - (h.last || 0)) > 0.0001) {

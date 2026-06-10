@@ -6,7 +6,7 @@
 //   changePct → computed ONCE from the final last + prevClose, so the ticker tape and the
 //               今日盈亏 module always show the same self-consistent number.
 //
-// The CLIENT splits its holdings into small chunks (~22 symbols) and calls this endpoint
+// The CLIENT splits its holdings into small chunks (~15 symbols) and calls this endpoint
 // once per chunk, so a single invocation never fires 130+ concurrent fetches (which got
 // Yahoo rate-limited and timed the function out → empty response → "行情加载中"). Each
 // chunk is small enough to finish well under Vercel's 10s limit. If Yahoo rate-limits a
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
           if (!finnhubKey) return null;
           const r = await fetch(
             `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${finnhubKey}`,
-            { signal: AbortSignal.timeout(4500) }
+            { signal: AbortSignal.timeout(3500) }
           );
           const d = await r.json();
           if (d.c > 0) return { last: d.c, prevClose: d.pc > 0 ? d.pc : null };
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
             try {
               const r = await fetch(
                 `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`,
-                { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(4500) }
+                { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(3500) }
               );
               if (!r.ok) continue;
               const d    = await r.json();
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
           try {
             const pr  = await fetch(
               `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
-              { signal: AbortSignal.timeout(4500) }
+              { signal: AbortSignal.timeout(3500) }
             );
             const pd  = await pr.json();
             const bar = pd.results?.[0];
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
         try {
           const r = await fetch(
             `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
-            { signal: AbortSignal.timeout(4500) }
+            { signal: AbortSignal.timeout(3500) }
           );
           const d   = await r.json();
           const bar = d.results?.[0];
