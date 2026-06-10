@@ -4630,19 +4630,35 @@
       if (y === year && m - 1 === month) addExit(d, h.sym, h.pnlFinal ?? null);
     });
 
-    // Month summary
-    const pnlVals = Object.values(pnlMap);
-    const mTotal  = pnlVals.reduce((s, v) => s + v, 0);
-    const mWins   = pnlVals.filter(v => v > 0).length;
-    const mLosses = pnlVals.filter(v => v < 0).length;
+    // Month stats: count individual closed trade records (not unique close days)
+    let mTradeWins = 0, mTradeLosses = 0;
+    CLOSED_POSITIONS.forEach(h => {
+      if (!h.closedAt) return;
+      const [cy, cm] = h.closedAt.slice(0, 10).split("-").map(Number);
+      if (cy !== year || cm - 1 !== month) return;
+      const pnl = h.pnlFinal || 0;
+      if (pnl > 0) mTradeWins++;
+      else if (pnl < 0) mTradeLosses++;
+    });
+    // Monthly portfolio total: sum daily portfolio P&L changes (histPnlLog / dailyPnlLog)
+    // This is consistent with what each cell displays, so the total actually adds up.
+    const daysInMoLoop = new Date(year, month + 1, 0).getDate();
+    let mPortfolio = 0, mHasHist = false;
+    for (let i = 1; i <= daysInMoLoop; i++) {
+      const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
+      if (ds > todayStr) break;
+      const v = ds === todayStr ? (isCurrentMonth ? liveTodayPnl : null)
+                                : (histPnlLog[ds] ?? dailyPnlLog[ds] ?? null);
+      if (v != null) { mPortfolio += v; mHasHist = true; }
+    }
 
     const monthLabel = new Date(year, month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
-    const mSign     = mTotal >= 0 ? "up" : "down";
-    const mTotalHTML = pnlVals.length
-      ? `<span class="mono ${mSign}" style="font-size:14px;font-weight:700">${fmt.signed(Math.round(mTotal))}</span>`
-      : `<span class="muted" style="font-size:12px">暂无已平仓数据</span>`;
-    const mWLHTML = (mWins + mLosses) > 0
-      ? `<span class="muted" style="font-size:10.5px">${mWins}W · ${mLosses}L</span>` : "";
+    const mSign = mPortfolio >= 0 ? "up" : "down";
+    const mTotalHTML = mHasHist
+      ? `<span class="mono ${mSign}" style="font-size:14px;font-weight:700">${fmt.signed(Math.round(mPortfolio))}</span>`
+      : `<span class="muted" style="font-size:12px">暂无数据</span>`;
+    const mWLHTML = (mTradeWins + mTradeLosses) > 0
+      ? `<span class="muted" style="font-size:10.5px">${mTradeWins}W · ${mTradeLosses}L</span>` : "";
 
     const isNextDis = year > today.getFullYear() || (year === today.getFullYear() && month >= today.getMonth());
     const firstDow  = new Date(year, month, 1).getDay();
@@ -4660,41 +4676,36 @@
       const isWknd  = (dow === 0 || dow === 6);
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const isToday = (dateStr === todayStr);
-      const pnl     = pnlMap[dateStr];
       const entries = entryMap[dateStr] || [];
+      // Daily portfolio P&L: live for today, histPnlLog/dailyPnlLog for past days.
+      // Consistent for all days so cell values and the monthly total add up correctly.
+      const cellPnl = isToday
+        ? liveTodayPnl
+        : (histPnlLog[dateStr] ?? dailyPnlLog[dateStr] ?? null);
 
       let cls = "cal-cell";
       if (isWknd)  cls += " wknd";
       if (isToday) cls += " today";
-      if (!isWknd && pnl != null) cls += pnl >= 0 ? " win" : " loss";
-
-      // Realized PnL text; today's floating PnL shown muted if no realized trade
-      let pnlHTML = "";
+      // Color by daily portfolio move; fall back to realized direction when hist is missing
       if (!isWknd) {
-      if (pnl != null) {
-        const col  = pnl >= 0 ? "var(--up)" : "var(--down)";
-        const sign = pnl >= 0 ? "+" : "−";
-        const abs  = Math.abs(Math.round(pnl));
-        const amt  = abs >= 10000 ? `${sign}$${(abs / 1000).toFixed(0)}k`
-                   : abs >= 1000  ? `${sign}$${(abs / 1000).toFixed(1)}k`
-                   : `${sign}$${abs}`;
-        pnlHTML = `<div class="cal-pnl" style="color:${col}">${amt}</div>`;
-      } else {
-        // Past days: use stored log; today: live calculation (muted = unrealized)
-        // histPnlLog (computed from Yahoo Finance) takes priority; fall back to live-recorded log
-        const loggedPnl = isToday ? liveTodayPnl : (histPnlLog[dateStr] ?? dailyPnlLog[dateStr] ?? null);
-        if (loggedPnl != null && loggedPnl !== 0) {
-          const col    = loggedPnl >= 0 ? "var(--up)" : "var(--down)";
-          const sign   = loggedPnl >= 0 ? "+" : "−";
-          const abs    = Math.abs(loggedPnl);
-          const amt    = abs >= 10000 ? `${sign}$${(abs / 1000).toFixed(0)}k`
-                       : abs >= 1000  ? `${sign}$${(abs / 1000).toFixed(1)}k`
-                       : `${sign}$${abs}`;
-          const opacity = isToday ? ";opacity:0.55" : "";
-          pnlHTML = `<div class="cal-pnl" style="color:${col}${opacity}">${amt}</div>`;
-        }
+        if (cellPnl != null && cellPnl !== 0)
+          cls += cellPnl >= 0 ? " win" : " loss";
+        else if (pnlMap[dateStr] != null)
+          cls += pnlMap[dateStr] >= 0 ? " win" : " loss";
       }
-      } // end !isWknd
+
+      // P&L number: daily portfolio P&L for all days (muted/opaque on today = unrealized)
+      let pnlHTML = "";
+      if (!isWknd && cellPnl != null && cellPnl !== 0) {
+        const col   = cellPnl >= 0 ? "var(--up)" : "var(--down)";
+        const sign  = cellPnl >= 0 ? "+" : "−";
+        const abs   = Math.abs(Math.round(cellPnl));
+        const amt   = abs >= 10000 ? `${sign}$${(abs / 1000).toFixed(0)}k`
+                    : abs >= 1000  ? `${sign}$${(abs / 1000).toFixed(1)}k`
+                    : `${sign}$${abs}`;
+        const opacity = isToday ? ";opacity:0.55" : "";
+        pnlHTML = `<div class="cal-pnl" style="color:${col}${opacity}">${amt}</div>`;
+      }
 
       // Entry chips: ● dot + ticker, always accent color (entry event, not P&L)
       let entryHTML = "";
