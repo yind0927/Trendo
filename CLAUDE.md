@@ -55,7 +55,7 @@ project/
   sw.js           — Service Worker（PWA 自动更新）
   manifest.json   — PWA manifest
   api/
-    quote.js           — 实时价格（每symbol并发 Finnhub实时last + Yahoo chart可靠prevClose，Yahoo query1→query2 失败重试 → Polygon /prev兜底；**prevClose来源链：Yahoo indicators.quote[0].close原始（未调整）收盘序列，用timestamp判断今日bar是否已收盘选正确的bar → Polygon /prev；Finnhub d.pc和Yahoo meta.previousClose均不用于prevClose：Finnhub d.pc可能滞后数日；meta.previousClose会针对公司行动（分拆/特别股息）做调整导致数值偏离券商显示值（如INTC在分拆日meta.previousClose≈$99，券商昨收≈$110，产生+8.82%虚高）**；兜底 prevClose===last 且 changePct=null）
+    quote.js           — 实时价格（每symbol并发 Finnhub实时last + Yahoo chart可靠prevClose，Yahoo query1→query2 失败重试 → Polygon日线序列兜底（非/prev：收盘后/prev返回当天bar会压平涨跌）；**prevClose来源链：Yahoo indicators.quote[0].close原始（未调整）收盘序列 + 开盘时段感知选bar——开盘中且今日bar未生成→bars[-1]（昨收），其余所有情况（今日bar已存在、或休市=盘前/周末）→bars[-2]，因为休市时last本身就是最近完成交易日的收盘价，涨跌必须参照其前一交易日（券商盘前/周末显示上一交易日涨跌）；Finnhub d.pc和Yahoo meta.previousClose均不用于prevClose：d.pc可能滞后数日；meta.previousClose被公司行动（分拆/特别股息）调整偏离券商值（INTC +8.82%虚高案例）**）
     history.js         — 历史日线数据（Yahoo Finance）
     holdings.js        — ETF 成分股静态数据（top 20，手动维护）
     earnings.js        — 财报日期（Finnhub → Yahoo 降级）
