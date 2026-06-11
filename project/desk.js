@@ -6377,6 +6377,13 @@
   // On startup: fetch cloud, compare timestamps, pull if cloud is newer else push.
   // This ensures cross-device changes (e.g. desktop → mobile) propagate automatically.
   if (syncKey) syncOnStartup();
+  // Re-pull when the tab regains focus: the background order worker
+  // (api/order-check.js) may have filled sim pending orders while this tab was
+  // throttled/asleep. Pull-if-newer prevents a stale local push from
+  // resurrecting an already-executed order.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && syncKey) syncOnStartup();
+  });
   tick(); setInterval(tick, 1000);
 
 })();
