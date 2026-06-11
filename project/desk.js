@@ -4014,7 +4014,11 @@
     const allPos   = [...HOLDINGS, ...CLOSED_POSITIONS];
 
     const livePnl      = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
-    const liveValue    = totalNotional + livePnl;
+    // Realized P&L stays in account equity after a close — same formula as the
+    // Dashboard 总资产 card (totalNotional + floating + realized), so the curve's
+    // last point always matches the number shown on the Dashboard.
+    const realizedPnl  = CLOSED_POSITIONS.reduce((s, h) => s + (h.pnlFinal || 0), 0);
+    const liveValue    = totalNotional + livePnl + realizedPnl;
     const liveTodayPnl = HOLDINGS.reduce((s, h) => s + ((h.last || 0) - (h.prevClose || h.last || 0)) * (h.qty || 0), 0);
 
     const getDayPnl = d => d === todayStr ? liveTodayPnl : (histPnlLog[d] ?? dailyPnlLog[d] ?? 0);
@@ -4048,7 +4052,13 @@
       return (keys.length && keys[lo] <= d) ? cache[keys[lo]] : null;
     };
 
-    // Direct portfolio value: totalNotional + Σ(price_at_D - cost)×qty for open positions on D.
+    // CC premium received on or before date d (premium is income on its record date)
+    const ccNetAt = (pos, d) =>
+      (pos.cc || []).reduce((s, c) => s + ((c.date || "") <= d ? (c.total || 0) : 0), 0);
+
+    // Direct portfolio value: totalNotional + Σ(price_at_D - cost)×qty for open positions on D
+    // + pnlFinal for positions already closed by D (realized profit stays in equity —
+    // otherwise the curve drops back after every close and never matches the Dashboard).
     // Computing from absolute prices (not cumulative daily deltas) avoids drift from missing
     // dates in Yahoo Finance history and retroactive shifts when new positions are added.
     const portfolioAt = d => {
@@ -4058,11 +4068,11 @@
         const entryDate = pos.entry?.slice(0, 10);
         const closeDate = pos.closedAt?.slice(0, 10);
         if (!entryDate || d < entryDate) return;
-        if (closeDate && d > closeDate) return;
+        if (closeDate && d > closeDate) { pnl += pos.pnlFinal || 0; return; }
         const ySym  = pos.kind === "crypto" ? `${pos.sym}-USD` : pos.sym;
         const price = priceAt(ySym, d);
         if (price == null) return;
-        pnl += (price - pos.cost) * pos.qty;
+        pnl += (price - pos.cost) * pos.qty + ccNetAt(pos, d);
       });
       return totalNotional + pnl;
     };
