@@ -2,7 +2,9 @@
 // Stocks/ETFs (per symbol, Finnhub + Yahoo in parallel):
 //   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
 //   prevClose → Yahoo raw close series (unadjusted, broker-matching) using timestamps to
-//               pick the correct bar whether market is open or closed → Polygon /prev
+//               pick the correct bar whether market is open or closed → Polygon daily bars
+//               with the SAME timestamp-based selection (NOT /prev: after the close /prev
+//               returns today's finalized bar, flattening the daily change to ~0%).
 //               NOTE: Finnhub d.pc and Yahoo meta.previousClose are intentionally NOT used.
 //               Finnhub d.pc can be stale by multiple sessions. Yahoo meta.previousClose is
 //               ADJUSTED for corporate actions (spin-offs, special dividends), so on an
@@ -31,6 +33,33 @@ export default async function handler(req, res) {
   }
 
   const results = {};
+
+  // Polygon daily bars (ascending) for the past ~9 days. Used by both fallbacks below.
+  // We do NOT use Polygon /prev: after the close it returns TODAY's finalized bar, so
+  // prevClose would equal today's close and flatten the daily change to ~0% for any
+  // symbol whose Yahoo fetch happened to fail that cycle. With the bar list we apply
+  // the same timestamp-based selection as the Yahoo path: skip today's bar if present.
+  const polygonBars = async sym => {
+    const to   = new Date().toISOString().slice(0, 10);
+    const from = new Date(Date.now() - 9 * 86400000).toISOString().slice(0, 10);
+    const r = await fetch(
+      `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/range/1/day/${from}/${to}` +
+      `?adjusted=true&sort=asc&apiKey=${polygonKey}`,
+      { signal: AbortSignal.timeout(3500) }
+    );
+    const d = await r.json();
+    return (d.results || []).filter(b => b.c > 0);
+  };
+  // Previous-session close from the bar list (today's bar excluded when present)
+  const polygonPrevClose = bars => {
+    if (!bars.length) return null;
+    const todayUTC = new Date().toISOString().slice(0, 10);
+    const lastUTC  = new Date(bars[bars.length - 1].t).toISOString().slice(0, 10);
+    const bar = (lastUTC === todayUTC && bars.length >= 2)
+      ? bars[bars.length - 2]   // today finalized → 2nd-to-last = yesterday
+      : bars[bars.length - 1];  // series ends at yesterday
+    return bar?.c ?? null;
+  };
 
   // ── Stocks + ETFs ─────────────────────────────────────────────────
   if (stocks.length) {
@@ -106,17 +135,12 @@ export default async function handler(req, res) {
         const last      = fh?.last      ?? yh?.last      ?? null;
         let   prevClose = yh?.prevClose ?? null;
 
-        // Polygon prev-day bar when Yahoo failed to supply prevClose (common when Yahoo is
+        // Polygon daily bars when Yahoo failed to supply prevClose (common when Yahoo is
         // rate-limited or returns non-USD data). Never let it overwrite `last`.
         if (last && !(prevClose > 0) && polygonKey) {
           try {
-            const pr  = await fetch(
-              `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
-              { signal: AbortSignal.timeout(3500) }
-            );
-            const pd  = await pr.json();
-            const bar = pd.results?.[0];
-            if (bar?.c > 0) prevClose = bar.c;
+            const pc = polygonPrevClose(await polygonBars(sym));
+            if (pc > 0) prevClose = pc;
           } catch (_) {}
         }
 
@@ -127,16 +151,20 @@ export default async function handler(req, res) {
         return;
       }
 
-      // 3) Polygon prev-day — last resort: both Finnhub AND Yahoo failed entirely.
+      // 3) Polygon daily bars — last resort: both Finnhub AND Yahoo failed entirely.
+      // With ≥2 bars we can serve a genuine last + prevClose pair (e.g. after the close:
+      // last = today's finalized close, prevClose = yesterday) instead of the old
+      // flattened prevClose===last && changePct null placeholder.
       if (polygonKey) {
         try {
-          const r = await fetch(
-            `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/prev?adjusted=true&apiKey=${polygonKey}`,
-            { signal: AbortSignal.timeout(3500) }
-          );
-          const d   = await r.json();
-          const bar = d.results?.[0];
-          if (bar?.c) results[sym] = { last: bar.c, prevClose: bar.c, changePct: null };
+          const bars = await polygonBars(sym);
+          if (bars.length >= 2) {
+            const last = bars[bars.length - 1].c;
+            const pc   = bars[bars.length - 2].c;
+            results[sym] = { last, prevClose: pc, changePct: (last - pc) / pc * 100 };
+          } else if (bars.length === 1) {
+            results[sym] = { last: bars[0].c, prevClose: bars[0].c, changePct: null };
+          }
         } catch (_) {}
       }
     }));
