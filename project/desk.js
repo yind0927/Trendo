@@ -3708,6 +3708,7 @@
       if (_stw) _stw.style.display = "none";
       if (_shc) _shc.style.display = "flex";
       renderSimHoldingsCards(rows);
+      renderSimTradeLog();
       return;
     }
     if (_stw) _stw.style.display = "";
