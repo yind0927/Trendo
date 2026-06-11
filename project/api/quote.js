@@ -34,6 +34,14 @@ export default async function handler(req, res) {
 
   const results = {};
 
+  // US regular session: Mon–Fri 13:30–21:00 UTC. Determines prevClose bar selection —
+  // when closed, `last` equals the most recent completed close, so the daily change
+  // must reference the session before it (see comments in the Yahoo block).
+  const _now = new Date();
+  const _mins = _now.getUTCHours() * 60 + _now.getUTCMinutes();
+  const marketOpen = _now.getUTCDay() >= 1 && _now.getUTCDay() <= 5 &&
+                     _mins >= 13 * 60 + 30 && _mins < 21 * 60;
+
   // Polygon daily bars (ascending) for the past ~9 days. Used by both fallbacks below.
   // We do NOT use Polygon /prev: after the close it returns TODAY's finalized bar, so
   // prevClose would equal today's close and flatten the daily change to ~0% for any
@@ -50,14 +58,18 @@ export default async function handler(req, res) {
     const d = await r.json();
     return (d.results || []).filter(b => b.c > 0);
   };
-  // Previous-session close from the bar list (today's bar excluded when present)
+  // Previous-session close from the bar list — same session-aware rule as the Yahoo
+  // path: market open with no today-bar → bars[-1] (yesterday); every other case
+  // (today's bar present, or market closed = pre-market/weekend) → bars[-2].
   const polygonPrevClose = bars => {
     if (!bars.length) return null;
+    if (bars.length === 1) return bars[0].c;
     const todayUTC = new Date().toISOString().slice(0, 10);
     const lastUTC  = new Date(bars[bars.length - 1].t).toISOString().slice(0, 10);
-    const bar = (lastUTC === todayUTC && bars.length >= 2)
-      ? bars[bars.length - 2]   // today finalized → 2nd-to-last = yesterday
-      : bars[bars.length - 1];  // series ends at yesterday
+    const todayBarIn = lastUTC === todayUTC;
+    const bar = (marketOpen && !todayBarIn)
+      ? bars[bars.length - 1]
+      : bars[bars.length - 2];
     return bar?.c ?? null;
   };
 
@@ -100,22 +112,30 @@ export default async function handler(req, res) {
               // dividend): e.g. INTC after a ~$11 distribution Yahoo sets previousClose≈$99
               // while the broker compares to the actual session close of ~$110. Never use it.
               //
-              // Pick the right bar using timestamps: when today's session bar is present (last
-              // bar's date == today UTC), the previous close is closes[length-2]. When the series
-              // ends at yesterday (pre-market / market still open), it's closes[length-1].
+              // Pick the right bar using timestamps + market session:
+              // - Market OPEN: `last` is live intraday → prevClose = yesterday's close
+              //   (bars[-2] if Yahoo already created today's partial bar, else bars[-1]).
+              // - Market CLOSED (after-hours / pre-market / weekend): `last` IS the close of
+              //   the most recent completed session (= the series' final bar), so the daily
+              //   change must reference the session BEFORE it → always bars[-2]. Brokers show
+              //   the last completed session's move until the next open; using bars[-1] here
+              //   makes prevClose === last and flattens every symbol to ±0% pre-market.
               const rawCloses = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
               const timestamps = d.chart?.result?.[0]?.timestamp ?? [];
               const validBars  = rawCloses
                 .map((c, i) => ({ c, ts: timestamps[i] }))
                 .filter(b => b.c != null);
               let derivedPc = null;
-              if (validBars.length >= 1) {
-                const lastTs  = validBars[validBars.length - 1].ts;
+              if (validBars.length >= 2) {
+                const lastTs   = validBars[validBars.length - 1].ts;
                 const todayUTC = new Date().toISOString().slice(0, 10);
                 const lastUTC  = new Date(lastTs * 1000).toISOString().slice(0, 10);
-                derivedPc = lastUTC === todayUTC && validBars.length >= 2
-                  ? validBars[validBars.length - 2].c   // today in series → 2nd-to-last = yesterday
-                  : validBars[validBars.length - 1].c;  // today not in series → last = yesterday
+                const todayBarIn = lastUTC === todayUTC;
+                derivedPc = (marketOpen && !todayBarIn)
+                  ? validBars[validBars.length - 1].c   // open, today's bar not yet created
+                  : validBars[validBars.length - 2].c;  // all other cases → bar before last
+              } else if (validBars.length === 1) {
+                derivedPc = validBars[0].c;
               }
               const pc = derivedPc ?? null;
               return { last: meta.regularMarketPrice, prevClose: pc, name: meta.shortName || meta.longName || null };
