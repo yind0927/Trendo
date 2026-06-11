@@ -3825,39 +3825,61 @@
     const el      = $("#sim-trade-log");
     if (!el) return;
 
-    const hasClosed = SIM_CLOSED.length > 0;
+    const hasAny = SIM_HOLDINGS.length > 0 || SIM_CLOSED.length > 0;
     if (labelEl) {
-      labelEl.style.display = hasClosed ? "" : "none";
+      labelEl.style.display = hasAny ? "" : "none";
       const countEl = $("#sim-trade-log-count");
-      if (countEl) countEl.textContent = SIM_CLOSED.length + " 笔";
+      if (countEl) countEl.textContent = (SIM_HOLDINGS.length + SIM_CLOSED.length) + " 笔";
     }
-    if (!hasClosed) { el.innerHTML = ""; return; }
+    if (!hasAny) { el.innerHTML = ""; return; }
 
-    const sorted = [...SIM_CLOSED].sort((a, b) =>
-      (b.closedAt || b.entry || "").localeCompare(a.closedAt || a.entry || "")
-    );
+    // Merge open + closed, sort by most-recent date descending
+    const openEntries   = SIM_HOLDINGS.map(h => ({ h, isOpen: true,  date: h.entry || "" }));
+    const closedEntries = SIM_CLOSED.map(h   => ({ h, isOpen: false, date: h.closedAt || h.entry || "" }));
+    const sorted = [...openEntries, ...closedEntries].sort((a, b) => b.date.localeCompare(a.date));
 
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
-      sorted.map(h => {
-        const pnl     = h.pnlFinal ?? 0;
-        const pnlCls  = pnl >= 0 ? "up" : "down";
-        const pnlPct  = h.cost > 0 ? ((h.closePrice - h.cost) / h.cost * 100) : null;
-        const entryD  = h.entry?.slice(0, 10) || "—";
-        const closeD  = h.closedAt?.slice(0, 10) || "—";
-        return `<div class="tl-row">
-          <div>
-            <div class="tl-sym">${h.sym}</div>
-            <div class="tl-name">${h.name || ""}</div>
-          </div>
-          <div class="tl-mid">
-            <div class="tl-prices">$${h.cost?.toFixed(2)} → $${h.closePrice?.toFixed(2)}</div>
-            <div class="tl-dates">${entryD} → ${closeD}${h.days ? " · " + h.days + "天" : ""}</div>
-          </div>
-          <div>
-            <div class="tl-pnl ${pnlCls}">${fmt.signed(Math.round(pnl))}</div>
-            <div class="tl-pnl-pct ${pnlCls}">${pnlPct !== null ? (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(1) + "%" : ""}</div>
-          </div>
-        </div>`;
+      sorted.map(({ h, isOpen }) => {
+        if (isOpen) {
+          const entryD  = h.entry?.slice(0, 10) || "—";
+          const pnlDollar = h.pnlDollar ?? 0;
+          const pnlCls    = pnlDollar >= 0 ? "up" : "down";
+          const pnlPct    = h.pnlPct ?? 0;
+          return `<div class="tl-row">
+            <div>
+              <div class="tl-sym">${h.sym}</div>
+              <div class="tl-name">${h.name || ""}</div>
+            </div>
+            <div class="tl-mid">
+              <div class="tl-prices">买入 $${h.cost?.toFixed(2)}<span class="tl-open-badge">持仓中</span></div>
+              <div class="tl-dates">${entryD} · ${h.days ?? 0}天</div>
+            </div>
+            <div>
+              <div class="tl-pnl ${pnlCls}">${fmt.signed(Math.round(pnlDollar))}</div>
+              <div class="tl-pnl-pct ${pnlCls}">${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%</div>
+            </div>
+          </div>`;
+        } else {
+          const pnl    = h.pnlFinal ?? 0;
+          const pnlCls = pnl >= 0 ? "up" : "down";
+          const pnlPct = h.cost > 0 ? ((h.closePrice - h.cost) / h.cost * 100) : null;
+          const entryD = h.entry?.slice(0, 10) || "—";
+          const closeD = h.closedAt?.slice(0, 10) || "—";
+          return `<div class="tl-row">
+            <div>
+              <div class="tl-sym">${h.sym}</div>
+              <div class="tl-name">${h.name || ""}</div>
+            </div>
+            <div class="tl-mid">
+              <div class="tl-prices">$${h.cost?.toFixed(2)} → $${h.closePrice?.toFixed(2)}</div>
+              <div class="tl-dates">${entryD} → ${closeD}${h.days ? " · " + h.days + "天" : ""}</div>
+            </div>
+            <div>
+              <div class="tl-pnl ${pnlCls}">${fmt.signed(Math.round(pnl))}</div>
+              <div class="tl-pnl-pct ${pnlCls}">${pnlPct !== null ? (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(1) + "%" : ""}</div>
+            </div>
+          </div>`;
+        }
       }).join("") + `</div>`;
   }
 
