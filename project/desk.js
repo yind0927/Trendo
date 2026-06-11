@@ -539,10 +539,15 @@
 
   async function syncPush() {
     if (!syncKey) return;
+    // Reuse the exact savedAt written by saveLocalOnly — generating a fresh timestamp
+    // here made the cloud copy permanently ~2s "newer" than local, so every
+    // visibilitychange pull-if-newer re-applied identical cloud data and blanked the
+    // in-memory prevClose (今日盈亏 empty until the next 30s fetch cycle).
     const payload = {
       holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
-      simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog, savedAt: new Date().toISOString()
+      simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
+      savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
     };
     try {
       const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}`, {
@@ -584,14 +589,27 @@
       applyCloudData(cloudData);
       lastSyncAt = new Date();
       renderSyncStatus();
+    } else if (cloudTime === localTime && cloudTime > 0) {
+      // Same snapshot on both sides (savedAt travels with the data) — nothing to do.
+      // This runs on every visibilitychange, so avoid a pointless POST per tab switch.
+      lastSyncAt = new Date();
+      renderSyncStatus();
     } else {
-      // Local is newer or same — push to keep cloud in sync
+      // Local is newer — push to keep cloud in sync
       syncPush();
     }
   }
 
   function applyCloudData(data) {
     if (!data) return;
+    // Carry this session's live market fields across the array replacement. They came
+    // from the current session's API fetch (never from storage — noMarket guarantees
+    // the cloud blob has none), so restoring them is safe and keeps 今日盈亏 / tape
+    // populated instead of blanking until the next 30s fetch cycle.
+    const live = {};
+    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => {
+      if (h.prevClose > 0) live[h.sym] = { prevClose: h.prevClose, changePct: h.changePct, last: h.last };
+    });
     if (Array.isArray(data.holdings))    HOLDINGS.splice(0, HOLDINGS.length, ...data.holdings);
     if (Array.isArray(data.closed))      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
     if (data.notional != null)           totalNotional = data.notional;
@@ -607,9 +625,22 @@
     // Recalculate size% from qty after cloud data replaces HOLDINGS
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
-    // prevClose/changePct are never in cloud payload (stripped by noMarket in syncPush),
-    // but defensively clear them in case of old snapshots
-    [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; h.changePct = null; });
+    // Restore live market fields captured above; symbols new to this session start
+    // null and get filled by the next fetch (kicked off immediately below).
+    HOLDINGS.forEach(h => {
+      const lv = live[h.sym];
+      h.prevClose = lv ? lv.prevClose : null;
+      h.changePct = lv ? lv.changePct : null;
+      if (lv && lv.last > 0) { h.last = lv.last; recomputeHolding(h, totalNotional); }
+    });
+    SIM_HOLDINGS.forEach(h => {
+      const lv = live[h.sym];
+      h.prevClose = lv ? lv.prevClose : null;
+      h.changePct = lv ? lv.changePct : null;
+      if (lv && lv.last > 0) { h.last = lv.last; recomputeHolding(h, simNotional); }
+    });
+    // Refresh quotes right away (next tick) instead of waiting out the 30s interval
+    lastPriceFetch = 0;
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
