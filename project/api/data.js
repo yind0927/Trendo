@@ -28,11 +28,19 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     try {
+      // Registry for the background order worker (api/order-check.js): keep this
+      // sync key in `trendo:order_keys` iff the pushed blob has pending sim orders,
+      // so the every-minute cron only scans accounts that actually need checking.
+      const body = req.body || {};
+      const hasPending =
+        (Array.isArray(body.simPending)      && body.simPending.length      > 0) ||
+        (Array.isArray(body.simClosePending) && body.simClosePending.length > 0);
       const r = await fetch(`${url}/pipeline`, {
         method: "POST", headers,
         body: JSON.stringify([
-          ["SET", redisKey, JSON.stringify(req.body)],
-          ["EXPIRE", redisKey, 31536000]   // 1 year TTL
+          ["SET", redisKey, JSON.stringify(body)],
+          ["EXPIRE", redisKey, 31536000],   // 1 year TTL
+          [hasPending ? "SADD" : "SREM", "trendo:order_keys", syncKey]
         ])
       });
       const results = await r.json();

@@ -60,7 +60,8 @@ project/
     holdings.js        — ETF 成分股静态数据（top 20，手动维护）
     earnings.js        — 财报日期（Finnhub → Yahoo 降级）
     feargreed.js       — CNN 恐慌贪婪指数代理
-    data.js            — 跨设备云同步（Upstash Redis）
+    data.js            — 跨设备云同步（Upstash Redis）；POST 时按blob是否含挂单维护 `trendo:order_keys` 注册表
+    order-check.js     — 模拟仓挂单后台成交 worker（Vercel Cron 开盘时段每分钟触发；扫描 `trendo:order_keys` → 读用户blob → 镜像客户端成交逻辑（市价/限价、部分/全部平仓、CC结算、calcTradingDays）→ 写回blob并更新savedAt；客户端 visibilitychange 时 pull-if-newer 接收成交结果；冲突模型=savedAt last-write-wins，页面活跃时客户端自己成交并覆盖，结果等价）
     market-summary.js  — 市场日报 AI 简报（Claude Sonnet 4.6，含新闻+市场数据）
     holdings-brief.js  — 持仓分析 AI 简报（Claude Sonnet 4.6，含个股新闻+市场环境）
     drawdown-context.js — 历史回撤情景分析（VOO/QQQ 近15年单日大跌后续走势统计 + Claude 解读）
@@ -479,6 +480,16 @@ initHoldingsBriefCard()          // 初始化：读缓存或显示生成按钮
 - 移动端 FAB 悬浮按钮：在 sim 页时自动切换为 sim 上下文（`currentPage === "sim"`），效果与 sim-new-pos-btn 一致；其他页面仍为真实仓开仓。
 
 非 sim 上下文的平仓挂单走 `SIM_CLOSE_PENDING[]`，同样受 `isUSMarketOpen()` 门控。
+
+### 后台成交（api/order-check.js）
+
+挂单不再依赖页面打开：Vercel Cron 在开盘时段（UTC 13-20 时每分钟，函数内再做 13:30 门控）触发
+`/api/order-check`，扫描 Redis 注册表 `trendo:order_keys`（由 `api/data.js` POST 时维护：blob 含挂单
+即 SADD，否则 SREM），对每个 key 读取云端 blob、拉实时价（Finnhub→Yahoo 兜底，crypto 走 Polygon），
+按客户端相同条件成交后写回 blob（savedAt 更新）。客户端在 `visibilitychange` 恢复可见时执行
+pull-if-newer，接收后台成交结果；页面活跃时客户端 30 秒周期自己成交并推送覆盖，两边结果等价、
+数组整体替换不会重复开仓。**注意：Vercel Hobby 计划 cron 仅支持每日级别调度，每分钟 cron 需
+Pro 计划；Hobby 可改用外部定时器（如 cron-job.org）每分钟 GET /api/order-check 达到同样效果。**
 
 ---
 
