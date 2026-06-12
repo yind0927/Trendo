@@ -246,7 +246,8 @@ export default async function handler(req, res) {
 
   const today    = new Date().toISOString().slice(0, 10);
   // v3: force fresh Wilder RSI + English market cap format
-  const cacheKey = `trendo:stock_analysis:v3:${sym}:${today}`;
+  // v4: 3-bullet-per-section narrative format
+  const cacheKey = `trendo:stock_analysis:v4:${sym}:${today}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
@@ -520,49 +521,42 @@ ${nextEarnings ? `【财报日历】下次财报：${nextEarnings}（${daysToEar
 技术${scores.trend ?? "N/A"}/100 | 估值${scores.valuation}/100 | 成长${scores.growth}/100 | 财务${scores.health}/100 | 分析师${scores.analyst ?? "N/A"}/100 | 综合${overall}/100（${scores.grade}级）
 
 ---
-请按以下7段格式，每段用 bullet point（• 开头），总字数≤900字。格式要求：关键数字、重要判断词（如"高估""强烈买入""警惕"）用**加粗**标注；其余不加任何Markdown符号；必须引用具体数字，不说空话，体现专业判断和独立见解：
+请严格按以下7段格式输出，每段恰好3条 bullet（• 开头），不多不少。总字数≤900字。格式要求：关键数字和重要判断词用**加粗**；其余不加任何Markdown符号；不输出##标题行或分割线；必须引用具体数字，不说空话，体现专业独立见解。
 
 【公司简介】
-• 核心业务：[主要产品/服务和收入结构，说清楚钱从哪来]
-• 护城河：[具体竞争壁垒，不是行业标签]
-• 近期最重要催化剂：[具体事件或战略转变]
+• 核心业务与护城河：[主要产品/收入结构+具体竞争壁垒，数字支撑]
+• 近期最重要催化剂：[最具影响力的具体事件或战略转变]
 • 主要威胁：[最值得关注的竞争/行业/监管风险]
 
 【估值分析】
-• PE(TTM)/远期PE：[结合增速说是否合理，与主要竞争对手比高/低]
-• PEG/EV-EBITDA：[增长溢价有无支撑，给出明确判断]
-• 分析师目标价：[$X 隐含+X% — 目标价是否可信，为何]
-• 估值结论：[高估/低估/合理，一句话核心判断]
+• 估值倍数：[PE/远期PE/PEG/EV-EBITDA综合评估，与增速和竞对比较]
+• 分析师目标价：[$X 隐含+X%空间，目标价可信度分析]
+• 估值结论：[**高估/合理/低估**，一句话核心判断及支撑逻辑]
 
 【成长性】
-• 营收增速${fmtP(m.revGrowth)}：[驱动力是什么，有机增长还是其他]
-• EPS增速与季度表现：[近4季beat/miss比例，趋势加速还是减速]
-• 未来12个月预期：[增速区间预判及核心假设]
-• 增长质量风险：[增长可持续的前提条件和潜在破坏因素]
+• 增速与驱动：[收入${fmtP(m.revGrowth)}/EPS增速${fmtP(m.epsGrowth)}，增长来源和质量]
+• 季度表现：[近4季beat/miss比例，趋势是加速还是减速]
+• 未来12个月预判：[增速区间预估、核心假设及最大破坏因素]
 
 【盈利与现金流】
-• 净利率${fmtM(m.netMargin)}：[行业定位，趋势方向]
-• ROE${fmtM(m.roe)}：[资本效率，是否依赖杠杆]
-• FCF质量：[${fcfLine}的含义，FCF与净利润的关系（高/低质量信号）]
-• 盈利风险：[利润率可能面临的压力点]
+• 利润率质量：[毛利率${fmtM(m.grossMargin)}/净利率${fmtM(m.netMargin)}，行业定位与趋势方向]
+• 资本效率：[ROE${fmtM(m.roe)}与ROA${fmtM(m.roa)}，是否依赖高杠杆]
+• FCF健康度：[${fcfLine}，FCF与净利润的差距含义及盈利风险点]
 
 【财务健康】
-• 资产负债：[D/E${fmtN(m.deRatio, 2)}，债务是战略性杠杆还是风险负担]
-• 流动性：[流动/速动比率 — 短期偿付能力评估]
-• 潜在隐患：[若有具体说明；若无，明确说财务状况健康]
+• 资产负债结构：[D/E${fmtN(m.deRatio, 2)}，债务是战略杠杆还是风险负担]
+• 流动性：[流动/速动比率综合评估，短期偿付能力]
+• 财务风险提示：[若有具体隐患则说明；若无则明确说明财务状况健康]
 
 【技术面】
-• 趋势结构：[${trendStr}对交易者意味着什么]
-• RSI${rsi?.toFixed(1) ?? "N/A"}动量：[超买/超卖/中性，结合近期走势]
-• 关键价位：[支撑 $X（含义），阻力 $X（含义）]
-• 入场信号：[建议等待什么技术确认，理想入场区域]
+• 趋势结构：[${trendStr}，对中期持仓者意味着什么]
+• 动量与关键价位：[RSI${rsi?.toFixed(1) ?? "N/A"}动量状态，重要支撑$X和阻力$X]
+• 入场建议：[理想入场区域$X~$Y，止损参考$X，等待什么技术信号]
 
 【综合建议】
-• 核心判断：[一句话最重要结论，体现你的独立见解]
-• 量化评分${overall}/100 vs 分析师共识${analyst.recLabel ?? "N/A"}：[一致/分歧，若分歧说明原因]
-• 操作思路：[入场区域 $X~$Y，止损参考 $X（基于EMA或关键支撑），目标 $X]
-• 最大风险：[最值得警惕的单一风险点]
-${nextEarnings ? `• 财报风险：[${nextEarnings}，预期什么，如何应对]` : ""}
+• 核心判断：[一句话最重要结论，综合评分${overall}/100 vs 分析师${analyst.recLabel ?? "N/A"}的一致/分歧分析]
+• 操作思路：[具体入场区间、止损位（EMA或关键支撑）、目标价及R/R比]
+• 最大风险：[最值得警惕的单一风险${nextEarnings ? `，以及${nextEarnings}财报的预期与应对` : ""}]
 
 RECOMMENDATION:{"action":"watch","label":"可以关注","entry":"${ema50 ? '回调至EMA50($' + ema50.toFixed(0) + ')区域' : '等待技术信号'}"}
 

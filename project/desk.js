@@ -4963,12 +4963,28 @@
       if (!raw) return;
       await triggerAnalysis(raw, false);
     });
+
+    // TTL selector — restore saved value and persist on change
+    const ttlSel = $("#wl-ttl-sel");
+    if (ttlSel) {
+      const saved = localStorage.getItem("wl_analysis_ttl");
+      if (saved) ttlSel.value = saved;
+      ttlSel.addEventListener("change", () => localStorage.setItem("wl_analysis_ttl", ttlSel.value));
+    }
+
     renderAnalysisHistory();
   }
 
   // ── Today's analysis history (localStorage wl_analysis_*, same-day validity) ─
-  // Cache entries already expire daily (_date check in fetchStockAnalysis);
-  // here we purge stale keys and surface today's analyses as quick-access chips.
+  function saHistTimeStr(ms) {
+    if (!ms) return "";
+    const mins = Math.round((Date.now() - ms) / 60000);
+    if (mins < 1)  return "刚刚";
+    if (mins < 60) return `${mins}分钟前`;
+    const hrs = Math.floor(mins / 60);
+    return hrs < 24 ? `${hrs}小时前` : "今日";
+  }
+
   function getAnalysisHistory() {
     const today = new Date().toLocaleDateString("en-CA");
     const out = [];
@@ -4977,8 +4993,16 @@
       if (!k?.startsWith("wl_analysis_")) continue;
       try {
         const c = JSON.parse(localStorage.getItem(k) || "null");
-        if (c?._date === today) out.push({ sym: k.slice(12), grade: c.scores?.grade, savedAt: c._savedAt ?? 0 });
-        else localStorage.removeItem(k);   // 跨日失效 → 清除
+        if (c?._date === today) {
+          out.push({
+            sym: k.slice(12),
+            grade:   c.scores?.grade,
+            overall: c.scores?.overall ?? 50,
+            name:    c.name ?? "",
+            price:   c.price ?? null,
+            savedAt: c._savedAt ?? 0,
+          });
+        } else { localStorage.removeItem(k); }   // 跨日失效 → 清除
       } catch (_) { localStorage.removeItem(k); }
     }
     out.sort((a, b) => b.savedAt - a.savedAt);
@@ -4991,9 +5015,23 @@
     const hist = getAnalysisHistory();
     if (!hist.length) { el.style.display = "none"; el.innerHTML = ""; return; }
     el.style.display = "";
-    el.innerHTML = `<span class="wl-hist-lbl">今日已分析</span>` +
-      hist.map(h => `<span class="wl-hist-chip" data-sym="${h.sym}">${h.sym}${h.grade ? `<b>${h.grade}</b>` : ""}</span>`).join("");
-    $$(".wl-hist-chip", el).forEach(c =>
+    el.innerHTML = `<div class="wl-hist-lbl">今日分析记录</div>
+      <div class="wl-hist-cards">
+        ${hist.map(h => {
+          const gc = saGradeColor(h.overall);
+          const meta = [h.price ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
+          return `<div class="sa-hist-card" data-sym="${h.sym}">
+            <div class="sa-hist-sym">${h.sym}</div>
+            ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}</div>` : ""}
+            <div class="sa-hist-info">
+              <div class="sa-hist-name">${h.name}</div>
+              ${meta ? `<div class="sa-hist-meta">${meta}</div>` : ""}
+            </div>
+            <div class="sa-hist-arrow">›</div>
+          </div>`;
+        }).join("")}
+      </div>`;
+    $$(".sa-hist-card", el).forEach(c =>
       c.addEventListener("click", () => triggerAnalysis(c.dataset.sym, false)));
   }
 
@@ -5004,7 +5042,8 @@
     if (!force) {
       try {
         const c = JSON.parse(localStorage.getItem(key) || "null");
-        if (c?._date === today) return c;
+        const ttlMs = (parseInt(localStorage.getItem("wl_analysis_ttl") || "240")) * 60000;
+        if (c?._date === today && c?._savedAt && (Date.now() - c._savedAt) < ttlMs) return c;
       } catch (_) {}
     }
     const r = await fetch(`/api/stock-analysis?sym=${encodeURIComponent(sym)}${force ? "&force=1" : ""}`);
@@ -5098,6 +5137,11 @@
     return `<svg viewBox="0 0 200 185" class="sa-radar" xmlns="http://www.w3.org/2000/svg">${rings}${spokes}<polygon points="${dataPts}" fill="oklch(0.78 0.12 195 / 0.18)" stroke="oklch(0.78 0.12 195)" stroke-width="1.5" stroke-linejoin="round"/>${lbls}</svg>`;
   }
 
+  // ── Grade color helper (also used in history cards) ──────────────────────
+  function saGradeColor(score) {
+    return score >= 80 ? "var(--up)" : score >= 65 ? "var(--accent)" : score >= 50 ? "var(--warn)" : "var(--down)";
+  }
+
   // ── Metric tip popup: body-level singleton ────────────────────────────────
   // Mounted on document.body — .page-enter keeps transform applied (fill both),
   // which turns ancestors into containing blocks for position:fixed and breaks
@@ -5147,7 +5191,7 @@
     } = data;
 
     // Grade / bar colors
-    const gradeColor = s => s >= 80 ? "var(--up)" : s >= 65 ? "var(--accent)" : s >= 50 ? "var(--warn)" : "var(--down)";
+    const gradeColor = saGradeColor;
     const barColor   = s => s >= 75 ? "var(--up)" : s >= 60 ? "var(--accent)" : s >= 45 ? "var(--warn)" : "var(--down)";
 
     // Recommendation badge style
