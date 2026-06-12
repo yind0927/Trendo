@@ -5149,6 +5149,7 @@
       const cached = JSON.parse(localStorage.getItem(`wl_analysis_${sym}`) || "null");
       if (cached) { recordAnalysis(sym, cached); renderAnalysisHistory(); }
     } catch (_) {}
+  }
 
   // ── Format section body: **bold** + bullet lines ─────────────────────────
   function formatSectionBody(text) {
