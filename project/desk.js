@@ -4835,7 +4835,7 @@
     if (!content) return;
 
     content.innerHTML = WATCHLIST.length === 0
-      ? `<div style="text-align:center;padding:48px;color:var(--fg-3);font-size:13px">暂无观察标的</div>`
+      ? `<div style="text-align:center;padding:48px;color:var(--fg-3);font-size:13px">暂无列表记录</div>`
       : WATCHLIST.map((item, idx) => watchlistCardHTML(item, idx)).join("");
 
     $$(".wl-delete", content).forEach(btn => {
