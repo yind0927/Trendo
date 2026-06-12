@@ -5059,7 +5059,7 @@
     if (!panel) return;
 
     const {
-      sym, name, industry, exchange, marketCapStr, ipoYear, price,
+      sym, name, industry, exchange, marketCapStr, marketCap, ipoYear, price,
       wk52High, wk52Low, wk52Pos, ema50, ema200, rsi,
       scores, metrics, analyst, quarterlyEPS,
       nextEarnings, daysToEarnings, earningsRisk,
@@ -5091,7 +5091,14 @@
       return `${n.toFixed(1)}%`;
     };
 
-    // 52-week bar (gradient track + EMA tick marks + price pointer)
+    // Market cap — computed client-side so format is always fresh (not stuck in Redis cache)
+    const mcDisplay = marketCap != null
+      ? marketCap >= 1e6  ? `$${(marketCap / 1e6).toFixed(2)}T`
+      : marketCap >= 1000 ? `$${(marketCap / 1000).toFixed(1)}B`
+      : `$${Math.round(marketCap)}M`
+      : (marketCapStr && marketCapStr !== "N/A" ? marketCapStr : null);
+
+    // 52-week bar (minimal redesign: EMA labels above bar, price info below)
     const fPr = v => v == null ? "—" : v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0);
     const w52bar = (wk52High && wk52Low && wk52Pos != null) ? (() => {
       const pct = wk52Pos;
@@ -5101,23 +5108,25 @@
       const ema200p = (ema200 && ema200 >= wk52Low && ema200 <= wk52High)
         ? +((ema200 - wk52Low) / (wk52High - wk52Low) * 100).toFixed(1) : null;
       return `<div class="sa-52w">
-        <div class="sa-52w-row">
-          <span class="sa-52w-lohi">L&nbsp;$${fPr(wk52Low)}</span>
-          <div class="sa-52w-inner">
+        <div class="sa-52w-ema-row">
+          ${ema200p != null ? `<span class="sa-52w-ema-lbl" style="left:${ema200p}%">EMA 200</span>` : ""}
+          ${ema50p  != null ? `<span class="sa-52w-ema-lbl sa-52w-ema-lbl50" style="left:${ema50p}%">EMA 50</span>` : ""}
+        </div>
+        <div class="sa-52w-track-row">
+          <span class="sa-52w-bound">$${fPr(wk52Low)}</span>
+          <div class="sa-52w-bar-outer">
             <div class="sa-52w-track">
-              ${ema200p != null ? `<div class="sa-52w-ema-tick" style="left:${ema200p}%" title="EMA200"></div>` : ""}
-              ${ema50p  != null ? `<div class="sa-52w-ema-tick sa-52w-ema50" style="left:${ema50p}%" title="EMA50"></div>` : ""}
-              <div class="sa-52w-marker" style="left:${pct}%;background:${ptClr}"></div>
-            </div>
-            <div class="sa-52w-tags">
-              ${ema200p != null ? `<span class="sa-52w-ema-lbl" style="left:${ema200p}%">200e</span>` : ""}
-              ${ema50p  != null ? `<span class="sa-52w-ema-lbl sa-52w-e50lbl" style="left:${ema50p}%">50e</span>` : ""}
-              <span class="sa-52w-price-lbl" style="left:${pct}%;color:${ptClr}">$${fPr(price)}</span>
+              ${ema200p != null ? `<div class="sa-52w-etick" style="left:${ema200p}%"></div>` : ""}
+              ${ema50p  != null ? `<div class="sa-52w-etick sa-52w-etick50" style="left:${ema50p}%"></div>` : ""}
+              <div class="sa-52w-dot" style="left:${pct}%;background:${ptClr}"></div>
             </div>
           </div>
-          <span class="sa-52w-lohi">H&nbsp;$${fPr(wk52High)}</span>
+          <span class="sa-52w-bound">$${fPr(wk52High)}</span>
         </div>
-        <div class="sa-52w-pct" style="color:${ptClr}">52周 ${pct}% 分位</div>
+        <div class="sa-52w-info">
+          <span style="color:${ptClr};font-weight:700">$${fPr(price)}</span>
+          <span style="color:${ptClr}">52w ${pct}%分位</span>
+        </div>
       </div>`;
     })() : "";
 
@@ -5282,7 +5291,7 @@
         <div class="sa-tags">
           ${industry ? `<span class="sa-tag">${industry}</span>` : ""}
           ${exchange  ? `<span class="sa-tag">${exchange.split(" ")[0]}</span>` : ""}
-          ${marketCapStr && marketCapStr !== "N/A" ? `<span class="sa-tag">Mkt Cap ${marketCapStr}</span>` : ""}
+          ${mcDisplay ? `<span class="sa-tag">Mkt Cap ${mcDisplay}</span>` : ""}
           ${ipoYear ? `<span class="sa-tag">上市 ${ipoYear}</span>` : ""}
           ${earnTag}
         </div>
@@ -5296,9 +5305,9 @@
             <div class="sa-overall-num" style="color:${gradeColor(scores.overall)}">${scores.overall}<span style="font-size:13px;font-weight:400;color:var(--fg-3)">/100</span></div>
             <div class="sa-overall-sub">综合评分</div>
           </div>
+          <div class="sa-radar-inline">${buildRadarSVG(scores)}</div>
         </div>
         <div class="sa-score-grid">${scoreBars}</div>
-        <div class="sa-radar-wrap">${buildRadarSVG(scores)}</div>
       </div>
 
       ${recommendation ? `<div class="sa-rec">
@@ -5412,11 +5421,13 @@
         popup.querySelector(".sa-tip-name").textContent = tip[0];
         popup.querySelector(".sa-tip-desc").textContent = tip[1];
         popup._lastKey = el.dataset.tipk;
-        const rect = el.getBoundingClientRect();
-        const pw = 260, pad = 8;
+        // Use the card rect (not the tiny ⓘ icon) for natural positioning
+        const card = el.closest(".sa-mc") ?? el;
+        const rect = card.getBoundingClientRect();
+        const pw = 264, pad = 8;
         let left = rect.left, top = rect.bottom + 6;
         if (left + pw > window.innerWidth - pad) left = window.innerWidth - pw - pad;
-        if (top + 140 > window.innerHeight) top = rect.top - 148;
+        if (top + 164 > window.innerHeight) top = rect.top - 170;
         popup.style.left = Math.max(pad, left) + "px";
         popup.style.top  = top + "px";
         popup.style.display = "block";

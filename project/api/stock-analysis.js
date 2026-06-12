@@ -245,8 +245,8 @@ export default async function handler(req, res) {
   if (!aiKey) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const today    = new Date().toISOString().slice(0, 10);
-  // v2: cache key versioned so deploys with data-source fixes bypass stale entries
-  const cacheKey = `trendo:stock_analysis:v2:${sym}:${today}`;
+  // v3: force fresh Wilder RSI + English market cap format
+  const cacheKey = `trendo:stock_analysis:v3:${sym}:${today}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────

@@ -1866,19 +1866,19 @@
   .sa-tag { font-size: 10.5px; padding: 2px 8px; border-radius: 20px; background: var(--bg-2); color: var(--fg-2); border: 1px solid var(--line); white-space: nowrap; }
   .sa-tag.earn-high { color: var(--down); border-color: oklch(0.70 0.19 25 / 0.4); background: oklch(0.70 0.19 25 / 0.08); }
   .sa-tag.earn-mod  { color: var(--warn); border-color: oklch(0.80 0.15 75 / 0.4); background: oklch(0.80 0.15 75 / 0.08); }
-  .sa-52w { margin-top: 10px; }
-  .sa-52w-row { display: flex; align-items: center; gap: 8px; }
-  .sa-52w-lohi { font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-3); white-space: nowrap; flex-shrink: 0; }
-  .sa-52w-inner { flex: 1; }
-  .sa-52w-track { height: 8px; background: linear-gradient(to right, oklch(0.70 0.19 25), oklch(0.80 0.15 75) 50%, oklch(0.78 0.17 145)); border-radius: 4px; position: relative; overflow: visible; }
-  .sa-52w-ema-tick { position: absolute; top: -3px; transform: translateX(-50%); width: 2px; height: 14px; background: var(--fg-3); border-radius: 1px; opacity: 0.8; z-index: 1; }
-  .sa-52w-ema50 { background: var(--warn) !important; opacity: 1; }
-  .sa-52w-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; border: 2.5px solid var(--bg-1); z-index: 2; }
-  .sa-52w-tags { position: relative; height: 20px; margin-top: 2px; }
-  .sa-52w-ema-lbl { position: absolute; transform: translateX(-50%); font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; line-height: 20px; }
-  .sa-52w-e50lbl { color: var(--warn); }
-  .sa-52w-price-lbl { position: absolute; transform: translateX(-50%); font-size: 10.5px; font-weight: 700; font-family: var(--f-mono); white-space: nowrap; line-height: 20px; }
-  .sa-52w-pct { font-size: 9.5px; text-align: right; margin-top: 3px; font-family: var(--f-mono); }
+  /* 52w bar — clean redesign */
+  .sa-52w { margin-top: 12px; }
+  .sa-52w-ema-row { position: relative; height: 16px; }
+  .sa-52w-ema-lbl { position: absolute; bottom: 2px; transform: translateX(-50%); font-size: 8.5px; color: var(--fg-3); white-space: nowrap; font-family: var(--f-mono); }
+  .sa-52w-ema-lbl50 { color: oklch(0.72 0.13 75); }
+  .sa-52w-track-row { display: flex; align-items: center; gap: 8px; }
+  .sa-52w-bound { font-size: 10px; font-family: var(--f-mono); color: var(--fg-3); white-space: nowrap; flex-shrink: 0; }
+  .sa-52w-bar-outer { flex: 1; }
+  .sa-52w-track { height: 7px; border-radius: 4px; background: linear-gradient(to right, oklch(0.65 0.18 25), oklch(0.78 0.14 75) 50%, oklch(0.72 0.16 145)); position: relative; overflow: visible; }
+  .sa-52w-etick { position: absolute; top: -3px; transform: translateX(-50%); width: 1.5px; height: 13px; background: oklch(1 0 0 / 0.25); border-radius: 1px; }
+  .sa-52w-etick50 { background: oklch(0.80 0.15 75 / 0.65); }
+  .sa-52w-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--bg-1); z-index: 2; }
+  .sa-52w-info { display: flex; justify-content: space-between; padding-top: 5px; font-size: 10px; font-family: var(--f-mono); }
 
   /* Scores */
   .sa-scores { padding: 16px 20px; border-bottom: 1px solid var(--line); }
@@ -1886,6 +1886,8 @@
   .sa-grade { font-size: 38px; font-weight: 900; font-family: var(--f-mono); line-height: 1; }
   .sa-overall-num { font-size: 24px; font-weight: 700; font-family: var(--f-mono); }
   .sa-overall-sub { font-size: 10px; color: var(--fg-3); margin-top: 1px; }
+  .sa-radar-inline { margin-left: auto; flex-shrink: 0; }
+  .sa-radar { width: 108px; height: 98px; overflow: visible; }
   .sa-score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
   .sa-score-row { display: flex; flex-direction: column; gap: 4px; }
   .sa-score-lbl { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-3); }
@@ -1902,16 +1904,14 @@
   .sa-metrics { padding: 14px 20px; border-bottom: 1px solid var(--line); }
   .sa-metrics-hdr { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 10px; }
   .sa-metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .sa-mc { background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 5px; transition: border-color .12s; }
+  .sa-mc { background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px 13px 10px; display: flex; flex-direction: column; gap: 7px; transition: border-color .12s; min-height: 64px; }
   .sa-mc:hover { border-color: oklch(0.40 0.02 250); }
   .sa-mc-val { font-size: 16px; font-weight: 800; font-family: var(--f-mono); color: var(--fg-0); line-height: 1; }
   .sa-mc-lbl { font-size: 9px; color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; gap: 3px; }
   .sa-mc-info { cursor: pointer; font-size: 12px; color: var(--fg-3); opacity: 0.55; transition: opacity .12s, color .12s; font-style: normal; text-transform: none; letter-spacing: 0; flex-shrink: 0; line-height: 1; }
   .sa-mc-info:hover { opacity: 1; color: var(--accent); }
   .sa-tech-grid { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
-  /* Radar chart */
-  .sa-radar-wrap { display: flex; justify-content: center; padding: 8px 0 4px; }
-  .sa-radar { width: 180px; height: 166px; overflow: visible; }
+  /* Radar chart (inline in grade row — see .sa-radar-inline above) */
   /* EPS beat/miss strip */
   .sa-eps-strip { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
   .sa-eps-ttl { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 8px; }
@@ -3774,8 +3774,8 @@
   </div>
 </div>
 
-<script src="data.js?v=30"></script>
-<script src="desk.js?v=30"></script>
+<script src="data.js?v=31"></script>
+<script src="desk.js?v=31"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
