@@ -1887,7 +1887,7 @@
   .sa-overall-num { font-size: 24px; font-weight: 700; font-family: var(--f-mono); }
   .sa-overall-sub { font-size: 10px; color: var(--fg-3); margin-top: 1px; }
   .sa-radar-inline { margin-left: auto; flex-shrink: 0; }
-  .sa-radar { width: 140px; height: 128px; overflow: visible; }
+  .sa-radar { width: 168px; height: 154px; overflow: visible; }
   .sa-score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
   .sa-score-row { display: flex; flex-direction: column; gap: 4px; }
   .sa-score-lbl { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-3); }
@@ -1910,7 +1910,7 @@
   .sa-mc-lbl { font-size: 9px; color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; gap: 3px; }
   .sa-mc-info { cursor: pointer; font-size: 12px; color: var(--fg-3); opacity: 0.55; transition: opacity .12s, color .12s; font-style: normal; text-transform: none; letter-spacing: 0; flex-shrink: 0; line-height: 1; }
   .sa-mc-info:hover { opacity: 1; color: var(--accent); }
-  .sa-tech-grid { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .sa-tech-grid { }
   /* Radar chart (inline in grade row — see .sa-radar-inline above) */
   /* EPS beat/miss strip */
   .sa-eps-strip { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
@@ -1925,10 +1925,14 @@
   .sa-eps-val.beat { color: var(--up); } .sa-eps-val.miss { color: var(--down); }
   .sa-eps-est { font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); }
   .sa-eps-per { font-size: 9px; color: var(--fg-3); }
-  /* Metric tooltip popup — centered overlay */
+  /* Metric section row label */
+  .sa-sec-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin: 10px 0 5px; display: flex; align-items: center; gap: 7px; }
+  .sa-sec-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .sa-sec-label:first-child { margin-top: 0; }
+  /* Metric tooltip popup — panel-centered overlay */
   .sa-tip-overlay { position: fixed; inset: 0; z-index: 9998; background: oklch(0 0 0 / 0.52); display: none; }
   .sa-tip-overlay.open { display: block; }
-  .sa-tip-popup { position: fixed; z-index: 9999; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-1); border: 1px solid oklch(0.30 0.02 250); border-radius: 12px; width: 300px; max-width: calc(100vw - 32px); box-shadow: 0 16px 48px oklch(0 0 0 / 0.65); display: none; }
+  .sa-tip-popup { position: fixed; z-index: 9999; transform: translate(-50%, -50%); background: var(--bg-1); border: 1px solid oklch(0.30 0.02 250); border-radius: 12px; width: 300px; max-width: calc(100vw - 32px); box-shadow: 0 16px 48px oklch(0 0 0 / 0.65); display: none; }
   .sa-tip-popup.open { display: block; }
   .sa-tip-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
   .sa-tip-name { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
@@ -3782,8 +3786,8 @@
   </div>
 </div>
 
-<script src="data.js?v=32"></script>
-<script src="desk.js?v=32"></script>
+<script src="data.js?v=33"></script>
+<script src="desk.js?v=33"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

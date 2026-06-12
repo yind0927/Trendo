@@ -5201,37 +5201,52 @@
       </div>`;
     };
 
-    // Key metrics (redesigned cards with color coding + tooltip icons)
-    const metricRows = [
-      [
-        { v: fV(metrics.pe),        l: "P/E",      raw: metrics.pe,        k: "pe" },
-        { v: fV(metrics.forwardPE), l: "远期P/E",   raw: metrics.forwardPE, k: "forwardpe" },
-        { v: fV(metrics.peg),       l: "PEG",       raw: metrics.peg,       k: "peg" },
-        { v: fV(metrics.evEbitda),  l: "EV/EBITDA", raw: metrics.evEbitda,  k: "evebitda" },
-      ],
-      [
-        { v: fV(metrics.ps),        l: "P/S",    raw: metrics.ps,        k: "ps" },
-        { v: fV(metrics.pb),        l: "P/B",    raw: metrics.pb,        k: "pb" },
-        { v: fP(metrics.revGrowth), l: "收入增速", raw: metrics.revGrowth, k: "revgrowth" },
-        { v: fP(metrics.epsGrowth), l: "EPS增速", raw: metrics.epsGrowth, k: "epsgrowth" },
-      ],
-      [
-        { v: fPn(metrics.netMargin),   l: "净利率", raw: metrics.netMargin,   k: "netmargin" },
-        { v: fPn(metrics.grossMargin), l: "毛利率", raw: metrics.grossMargin, k: "grossmargin" },
-        { v: fPn(metrics.roe),         l: "ROE",    raw: metrics.roe,         k: "roe" },
-        { v: fPn(metrics.roa),         l: "ROA",    raw: metrics.roa,         k: "roa" },
-      ],
-      [
-        { v: metrics.freeCashflow != null ? `${metrics.freeCashflow >= 0 ? "" : "−"}$${Math.abs(metrics.freeCashflow).toFixed(1)}B` : "—", l: "FCF", raw: metrics.freeCashflow,       k: "fcf" },
-        { v: metrics.operatingCashflow != null ? `$${metrics.operatingCashflow.toFixed(1)}B` : "—",                                       l: "OCF", raw: metrics.operatingCashflow,  k: "ocf" },
-        { v: metrics.deRatio?.toFixed(2)    ?? "—", l: "D/E",    raw: metrics.deRatio,      k: "de" },
-        { v: metrics.currentRatio?.toFixed(2) ?? "—", l: "流动比率", raw: metrics.currentRatio, k: "currentratio" },
-      ],
+    // Key metrics — sectioned rows with category labels
+    const metricSections = [
+      {
+        label: "估值", cols: 3,
+        items: [
+          { v: fV(metrics.pe),        l: "P/E",      raw: metrics.pe,        k: "pe" },
+          { v: fV(metrics.forwardPE), l: "远期P/E",   raw: metrics.forwardPE, k: "forwardpe" },
+          { v: fV(metrics.peg),       l: "PEG",       raw: metrics.peg,       k: "peg" },
+          { v: fV(metrics.evEbitda),  l: "EV/EBITDA", raw: metrics.evEbitda,  k: "evebitda" },
+          { v: fV(metrics.ps),        l: "P/S",       raw: metrics.ps,        k: "ps" },
+          { v: fV(metrics.pb),        l: "P/B",       raw: metrics.pb,        k: "pb" },
+        ],
+      },
+      {
+        label: "成长", cols: 2,
+        items: [
+          { v: fP(metrics.revGrowth), l: "收入增速", raw: metrics.revGrowth, k: "revgrowth" },
+          { v: fP(metrics.epsGrowth), l: "EPS增速",  raw: metrics.epsGrowth, k: "epsgrowth" },
+        ],
+      },
+      {
+        label: "盈利能力",
+        items: [
+          { v: fPn(metrics.netMargin),   l: "净利率", raw: metrics.netMargin,   k: "netmargin" },
+          { v: fPn(metrics.grossMargin), l: "毛利率", raw: metrics.grossMargin, k: "grossmargin" },
+          { v: fPn(metrics.roe),         l: "ROE",    raw: metrics.roe,         k: "roe" },
+          { v: fPn(metrics.roa),         l: "ROA",    raw: metrics.roa,         k: "roa" },
+        ],
+      },
+      {
+        label: "财务健康",
+        items: [
+          { v: metrics.freeCashflow != null ? `${metrics.freeCashflow >= 0 ? "" : "−"}$${Math.abs(metrics.freeCashflow).toFixed(1)}B` : "—", l: "FCF", raw: metrics.freeCashflow,      k: "fcf" },
+          { v: metrics.operatingCashflow != null ? `$${metrics.operatingCashflow.toFixed(1)}B` : "—",                                       l: "OCF", raw: metrics.operatingCashflow, k: "ocf" },
+          { v: metrics.deRatio?.toFixed(2)    ?? "—", l: "D/E",    raw: metrics.deRatio,      k: "de" },
+          { v: metrics.currentRatio?.toFixed(2) ?? "—", l: "流动比率", raw: metrics.currentRatio, k: "currentratio" },
+        ],
+      },
     ];
 
-    const metricsHTML = metricRows.map(row =>
-      `<div class="sa-metrics-grid">${row.map(mkMC).join("")}</div>`
-    ).join(`<div style="height:6px"></div>`);
+    const metricsHTML = metricSections.map(s => {
+      const cols = s.cols ?? 4;
+      const style = cols !== 4 ? ` style="grid-template-columns:repeat(${cols},1fr)"` : "";
+      return `<div class="sa-sec-label">${s.label}</div>
+      <div class="sa-metrics-grid"${style}>${s.items.map(mkMC).join("")}</div>`;
+    }).join("");
 
     const techMetrics = [
       rsi    != null ? { v: rsi.toFixed(1),                          l: "RSI(14)",  raw: rsi,                   k: "rsi14" }      : null,
@@ -5243,6 +5258,7 @@
     ].filter(Boolean);
 
     const techStrip = techMetrics.length ? `
+      <div class="sa-sec-label">技术指标</div>
       <div class="sa-metrics-grid sa-tech-grid">${techMetrics.map(mkMC).join("")}</div>` : "";
 
     // Quarterly EPS beat/miss strip (visual summary)
@@ -5415,13 +5431,28 @@
     // Re-analyze
     $("#sa-btn-re", panel)?.addEventListener("click", () => triggerAnalysis(data.sym, true));
 
-    // Metric tooltip popup — centered overlay
+    // Metric tooltip popup — centered within visible panel area
     const tipOverlay = panel.querySelector(".sa-tip-overlay");
     const tipPopup   = panel.querySelector(".sa-tip-popup");
     const closeTip = () => {
       tipOverlay.classList.remove("open");
       tipPopup.classList.remove("open");
       tipPopup._lastKey = null;
+    };
+    const positionTip = () => {
+      const pr  = panel.getBoundingClientRect();
+      // visible intersection of panel and viewport
+      const vx0 = Math.max(0, pr.left), vy0 = Math.max(0, pr.top);
+      const vx1 = Math.min(window.innerWidth, pr.right);
+      const vy1 = Math.min(window.innerHeight, pr.bottom);
+      const cx  = (vx0 + vx1) / 2;
+      const cy  = (vy0 + vy1) / 2;
+      // clamp so popup stays fully within viewport
+      const pw = Math.min(300, window.innerWidth - 32);
+      const ph = 260;
+      tipPopup.style.left  = Math.max(pw / 2 + 8, Math.min(window.innerWidth - pw / 2 - 8, cx)) + "px";
+      tipPopup.style.top   = Math.max(ph / 2 + 8, Math.min(window.innerHeight - ph / 2 - 8, cy)) + "px";
+      tipPopup.style.width = pw + "px";
     };
     if (tipOverlay) tipOverlay.addEventListener("click", closeTip);
     tipPopup?.querySelector(".sa-tip-close")?.addEventListener("click", closeTip);
@@ -5440,6 +5471,7 @@
         if (tip[2]) { thresh.textContent = tip[2]; thresh.style.display = ""; }
         else { thresh.style.display = "none"; }
         tipPopup._lastKey = el.dataset.tipk;
+        positionTip();
         tipOverlay.classList.add("open");
         tipPopup.classList.add("open");
       });
