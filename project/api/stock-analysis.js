@@ -14,15 +14,20 @@ function calcEMA(closes, n) {
 
 function calcRSI(closes, n = 14) {
   if (closes.length < n + 1) return null;
-  const recent = closes.slice(-(n + 1));
-  let gains = 0, losses = 0;
-  for (let i = 1; i < recent.length; i++) {
-    const d = recent[i] - recent[i - 1];
-    if (d > 0) gains += d; else losses -= d;
+  // Wilder's smoothing: seed with SMA of first n changes, then EMA(1/n)
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= n; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) avgGain += d; else avgLoss -= d;
   }
-  const ag = gains / n, al = losses / n;
-  if (al === 0) return 100;
-  return Math.round((100 - 100 / (1 + ag / al)) * 10) / 10;
+  avgGain /= n; avgLoss /= n;
+  for (let i = n + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    avgGain = (avgGain * (n - 1) + Math.max(d, 0)) / n;
+    avgLoss = (avgLoss * (n - 1) + Math.max(-d, 0)) / n;
+  }
+  if (avgLoss === 0) return 100;
+  return Math.round((100 - 100 / (1 + avgGain / avgLoss)) * 10) / 10;
 }
 
 function normPct(v) {
@@ -453,9 +458,9 @@ export default async function handler(req, res) {
   const fmtM = v => v != null ? `${parseFloat(v.toFixed(1))}%` : "N/A";
 
   const mcStr = marketCap
-    ? marketCap > 200000 ? `$${(marketCap / 1e6).toFixed(1)}万亿`
-    : marketCap > 10000  ? `$${(marketCap / 1000).toFixed(0)}亿`
-    : `$${marketCap.toFixed(0)}百万` : "N/A";
+    ? marketCap >= 1e6   ? `$${(marketCap / 1e6).toFixed(2)}T`
+    : marketCap >= 1000  ? `$${(marketCap / 1000).toFixed(1)}B`
+    : `$${Math.round(marketCap)}M` : "N/A";
 
   const trendStr = price && ema50 && ema200
     ? price > ema50 && ema50 > ema200 ? "多头排列：price > EMA50 > EMA200"

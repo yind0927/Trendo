@@ -5032,6 +5032,27 @@
       }).join('');
   }
 
+  // ── 5-axis radar pentagon SVG ─────────────────────────────────────────────
+  function buildRadarSVG(sc) {
+    const axes = [
+      { l: "技术",  v: sc.trend     ?? 50 },
+      { l: "估值",  v: sc.valuation ?? 50 },
+      { l: "成长",  v: sc.growth    ?? 50 },
+      { l: "财务",  v: sc.health    ?? 50 },
+      { l: "分析师", v: sc.analyst   ?? 50 },
+    ];
+    const N = 5, cx = 100, cy = 90, r = 62;
+    const ang = i => (i / N) * 2 * Math.PI - Math.PI / 2;
+    const pt  = (i, f) => [+(cx + r * f * Math.cos(ang(i))).toFixed(1), +(cy + r * f * Math.sin(ang(i))).toFixed(1)];
+    const rings = [0.25, 0.5, 0.75, 1].map(f =>
+      `<polygon points="${Array.from({length:N},(_,i)=>pt(i,f).join(",")).join(" ")}" fill="none" stroke="oklch(0.26 0.01 250)" stroke-width="0.8"/>`
+    ).join("");
+    const spokes = Array.from({length:N},(_,i)=>{const[x,y]=pt(i,1);return`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="oklch(0.26 0.01 250)" stroke-width="0.8"/>`;}).join("");
+    const dataPts = axes.map((a,i)=>pt(i,a.v/100).join(",")).join(" ");
+    const lbls = axes.map((a,i)=>{const[x,y]=pt(i,1.28);return`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="oklch(0.58 0.02 250)">${a.l}</text>`;}).join("");
+    return `<svg viewBox="0 0 200 185" class="sa-radar" xmlns="http://www.w3.org/2000/svg">${rings}${spokes}<polygon points="${dataPts}" fill="oklch(0.78 0.12 195 / 0.18)" stroke="oklch(0.78 0.12 195)" stroke-width="1.5" stroke-linejoin="round"/>${lbls}</svg>`;
+  }
+
   // ── Render full analysis card ─────────────────────────────────────────────
   function renderAnalysisPanel(data) {
     const panel = $("#wl-analysis-panel");
@@ -5070,18 +5091,35 @@
       return `${n.toFixed(1)}%`;
     };
 
-    // 52-week bar
-    const w52bar = (wk52High && wk52Low && wk52Pos != null) ? `
-      <div class="sa-52w">
-        <div class="sa-52w-bar">
-          <span>$${wk52Low.toFixed(0)}</span>
-          <div class="sa-52w-track">
-            <div class="sa-52w-ptr" style="left:${wk52Pos}%"></div>
+    // 52-week bar (gradient track + EMA tick marks + price pointer)
+    const fPr = v => v == null ? "—" : v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0);
+    const w52bar = (wk52High && wk52Low && wk52Pos != null) ? (() => {
+      const pct = wk52Pos;
+      const ptClr = pct >= 65 ? "var(--up)" : pct <= 35 ? "var(--down)" : "var(--warn)";
+      const ema50p  = (ema50  && ema50  >= wk52Low && ema50  <= wk52High)
+        ? +((ema50  - wk52Low) / (wk52High - wk52Low) * 100).toFixed(1) : null;
+      const ema200p = (ema200 && ema200 >= wk52Low && ema200 <= wk52High)
+        ? +((ema200 - wk52Low) / (wk52High - wk52Low) * 100).toFixed(1) : null;
+      return `<div class="sa-52w">
+        <div class="sa-52w-row">
+          <span class="sa-52w-lohi">L&nbsp;$${fPr(wk52Low)}</span>
+          <div class="sa-52w-inner">
+            <div class="sa-52w-track">
+              ${ema200p != null ? `<div class="sa-52w-ema-tick" style="left:${ema200p}%" title="EMA200"></div>` : ""}
+              ${ema50p  != null ? `<div class="sa-52w-ema-tick sa-52w-ema50" style="left:${ema50p}%" title="EMA50"></div>` : ""}
+              <div class="sa-52w-marker" style="left:${pct}%;background:${ptClr}"></div>
+            </div>
+            <div class="sa-52w-tags">
+              ${ema200p != null ? `<span class="sa-52w-ema-lbl" style="left:${ema200p}%">200e</span>` : ""}
+              ${ema50p  != null ? `<span class="sa-52w-ema-lbl sa-52w-e50lbl" style="left:${ema50p}%">50e</span>` : ""}
+              <span class="sa-52w-price-lbl" style="left:${pct}%;color:${ptClr}">$${fPr(price)}</span>
+            </div>
           </div>
-          <span>$${wk52High.toFixed(0)}</span>
-          <span style="color:var(--fg-2)">@${wk52Pos}%分位</span>
+          <span class="sa-52w-lohi">H&nbsp;$${fPr(wk52High)}</span>
         </div>
-      </div>` : "";
+        <div class="sa-52w-pct" style="color:${ptClr}">52周 ${pct}% 分位</div>
+      </div>`;
+    })() : "";
 
     // Earnings tag
     const earnTag = nextEarnings
@@ -5100,48 +5138,121 @@
         <div class="sa-bar-track"><div class="sa-bar-fill" style="width:${val}%;background:${barColor(val)}"></div></div>
       </div>` : "").join("");
 
-    // Key metrics
+    // Metric color coding helper (key → raw numeric value → CSS color or null)
+    const metricColor = (k, raw) => {
+      if (raw == null) return null;
+      const v = parseFloat(raw); if (isNaN(v)) return null;
+      const G = "var(--up)", W = "var(--warn)", R = "var(--down)";
+      const m = {
+        pe: v<0?R:v<18?G:v<32?null:v<50?W:R, forwardpe: v<0?R:v<18?G:v<30?null:v<45?W:R,
+        peg: v<0?R:v<1?G:v<2?null:v<3?W:R, evebitda: v<0?R:v<10?G:v<18?null:v<30?W:R,
+        ps: v<2?G:v<8?null:v<20?W:R, pb: v<0?R:v<2?G:v<5?null:W,
+        revgrowth: v>20?G:v>8?null:v>0?W:R, epsgrowth: v>20?G:v>5?null:v>0?W:R,
+        netmargin: v>15?G:v>5?null:v>0?W:R, grossmargin: v>60?G:v>35?null:v>15?W:R,
+        roe: v>20?G:v>10?null:v>0?W:R, roa: v>10?G:v>5?null:v>0?W:R,
+        fcf: v>0?G:R, ocf: v>0?G:R, de: v<0.5?G:v<1.5?null:v<3?W:R,
+        currentratio: v>2?G:v>1?null:R, rsi14: v>70?W:v<30?W:null,
+        quickratio: v>1?G:W, beta: null, divyield: v>3?G:null,
+      };
+      return m[k] ?? null;
+    };
+
+    // Tooltip definitions [title, description]
+    const METRIC_TIPS = {
+      pe:          ["P/E (TTM)",      "市盈率：股价÷过去12月EPS。<15偏低 / 15-25合理 / >35偏贵，负值=亏损。"],
+      forwardpe:   ["远期 P/E",        "前瞻市盈率：股价÷预期下年EPS。成长股远期PE通常低于TTM，更具参考性。"],
+      peg:         ["PEG",            "市盈增长比：P/E ÷ EPS增速(%)。<1.0低估 / 1-2合理 / >2增长溢价过高。"],
+      evebitda:    ["EV/EBITDA",      "企业价值÷运营利润（含债务定价）。<10偏低 / 10-15合理 / >20偏贵，并购首选指标。"],
+      ps:          ["P/S",            "市销率：股价÷每股营收，适合亏损成长股。SaaS 5-15x，传统行业<2x。"],
+      pb:          ["P/B",            "市净率：股价÷每股净资产。<1账面打折，>5轻资产/高ROE溢价，金融股参考最强。"],
+      revgrowth:   ["收入增速 YoY",   ">20%高增长 / 10-20%健康 / <5%缓慢 / 负值需关注业务萎缩。"],
+      epsgrowth:   ["EPS增速 YoY",    "EPS增速>营收→利润率扩张（积极）；EPS增速<营收→利润率收缩（需关注）。"],
+      netmargin:   ["净利率",          "净利润÷营收。科技>20%优秀 / 消费品10%合理 / 零售<5%正常 / 负值亏损。"],
+      grossmargin: ["毛利率",          "毛利润÷营收，衡量产品定价权与竞争壁垒。SaaS>70% / 制造业25-45%。"],
+      roe:         ["ROE",            "净资产收益率。>15%优秀 / >25%卓越，注意是否因高杠杆(高D/E)人为拉高。"],
+      roa:         ["ROA",            "总资产收益率，衡量资产利用效率。>10%优秀，金融股ROA 1-2%属正常范围。"],
+      fcf:         ["FCF 自由现金流", "经营现金流 − 资本支出（单位B$）。正FCF=真实造血能力，比净利润更难造假。"],
+      ocf:         ["OCF 经营现金流", "核心业务产生的现金（B$）。应与净利润同向，若远低则盈利质量存疑。"],
+      de:          ["D/E 负债率",     "总债务÷股东权益。<0.5稳健 / 0.5-1.5正常 / >2偏高，需关注利息覆盖倍数。"],
+      currentratio:["流动比率",        "流动资产÷流动负债。>2充裕 / 1-2正常 / <1短期偿付有压力。"],
+      rsi14:       ["RSI 14日",       "相对强弱指数（Wilder平滑法）。>70超买注意回调 / <30超卖可能反弹 / 45-65健康动量区间。"],
+      ema50:       ["EMA 50日",       "50日指数移动均线，短中期趋势基准。价格站上EMA50=看多，跌破=短期趋势转弱。"],
+      ema200:      ["EMA 200日",      "200日指数移动均线，长期核心防线。价格在EMA200之上=牛市结构，跌破=重要警示。"],
+      quickratio:  ["速动比率",        "(流动资产−库存)÷流动负债。>1合格，比流动比率更保守，排除难变现的库存。"],
+      beta:        ["Beta 系数",      "相对大盘波动敏感度。1.0跟随大盘 / >1.5高波动进攻型 / <0.5低波动防御型。"],
+      divyield:    ["股息率",          "年化股息÷股价。>3%为较高股息，成长股通常不分红而选择再投资扩张。"],
+    };
+
+    // Metric card builder
+    const mkMC = ({ v, l, raw, k }) => {
+      const col = metricColor(k, raw);
+      return `<div class="sa-mc">
+        <div class="sa-mc-val"${col ? ` style="color:${col}"` : ""}>${v}</div>
+        <div class="sa-mc-lbl"><span>${l}</span><span class="sa-mc-info" data-tipk="${k}">ⓘ</span></div>
+      </div>`;
+    };
+
+    // Key metrics (redesigned cards with color coding + tooltip icons)
     const metricRows = [
       [
-        { v: fV(metrics.pe),            l: "P/E (TTM)" },
-        { v: fV(metrics.forwardPE),     l: "远期 P/E" },
-        { v: fV(metrics.peg),           l: "PEG" },
-        { v: fV(metrics.evEbitda),      l: "EV/EBITDA" },
+        { v: fV(metrics.pe),        l: "P/E",      raw: metrics.pe,        k: "pe" },
+        { v: fV(metrics.forwardPE), l: "远期P/E",   raw: metrics.forwardPE, k: "forwardpe" },
+        { v: fV(metrics.peg),       l: "PEG",       raw: metrics.peg,       k: "peg" },
+        { v: fV(metrics.evEbitda),  l: "EV/EBITDA", raw: metrics.evEbitda,  k: "evebitda" },
       ],
       [
-        { v: fV(metrics.ps),            l: "P/S" },
-        { v: fV(metrics.pb),            l: "P/B" },
-        { v: fP(metrics.revGrowth),     l: "收入增速" },
-        { v: fP(metrics.epsGrowth),     l: "EPS增速" },
+        { v: fV(metrics.ps),        l: "P/S",    raw: metrics.ps,        k: "ps" },
+        { v: fV(metrics.pb),        l: "P/B",    raw: metrics.pb,        k: "pb" },
+        { v: fP(metrics.revGrowth), l: "收入增速", raw: metrics.revGrowth, k: "revgrowth" },
+        { v: fP(metrics.epsGrowth), l: "EPS增速", raw: metrics.epsGrowth, k: "epsgrowth" },
       ],
       [
-        { v: fPn(metrics.netMargin),    l: "净利率" },
-        { v: fPn(metrics.grossMargin),  l: "毛利率" },
-        { v: fPn(metrics.roe),          l: "ROE" },
-        { v: fPn(metrics.roa),          l: "ROA" },
+        { v: fPn(metrics.netMargin),   l: "净利率", raw: metrics.netMargin,   k: "netmargin" },
+        { v: fPn(metrics.grossMargin), l: "毛利率", raw: metrics.grossMargin, k: "grossmargin" },
+        { v: fPn(metrics.roe),         l: "ROE",    raw: metrics.roe,         k: "roe" },
+        { v: fPn(metrics.roa),         l: "ROA",    raw: metrics.roa,         k: "roa" },
       ],
       [
-        { v: metrics.freeCashflow != null ? `${metrics.freeCashflow >= 0 ? "" : "-"}$${Math.abs(metrics.freeCashflow).toFixed(1)}B` : "—", l: "FCF" },
-        { v: metrics.operatingCashflow != null ? `$${metrics.operatingCashflow.toFixed(1)}B` : "—", l: "OCF" },
-        { v: metrics.deRatio?.toFixed(2) ?? "—",   l: "D/E" },
-        { v: metrics.currentRatio?.toFixed(2) ?? "—", l: "流动比率" },
+        { v: metrics.freeCashflow != null ? `${metrics.freeCashflow >= 0 ? "" : "−"}$${Math.abs(metrics.freeCashflow).toFixed(1)}B` : "—", l: "FCF", raw: metrics.freeCashflow,       k: "fcf" },
+        { v: metrics.operatingCashflow != null ? `$${metrics.operatingCashflow.toFixed(1)}B` : "—",                                       l: "OCF", raw: metrics.operatingCashflow,  k: "ocf" },
+        { v: metrics.deRatio?.toFixed(2)    ?? "—", l: "D/E",    raw: metrics.deRatio,      k: "de" },
+        { v: metrics.currentRatio?.toFixed(2) ?? "—", l: "流动比率", raw: metrics.currentRatio, k: "currentratio" },
       ],
     ];
 
     const metricsHTML = metricRows.map(row =>
-      `<div class="sa-metrics-grid">${row.map(({ v, l }) =>
-        `<div class="sa-metric"><div class="sa-metric-val">${v}</div><div class="sa-metric-lbl">${l}</div></div>`
-      ).join("")}</div>`
-    ).join(`<div style="height:8px"></div>`);
+      `<div class="sa-metrics-grid">${row.map(mkMC).join("")}</div>`
+    ).join(`<div style="height:6px"></div>`);
 
-    const techStrip = (rsi || ema50 || ema200) ? `
-      <div class="sa-tech-strip">
-        ${rsi    ? `<div class="sa-metric"><div class="sa-metric-val">${rsi.toFixed(1)}</div><div class="sa-metric-lbl">RSI(14)</div></div>` : ""}
-        ${ema50  ? `<div class="sa-metric"><div class="sa-metric-val">$${ema50.toFixed(1)}</div><div class="sa-metric-lbl">EMA50</div></div>` : ""}
-        ${ema200 ? `<div class="sa-metric"><div class="sa-metric-val">$${ema200.toFixed(1)}</div><div class="sa-metric-lbl">EMA200</div></div>` : ""}
-        ${metrics.quickRatio ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.quickRatio.toFixed(2)}x</div><div class="sa-metric-lbl">速动比率</div></div>` : ""}
-        ${metrics.beta       ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.beta.toFixed(2)}</div><div class="sa-metric-lbl">Beta</div></div>` : ""}
-        ${metrics.divYield   ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.divYield.toFixed(2)}%</div><div class="sa-metric-lbl">股息率</div></div>` : ""}
+    const techMetrics = [
+      rsi    != null ? { v: rsi.toFixed(1),                          l: "RSI(14)",  raw: rsi,                   k: "rsi14" }      : null,
+      ema50  != null ? { v: `$${ema50.toFixed(1)}`,                   l: "EMA50",    raw: ema50,                  k: "ema50" }      : null,
+      ema200 != null ? { v: `$${ema200.toFixed(1)}`,                   l: "EMA200",   raw: ema200,                 k: "ema200" }     : null,
+      metrics.quickRatio != null ? { v: `${metrics.quickRatio.toFixed(2)}x`, l: "速动比率",  raw: metrics.quickRatio, k: "quickratio" } : null,
+      metrics.beta       != null ? { v: metrics.beta.toFixed(2),              l: "Beta",      raw: metrics.beta,       k: "beta" }       : null,
+      metrics.divYield   != null ? { v: `${metrics.divYield.toFixed(2)}%`,    l: "股息率",    raw: metrics.divYield,   k: "divyield" }   : null,
+    ].filter(Boolean);
+
+    const techStrip = techMetrics.length ? `
+      <div class="sa-metrics-grid sa-tech-grid">${techMetrics.map(mkMC).join("")}</div>` : "";
+
+    // Quarterly EPS beat/miss strip (visual summary)
+    const epsStripHTML = quarterlyEPS?.length ? `
+      <div class="sa-eps-strip">
+        <div class="sa-eps-ttl">季度 EPS</div>
+        <div class="sa-eps-items">
+          ${quarterlyEPS.map(q => {
+            const bc = q.beat === true ? "beat" : q.beat === false ? "miss" : "na";
+            const av = q.actual   != null ? `$${Math.abs(q.actual)   < 0.1 ? q.actual.toFixed(3)   : q.actual.toFixed(2)}` : "—";
+            const ev = q.estimate != null ? `e${Math.abs(q.estimate) < 0.1 ? q.estimate.toFixed(3) : q.estimate.toFixed(2)}` : "";
+            return `<div class="sa-eps-q">
+              <div class="sa-eps-dot ${bc}">${q.beat===true?"✓":q.beat===false?"✗":"·"}</div>
+              <div class="sa-eps-val ${bc}">${av}</div>
+              ${ev ? `<div class="sa-eps-est">${ev}</div>` : ""}
+              <div class="sa-eps-per">${q.period}</div>
+            </div>`;
+          }).join("")}
+        </div>
       </div>` : "";
 
     // Parse Claude sections
@@ -5171,7 +5282,7 @@
         <div class="sa-tags">
           ${industry ? `<span class="sa-tag">${industry}</span>` : ""}
           ${exchange  ? `<span class="sa-tag">${exchange.split(" ")[0]}</span>` : ""}
-          ${marketCapStr && marketCapStr !== "N/A" ? `<span class="sa-tag">市值 ${marketCapStr}</span>` : ""}
+          ${marketCapStr && marketCapStr !== "N/A" ? `<span class="sa-tag">Mkt Cap ${marketCapStr}</span>` : ""}
           ${ipoYear ? `<span class="sa-tag">上市 ${ipoYear}</span>` : ""}
           ${earnTag}
         </div>
@@ -5187,6 +5298,7 @@
           </div>
         </div>
         <div class="sa-score-grid">${scoreBars}</div>
+        <div class="sa-radar-wrap">${buildRadarSVG(scores)}</div>
       </div>
 
       ${recommendation ? `<div class="sa-rec">
@@ -5212,6 +5324,7 @@
         <div class="sa-metrics-hdr">关键指标</div>
         ${metricsHTML}
         ${techStrip}
+        ${epsStripHTML}
       </div>
 
       ${sections.length ? `<div class="sa-analysis">
@@ -5233,6 +5346,10 @@
         <button class="btn" id="sa-btn-re" style="font-size:12px;padding:7px 14px;color:var(--fg-3)">↻ 重新分析</button>
         ${ageStr ? `<span class="sa-age">${ageStr}更新</span>` : ""}
       </div>
+    </div>
+    <div class="sa-tip-popup">
+      <div class="sa-tip-name"></div>
+      <div class="sa-tip-desc"></div>
     </div>`;
 
     panel.style.display = "";
@@ -5281,6 +5398,37 @@
 
     // Re-analyze
     $("#sa-btn-re", panel)?.addEventListener("click", () => triggerAnalysis(data.sym, true));
+
+    // Metric tooltip popup
+    $$(".sa-mc-info", panel).forEach(el => {
+      el.addEventListener("click", e => {
+        e.stopPropagation();
+        const tip = METRIC_TIPS[el.dataset.tipk];
+        if (!tip) return;
+        const popup = panel.querySelector(".sa-tip-popup");
+        if (!popup) return;
+        const isMe = popup._lastKey === el.dataset.tipk && popup.style.display === "block";
+        if (isMe) { popup.style.display = "none"; popup._lastKey = null; return; }
+        popup.querySelector(".sa-tip-name").textContent = tip[0];
+        popup.querySelector(".sa-tip-desc").textContent = tip[1];
+        popup._lastKey = el.dataset.tipk;
+        const rect = el.getBoundingClientRect();
+        const pw = 260, pad = 8;
+        let left = rect.left, top = rect.bottom + 6;
+        if (left + pw > window.innerWidth - pad) left = window.innerWidth - pw - pad;
+        if (top + 140 > window.innerHeight) top = rect.top - 148;
+        popup.style.left = Math.max(pad, left) + "px";
+        popup.style.top  = top + "px";
+        popup.style.display = "block";
+        const close = ev => {
+          if (!popup.contains(ev.target) && ev.target !== el) {
+            popup.style.display = "none"; popup._lastKey = null;
+            document.removeEventListener("click", close, true);
+          }
+        };
+        setTimeout(() => document.addEventListener("click", close, true), 0);
+      });
+    });
   }
 
   // ============ MARKET PAGE ============
