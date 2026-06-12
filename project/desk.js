@@ -5022,7 +5022,8 @@
     const {
       sym, name, industry, exchange, marketCapStr, ipoYear, price,
       wk52High, wk52Low, wk52Pos, ma50, ma200, rsi,
-      scores, metrics, nextEarnings, daysToEarnings, earningsRisk,
+      scores, metrics, analyst, quarterlyEPS,
+      nextEarnings, daysToEarnings, earningsRisk,
       recommendation, summary, updatedAt,
     } = data;
 
@@ -5070,10 +5071,11 @@
 
     // Score bars
     const scoreBars = [
-      { lbl: "技术面", val: scores.trend },
-      { lbl: "估值",   val: scores.valuation },
-      { lbl: "成长性", val: scores.growth },
+      { lbl: "技术面",   val: scores.trend },
+      { lbl: "估值",     val: scores.valuation },
+      { lbl: "成长性",   val: scores.growth },
       { lbl: "财务健康", val: scores.health },
+      { lbl: "分析师",   val: scores.analyst },
     ].map(({ lbl, val }) => val != null ? `
       <div class="sa-score-row">
         <div class="sa-score-lbl"><span>${lbl}</span><span class="sa-score-num">${val}</span></div>
@@ -5083,22 +5085,28 @@
     // Key metrics
     const metricRows = [
       [
-        { v: fV(metrics.pe),            l: "P/E" },
+        { v: fV(metrics.pe),            l: "P/E (TTM)" },
+        { v: fV(metrics.forwardPE),     l: "远期 P/E" },
         { v: fV(metrics.peg),           l: "PEG" },
+        { v: fV(metrics.evEbitda),      l: "EV/EBITDA" },
+      ],
+      [
         { v: fV(metrics.ps),            l: "P/S" },
         { v: fV(metrics.pb),            l: "P/B" },
-      ],
-      [
         { v: fP(metrics.revGrowth),     l: "收入增速" },
         { v: fP(metrics.epsGrowth),     l: "EPS增速" },
-        { v: fPn(metrics.netMargin),    l: "净利率" },
-        { v: fPn(metrics.grossMargin),  l: "毛利率" },
       ],
       [
+        { v: fPn(metrics.netMargin),    l: "净利率" },
+        { v: fPn(metrics.grossMargin),  l: "毛利率" },
         { v: fPn(metrics.roe),          l: "ROE" },
         { v: fPn(metrics.roa),          l: "ROA" },
-        { v: metrics.deRatio?.toFixed(2) ?? "—", l: "D/E" },
-        { v: metrics.beta?.toFixed(2) ?? "—",    l: "Beta" },
+      ],
+      [
+        { v: metrics.freeCashflow != null ? `${metrics.freeCashflow >= 0 ? "" : "-"}$${Math.abs(metrics.freeCashflow).toFixed(1)}B` : "—", l: "FCF" },
+        { v: metrics.operatingCashflow != null ? `$${metrics.operatingCashflow.toFixed(1)}B` : "—", l: "OCF" },
+        { v: metrics.deRatio?.toFixed(2) ?? "—",   l: "D/E" },
+        { v: metrics.currentRatio?.toFixed(2) ?? "—", l: "流动比率" },
       ],
     ];
 
@@ -5110,14 +5118,16 @@
 
     const techStrip = (rsi || ma50 || ma200) ? `
       <div class="sa-tech-strip">
-        ${rsi  ? `<div class="sa-metric"><div class="sa-metric-val">${rsi.toFixed(1)}</div><div class="sa-metric-lbl">RSI(14)</div></div>` : ""}
-        ${ma50 ? `<div class="sa-metric"><div class="sa-metric-val">$${ma50.toFixed(1)}</div><div class="sa-metric-lbl">MA50</div></div>` : ""}
+        ${rsi   ? `<div class="sa-metric"><div class="sa-metric-val">${rsi.toFixed(1)}</div><div class="sa-metric-lbl">RSI(14)</div></div>` : ""}
+        ${ma50  ? `<div class="sa-metric"><div class="sa-metric-val">$${ma50.toFixed(1)}</div><div class="sa-metric-lbl">MA50</div></div>` : ""}
         ${ma200 ? `<div class="sa-metric"><div class="sa-metric-val">$${ma200.toFixed(1)}</div><div class="sa-metric-lbl">MA200</div></div>` : ""}
-        ${metrics.divYield ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.divYield.toFixed(2)}%</div><div class="sa-metric-lbl">股息率</div></div>` : ""}
+        ${metrics.quickRatio  ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.quickRatio.toFixed(2)}x</div><div class="sa-metric-lbl">速动比率</div></div>` : ""}
+        ${metrics.beta        ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.beta.toFixed(2)}</div><div class="sa-metric-lbl">Beta</div></div>` : ""}
+        ${metrics.divYield    ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.divYield.toFixed(2)}%</div><div class="sa-metric-lbl">股息率</div></div>` : ""}
       </div>` : "";
 
     // Parse Claude sections
-    const secNames = ["公司简介", "估值分析", "成长性", "财务健康", "技术面", "综合建议"];
+    const secNames = ["公司简介", "估值分析", "成长性", "盈利与现金流", "财务健康", "技术面", "综合建议"];
     const sections = secNames.map(n => {
       const m = summary?.match(new RegExp(`【${n}】\\s*([\\s\\S]*?)(?=【|$)`));
       return m ? { n, body: m[1].trim() } : null;
@@ -5165,6 +5175,20 @@
         <span class="sa-rec-badge" style="background:${recStyle.bg};border-color:${recStyle.border};color:${recStyle.text}">${recommendation.label ?? ""}</span>
         ${recommendation.entry ? `<span class="sa-rec-entry">${recommendation.entry}</span>` : ""}
       </div>` : ""}
+
+      ${analyst?.recLabel ? (() => {
+        const recCls = { strongBuy: "sa-ab-buy-strong", buy: "sa-ab-buy", hold: "sa-ab-hold", underperform: "sa-ab-under", sell: "sa-ab-sell" }[analyst.recKey] ?? "sa-ab-hold";
+        const up = analyst.targetUpside;
+        const upColor = up == null ? "var(--fg-2)" : up >= 0 ? "var(--up)" : "var(--down)";
+        const upStr   = up != null ? `${up >= 0 ? "▲" : "▼"} ${Math.abs(up).toFixed(1)}%` : "";
+        return `<div class="sa-analyst-strip">
+          <span class="sa-analyst-badge ${recCls}">${analyst.recLabel}</span>
+          ${analyst.targetMean ? `<span class="sa-analyst-target">目标 <b>$${analyst.targetMean.toFixed(1)}</b></span>` : ""}
+          ${upStr ? `<span class="sa-analyst-upside" style="color:${upColor}">${upStr}</span>` : ""}
+          ${analyst.analystCount ? `<span class="sa-analyst-meta">${analyst.analystCount}位分析师</span>` : ""}
+          ${analyst.targetLow && analyst.targetHigh ? `<span class="sa-analyst-meta">$${analyst.targetLow.toFixed(0)}~$${analyst.targetHigh.toFixed(0)}</span>` : ""}
+        </div>`;
+      })() : ""}
 
       <div class="sa-metrics">
         <div class="sa-metrics-hdr">关键指标</div>

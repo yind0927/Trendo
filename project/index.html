@@ -1909,6 +1909,19 @@
   .sa-sec-body { padding: 0 20px 14px; font-size: 12.5px; line-height: 1.75; color: var(--fg-1); display: none; }
   .sa-sec-body.open { display: block; }
 
+  /* Analyst consensus strip */
+  .sa-analyst-strip { padding: 10px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: oklch(0.17 0.01 250); }
+  .sa-analyst-badge { padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; border: 1px solid; white-space: nowrap; }
+  .sa-ab-buy-strong { background: oklch(0.78 0.17 145/0.15); color: var(--up);     border-color: oklch(0.78 0.17 145/0.45); }
+  .sa-ab-buy        { background: oklch(0.78 0.12 195/0.12); color: var(--accent); border-color: oklch(0.78 0.12 195/0.4); }
+  .sa-ab-hold       { background: oklch(0.80 0.15 75/0.12);  color: var(--warn);   border-color: oklch(0.80 0.15 75/0.4); }
+  .sa-ab-under      { background: oklch(0.75 0.17 50/0.12);  color: var(--orange); border-color: oklch(0.75 0.17 50/0.4); }
+  .sa-ab-sell       { background: oklch(0.70 0.19 25/0.12);  color: var(--down);   border-color: oklch(0.70 0.19 25/0.4); }
+  .sa-analyst-target { font-size: 12px; color: var(--fg-1); font-family: var(--f-mono); }
+  .sa-analyst-target b { font-weight: 700; }
+  .sa-analyst-upside { font-size: 12px; font-weight: 700; font-family: var(--f-mono); }
+  .sa-analyst-meta { font-size: 10.5px; color: var(--fg-3); }
+
   /* Actions */
   .sa-actions { padding: 12px 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .sa-age { font-size: 10px; color: var(--fg-3); margin-left: auto; font-family: var(--f-mono); }
@@ -3723,8 +3736,8 @@
   </div>
 </div>
 
-<script src="data.js?v=27"></script>
-<script src="desk.js?v=27"></script>
+<script src="data.js?v=28"></script>
+<script src="desk.js?v=28"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
