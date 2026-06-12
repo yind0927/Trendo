@@ -5874,9 +5874,9 @@
   function mkPlaybookHTML() {
     // Three-axis reference handbook (replaces old 6-regime table).
     const axisA = [
-      { label: "做多", color: "#22c55e", cond: "价格 > 50MA > 200MA", action: "有做多资格，正常布局" },
-      { label: "中性", color: "#eab308", cond: "价格在 50/200MA 之间回调", action: "少开新仓，持有已有仓位" },
-      { label: "做空", color: "#ef4444", cond: "50/200 死叉 或 价格 < 200MA", action: "禁止新多仓，严格执行止损" },
+      { label: "做多", color: "#22c55e", cond: "价格 > EMA50 > EMA200", action: "有做多资格，正常布局" },
+      { label: "中性", color: "#eab308", cond: "价格在 EMA50/EMA200 之间回调", action: "少开新仓，持有已有仓位" },
+      { label: "做空", color: "#ef4444", cond: "EMA50/EMA200 死叉 或 价格 < EMA200", action: "禁止新多仓，严格执行止损" },
     ];
     const axisB = [
       { label: "充裕", color: "#22c55e", cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
@@ -5927,20 +5927,28 @@
     return +(slice.reduce((a, b) => a + b, 0) / period).toFixed(2);
   }
 
-  // 轴A：方向（趋势）—— VOO 价格 vs 50MA / 200MA。决定"有没有做多资格"。
+  function calcEMA(closes, period) {
+    if (!closes || closes.length < period) return null;
+    const k = 2 / (period + 1);
+    let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+    return +ema.toFixed(2);
+  }
+
+  // 轴A：方向（趋势）—— VOO 价格 vs EMA50 / EMA200。决定"有没有做多资格"。
   function getDirectionAxis(price, ma50, ma200) {
     if (price == null || ma50 == null)
       return { id: "unknown", label: "未知", color: "var(--fg-3)", desc: "趋势数据不足", eligible: true };
     if (ma200 == null)
       return price > ma50
-        ? { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > 50MA，趋势偏多", eligible: true }
-        : { id: "headwind", label: "做空", color: "#ef4444", desc: "价格跌破 50MA", eligible: false };
+        ? { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > EMA50，趋势偏多", eligible: true }
+        : { id: "headwind", label: "做空", color: "#ef4444", desc: "价格跌破 EMA50", eligible: false };
     const deathCross = ma50 < ma200;
     if (deathCross || price < ma200)
       return { id: "headwind", label: "做空", color: "#ef4444",
-        desc: deathCross ? "50/200 死叉，长期趋势走弱" : "价格跌破 200MA，回避新多单", eligible: false };
+        desc: deathCross ? "EMA50/EMA200 死叉，长期趋势走弱" : "价格跌破 EMA200，回避新多单", eligible: false };
     if (price > ma50 && ma50 > ma200)
-      return { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > 50MA > 200MA，多头结构完整", eligible: true };
+      return { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > EMA50 > EMA200，多头结构完整", eligible: true };
     return { id: "neutral", label: "中性", color: "#eab308", desc: "价格在均线间回调，方向待确认", eligible: true };
   }
 
@@ -6002,8 +6010,8 @@
     if (!axes) return "";
     const { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 } = axes;
     const maNote = (ma50 != null && ma200 != null)
-      ? `50MA ${ma50} · 200MA ${ma200}`
-      : (ma50 != null ? `50MA ${ma50}` : "数据不足");
+      ? `EMA50 ${ma50} · EMA200 ${ma200}`
+      : (ma50 != null ? `EMA50 ${ma50}` : "数据不足");
     return `
       <div class="mkt-axes">
         <div class="mkt-section-label">市场模型 · 综合建议</div>
@@ -6121,18 +6129,11 @@
           if (rp != null) rsiPrev = rp;
         }
         benchPrice = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
-        benchMA50  = calcSMA(closes, 50);
-        benchMA200 = calcSMA(closes, 200);
+        benchMA50  = calcEMA(closes, 50);
+        benchMA200 = calcEMA(closes, 200);
       }
 
       // VIX / VXN EMA10 + trend direction
-      const calcEMA = (closes, period) => {
-        if (closes.length < period) return null;
-        const k = 2 / (period + 1);
-        let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
-        for (let i = period; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
-        return +ema.toFixed(2);
-      };
       const calcEMA10Trend = (results, sym) => {
         const raw = results?.[sym];
         if (!raw) return { ema10: null, trend: "flat" };
