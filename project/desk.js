@@ -1039,10 +1039,11 @@
     let progPct = 0;
     let progColor = "var(--accent)";
     if (!isClosed && h.cost && h.stop && h.target && h.last) {
-      if (h.last >= h.cost) {
-        progPct = Math.min(1, (h.last - h.cost) / (h.target - h.cost));
+      const baseCost = ccAdjCost(h);
+      if (h.last >= baseCost) {
+        progPct = Math.min(1, (h.last - baseCost) / (h.target - baseCost));
       } else {
-        progPct = -Math.min(1, (h.cost - h.last) / (h.cost - h.stop));
+        progPct = -Math.min(1, (baseCost - h.last) / (baseCost - h.stop));
       }
       progColor = bs.color;
     }

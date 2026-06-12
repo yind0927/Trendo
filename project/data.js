@@ -11,15 +11,18 @@ window.STATUS_LABEL = {
 
 // Progress bucket function — dual-axis: loss zone (2 stages) + profit zone (4 stages)
 window.progressBucket = h => {
-  if (!h.stop || !h.cost || !h.target || h.stop >= h.target) return "Early";
-  if (h.last < h.cost && h.cost > h.stop) {
-    const lp = (h.cost - h.last) / (h.cost - h.stop);
+  // Use CC-adjusted cost as the entry reference so status and filters match the displayed entry price
+  const ccNetAmt = (h.cc || []).reduce((s, c) => s + (c.total || 0), 0);
+  const cost = (ccNetAmt > 0 && h.qty > 0) ? h.cost - ccNetAmt / h.qty : h.cost;
+  if (!h.stop || !cost || !h.target || h.stop >= h.target) return "Early";
+  if (h.last < cost && cost > h.stop) {
+    const lp = (cost - h.last) / (cost - h.stop);
     if (lp < 0.50) return "Pullback";
     return "Near Stop";
   }
-  const range = h.target - h.cost;
+  const range = h.target - cost;
   if (range <= 0) return "On Track";
-  const pp = (h.last - h.cost) / range;
+  const pp = (h.last - cost) / range;
   if (pp < 0.25) return "Early";
   if (pp < 0.60) return "Midway";
   if (pp < 0.90) return "On Track";
