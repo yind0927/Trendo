@@ -525,6 +525,7 @@
   const PRICE_INTERVAL_MS = 30000;
   let priceIntervalMs = +(localStorage.getItem("trendo_refresh_interval") || 30) * 1000;
   let _lastMktCtx = null; // cached market context for holdings brief
+  let analysisHistory = []; // persistent AI analysis history across days, synced to cloud
 
   // ============ CLOUD SYNC (Upstash) ============
   let syncKey    = localStorage.getItem("trendo_sync_key") || "";
@@ -547,6 +548,7 @@
       holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
       simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
+      analysisHistory,
       savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
     };
     try {
@@ -622,6 +624,7 @@
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
+    if (Array.isArray(data.analysisHistory)) analysisHistory.splice(0, analysisHistory.length, ...data.analysisHistory);
     // Recalculate size% from qty after cloud data replaces HOLDINGS
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
@@ -683,6 +686,7 @@
       localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
+      localStorage.setItem("trendo_v4_analysis_hist", JSON.stringify(analysisHistory));
       localStorage.setItem("trendo_v4_savedAt",      new Date().toISOString());
     } catch (e) { /* storage unavailable */ }
   }
@@ -717,6 +721,8 @@
       if (scp) { const parsed = JSON.parse(scp); SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...parsed); }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
+      const ah = localStorage.getItem("trendo_v4_analysis_hist");
+      if (ah) { try { const p = JSON.parse(ah); if (Array.isArray(p)) analysisHistory.splice(0, analysisHistory.length, ...p); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
     // Recalculate size% from qty after load (qty is source of truth)
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
@@ -4980,38 +4986,50 @@
     renderAnalysisHistory();
   }
 
-  // ── Today's analysis history (localStorage wl_analysis_*, same-day validity) ─
+  // ── Persistent analysis history (in-memory + cloud sync) ──────────────────
   function saHistTimeStr(ms) {
     if (!ms) return "";
     const mins = Math.round((Date.now() - ms) / 60000);
     if (mins < 1)  return "刚刚";
     if (mins < 60) return `${mins}分钟前`;
     const hrs = Math.floor(mins / 60);
-    return hrs < 24 ? `${hrs}小时前` : "今日";
+    if (hrs < 24)  return `${hrs}小时前`;
+    return new Date(ms).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  function saDateLabel(dateStr) {
+    const today     = new Date().toLocaleDateString("en-CA");
+    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("en-CA");
+    if (dateStr === today)     return "今天";
+    if (dateStr === yesterday) return "昨天";
+    const d = new Date(dateStr + "T00:00:00");
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
+  }
+
+  function recordAnalysis(sym, data) {
+    const date = new Date().toLocaleDateString("en-CA");
+    const entry = {
+      sym,
+      grade:   data.scores?.grade ?? "",
+      overall: data.scores?.overall ?? 50,
+      name:    data.name ?? "",
+      price:   typeof data.price === "number" ? data.price : null,
+      savedAt: Date.now(),
+      date,
+    };
+    // One entry per sym per day — update if re-analyzed same day
+    const idx = analysisHistory.findIndex(e => e.sym === sym && e.date === date);
+    if (idx >= 0) analysisHistory[idx] = entry;
+    else          analysisHistory.unshift(entry);
+    // Cap at 200 entries
+    if (analysisHistory.length > 200) analysisHistory.splice(200);
+    saveLocalOnly();
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncPush, 2000);
   }
 
   function getAnalysisHistory() {
-    const today = new Date().toLocaleDateString("en-CA");
-    const out = [];
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (!k?.startsWith("wl_analysis_")) continue;
-      try {
-        const c = JSON.parse(localStorage.getItem(k) || "null");
-        if (c?._date === today) {
-          out.push({
-            sym: k.slice(12),
-            grade:   c.scores?.grade,
-            overall: c.scores?.overall ?? 50,
-            name:    c.name ?? "",
-            price:   c.price ?? null,
-            savedAt: c._savedAt ?? 0,
-          });
-        } else { localStorage.removeItem(k); }   // 跨日失效 → 清除
-      } catch (_) { localStorage.removeItem(k); }
-    }
-    out.sort((a, b) => b.savedAt - a.savedAt);
-    return out;
+    return [...analysisHistory].sort((a, b) => b.savedAt - a.savedAt);
   }
 
   function renderAnalysisHistory() {
@@ -5020,22 +5038,37 @@
     const hist = getAnalysisHistory();
     if (!hist.length) { el.style.display = "none"; el.innerHTML = ""; return; }
     el.style.display = "";
-    el.innerHTML = `<div class="wl-hist-lbl">今日分析记录</div>
-      <div class="wl-hist-cards">
-        ${hist.map(h => {
-          const gc = saGradeColor(h.overall);
-          const meta = [h.price ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
-          return `<div class="sa-hist-card" data-sym="${h.sym}">
-            <div class="sa-hist-sym">${h.sym}</div>
-            ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}</div>` : ""}
-            <div class="sa-hist-info">
-              <div class="sa-hist-name">${h.name}</div>
-              ${meta ? `<div class="sa-hist-meta">${meta}</div>` : ""}
-            </div>
-            <div class="sa-hist-arrow">›</div>
-          </div>`;
-        }).join("")}
+
+    // Group by date, most recent first
+    const groups = new Map();
+    hist.forEach(h => {
+      const d = h.date || new Date(h.savedAt).toLocaleDateString("en-CA");
+      if (!groups.has(d)) groups.set(d, []);
+      groups.get(d).push(h);
+    });
+    const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+
+    const sections = sortedDates.map(date => {
+      const cards = groups.get(date).map(h => {
+        const gc = saGradeColor(h.overall);
+        const meta = [h.price != null ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
+        return `<div class="sa-hist-card" data-sym="${h.sym}">
+          <div class="sa-hist-sym">${h.sym}</div>
+          ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}</div>` : ""}
+          <div class="sa-hist-info">
+            <div class="sa-hist-name">${h.name}</div>
+            ${meta ? `<div class="sa-hist-meta">${meta}</div>` : ""}
+          </div>
+          <div class="sa-hist-arrow">›</div>
+        </div>`;
+      }).join("");
+      return `<div class="wl-hist-group">
+        <div class="wl-hist-date-lbl">${saDateLabel(date)}</div>
+        <div class="wl-hist-cards">${cards}</div>
       </div>`;
+    }).join("");
+
+    el.innerHTML = `<div class="wl-hist-lbl">分析记录</div>${sections}`;
     $$(".sa-hist-card", el).forEach(c =>
       c.addEventListener("click", () => triggerAnalysis(c.dataset.sym, false)));
   }
@@ -5082,6 +5115,7 @@
 
     try {
       const data = await fetchStockAnalysis(sym, force);
+      recordAnalysis(sym, data);
       renderAnalysisPanel(data);
       renderAnalysisHistory();
       if (input) input.value = "";
