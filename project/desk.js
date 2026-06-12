@@ -5115,9 +5115,7 @@
 
     try {
       const data = await fetchStockAnalysis(sym, force);
-      recordAnalysis(sym, data);
       renderAnalysisPanel(data);
-      renderAnalysisHistory();
       if (input) input.value = "";
     } catch (e) {
       panel.innerHTML = `<div class="sa-loading" style="color:var(--down)">
@@ -5130,7 +5128,11 @@
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> AI 分析`; }
     }
-  }
+    // Record history after the panel renders — never let this block the display
+    try {
+      const cached = JSON.parse(localStorage.getItem(`wl_analysis_${sym}`) || "null");
+      if (cached) { recordAnalysis(sym, cached); renderAnalysisHistory(); }
+    } catch (_) {}
 
   // ── Format section body: **bold** + bullet lines ─────────────────────────
   function formatSectionBody(text) {
