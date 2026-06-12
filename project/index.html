@@ -1997,14 +1997,23 @@
   .sa-age { font-size: 10px; color: var(--fg-3); margin-left: auto; font-family: var(--f-mono); }
 
   @media (max-width: 768px) {
-    .sa-scores { padding: 14px 16px; }
-    .sa-score-grid { gap: 8px 16px; }
+    .wl-analyze-wrap { padding: 10px 8px 4px; }
+    #wl-analysis-panel { padding-left: 8px !important; padding-right: 8px !important; }
+    .wl-history { padding-left: 8px; padding-right: 8px; }
+    .sa-scores { padding: 12px 14px; }
+    .sa-score-grid { gap: 8px 14px; }
+    .sa-radar { width: 120px; height: 110px; }
+    .sa-grade { font-size: 32px; }
+    .sa-overall-num { font-size: 20px; }
     .sa-metrics-grid { grid-template-columns: repeat(2, 1fr); }
     .sa-mc-val { font-size: 14px; }
-    .sa-header, .sa-rec, .sa-metrics, .sa-actions { padding-left: 16px; padding-right: 16px; }
-    .sa-sec-hdr { padding: 10px 16px; }
-    .sa-sec-body { padding: 0 16px 12px; }
-    .wl-analyze-wrap { padding: 12px 12px 4px; }
+    .sa-mc { padding: 12px 10px 10px; min-height: 68px; }
+    .sa-header, .sa-rec, .sa-metrics, .sa-analyst-strip, .sa-actions { padding-left: 14px; padding-right: 14px; }
+    .sa-sec-hdr { padding: 10px 14px; }
+    .sa-sec-body { padding: 0 14px 12px; }
+    .sa-sym { font-size: 19px; }
+    .sa-price { font-size: 17px; }
+    .sa-collapse-btn { font-size: 10px; padding: 5px 7px; }
   }
 
   /* EDITABLE POSITION FIELDS */
@@ -3810,8 +3819,8 @@
   </div>
 </div>
 
-<script src="data.js?v=37"></script>
-<script src="desk.js?v=37"></script>
+<script src="data.js?v=38"></script>
+<script src="desk.js?v=38"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

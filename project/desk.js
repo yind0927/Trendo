@@ -5034,7 +5034,7 @@
     if (!force) {
       try {
         const c = JSON.parse(localStorage.getItem(key) || "null");
-        const ttlMs = (parseInt(localStorage.getItem("wl_analysis_ttl") || "240")) * 60000;
+        const ttlMs = (parseInt(localStorage.getItem("wl_analysis_ttl") || "720")) * 60000;
         if (c?._date === today && c?._savedAt && (Date.now() - c._savedAt) < ttlMs) return c;
       } catch (_) {}
     }
