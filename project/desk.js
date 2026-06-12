@@ -5014,6 +5014,24 @@
     }
   }
 
+  // ── Format section body: **bold** + bullet lines ─────────────────────────
+  function formatSectionBody(text) {
+    return text
+      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+      .split('\n')
+      .filter(l => l.trim())
+      .map(line => {
+        const t = line.trim();
+        if (t.startsWith('•') || t.startsWith('-')) {
+          const content = t.replace(/^[•\-]\s*/, '');
+          const labeled = content.replace(/^([^：:(\n]{1,25}[：:])\s*/,
+            (m, label) => `<span class="sa-bl">${label}</span> `);
+          return `<div class="sa-bline"><span class="sa-bdot">•</span><span>${labeled}</span></div>`;
+        }
+        return `<div class="sa-tline">${t}</div>`;
+      }).join('');
+  }
+
   // ── Render full analysis card ─────────────────────────────────────────────
   function renderAnalysisPanel(data) {
     const panel = $("#wl-analysis-panel");
@@ -5204,7 +5222,7 @@
               <span class="sa-sec-title">${s.n}</span>
               <span class="sa-sec-chev${isLast ? " open" : ""}">▶</span>
             </div>
-            <div class="sa-sec-body${isLast ? " open" : ""}" id="sa-s-${i}">${s.body.replace(/\n/g, "<br>")}</div>
+            <div class="sa-sec-body${isLast ? " open" : ""}" id="sa-s-${i}">${formatSectionBody(s.body)}</div>
           </div>`;
         }).join("")}
       </div>` : ""}

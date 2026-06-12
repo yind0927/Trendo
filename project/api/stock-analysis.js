@@ -44,23 +44,44 @@ async function getYahooCrumb(headers) {
   } catch (_) { return ''; }
 }
 
-// Try multiple Yahoo quoteSummary endpoints (v11→v10→v10+crumb)
-async function fetchYahooQS(sym, headers, crumb) {
-  const mods = 'summaryDetail%2CdefaultKeyStatistics%2CfinancialData%2Cearnings';
+// Try Yahoo quoteSummary for BASIC modules (price+summaryDetail) — works WITHOUT crumb
+// These give: PE, forwardPE, PS, PB, beta, dividend, 52w, marketCap
+async function fetchYahooQSBasic(sym, headers) {
+  const mods = 'price%2CsummaryDetail';
   const enc  = encodeURIComponent(sym);
-  const urls = [
+  for (const url of [
     `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
     `https://query2.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
     `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
     `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
-    ...(crumb ? [`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}&crumb=${encodeURIComponent(crumb)}`] : []),
-  ];
-  for (const url of urls) {
+  ]) {
     try {
       const r = await fetch(url, { headers, signal: AbortSignal.timeout(6000) });
       if (!r.ok) continue;
       const d = await r.json();
-      if (d?.quoteSummary?.result?.[0]) return d;
+      if (d?.quoteSummary?.result?.[0]) return d.quoteSummary.result[0];
+    } catch (_) {}
+  }
+  return null;
+}
+
+// Try Yahoo quoteSummary for FINANCIAL modules — needs crumb (margins/growth/FCF/analyst)
+async function fetchYahooQSFin(sym, headers, crumb) {
+  const mods = 'financialData%2CdefaultKeyStatistics%2Cearnings';
+  const enc  = encodeURIComponent(sym);
+  const urls = [
+    `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
+    `https://query2.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
+    ...(crumb ? [`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}&crumb=${encodeURIComponent(crumb)}`] : []),
+    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
+    `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
+  ];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { headers, signal: AbortSignal.timeout(7000) });
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d?.quoteSummary?.result?.[0]) return d.quoteSummary.result[0];
     } catch (_) {}
   }
   return null;
@@ -281,24 +302,35 @@ export default async function handler(req, res) {
   const history      = historyR.status  === "fulfilled" ? historyR.value : null;
   const nextEarnings = earningsR.status === "fulfilled" ? earningsR.value : null;
 
-  // ── 3. Phase 2: quoteSummary (uses crumb from phase 1) ─────────────────────
-  const yqs = await fetchYahooQS(sym, yH, crumb);
-  const ys = yqs?.quoteSummary?.result?.[0] ?? {};
-  const yD = ys.summaryDetail        ?? {};
-  const yK = ys.defaultKeyStatistics ?? {};
-  const yF = ys.financialData        ?? {};
-  const yE = ys.earnings             ?? null;
+  // ── 3. Phase 2: split quoteSummary requests (parallel) ────────────────────
+  // Basic (price+summaryDetail) works WITHOUT crumb → always gets PE/fwdPE/PS/PB/beta
+  // Financial (financialData+stats+earnings) tries crumb → margins/growth/FCF/analyst
+  const [ysBasic, ysFin] = await Promise.all([
+    fetchYahooQSBasic(sym, yH),
+    fetchYahooQSFin(sym, yH, crumb),
+  ]);
+
+  // Unpack basic modules (price module has most valuation data)
+  const yPrice = ysBasic?.price        ?? {};
+  const yD     = ysBasic?.summaryDetail ?? {};
+  // Unpack financial modules
+  const yF     = ysFin?.financialData        ?? {};
+  const yK     = ysFin?.defaultKeyStatistics ?? {};
+  const yE     = ysFin?.earnings             ?? null;
 
   // ── 4. Technical calculations (EMA) ───────────────────────────────────────
   const closes = history?.closes ?? [];
-  const price  = history?.meta?.regularMarketPrice ?? yv7?.regularMarketPrice ?? closes[closes.length - 1] ?? null;
-  const name   = profile?.name ?? yv7?.longName ?? yv7?.shortName ?? sym;
+  const price  = history?.meta?.regularMarketPrice
+    ?? yPrice.regularMarketPrice?.raw ?? yv7?.regularMarketPrice
+    ?? closes[closes.length - 1] ?? null;
+  const name      = profile?.name ?? yPrice.longName ?? yPrice.shortName ?? yv7?.longName ?? yv7?.shortName ?? sym;
   const industry  = profile?.finnhubIndustry ?? null;
   const exchange  = profile?.exchange ?? null;
   const ipoYear   = profile?.ipo?.slice(0, 4) ?? null;
 
-  // Market cap: Finnhub (millions) > Yahoo v7 (bytes) > Yahoo QS
+  // Market cap: Finnhub (millions) > Yahoo price module (bytes) > Yahoo v7 (bytes)
   const marketCap = profile?.marketCapitalization
+    ?? (yPrice.marketCap?.raw != null ? yPrice.marketCap.raw / 1e6 : null)
     ?? (yv7?.marketCap != null ? yv7.marketCap / 1e6 : null)
     ?? (yD.marketCap?.raw != null ? yD.marketCap.raw / 1e6 : null);
 
@@ -306,30 +338,33 @@ export default async function handler(req, res) {
   const ema200  = calcEMA(closes, 200);
   const rsi     = calcRSI(closes, 14);
 
-  // 52-week range: Yahoo v7 is most reliable
-  const wk52H   = yv7?.fiftyTwoWeekHigh ?? yD.fiftyTwoWeekHigh?.raw ?? rawM["52WeekHigh"] ?? null;
-  const wk52L   = yv7?.fiftyTwoWeekLow  ?? yD.fiftyTwoWeekLow?.raw  ?? rawM["52WeekLow"]  ?? null;
+  // 52-week range: summaryDetail > v7 fallback
+  const wk52H = yD.fiftyTwoWeekHigh?.raw ?? yPrice.fiftyTwoWeekHigh?.raw ?? yv7?.fiftyTwoWeekHigh ?? rawM["52WeekHigh"] ?? null;
+  const wk52L = yD.fiftyTwoWeekLow?.raw  ?? yPrice.fiftyTwoWeekLow?.raw  ?? yv7?.fiftyTwoWeekLow  ?? rawM["52WeekLow"]  ?? null;
   const wk52Pos = (price && wk52H && wk52L && wk52H > wk52L)
     ? Math.round((price - wk52L) / (wk52H - wk52L) * 100) : null;
 
-  // ── 5. Merge financial metrics (Yahoo v7 → Yahoo QS → Finnhub) ────────────
+  // ── 5. Merge financial metrics ────────────────────────────────────────────
+  // Priority: Yahoo price module → Yahoo summaryDetail → Yahoo financialData → Yahoo v7 → Finnhub
   const yPct = v => v != null ? parseFloat((v * 100).toFixed(2)) : null;
 
-  // PE from v7 is most accurate (no adjustments)
   const m = {
-    pe:          yv7?.trailingPE           ?? yD.trailingPE?.raw    ?? rawM.peNormalizedAnnual ?? rawM.peExclExtraTTM ?? null,
-    forwardPE:   yv7?.forwardPE            ?? yD.forwardPE?.raw     ?? null,
-    ps:          yv7?.priceToSalesRatioTTM ?? yD.priceToSalesTrailing12Months?.raw ?? rawM.psTTM ?? rawM.psAnnual ?? null,
-    pb:          yv7?.priceToBook          ?? yD.priceToBook?.raw   ?? rawM.pbAnnual ?? null,
-    peg:         yv7?.pegRatio             ?? yK.pegRatio?.raw      ?? null,
+    // Valuation — price module is primary (most direct, no adjustments)
+    pe:          yPrice.trailingPE?.raw   ?? yD.trailingPE?.raw   ?? yv7?.trailingPE  ?? rawM.peNormalizedAnnual ?? rawM.peExclExtraTTM ?? null,
+    forwardPE:   yPrice.forwardPE?.raw    ?? yD.forwardPE?.raw    ?? yv7?.forwardPE   ?? null,
+    ps:          yD.priceToSalesTrailing12Months?.raw ?? yv7?.priceToSalesRatioTTM ?? rawM.psTTM ?? rawM.psAnnual ?? null,
+    pb:          yPrice.priceToBook?.raw  ?? yD.priceToBook?.raw  ?? yv7?.priceToBook ?? rawM.pbAnnual ?? null,
+    peg:         yK.pegRatio?.raw         ?? yv7?.pegRatio        ?? null,
     evEbitda:    yK.enterpriseToEbitda?.raw ?? null,
+    // Growth — financial module (Yahoo QS fin)
     revGrowth:   yF.revenueGrowth?.raw != null  ? yPct(yF.revenueGrowth.raw)  : normPct(rawM.revenueGrowthTTMYoy ?? rawM.revenueGrowth3Y ?? null),
     epsGrowth:   yF.earningsGrowth?.raw != null ? yPct(yF.earningsGrowth.raw) : normPct(rawM.epsGrowthTTMYoy ?? rawM.epsGrowth3Y ?? null),
-    grossMargin: yF.grossMargins?.raw != null    ? yPct(yF.grossMargins.raw)   : normPct(rawM.grossMarginTTM ?? rawM.grossMarginAnnual ?? null),
+    // Margins
+    grossMargin: yF.grossMargins?.raw != null     ? yPct(yF.grossMargins.raw)     : normPct(rawM.grossMarginTTM ?? rawM.grossMarginAnnual ?? null),
     opMargin:    yF.operatingMargins?.raw != null ? yPct(yF.operatingMargins.raw) : normPct(rawM.operatingMarginTTM ?? rawM.operatingMarginAnnual ?? null),
-    netMargin:   yF.profitMargins?.raw != null   ? yPct(yF.profitMargins.raw)  : normPct(rawM.netMarginTTM ?? rawM.netMarginAnnual ?? null),
-    roe:         yF.returnOnEquity?.raw != null  ? yPct(yF.returnOnEquity.raw) : normPct(rawM.roeTTM ?? rawM.roe5Y ?? null),
-    roa:         yF.returnOnAssets?.raw != null  ? yPct(yF.returnOnAssets.raw) : normPct(rawM.roaTTM ?? null),
+    netMargin:   yF.profitMargins?.raw != null    ? yPct(yF.profitMargins.raw)    : normPct(rawM.netMarginTTM ?? rawM.netMarginAnnual ?? null),
+    roe:         yF.returnOnEquity?.raw != null   ? yPct(yF.returnOnEquity.raw)   : normPct(rawM.roeTTM ?? rawM.roe5Y ?? null),
+    roa:         yF.returnOnAssets?.raw != null   ? yPct(yF.returnOnAssets.raw)   : normPct(rawM.roaTTM ?? null),
     // Yahoo D/E is %-form (e.g. 164 = 1.64x); Finnhub is ratio
     deRatio:     yF.debtToEquity?.raw != null    ? parseFloat((yF.debtToEquity.raw / 100).toFixed(2)) : (rawM["totalDebt/equityAnnual"] ?? rawM["totalDebt/equityQuarterly"] ?? null),
     currentRatio: yF.currentRatio?.raw           ?? rawM.currentRatioQuarterly ?? rawM.currentRatioAnnual ?? null,
@@ -337,9 +372,10 @@ export default async function handler(req, res) {
     freeCashflow: yF.freeCashflow?.raw != null   ? parseFloat((yF.freeCashflow.raw / 1e9).toFixed(2)) : null,
     operatingCashflow: yF.operatingCashflow?.raw != null ? parseFloat((yF.operatingCashflow.raw / 1e9).toFixed(2)) : null,
     revenueActual: yF.totalRevenue?.raw != null  ? parseFloat((yF.totalRevenue.raw / 1e9).toFixed(2)) : null,
-    beta:        yv7?.beta ?? yD.beta?.raw ?? rawM.beta ?? null,
-    divYield:    (yv7?.trailingAnnualDividendYield ?? yv7?.dividendYield)
-                   ?? (yD.dividendYield?.raw != null ? yPct(yD.dividendYield.raw) : (rawM.dividendYieldIndicatedAnnual ?? null)),
+    beta:        yD.beta?.raw ?? yv7?.beta ?? rawM.beta ?? null,
+    divYield:    (yD.dividendYield?.raw != null ? yPct(yD.dividendYield.raw) : null)
+                   ?? (yv7?.trailingAnnualDividendYield ?? yv7?.dividendYield)
+                   ?? (rawM.dividendYieldIndicatedAnnual ?? null),
     epsForward:  yv7?.epsForward ?? null,
     epsTTM:      yv7?.epsTrailingTwelveMonths ?? null,
   };
@@ -459,7 +495,7 @@ ${nextEarnings ? `【财报日历】下次财报：${nextEarnings}（${daysToEar
 技术${scores.trend ?? "N/A"}/100 | 估值${scores.valuation}/100 | 成长${scores.growth}/100 | 财务${scores.health}/100 | 分析师${scores.analyst ?? "N/A"}/100 | 综合${overall}/100（${scores.grade}级）
 
 ---
-请按以下7段格式，每段用 bullet point（• 开头），不用Markdown，总字数≤900字。要求：必须引用具体数字，不说空话，体现专业判断和独立见解：
+请按以下7段格式，每段用 bullet point（• 开头），总字数≤900字。格式要求：关键数字、重要判断词（如"高估""强烈买入""警惕"）用**加粗**标注；其余不加任何Markdown符号；必须引用具体数字，不说空话，体现专业判断和独立见解：
 
 【公司简介】
 • 核心业务：[主要产品/服务和收入结构，说清楚钱从哪来]

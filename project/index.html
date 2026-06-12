@@ -1908,6 +1908,11 @@
   .sa-sec-chev.open { transform: rotate(90deg); }
   .sa-sec-body { padding: 0 20px 14px; font-size: 12.5px; line-height: 1.75; color: var(--fg-1); display: none; }
   .sa-sec-body.open { display: block; }
+  .sa-bline { display: flex; gap: 8px; padding: 3px 0; align-items: flex-start; }
+  .sa-bdot { color: var(--accent); flex-shrink: 0; font-weight: 700; line-height: 1.75; }
+  .sa-tline { padding: 2px 0; }
+  .sa-bl { font-weight: 600; color: var(--fg-0); }
+  .sa-sec-body b { color: oklch(0.78 0.12 195); font-weight: 700; }
 
   /* Analyst consensus strip */
   .sa-analyst-strip { padding: 10px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: oklch(0.17 0.01 250); }
@@ -3736,8 +3741,8 @@
   </div>
 </div>
 
-<script src="data.js?v=28"></script>
-<script src="desk.js?v=28"></script>
+<script src="data.js?v=29"></script>
+<script src="desk.js?v=29"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
