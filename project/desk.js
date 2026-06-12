@@ -5059,17 +5059,22 @@
     return text
       .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
       .split('\n')
-      .filter(l => l.trim())
+      .filter(l => {
+        const t = l.trim();
+        // drop blank, markdown headings (##), horizontal rules (--, ---, ===)
+        return t && !/^#{1,6}(\s|$)/.test(t) && !/^[-=]{2,}$/.test(t);
+      })
       .map(line => {
         const t = line.trim();
-        if (t.startsWith('•') || t.startsWith('-')) {
+        if (t.startsWith('•') || (t.startsWith('-') && !t.startsWith('--'))) {
           const content = t.replace(/^[•\-]\s*/, '');
+          if (!content) return '';
           const labeled = content.replace(/^([^：:(\n]{1,25}[：:])\s*/,
             (m, label) => `<span class="sa-bl">${label}</span> `);
           return `<div class="sa-bline"><span class="sa-bdot">•</span><span>${labeled}</span></div>`;
         }
         return `<div class="sa-tline">${t}</div>`;
-      }).join('');
+      }).filter(Boolean).join('');
   }
 
   // ── 5-axis radar pentagon SVG ─────────────────────────────────────────────
@@ -5521,8 +5526,14 @@
         popup.querySelector(".sa-tip-name").textContent = tip[0];
         popup.querySelector(".sa-tip-desc").textContent = tip[1];
         const thresh = popup.querySelector(".sa-tip-thresh");
-        if (tip[2]) { thresh.textContent = tip[2]; thresh.style.display = ""; }
-        else { thresh.style.display = "none"; }
+        if (tip[2]) {
+          thresh.innerHTML = tip[2].split('\n').map(line => {
+            const m = line.match(/^(.+?)\s{2,}(.+)$/);
+            if (m) return `<div class="sa-thresh-row"><span class="sa-thresh-key">${m[1]}</span><span class="sa-thresh-val">${m[2]}</span></div>`;
+            return `<div class="sa-thresh-row sa-thresh-full">${line}</div>`;
+          }).join('');
+          thresh.style.display = "";
+        } else { thresh.style.display = "none"; }
         popup._lastKey = el.dataset.tipk;
         // Measure first (hidden), then anchor below the card; flip above if no room
         popup.style.visibility = "hidden";

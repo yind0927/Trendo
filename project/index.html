@@ -1951,7 +1951,11 @@
   .sa-tip-close:hover { color: var(--fg-0); background: var(--bg-2); }
   .sa-tip-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
   .sa-tip-desc { font-size: 12.5px; line-height: 1.7; color: var(--fg-1); }
-  .sa-tip-thresh { font-size: 11px; line-height: 1.65; color: var(--fg-2); background: var(--bg-2); border-radius: 8px; padding: 10px 12px; font-family: var(--f-mono); letter-spacing: 0.01em; }
+  .sa-tip-thresh { font-size: 11px; color: var(--fg-2); background: var(--bg-2); border-radius: 8px; padding: 8px 12px; font-family: var(--f-mono); letter-spacing: 0.01em; display: flex; flex-direction: column; gap: 3px; }
+  .sa-thresh-row { display: flex; gap: 10px; line-height: 1.5; }
+  .sa-thresh-key { flex-shrink: 0; min-width: 54px; color: var(--fg-1); font-weight: 600; }
+  .sa-thresh-val { color: var(--fg-2); }
+  .sa-thresh-full { color: var(--fg-2); }
 
   /* AI narrative accordion */
   .sa-analysis { }
@@ -3800,8 +3804,8 @@
   </div>
 </div>
 
-<script src="data.js?v=34"></script>
-<script src="desk.js?v=34"></script>
+<script src="data.js?v=35"></script>
+<script src="desk.js?v=35"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
