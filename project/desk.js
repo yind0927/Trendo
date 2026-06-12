@@ -5166,30 +5166,30 @@
       return m[k] ?? null;
     };
 
-    // Tooltip definitions [title, description]
+    // Tooltip definitions [title, description, thresholds]
     const METRIC_TIPS = {
-      pe:          ["P/E (TTM)",      "市盈率：股价÷过去12月EPS。<15偏低 / 15-25合理 / >35偏贵，负值=亏损。"],
-      forwardpe:   ["远期 P/E",        "前瞻市盈率：股价÷预期下年EPS。成长股远期PE通常低于TTM，更具参考性。"],
-      peg:         ["PEG",            "市盈增长比：P/E ÷ EPS增速(%)。<1.0低估 / 1-2合理 / >2增长溢价过高。"],
-      evebitda:    ["EV/EBITDA",      "企业价值÷运营利润（含债务定价）。<10偏低 / 10-15合理 / >20偏贵，并购首选指标。"],
-      ps:          ["P/S",            "市销率：股价÷每股营收，适合亏损成长股。SaaS 5-15x，传统行业<2x。"],
-      pb:          ["P/B",            "市净率：股价÷每股净资产。<1账面打折，>5轻资产/高ROE溢价，金融股参考最强。"],
-      revgrowth:   ["收入增速 YoY",   ">20%高增长 / 10-20%健康 / <5%缓慢 / 负值需关注业务萎缩。"],
-      epsgrowth:   ["EPS增速 YoY",    "EPS增速>营收→利润率扩张（积极）；EPS增速<营收→利润率收缩（需关注）。"],
-      netmargin:   ["净利率",          "净利润÷营收。科技>20%优秀 / 消费品10%合理 / 零售<5%正常 / 负值亏损。"],
-      grossmargin: ["毛利率",          "毛利润÷营收，衡量产品定价权与竞争壁垒。SaaS>70% / 制造业25-45%。"],
-      roe:         ["ROE",            "净资产收益率。>15%优秀 / >25%卓越，注意是否因高杠杆(高D/E)人为拉高。"],
-      roa:         ["ROA",            "总资产收益率，衡量资产利用效率。>10%优秀，金融股ROA 1-2%属正常范围。"],
-      fcf:         ["FCF 自由现金流", "经营现金流 − 资本支出（单位B$）。正FCF=真实造血能力，比净利润更难造假。"],
-      ocf:         ["OCF 经营现金流", "核心业务产生的现金（B$）。应与净利润同向，若远低则盈利质量存疑。"],
-      de:          ["D/E 负债率",     "总债务÷股东权益。<0.5稳健 / 0.5-1.5正常 / >2偏高，需关注利息覆盖倍数。"],
-      currentratio:["流动比率",        "流动资产÷流动负债。>2充裕 / 1-2正常 / <1短期偿付有压力。"],
-      rsi14:       ["RSI 14日",       "相对强弱指数（Wilder平滑法）。>70超买注意回调 / <30超卖可能反弹 / 45-65健康动量区间。"],
-      ema50:       ["EMA 50日",       "50日指数移动均线，短中期趋势基准。价格站上EMA50=看多，跌破=短期趋势转弱。"],
-      ema200:      ["EMA 200日",      "200日指数移动均线，长期核心防线。价格在EMA200之上=牛市结构，跌破=重要警示。"],
-      quickratio:  ["速动比率",        "(流动资产−库存)÷流动负债。>1合格，比流动比率更保守，排除难变现的库存。"],
-      beta:        ["Beta 系数",      "相对大盘波动敏感度。1.0跟随大盘 / >1.5高波动进攻型 / <0.5低波动防御型。"],
-      divyield:    ["股息率",          "年化股息÷股价。>3%为较高股息，成长股通常不分红而选择再投资扩张。"],
+      pe:          ["P/E (TTM)", "市盈率，即股价除以过去12个月每股盈利。反映市场愿意为每1元利润支付多少倍价格，是最常用的估值参考。", "< 15  偏低（价值区）\n15–25  合理区间\n25–35  偏贵需注意\n> 35   高估溢价\n负值   公司亏损中"],
+      forwardpe:   ["远期 P/E", "前瞻市盈率，股价除以分析师预期下一财年EPS。成长型公司远期PE通常低于TTM PE，更能反映未来增长潜力。", "< 15  低估或低增长\n15–25  合理\n25–40  成长溢价\n> 40   高估值风险"],
+      peg:         ["PEG 比率", "市盈增长比，即P/E除以EPS年增速（%）。将估值与增长速度结合，适合对比不同成长阶段的公司。", "< 0.8  低估（增长被忽视）\n0.8–1.2  合理定价\n1.2–2.0  轻度溢价\n> 2.0   增长溢价过高"],
+      evebitda:    ["EV/EBITDA", "企业价值除以息税折旧摊销前利润。含债务在内的综合估值，不受资本结构和税率影响，是并购和跨公司比较首选指标。", "< 8    偏低（含杠杆价值）\n8–14   合理区间\n14–20  偏贵\n> 20   高估或重资产溢价"],
+      ps:          ["P/S 市销率", "股价除以每股营收。适用于盈利为负的成长期公司，衡量市场对营收的定价。", "< 2    传统行业合理\n2–5    消费/工业正常\n5–15   SaaS/科技可接受\n> 15   需要高增速支撑"],
+      pb:          ["P/B 市净率", "股价除以每股净资产（账面价值）。反映市场对公司净资产的溢价，对重资产行业和金融股参考价值最高。", "< 1    低于账面（价值陷阱需甄别）\n1–3    合理溢价\n3–6    轻资产/高ROE\n> 6    高成长溢价，风险上升"],
+      revgrowth:   ["收入增速 YoY", "同比营收增长率，反映公司业务规模扩张速度。持续强劲的收入增长是估值溢价的核心支撑。", "> 30%  高速扩张\n15–30%  健康增长\n5–15%  稳健\n0–5%   缓慢\n< 0%   收缩，需关注原因"],
+      epsgrowth:   ["EPS 增速 YoY", "每股盈利同比增速。若EPS增速持续高于收入增速，说明利润率在扩张；反之则需关注成本压力。", "> 25%  盈利高速扩张\n10–25%  健康\n0–10%   温和增长\n< 0%   盈利萎缩"],
+      netmargin:   ["净利率", "净利润除以总营收，衡量公司将收入转化为最终利润的效率，是竞争壁垒和定价权的综合体现。", "> 25%  卓越（科技/软件）\n15–25%  优秀\n5–15%  合理（行业依赖）\n1–5%   薄利（零售/物流）\n< 0%   亏损中"],
+      grossmargin: ["毛利率", "毛利润（营收-直接成本）除以营收。反映产品本身的竞争壁垒和定价权，是利润率的天花板。", "> 70%  极强护城河（SaaS/药品）\n45–70%  优秀\n25–45%  制造业合理\n< 25%  低壁垒或价格竞争激烈"],
+      roe:         ["ROE 股本回报率", "净利润除以股东权益，衡量公司利用股东资金创造利润的效率。注意排除高杠杆人为拉高的情况（查看D/E）。", "> 25%  卓越资本配置\n15–25%  优秀\n8–15%  合格\n< 8%   资本效率偏低"],
+      roa:         ["ROA 总资产回报率", "净利润除以总资产，衡量公司整体资产的盈利效率，受杠杆影响比ROE小，适合跨资本结构比较。", "> 15%  卓越\n8–15%  优秀\n3–8%   合理\n1–3%   金融行业正常范围\n< 1%   效率偏低"],
+      fcf:         ["FCF 自由现金流", "经营现金流减去资本支出，代表企业真实的造血能力。正向FCF可用于回购、分红或再投资，比净利润更难被会计手段粉饰。", "强正值  造血能力强，可回购/分红\n弱正值  维持运营\n负值    扩张期消耗（需结合业务背景判断）"],
+      ocf:         ["OCF 经营现金流", "核心业务产生的现金（含非现金费用调整）。应与净利润方向一致；若OCF长期远低于净利润，盈利质量存疑。", "强正值  盈利质量高\n与净利润匹配  正常\n明显低于净利润  应收账款积压？\n负值    核心业务耗现金"],
+      de:          ["D/E 负债率", "总债务除以股东权益，反映财务杠杆水平。高D/E在低利率时可放大ROE，但加息或衰退期偿债压力大幅上升。", "< 0.3  极度稳健\n0.3–1.0  健康\n1.0–2.0  中等杠杆，需关注利息覆盖\n> 2.0   高杠杆，偿债风险上升"],
+      currentratio:["流动比率", "流动资产除以流动负债，衡量公司在12个月内偿还短期债务的能力。", "> 2.5  充裕但可能资金利用率低\n1.5–2.5  健康\n1.0–1.5  偏紧，需关注现金流\n< 1.0   短期偿付有压力"],
+      rsi14:       ["RSI 14日", "相对强弱指数，采用Wilder平滑法计算14日涨跌幅的比率。反映短中期价格动量，>70超买区，<30超卖区。", "70–100  超买区，注意回调风险\n55–70   强势动量区\n45–55   中性震荡\n30–45   偏弱动量\n0–30    超卖区，可能反弹"],
+      ema50:       ["EMA 50日", "50日指数移动均线，对近期价格赋予更高权重，是判断短中期趋势的关键参考线。", "价格 > EMA50  短中期趋势偏多\n价格 ≈ EMA50  支撑/压力位测试\n价格 < EMA50  短期趋势偏弱"],
+      ema200:      ["EMA 200日", "200日指数移动均线，是判断长期牛熊结构的核心分界线。机构投资者普遍以此作为仓位参考依据。", "价格 > EMA200  长期牛市结构\nEMA50上穿EMA200  金叉，多头信号\nEMA50下穿EMA200  死叉，空头信号\n价格 < EMA200  长期趋势偏空"],
+      quickratio:  ["速动比率", "（流动资产 − 存货）除以流动负债。排除了变现能力最弱的存货，比流动比率更保守，适用于存货周转慢的行业。", "> 1.5  充裕\n1.0–1.5  合格\n0.7–1.0  偏紧\n< 0.7   短期流动性压力较大"],
+      beta:        ["Beta 系数", "股票相对大盘（S&P 500）的波动敏感度。Beta越高，涨跌幅通常越剧烈，适合不同风险偏好的投资者选择。", "< 0.5   低波动，防御型\n0.5–0.9  稳健，低于市场敏感度\n1.0      与大盘同步\n1.0–1.5  进攻型，放大涨跌\n> 1.5    高波动，高风险高回报"],
+      divyield:    ["股息率", "年化每股股息除以股价，反映股东直接收益回报。高股息往往出现在成熟、稳定的行业；成长股通常不分红而选择再投资。", "0%       无分红，再投资扩张\n0.5–1.5%  象征性分红\n1.5–3%   合理回报\n3–5%     较高股息收益\n> 5%     高股息，需核实可持续性"],
     };
 
     // Metric card builder
@@ -5356,9 +5356,16 @@
         ${ageStr ? `<span class="sa-age">${ageStr}更新</span>` : ""}
       </div>
     </div>
+    <div class="sa-tip-overlay"></div>
     <div class="sa-tip-popup">
-      <div class="sa-tip-name"></div>
-      <div class="sa-tip-desc"></div>
+      <div class="sa-tip-hdr">
+        <span class="sa-tip-name"></span>
+        <span class="sa-tip-close">✕</span>
+      </div>
+      <div class="sa-tip-body">
+        <div class="sa-tip-desc"></div>
+        <div class="sa-tip-thresh"></div>
+      </div>
     </div>`;
 
     panel.style.display = "";
@@ -5408,36 +5415,33 @@
     // Re-analyze
     $("#sa-btn-re", panel)?.addEventListener("click", () => triggerAnalysis(data.sym, true));
 
-    // Metric tooltip popup
+    // Metric tooltip popup — centered overlay
+    const tipOverlay = panel.querySelector(".sa-tip-overlay");
+    const tipPopup   = panel.querySelector(".sa-tip-popup");
+    const closeTip = () => {
+      tipOverlay.classList.remove("open");
+      tipPopup.classList.remove("open");
+      tipPopup._lastKey = null;
+    };
+    if (tipOverlay) tipOverlay.addEventListener("click", closeTip);
+    tipPopup?.querySelector(".sa-tip-close")?.addEventListener("click", closeTip);
+
     $$(".sa-mc-info", panel).forEach(el => {
       el.addEventListener("click", e => {
         e.stopPropagation();
         const tip = METRIC_TIPS[el.dataset.tipk];
         if (!tip) return;
-        const popup = panel.querySelector(".sa-tip-popup");
-        if (!popup) return;
-        const isMe = popup._lastKey === el.dataset.tipk && popup.style.display === "block";
-        if (isMe) { popup.style.display = "none"; popup._lastKey = null; return; }
-        popup.querySelector(".sa-tip-name").textContent = tip[0];
-        popup.querySelector(".sa-tip-desc").textContent = tip[1];
-        popup._lastKey = el.dataset.tipk;
-        // Use the card rect (not the tiny ⓘ icon) for natural positioning
-        const card = el.closest(".sa-mc") ?? el;
-        const rect = card.getBoundingClientRect();
-        const pw = 264, pad = 8;
-        let left = rect.left, top = rect.bottom + 6;
-        if (left + pw > window.innerWidth - pad) left = window.innerWidth - pw - pad;
-        if (top + 164 > window.innerHeight) top = rect.top - 170;
-        popup.style.left = Math.max(pad, left) + "px";
-        popup.style.top  = top + "px";
-        popup.style.display = "block";
-        const close = ev => {
-          if (!popup.contains(ev.target) && ev.target !== el) {
-            popup.style.display = "none"; popup._lastKey = null;
-            document.removeEventListener("click", close, true);
-          }
-        };
-        setTimeout(() => document.addEventListener("click", close, true), 0);
+        if (tipPopup._lastKey === el.dataset.tipk && tipPopup.classList.contains("open")) {
+          closeTip(); return;
+        }
+        tipPopup.querySelector(".sa-tip-name").textContent = tip[0];
+        tipPopup.querySelector(".sa-tip-desc").textContent = tip[1];
+        const thresh = tipPopup.querySelector(".sa-tip-thresh");
+        if (tip[2]) { thresh.textContent = tip[2]; thresh.style.display = ""; }
+        else { thresh.style.display = "none"; }
+        tipPopup._lastKey = el.dataset.tipk;
+        tipOverlay.classList.add("open");
+        tipPopup.classList.add("open");
       });
     });
   }

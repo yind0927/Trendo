@@ -1887,7 +1887,7 @@
   .sa-overall-num { font-size: 24px; font-weight: 700; font-family: var(--f-mono); }
   .sa-overall-sub { font-size: 10px; color: var(--fg-3); margin-top: 1px; }
   .sa-radar-inline { margin-left: auto; flex-shrink: 0; }
-  .sa-radar { width: 108px; height: 98px; overflow: visible; }
+  .sa-radar { width: 140px; height: 128px; overflow: visible; }
   .sa-score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
   .sa-score-row { display: flex; flex-direction: column; gap: 4px; }
   .sa-score-lbl { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-3); }
@@ -1904,7 +1904,7 @@
   .sa-metrics { padding: 14px 20px; border-bottom: 1px solid var(--line); }
   .sa-metrics-hdr { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 10px; }
   .sa-metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .sa-mc { background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px 13px 10px; display: flex; flex-direction: column; gap: 7px; transition: border-color .12s; min-height: 64px; }
+  .sa-mc { background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px 13px 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color .12s; min-height: 76px; }
   .sa-mc:hover { border-color: oklch(0.40 0.02 250); }
   .sa-mc-val { font-size: 16px; font-weight: 800; font-family: var(--f-mono); color: var(--fg-0); line-height: 1; }
   .sa-mc-lbl { font-size: 9px; color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; gap: 3px; }
@@ -1925,10 +1925,18 @@
   .sa-eps-val.beat { color: var(--up); } .sa-eps-val.miss { color: var(--down); }
   .sa-eps-est { font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); }
   .sa-eps-per { font-size: 9px; color: var(--fg-3); }
-  /* Metric tooltip popup */
-  .sa-tip-popup { position: fixed; z-index: 9999; background: var(--bg-0); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; width: 260px; box-shadow: 0 8px 28px oklch(0 0 0 / 0.5); display: none; }
-  .sa-tip-name { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.04em; }
-  .sa-tip-desc { font-size: 11.5px; line-height: 1.65; color: var(--fg-1); }
+  /* Metric tooltip popup — centered overlay */
+  .sa-tip-overlay { position: fixed; inset: 0; z-index: 9998; background: oklch(0 0 0 / 0.52); display: none; }
+  .sa-tip-overlay.open { display: block; }
+  .sa-tip-popup { position: fixed; z-index: 9999; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-1); border: 1px solid oklch(0.30 0.02 250); border-radius: 12px; width: 300px; max-width: calc(100vw - 32px); box-shadow: 0 16px 48px oklch(0 0 0 / 0.65); display: none; }
+  .sa-tip-popup.open { display: block; }
+  .sa-tip-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+  .sa-tip-name { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
+  .sa-tip-close { cursor: pointer; font-size: 16px; line-height: 1; color: var(--fg-3); padding: 2px 4px; border-radius: 4px; transition: color .12s, background .12s; }
+  .sa-tip-close:hover { color: var(--fg-0); background: var(--bg-2); }
+  .sa-tip-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .sa-tip-desc { font-size: 12.5px; line-height: 1.7; color: var(--fg-1); }
+  .sa-tip-thresh { font-size: 11px; line-height: 1.65; color: var(--fg-2); background: var(--bg-2); border-radius: 8px; padding: 10px 12px; font-family: var(--f-mono); letter-spacing: 0.01em; }
 
   /* AI narrative accordion */
   .sa-analysis { }
@@ -3774,8 +3782,8 @@
   </div>
 </div>
 
-<script src="data.js?v=31"></script>
-<script src="desk.js?v=31"></script>
+<script src="data.js?v=32"></script>
+<script src="desk.js?v=32"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
