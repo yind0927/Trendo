@@ -1843,8 +1843,6 @@
   }
   .wl-analyze-input:focus { outline: none; border-color: var(--accent); }
   .wl-analyze-input::placeholder { font-family: var(--f-sans); letter-spacing: normal; color: var(--fg-3); font-size: 13px; text-transform: none; }
-  .wl-ttl-sel { background: var(--bg-1); border: 1px solid var(--line); border-radius: 9px; padding: 0 10px; font-size: 11.5px; color: var(--fg-2); cursor: pointer; flex-shrink: 0; height: 42px; outline: none; transition: border-color .15s; }
-  .wl-ttl-sel:focus { border-color: var(--accent); }
   /* Today's analysis history cards */
   .wl-history { max-width: 960px; margin: 0 auto; padding: 6px 20px 0; }
   .wl-hist-lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 6px; }
@@ -3462,13 +3460,6 @@
       <input id="wl-analyze-sym" class="wl-analyze-input"
              placeholder="输入股票代码进行 AI 分析… e.g. AAPL"
              autocapitalize="characters" spellcheck="false" maxlength="10" />
-      <select id="wl-ttl-sel" class="wl-ttl-sel" title="分析结果缓存时长">
-        <option value="60">1小时</option>
-        <option value="120">2小时</option>
-        <option value="240" selected>4小时</option>
-        <option value="480">8小时</option>
-        <option value="1440">今日</option>
-      </select>
       <button type="submit" class="wl-analyze-btn" id="wl-analyze-btn">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         AI 分析
@@ -3476,11 +3467,11 @@
     </form>
   </div>
 
-  <!-- Today's analysis history chips -->
-  <div id="wl-analyze-history" class="wl-history" style="display:none"></div>
-
   <!-- Analysis Result Panel -->
   <div id="wl-analysis-panel" style="display:none;max-width:960px;margin:0 auto;padding:8px 20px 0"></div>
+
+  <!-- Today's analysis history cards (below the result panel) -->
+  <div id="wl-analyze-history" class="wl-history" style="display:none"></div>
 
   <!-- Watchlist Section -->
   <div style="max-width:960px;margin:0 auto;padding:0 20px">
@@ -3819,8 +3810,8 @@
   </div>
 </div>
 
-<script src="data.js?v=36"></script>
-<script src="desk.js?v=36"></script>
+<script src="data.js?v=37"></script>
+<script src="desk.js?v=37"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

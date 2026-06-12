@@ -1,7 +1,7 @@
 // GET /api/stock-analysis?sym=AAPL[&force=1]
 // Five-axis AI stock analysis: technical(EMA) + valuation + growth + health + analyst
 // Data: Yahoo quoteSummary + v7 quote (cookie+crumb auth) + Finnhub fallback; ?debug=1 for source diagnostics
-// Redis cache: trendo:stock_analysis:SYM:YYYY-MM-DD (TTL 28800s / 8h)
+// Redis cache: trendo:stock_analysis:SYM:YYYY-MM-DD (TTL 43200s / 12h)
 
 // ── Technical helpers ─────────────────────────────────────────────────────────
 function calcEMA(closes, n) {
@@ -259,7 +259,7 @@ export default async function handler(req, res) {
       });
       const [{ result }] = await r.json();
       if (result) {
-        res.setHeader("Cache-Control", "s-maxage=28800");
+        res.setHeader("Cache-Control", "s-maxage=43200");
         return res.json({ ...JSON.parse(result), cached: true });
       }
     } catch (_) {}
@@ -631,11 +631,11 @@ RECOMMENDATION:{"action":"watch","label":"可以关注","entry":"${ema50 ? '回�
     try {
       await fetch(`${kvUrl}/pipeline`, {
         method: "POST", headers: kvH,
-        body: JSON.stringify([["SET", cacheKey, JSON.stringify(result)], ["EXPIRE", cacheKey, 28800]]),
+        body: JSON.stringify([["SET", cacheKey, JSON.stringify(result)], ["EXPIRE", cacheKey, 43200]]),
       });
     } catch (_) {}
   }
 
-  res.setHeader("Cache-Control", "s-maxage=28800");
+  res.setHeader("Cache-Control", "s-maxage=43200");
   res.json({ ...result, cached: false });
 }

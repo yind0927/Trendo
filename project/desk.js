@@ -4964,14 +4964,6 @@
       await triggerAnalysis(raw, false);
     });
 
-    // TTL selector — restore saved value and persist on change
-    const ttlSel = $("#wl-ttl-sel");
-    if (ttlSel) {
-      const saved = localStorage.getItem("wl_analysis_ttl");
-      if (saved) ttlSel.value = saved;
-      ttlSel.addEventListener("change", () => localStorage.setItem("wl_analysis_ttl", ttlSel.value));
-    }
-
     renderAnalysisHistory();
   }
 
