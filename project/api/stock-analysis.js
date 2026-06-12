@@ -1,6 +1,6 @@
 // GET /api/stock-analysis?sym=AAPL[&force=1]
 // Five-axis AI stock analysis: technical(EMA) + valuation + growth + health + analyst
-// Data: Yahoo v7 quote (primary, no-auth) + Yahoo quoteSummary (crumb) + Finnhub fallback
+// Data: Yahoo quoteSummary + v7 quote (cookie+crumb auth) + Finnhub fallback; ?debug=1 for source diagnostics
 // Redis cache: trendo:stock_analysis:SYM:YYYY-MM-DD (TTL 28800s / 8h)
 
 // ── Technical helpers ─────────────────────────────────────────────────────────
@@ -32,31 +32,49 @@ function normPct(v) {
 }
 
 // ── Yahoo Finance helpers ─────────────────────────────────────────────────────
-// Fetch crumb for quoteSummary authentication
-async function getYahooCrumb(headers) {
+// Yahoo quoteSummary / v7 quote require a PAIRED session cookie + crumb since 2023.
+// A crumb fetched without first establishing the cookie is rejected (401 Invalid
+// Crumb) — this was why all fundamental metrics came back empty. Flow (same as
+// yfinance): GET fc.yahoo.com → capture Set-Cookie → getcrumb WITH that cookie.
+async function getYahooAuth(headers) {
   try {
-    const r = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-      headers, signal: AbortSignal.timeout(4000),
+    const r1 = await fetch('https://fc.yahoo.com/', {
+      headers, redirect: 'manual', signal: AbortSignal.timeout(4000),
+    }).catch(() => null);
+    let cookie = '';
+    if (r1) {
+      const raw = typeof r1.headers.getSetCookie === 'function'
+        ? r1.headers.getSetCookie()
+        : [r1.headers.get('set-cookie') || ''];
+      cookie = raw.map(s => s.split(';')[0].trim()).filter(s => s.includes('=')).join('; ');
+    }
+    if (!cookie) return { cookie: '', crumb: '' };
+    const r2 = await fetch('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+      headers: { ...headers, Cookie: cookie }, signal: AbortSignal.timeout(4000),
     });
-    if (!r.ok) return '';
-    const t = await r.text();
-    return (t && t.length < 60 && !t.includes('<')) ? t.trim() : '';
-  } catch (_) { return ''; }
+    const t = r2.ok ? await r2.text() : '';
+    const crumb = (t && t.length < 60 && !t.includes('<')) ? t.trim() : '';
+    return { cookie, crumb };
+  } catch (_) { return { cookie: '', crumb: '' }; }
 }
 
-// Try Yahoo quoteSummary for BASIC modules (price+summaryDetail) — works WITHOUT crumb
-// These give: PE, forwardPE, PS, PB, beta, dividend, 52w, marketCap
-async function fetchYahooQSBasic(sym, headers) {
-  const mods = 'price%2CsummaryDetail';
-  const enc  = encodeURIComponent(sym);
-  for (const url of [
-    `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
-    `https://query2.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
-    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
+// Yahoo quoteSummary fetcher — tries authed (cookie+crumb) URLs first, then bare.
+async function fetchYahooQS(sym, headers, auth, mods) {
+  const enc = encodeURIComponent(sym);
+  const authed = auth.cookie && auth.crumb;
+  const crumbQ = authed ? `&crumb=${encodeURIComponent(auth.crumb)}` : '';
+  const urls = [
+    ...(authed ? [
+      `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}${crumbQ}`,
+      `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}${crumbQ}`,
+    ] : []),
     `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
-  ]) {
+    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
+  ];
+  for (const url of urls) {
     try {
-      const r = await fetch(url, { headers, signal: AbortSignal.timeout(6000) });
+      const h = (authed && url.includes('crumb=')) ? { ...headers, Cookie: auth.cookie } : headers;
+      const r = await fetch(url, { headers: h, signal: AbortSignal.timeout(7000) });
       if (!r.ok) continue;
       const d = await r.json();
       if (d?.quoteSummary?.result?.[0]) return d.quoteSummary.result[0];
@@ -65,23 +83,27 @@ async function fetchYahooQSBasic(sym, headers) {
   return null;
 }
 
-// Try Yahoo quoteSummary for FINANCIAL modules — needs crumb (margins/growth/FCF/analyst)
-async function fetchYahooQSFin(sym, headers, crumb) {
-  const mods = 'financialData%2CdefaultKeyStatistics%2Cearnings';
-  const enc  = encodeURIComponent(sym);
+const fetchYahooQSBasic = (sym, headers, auth) =>
+  fetchYahooQS(sym, headers, auth, 'price%2CsummaryDetail');
+const fetchYahooQSFin = (sym, headers, auth) =>
+  fetchYahooQS(sym, headers, auth, 'financialData%2CdefaultKeyStatistics%2Cearnings');
+
+// Yahoo v7 quote — also crumb-gated since 2023; only useful with auth
+async function fetchYahooV7(sym, headers, auth) {
+  const enc = encodeURIComponent(sym);
+  const authed = auth.cookie && auth.crumb;
   const urls = [
-    `https://query1.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
-    `https://query2.finance.yahoo.com/v11/finance/quoteSummary/${enc}?modules=${mods}`,
-    ...(crumb ? [`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}&crumb=${encodeURIComponent(crumb)}`] : []),
-    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
-    `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${enc}?modules=${mods}`,
+    ...(authed ? [`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${enc}&crumb=${encodeURIComponent(auth.crumb)}`] : []),
+    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${enc}`,
   ];
   for (const url of urls) {
     try {
-      const r = await fetch(url, { headers, signal: AbortSignal.timeout(7000) });
+      const h = url.includes('crumb=') ? { ...headers, Cookie: auth.cookie } : headers;
+      const r = await fetch(url, { headers: h, signal: AbortSignal.timeout(5000) });
       if (!r.ok) continue;
       const d = await r.json();
-      if (d?.quoteSummary?.result?.[0]) return d.quoteSummary.result[0];
+      const q = d?.quoteResponse?.result?.[0];
+      if (q) return q;
     } catch (_) {}
   }
   return null;
@@ -208,6 +230,7 @@ function gradeFrom(score) {
 export default async function handler(req, res) {
   const sym     = (req.query.sym || "").toUpperCase().replace(/[^A-Z0-9.\-^]/g, "").slice(0, 10);
   const force   = req.query.force === "1";
+  const debug   = req.query.debug === "1";
   const fhKey   = process.env.FINNHUB_API_KEY;
   const aiKey   = process.env.ANTHROPIC_API_KEY;
   const kvUrl   = process.env.KV_REST_API_URL;
@@ -217,11 +240,12 @@ export default async function handler(req, res) {
   if (!aiKey) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const today    = new Date().toISOString().slice(0, 10);
-  const cacheKey = `trendo:stock_analysis:${sym}:${today}`;
+  // v2: cache key versioned so deploys with data-source fixes bypass stale entries
+  const cacheKey = `trendo:stock_analysis:v2:${sym}:${today}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
-  if (!force && kvUrl && kvToken) {
+  if (!force && !debug && kvUrl && kvToken) {
     try {
       const r = await fetch(`${kvUrl}/pipeline`, {
         method: "POST", headers: kvH,
@@ -235,25 +259,28 @@ export default async function handler(req, res) {
     } catch (_) {}
   }
 
-  // ── 2. Parallel Phase 1 (all independent fetches + crumb) ─────────────────
+  // ── 2. Yahoo auth (cookie + crumb pair), then all fetches in parallel ─────
   const yH = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
   };
+  const auth = await getYahooAuth(yH);
 
-  const [profileR, crumbR, yv7R, metricsR, newsR, historyR, earningsR] = await Promise.allSettled([
+  const [profileR, yv7R, ysBasicR, ysFinR, metricsR, newsR, historyR, earningsR] = await Promise.allSettled([
 
     // Finnhub profile
     fhKey ? fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${sym}&token=${fhKey}`, { signal: AbortSignal.timeout(5000) })
       .then(r => r.json()).catch(() => null) : Promise.resolve(null),
 
-    // Yahoo crumb (for quoteSummary auth)
-    getYahooCrumb(yH),
+    // Yahoo v7 quote (cookie+crumb) — PE/fwdPE/beta/yield/52w/mktcap
+    fetchYahooV7(sym, yH, auth),
 
-    // Yahoo v7 quote — most reliable source for PE/fwdPE/beta/yield/52w/mktcap
-    fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(sym)}`, { headers: yH, signal: AbortSignal.timeout(5000) })
-      .then(r => r.ok ? r.json() : null).catch(() => null),
+    // Yahoo quoteSummary basic (price+summaryDetail) — valuation ratios
+    fetchYahooQSBasic(sym, yH, auth),
+
+    // Yahoo quoteSummary financial (financialData+stats+earnings) — margins/growth/FCF/analyst
+    fetchYahooQSFin(sym, yH, auth),
 
     // Finnhub metric/all (fallback for margins/growth/ratios)
     fhKey ? fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${sym}&metric=all&token=${fhKey}`, { signal: AbortSignal.timeout(5000) })
@@ -295,22 +322,15 @@ export default async function handler(req, res) {
   ]);
 
   const profile      = profileR.status  === "fulfilled" ? profileR.value  : null;
-  const crumb        = crumbR.status    === "fulfilled" ? crumbR.value    : '';
-  const yv7          = yv7R.status      === "fulfilled" ? (yv7R.value?.quoteResponse?.result?.[0] ?? null) : null;
+  const yv7          = yv7R.status      === "fulfilled" ? yv7R.value      : null;
+  const ysBasic      = ysBasicR.status  === "fulfilled" ? ysBasicR.value  : null;
+  const ysFin        = ysFinR.status    === "fulfilled" ? ysFinR.value    : null;
   const rawM         = metricsR.status  === "fulfilled" ? (metricsR.value?.metric ?? {}) : {};
   const news         = newsR.status     === "fulfilled" ? (newsR.value ?? []) : [];
   const history      = historyR.status  === "fulfilled" ? historyR.value : null;
   const nextEarnings = earningsR.status === "fulfilled" ? earningsR.value : null;
 
-  // ── 3. Phase 2: split quoteSummary requests (parallel) ────────────────────
-  // Basic (price+summaryDetail) works WITHOUT crumb → always gets PE/fwdPE/PS/PB/beta
-  // Financial (financialData+stats+earnings) tries crumb → margins/growth/FCF/analyst
-  const [ysBasic, ysFin] = await Promise.all([
-    fetchYahooQSBasic(sym, yH),
-    fetchYahooQSFin(sym, yH, crumb),
-  ]);
-
-  // Unpack basic modules (price module has most valuation data)
+  // ── 3. Unpack quoteSummary modules ─────────────────────────────────────────
   const yPrice = ysBasic?.price        ?? {};
   const yD     = ysBasic?.summaryDetail ?? {};
   // Unpack financial modules
@@ -542,6 +562,26 @@ ${nextEarnings ? `• 财报风险：[${nextEarnings}，预期什么，如何应
 RECOMMENDATION:{"action":"watch","label":"可以关注","entry":"${ema50 ? '回调至EMA50($' + ema50.toFixed(0) + ')区域' : '等待技术信号'}"}
 
 注意：最后一行必须是RECOMMENDATION:，JSON，action只能是 immediate/watch/wait/avoid，label：立即关注/可以关注/等待信号/建议回避。请自主判断。`;
+
+  // Debug mode: return raw data-source diagnostics without calling Claude
+  if (debug) {
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({
+      sym, name, price, marketCap, scores, metrics: m, analyst, quarterlyEPS,
+      ema50, ema200, rsi, nextEarnings,
+      _debug: {
+        yahooCookie:  !!auth.cookie,
+        yahooCrumb:   !!auth.crumb,
+        yv7:          !!yv7,
+        qsBasic:      !!ysBasic,
+        qsFin:        !!ysFin,
+        finnhubProfile: !!profile?.name,
+        finnhubMetricKeys: Object.keys(rawM).length,
+        chartCloses:  closes.length,
+        newsCount:    news.length,
+      },
+    });
+  }
 
   // ── 10. Claude Opus 4.8 ───────────────────────────────────────────────────
   let rawText = "";
