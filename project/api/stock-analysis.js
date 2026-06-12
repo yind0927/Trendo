@@ -590,7 +590,7 @@ RECOMMENDATION:{"action":"watch","label":"可以关注","entry":"${ema50 ? '回�
       method: "POST",
       headers: { "x-api-key": aiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
-        model: "claude-opus-4-8",
+        model: "claude-sonnet-4-6",
         max_tokens: 2500,
         messages: [{ role: "user", content: prompt }],
       }),
