@@ -5052,7 +5052,7 @@
       const cards = groups.get(date).map(h => {
         const gc = saGradeColor(h.overall);
         const meta = [h.price != null ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
-        return `<div class="sa-hist-card" data-sym="${h.sym}">
+        return `<div class="sa-hist-card" data-sym="${h.sym}" data-date="${h.date || ""}">
           <div class="sa-hist-sym">${h.sym}</div>
           ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}</div>` : ""}
           <div class="sa-hist-info">
@@ -5060,6 +5060,7 @@
             ${meta ? `<div class="sa-hist-meta">${meta}</div>` : ""}
           </div>
           <div class="sa-hist-arrow">›</div>
+          <button class="sa-hist-del" data-sym="${h.sym}" data-date="${h.date || ""}" title="删除记录">✕</button>
         </div>`;
       }).join("");
       return `<div class="wl-hist-group">
@@ -5069,21 +5070,36 @@
     }).join("");
 
     el.innerHTML = `<div class="wl-hist-lbl">分析记录</div>${sections}`;
-    $$(".sa-hist-card", el).forEach(c =>
-      c.addEventListener("click", () => triggerAnalysis(c.dataset.sym, false)));
+    $$(".sa-hist-card", el).forEach(card => {
+      card.addEventListener("click", e => {
+        if (e.target.closest(".sa-hist-del")) return; // let del button handle itself
+        triggerAnalysis(card.dataset.sym, false);
+      });
+    });
+    $$(".sa-hist-del", el).forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const sym = btn.dataset.sym, date = btn.dataset.date;
+        const idx = analysisHistory.findIndex(e => e.sym === sym && (e.date === date || !date));
+        if (idx >= 0) analysisHistory.splice(idx, 1);
+        try { localStorage.removeItem(`wl_analysis_${sym}`); } catch (_) {}
+        saveLocalOnly();
+        clearTimeout(syncTimer); syncTimer = setTimeout(syncPush, 2000);
+        renderAnalysisHistory();
+      });
+    });
   }
 
   // ── Stock analysis: localStorage cache + API call ─────────────────────────
   async function fetchStockAnalysis(sym, force = false) {
-    const key   = `wl_analysis_${sym}`;
-    const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+    const key = `wl_analysis_${sym}`;
     if (!force) {
       try {
         const c = JSON.parse(localStorage.getItem(key) || "null");
-        const ttlMs = (parseInt(localStorage.getItem("wl_analysis_ttl") || "720")) * 60000;
-        if (c?._date === today && c?._savedAt && (Date.now() - c._savedAt) < ttlMs) return c;
+        if (c?._date) return c; // has cached analysis — use it regardless of age
       } catch (_) {}
     }
+    const today = new Date().toLocaleDateString("en-CA");
     const r = await fetch(`/api/stock-analysis?sym=${encodeURIComponent(sym)}${force ? "&force=1" : ""}`);
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
