@@ -5021,7 +5021,7 @@
 
     const {
       sym, name, industry, exchange, marketCapStr, ipoYear, price,
-      wk52High, wk52Low, wk52Pos, ma50, ma200, rsi,
+      wk52High, wk52Low, wk52Pos, ema50, ema200, rsi,
       scores, metrics, analyst, quarterlyEPS,
       nextEarnings, daysToEarnings, earningsRisk,
       recommendation, summary, updatedAt,
@@ -5116,14 +5116,14 @@
       ).join("")}</div>`
     ).join(`<div style="height:8px"></div>`);
 
-    const techStrip = (rsi || ma50 || ma200) ? `
+    const techStrip = (rsi || ema50 || ema200) ? `
       <div class="sa-tech-strip">
-        ${rsi   ? `<div class="sa-metric"><div class="sa-metric-val">${rsi.toFixed(1)}</div><div class="sa-metric-lbl">RSI(14)</div></div>` : ""}
-        ${ma50  ? `<div class="sa-metric"><div class="sa-metric-val">$${ma50.toFixed(1)}</div><div class="sa-metric-lbl">MA50</div></div>` : ""}
-        ${ma200 ? `<div class="sa-metric"><div class="sa-metric-val">$${ma200.toFixed(1)}</div><div class="sa-metric-lbl">MA200</div></div>` : ""}
-        ${metrics.quickRatio  ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.quickRatio.toFixed(2)}x</div><div class="sa-metric-lbl">速动比率</div></div>` : ""}
-        ${metrics.beta        ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.beta.toFixed(2)}</div><div class="sa-metric-lbl">Beta</div></div>` : ""}
-        ${metrics.divYield    ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.divYield.toFixed(2)}%</div><div class="sa-metric-lbl">股息率</div></div>` : ""}
+        ${rsi    ? `<div class="sa-metric"><div class="sa-metric-val">${rsi.toFixed(1)}</div><div class="sa-metric-lbl">RSI(14)</div></div>` : ""}
+        ${ema50  ? `<div class="sa-metric"><div class="sa-metric-val">$${ema50.toFixed(1)}</div><div class="sa-metric-lbl">EMA50</div></div>` : ""}
+        ${ema200 ? `<div class="sa-metric"><div class="sa-metric-val">$${ema200.toFixed(1)}</div><div class="sa-metric-lbl">EMA200</div></div>` : ""}
+        ${metrics.quickRatio ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.quickRatio.toFixed(2)}x</div><div class="sa-metric-lbl">速动比率</div></div>` : ""}
+        ${metrics.beta       ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.beta.toFixed(2)}</div><div class="sa-metric-lbl">Beta</div></div>` : ""}
+        ${metrics.divYield   ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.divYield.toFixed(2)}%</div><div class="sa-metric-lbl">股息率</div></div>` : ""}
       </div>` : "";
 
     // Parse Claude sections
