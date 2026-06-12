@@ -4950,12 +4950,51 @@
     // ── AI Analyze Form ───────────────────────────────────────────────────────
     const analyzeForm = $("#wl-analyze-form");
     if (!analyzeForm) return;
+    const analyzeInput = $("#wl-analyze-sym");
+    // Auto-uppercase as the user types (CSS shows uppercase; keep the value in sync)
+    analyzeInput?.addEventListener("input", () => {
+      const p = analyzeInput.selectionStart;
+      analyzeInput.value = analyzeInput.value.toUpperCase();
+      try { analyzeInput.setSelectionRange(p, p); } catch (_) {}
+    });
     analyzeForm.addEventListener("submit", async e => {
       e.preventDefault();
-      const raw = ($("#wl-analyze-sym").value || "").toUpperCase().trim();
+      const raw = (analyzeInput.value || "").toUpperCase().trim();
       if (!raw) return;
       await triggerAnalysis(raw, false);
     });
+    renderAnalysisHistory();
+  }
+
+  // ── Today's analysis history (localStorage wl_analysis_*, same-day validity) ─
+  // Cache entries already expire daily (_date check in fetchStockAnalysis);
+  // here we purge stale keys and surface today's analyses as quick-access chips.
+  function getAnalysisHistory() {
+    const today = new Date().toLocaleDateString("en-CA");
+    const out = [];
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith("wl_analysis_")) continue;
+      try {
+        const c = JSON.parse(localStorage.getItem(k) || "null");
+        if (c?._date === today) out.push({ sym: k.slice(12), grade: c.scores?.grade, savedAt: c._savedAt ?? 0 });
+        else localStorage.removeItem(k);   // 跨日失效 → 清除
+      } catch (_) { localStorage.removeItem(k); }
+    }
+    out.sort((a, b) => b.savedAt - a.savedAt);
+    return out;
+  }
+
+  function renderAnalysisHistory() {
+    const el = $("#wl-analyze-history");
+    if (!el) return;
+    const hist = getAnalysisHistory();
+    if (!hist.length) { el.style.display = "none"; el.innerHTML = ""; return; }
+    el.style.display = "";
+    el.innerHTML = `<span class="wl-hist-lbl">今日已分析</span>` +
+      hist.map(h => `<span class="wl-hist-chip" data-sym="${h.sym}">${h.sym}${h.grade ? `<b>${h.grade}</b>` : ""}</span>`).join("");
+    $$(".wl-hist-chip", el).forEach(c =>
+      c.addEventListener("click", () => triggerAnalysis(c.dataset.sym, false)));
   }
 
   // ── Stock analysis: localStorage cache + API call ─────────────────────────
@@ -4975,7 +5014,7 @@
     }
     const data = await r.json();
     if (data.error) throw new Error(data.error);
-    try { localStorage.setItem(key, JSON.stringify({ ...data, _date: today })); } catch (_) {}
+    try { localStorage.setItem(key, JSON.stringify({ ...data, _date: today, _savedAt: Date.now() })); } catch (_) {}
     return data;
   }
 
@@ -5000,6 +5039,7 @@
     try {
       const data = await fetchStockAnalysis(sym, force);
       renderAnalysisPanel(data);
+      renderAnalysisHistory();
       if (input) input.value = "";
     } catch (e) {
       panel.innerHTML = `<div class="sa-loading" style="color:var(--down)">
@@ -5051,6 +5091,41 @@
     const dataPts = axes.map((a,i)=>pt(i,a.v/100).join(",")).join(" ");
     const lbls = axes.map((a,i)=>{const[x,y]=pt(i,1.28);return`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="9.5" fill="oklch(0.58 0.02 250)">${a.l}</text>`;}).join("");
     return `<svg viewBox="0 0 200 185" class="sa-radar" xmlns="http://www.w3.org/2000/svg">${rings}${spokes}<polygon points="${dataPts}" fill="oklch(0.78 0.12 195 / 0.18)" stroke="oklch(0.78 0.12 195)" stroke-width="1.5" stroke-linejoin="round"/>${lbls}</svg>`;
+  }
+
+  // ── Metric tip popup: body-level singleton ────────────────────────────────
+  // Mounted on document.body — .page-enter keeps transform applied (fill both),
+  // which turns ancestors into containing blocks for position:fixed and breaks
+  // viewport-based coordinates for any popup nested inside the page.
+  let _tipEls = null;
+  function ensureTipPopup() {
+    if (_tipEls) return _tipEls;
+    const overlay = document.createElement("div");
+    overlay.className = "sa-tip-overlay";
+    const popup = document.createElement("div");
+    popup.className = "sa-tip-popup";
+    popup.innerHTML = `<div class="sa-tip-hdr">
+        <span class="sa-tip-name"></span>
+        <span class="sa-tip-close">✕</span>
+      </div>
+      <div class="sa-tip-body">
+        <div class="sa-tip-desc"></div>
+        <div class="sa-tip-thresh"></div>
+      </div>`;
+    document.body.append(overlay, popup);
+    const close = () => {
+      overlay.classList.remove("open");
+      popup.classList.remove("open");
+      popup._lastKey = null;
+    };
+    overlay.addEventListener("click", close);
+    popup.querySelector(".sa-tip-close").addEventListener("click", close);
+    // Anchored popovers drift when the page scrolls under them — just close
+    window.addEventListener("scroll", e => {
+      if (!popup.contains(e.target)) close();
+    }, { capture: true, passive: true });
+    _tipEls = { overlay, popup, close };
+    return _tipEls;
   }
 
   // ── Render full analysis card ─────────────────────────────────────────────
@@ -5300,9 +5375,10 @@
             <div class="sa-sym">${sym}</div>
             <div class="sa-name">${name}</div>
           </div>
-          ${price != null ? `<div>
-            <div class="sa-price">$${price.toFixed(2)}</div>
-          </div>` : ""}
+          <div class="sa-hdr-right">
+            ${price != null ? `<div class="sa-price">$${price.toFixed(2)}</div>` : ""}
+            <button class="sa-collapse-btn" id="sa-collapse" title="收起/展开分析">▲ 收起</button>
+          </div>
         </div>
         <div class="sa-tags">
           ${industry ? `<span class="sa-tag">${industry}</span>` : ""}
@@ -5314,6 +5390,7 @@
         ${w52bar}
       </div>
 
+      <div id="sa-body">
       <div class="sa-scores">
         <div class="sa-grade-row">
           <div class="sa-grade" style="color:${gradeColor(scores.overall)}">${scores.grade}</div>
@@ -5371,16 +5448,6 @@
         <button class="btn" id="sa-btn-re" style="font-size:12px;padding:7px 14px;color:var(--fg-3)">↻ 重新分析</button>
         ${ageStr ? `<span class="sa-age">${ageStr}更新</span>` : ""}
       </div>
-    </div>
-    <div class="sa-tip-overlay"></div>
-    <div class="sa-tip-popup">
-      <div class="sa-tip-hdr">
-        <span class="sa-tip-name"></span>
-        <span class="sa-tip-close">✕</span>
-      </div>
-      <div class="sa-tip-body">
-        <div class="sa-tip-desc"></div>
-        <div class="sa-tip-thresh"></div>
       </div>
     </div>`;
 
@@ -5431,49 +5498,46 @@
     // Re-analyze
     $("#sa-btn-re", panel)?.addEventListener("click", () => triggerAnalysis(data.sym, true));
 
-    // Metric tooltip popup — centered within visible panel area
-    const tipOverlay = panel.querySelector(".sa-tip-overlay");
-    const tipPopup   = panel.querySelector(".sa-tip-popup");
-    const closeTip = () => {
-      tipOverlay.classList.remove("open");
-      tipPopup.classList.remove("open");
-      tipPopup._lastKey = null;
-    };
-    const positionTip = () => {
-      const pr  = panel.getBoundingClientRect();
-      // visible intersection of panel and viewport
-      const vx0 = Math.max(0, pr.left), vy0 = Math.max(0, pr.top);
-      const vx1 = Math.min(window.innerWidth, pr.right);
-      const vy1 = Math.min(window.innerHeight, pr.bottom);
-      const cx  = (vx0 + vx1) / 2;
-      const cy  = (vy0 + vy1) / 2;
-      // clamp so popup stays fully within viewport
-      const pw = Math.min(300, window.innerWidth - 32);
-      const ph = 260;
-      tipPopup.style.left  = Math.max(pw / 2 + 8, Math.min(window.innerWidth - pw / 2 - 8, cx)) + "px";
-      tipPopup.style.top   = Math.max(ph / 2 + 8, Math.min(window.innerHeight - ph / 2 - 8, cy)) + "px";
-      tipPopup.style.width = pw + "px";
-    };
-    if (tipOverlay) tipOverlay.addEventListener("click", closeTip);
-    tipPopup?.querySelector(".sa-tip-close")?.addEventListener("click", closeTip);
+    // Collapse / expand the whole analysis (header + 52w bar stay visible)
+    const collapseBtn = $("#sa-collapse", panel);
+    collapseBtn?.addEventListener("click", () => {
+      const body = $("#sa-body", panel);
+      if (!body) return;
+      const collapsed = body.style.display === "none";
+      body.style.display = collapsed ? "" : "none";
+      collapseBtn.textContent = collapsed ? "▲ 收起" : "▼ 展开";
+    });
 
+    // Metric tooltip popup — anchored beside the clicked card (body-mounted)
     $$(".sa-mc-info", panel).forEach(el => {
       el.addEventListener("click", e => {
         e.stopPropagation();
         const tip = METRIC_TIPS[el.dataset.tipk];
         if (!tip) return;
-        if (tipPopup._lastKey === el.dataset.tipk && tipPopup.classList.contains("open")) {
-          closeTip(); return;
+        const { overlay, popup, close } = ensureTipPopup();
+        if (popup._lastKey === el.dataset.tipk && popup.classList.contains("open")) {
+          close(); return;
         }
-        tipPopup.querySelector(".sa-tip-name").textContent = tip[0];
-        tipPopup.querySelector(".sa-tip-desc").textContent = tip[1];
-        const thresh = tipPopup.querySelector(".sa-tip-thresh");
+        popup.querySelector(".sa-tip-name").textContent = tip[0];
+        popup.querySelector(".sa-tip-desc").textContent = tip[1];
+        const thresh = popup.querySelector(".sa-tip-thresh");
         if (tip[2]) { thresh.textContent = tip[2]; thresh.style.display = ""; }
         else { thresh.style.display = "none"; }
-        tipPopup._lastKey = el.dataset.tipk;
-        positionTip();
-        tipOverlay.classList.add("open");
-        tipPopup.classList.add("open");
+        popup._lastKey = el.dataset.tipk;
+        // Measure first (hidden), then anchor below the card; flip above if no room
+        popup.style.visibility = "hidden";
+        popup.classList.add("open");
+        const pw = popup.offsetWidth, ph = popup.offsetHeight;
+        const r = (el.closest(".sa-mc") ?? el).getBoundingClientRect();
+        const pad = 8, gap = 8;
+        const left = Math.min(Math.max(r.left + r.width / 2 - pw / 2, pad), window.innerWidth - pw - pad);
+        let top = r.bottom + gap;
+        if (top + ph > window.innerHeight - pad) top = r.top - ph - gap;
+        if (top < pad) top = pad;
+        popup.style.left = left + "px";
+        popup.style.top  = top + "px";
+        popup.style.visibility = "";
+        overlay.classList.add("open");
       });
     });
   }

@@ -1839,9 +1839,16 @@
     flex: 1; background: var(--bg-1); border: 1px solid var(--line);
     border-radius: 9px; padding: 11px 16px; font-size: 14px; color: var(--fg-0);
     font-family: var(--f-mono); letter-spacing: 0.04em; transition: border-color .15s;
+    text-transform: uppercase;
   }
   .wl-analyze-input:focus { outline: none; border-color: var(--accent); }
-  .wl-analyze-input::placeholder { font-family: var(--f-sans); letter-spacing: normal; color: var(--fg-3); font-size: 13px; }
+  .wl-analyze-input::placeholder { font-family: var(--f-sans); letter-spacing: normal; color: var(--fg-3); font-size: 13px; text-transform: none; }
+  /* Today's analysis history chips */
+  .wl-history { max-width: 960px; margin: 0 auto; padding: 8px 20px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .wl-hist-lbl { font-size: 10px; color: var(--fg-3); letter-spacing: 0.05em; margin-right: 2px; }
+  .wl-hist-chip { font-size: 11px; font-family: var(--f-mono); font-weight: 600; padding: 3px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-1); color: var(--fg-1); cursor: pointer; transition: border-color .12s, color .12s; user-select: none; }
+  .wl-hist-chip:hover { border-color: var(--accent); color: var(--accent); }
+  .wl-hist-chip b { color: var(--accent); font-weight: 800; margin-left: 3px; }
   .wl-analyze-btn {
     background: var(--accent); color: #fff; border: none; border-radius: 9px;
     padding: 11px 20px; font-size: 12.5px; font-weight: 600; cursor: pointer;
@@ -1861,6 +1868,9 @@
   .sa-sym { font-size: 22px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.02em; line-height: 1.1; }
   .sa-name { font-size: 12px; color: var(--fg-2); margin-top: 2px; }
   .sa-price { font-size: 20px; font-weight: 700; font-family: var(--f-mono); text-align: right; }
+  .sa-hdr-right { display: flex; align-items: flex-start; gap: 10px; }
+  .sa-collapse-btn { background: var(--bg-2); border: 1px solid var(--line); border-radius: 7px; color: var(--fg-3); cursor: pointer; font-size: 11px; line-height: 1; padding: 6px 9px; flex-shrink: 0; transition: color .12s, border-color .12s; }
+  .sa-collapse-btn:hover { color: var(--accent); border-color: var(--accent); }
   .sa-price-change { font-size: 11px; text-align: right; margin-top: 1px; font-family: var(--f-mono); }
   .sa-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .sa-tag { font-size: 10.5px; padding: 2px 8px; border-radius: 20px; background: var(--bg-2); color: var(--fg-2); border: 1px solid var(--line); white-space: nowrap; }
@@ -1907,7 +1917,7 @@
   .sa-mc { background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px 13px 12px; display: flex; flex-direction: column; gap: 8px; transition: border-color .12s; min-height: 76px; }
   .sa-mc:hover { border-color: oklch(0.40 0.02 250); }
   .sa-mc-val { font-size: 16px; font-weight: 800; font-family: var(--f-mono); color: var(--fg-0); line-height: 1; }
-  .sa-mc-lbl { font-size: 9px; color: var(--fg-3); letter-spacing: 0.06em; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; gap: 3px; }
+  .sa-mc-lbl { font-size: 10.5px; color: var(--fg-3); letter-spacing: 0.05em; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; gap: 3px; }
   .sa-mc-info { cursor: pointer; font-size: 12px; color: var(--fg-3); opacity: 0.55; transition: opacity .12s, color .12s; font-style: normal; text-transform: none; letter-spacing: 0; flex-shrink: 0; line-height: 1; }
   .sa-mc-info:hover { opacity: 1; color: var(--accent); }
   .sa-tech-grid { }
@@ -1929,10 +1939,11 @@
   .sa-sec-label { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin: 10px 0 5px; display: flex; align-items: center; gap: 7px; }
   .sa-sec-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
   .sa-sec-label:first-child { margin-top: 0; }
-  /* Metric tooltip popup — panel-centered overlay */
-  .sa-tip-overlay { position: fixed; inset: 0; z-index: 9998; background: oklch(0 0 0 / 0.52); display: none; }
+  /* Metric tooltip popup — anchored beside the clicked card (mounted on body
+     to escape .page-enter's persistent transform, which breaks position:fixed) */
+  .sa-tip-overlay { position: fixed; inset: 0; z-index: 9998; background: transparent; display: none; }
   .sa-tip-overlay.open { display: block; }
-  .sa-tip-popup { position: fixed; z-index: 9999; transform: translate(-50%, -50%); background: var(--bg-1); border: 1px solid oklch(0.30 0.02 250); border-radius: 12px; width: 300px; max-width: calc(100vw - 32px); box-shadow: 0 16px 48px oklch(0 0 0 / 0.65); display: none; }
+  .sa-tip-popup { position: fixed; z-index: 9999; background: var(--bg-1); border: 1px solid oklch(0.32 0.02 250); border-radius: 12px; width: 290px; max-width: calc(100vw - 24px); box-shadow: 0 12px 40px oklch(0 0 0 / 0.6); display: none; }
   .sa-tip-popup.open { display: block; }
   .sa-tip-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
   .sa-tip-name { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
@@ -3446,6 +3457,9 @@
     </form>
   </div>
 
+  <!-- Today's analysis history chips -->
+  <div id="wl-analyze-history" class="wl-history" style="display:none"></div>
+
   <!-- Analysis Result Panel -->
   <div id="wl-analysis-panel" style="display:none;max-width:960px;margin:0 auto;padding:8px 20px 0"></div>
 
@@ -3786,8 +3800,8 @@
   </div>
 </div>
 
-<script src="data.js?v=33"></script>
-<script src="desk.js?v=33"></script>
+<script src="data.js?v=34"></script>
+<script src="desk.js?v=34"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
