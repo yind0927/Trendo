@@ -2818,7 +2818,14 @@
     const day = now.getUTCDay(); // 0=Sun, 6=Sat
     if (day === 0 || day === 6) return false;
     const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-    return mins >= 13 * 60 + 30 && mins < 21 * 60; // 13:30–21:00 UTC covers EDT+EST
+    if (mins < 13 * 60 + 30 || mins >= 21 * 60) return false; // 13:30–21:00 UTC covers EDT+EST
+    // Check US market holidays using Eastern Time calendar date
+    try {
+      const etDate = now.toLocaleDateString("en-CA", { timeZone: "America/New_York" }); // "YYYY-MM-DD"
+      const etYear = +etDate.slice(0, 4);
+      if (usMarketHolidays(etYear).includes(etDate)) return false;
+    } catch (_) {}
+    return true;
   }
 
   async function fetchPrices() {
@@ -3371,9 +3378,14 @@
 
     const mktOpen = isUSMarketOpen();
     const hdr = $("#sim-pending-header");
-    if (hdr) hdr.innerHTML = `挂单队列 · Pending Orders ${mktOpen
-      ? `<span class="pending-mkt-badge open">开盘中</span>`
-      : `<span class="pending-mkt-badge closed">休市</span>`}`;
+    if (hdr) {
+      hdr.innerHTML = `挂单队列 · Pending Orders ${mktOpen
+        ? `<span class="pending-mkt-badge open">开盘中</span>`
+        : `<span class="pending-mkt-badge closed">休市</span>`}
+        <button id="pending-refresh-btn" title="立即检查" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--fg-3);font-size:14px;padding:2px 6px;line-height:1;" onmouseenter="this.style.color='var(--accent)'" onmouseleave="this.style.color='var(--fg-3)'">↻</button>`;
+      const rb = document.getElementById("pending-refresh-btn");
+      if (rb) rb.addEventListener("click", () => { lastPriceFetch = 0; fetchPrices(); });
+    }
     const mktBadge = mktOpen
       ? `<span class="pending-mkt-badge open">开盘中</span>`
       : `<span class="pending-mkt-badge closed">休市</span>`;
@@ -7077,7 +7089,11 @@
   // throttled/asleep. Pull-if-newer prevents a stale local push from
   // resurrecting an already-executed order.
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && syncKey) syncOnStartup();
+    if (!document.hidden) {
+      if (syncKey) syncOnStartup();
+      // Force immediate price refresh so pending orders execute as soon as the tab is active
+      lastPriceFetch = 0;
+    }
   });
   tick(); setInterval(tick, 1000);
 
