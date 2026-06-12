@@ -724,6 +724,35 @@
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
       if (ah) { try { const p = JSON.parse(ah); if (Array.isArray(p)) analysisHistory.splice(0, analysisHistory.length, ...p); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
+    // Migrate legacy wl_analysis_* entries (pre-v41 format) into analysisHistory on first load
+    if (analysisHistory.length === 0) {
+      try {
+        const migrated = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k?.startsWith("wl_analysis_")) continue;
+          try {
+            const d = JSON.parse(localStorage.getItem(k) || "null");
+            if (!d?._date) continue;
+            const sym = k.slice("wl_analysis_".length).toUpperCase();
+            migrated.push({
+              sym,
+              grade:   d.scores?.grade   ?? "",
+              overall: d.scores?.overall ?? 50,
+              name:    d.name ?? "",
+              price:   typeof d.price === "number" ? d.price : null,
+              savedAt: d._savedAt || new Date(d._date + "T12:00:00").getTime(),
+              date:    d._date,
+            });
+          } catch (_) {}
+        }
+        if (migrated.length > 0) {
+          migrated.sort((a, b) => b.savedAt - a.savedAt);
+          if (migrated.length > 200) migrated.splice(200);
+          analysisHistory.splice(0, analysisHistory.length, ...migrated);
+        }
+      } catch (_) {}
+    }
     // Recalculate size% from qty after load (qty is source of truth)
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
