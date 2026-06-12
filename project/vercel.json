@@ -1,4 +1,10 @@
 {
+  "functions": {
+    "api/stock-analysis.js":  { "maxDuration": 60 },
+    "api/holdings-brief.js":  { "maxDuration": 60 },
+    "api/market-summary.js":  { "maxDuration": 60 },
+    "api/drawdown-context.js":{ "maxDuration": 60 }
+  },
   "crons": [
     {
       "path": "/api/market-summary?cron=1",

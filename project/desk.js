@@ -4912,16 +4912,16 @@
   }
 
   function wireWatchlistForm() {
-    const form       = $("#wl-add-form");
-    const toggleBtn  = $("#wl-toggle-form");
-    const formBody   = $("#wl-form-body");
+    const form      = $("#wl-add-form");
+    const toggleBtn = $("#wl-toggle-form");
+    const formBody  = $("#wl-form-body");
     if (!form) return;
 
     if (toggleBtn && formBody) {
       toggleBtn.addEventListener("click", () => {
         const hidden = formBody.style.display === "none";
         formBody.style.display = hidden ? "" : "none";
-        toggleBtn.textContent = hidden ? "取消" : "+ 添加标的";
+        toggleBtn.textContent = hidden ? "取消" : "+ 手动添加";
       });
     }
 
@@ -4943,9 +4943,302 @@
       saveToStorage();
       form.reset();
       if (formBody) formBody.style.display = "none";
-      if (toggleBtn) toggleBtn.textContent = "+ 添加标的";
+      if (toggleBtn) toggleBtn.textContent = "+ 手动添加";
       renderWatchlist();
     });
+
+    // ── AI Analyze Form ───────────────────────────────────────────────────────
+    const analyzeForm = $("#wl-analyze-form");
+    if (!analyzeForm) return;
+    analyzeForm.addEventListener("submit", async e => {
+      e.preventDefault();
+      const raw = ($("#wl-analyze-sym").value || "").toUpperCase().trim();
+      if (!raw) return;
+      await triggerAnalysis(raw, false);
+    });
+  }
+
+  // ── Stock analysis: localStorage cache + API call ─────────────────────────
+  async function fetchStockAnalysis(sym, force = false) {
+    const key   = `wl_analysis_${sym}`;
+    const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+    if (!force) {
+      try {
+        const c = JSON.parse(localStorage.getItem(key) || "null");
+        if (c?._date === today) return c;
+      } catch (_) {}
+    }
+    const r = await fetch(`/api/stock-analysis?sym=${encodeURIComponent(sym)}${force ? "&force=1" : ""}`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${r.status}`);
+    }
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+    try { localStorage.setItem(key, JSON.stringify({ ...data, _date: today })); } catch (_) {}
+    return data;
+  }
+
+  // ── Trigger analysis: manage loading / error / render ────────────────────
+  async function triggerAnalysis(sym, force = false) {
+    const panel = $("#wl-analysis-panel");
+    const btn   = $("#wl-analyze-btn");
+    const input = $("#wl-analyze-sym");
+    if (!panel) return;
+
+    // Loading state
+    panel.style.display = "";
+    panel.innerHTML = `<div class="sa-loading">
+      <div class="sa-spinner"></div>
+      <div>
+        <div>正在分析 <span class="mono" style="color:var(--fg-0);font-weight:700">${sym}</span>…</div>
+        <div style="font-size:11px;color:var(--fg-3);margin-top:3px">拉取财务数据 · 计算技术指标 · AI 综合解读</div>
+      </div>
+    </div>`;
+    if (btn) { btn.disabled = true; btn.textContent = "分析中…"; }
+
+    try {
+      const data = await fetchStockAnalysis(sym, force);
+      renderAnalysisPanel(data);
+      if (input) input.value = "";
+    } catch (e) {
+      panel.innerHTML = `<div class="sa-loading" style="color:var(--down)">
+        <div style="font-size:20px">✕</div>
+        <div>
+          <div>分析失败：${e.message}</div>
+          <div style="font-size:11px;color:var(--fg-3);margin-top:3px">请检查股票代码是否正确，或稍后重试</div>
+        </div>
+      </div>`;
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> AI 分析`; }
+    }
+  }
+
+  // ── Render full analysis card ─────────────────────────────────────────────
+  function renderAnalysisPanel(data) {
+    const panel = $("#wl-analysis-panel");
+    if (!panel) return;
+
+    const {
+      sym, name, industry, exchange, marketCapStr, ipoYear, price,
+      wk52High, wk52Low, wk52Pos, ma50, ma200, rsi,
+      scores, metrics, nextEarnings, daysToEarnings, earningsRisk,
+      recommendation, summary, updatedAt,
+    } = data;
+
+    // Grade / bar colors
+    const gradeColor = s => s >= 80 ? "var(--up)" : s >= 65 ? "var(--accent)" : s >= 50 ? "var(--warn)" : "var(--down)";
+    const barColor   = s => s >= 75 ? "var(--up)" : s >= 60 ? "var(--accent)" : s >= 45 ? "var(--warn)" : "var(--down)";
+
+    // Recommendation badge style
+    const recStyle = {
+      immediate: { bg: "oklch(0.78 0.17 145/0.14)", border: "oklch(0.78 0.17 145/0.45)", text: "var(--up)" },
+      watch:     { bg: "oklch(0.78 0.12 195/0.12)", border: "oklch(0.78 0.12 195/0.4)",  text: "var(--accent)" },
+      wait:      { bg: "oklch(0.80 0.15 75/0.12)",  border: "oklch(0.80 0.15 75/0.4)",   text: "var(--warn)" },
+      avoid:     { bg: "oklch(0.70 0.19 25/0.12)",  border: "oklch(0.70 0.19 25/0.4)",   text: "var(--down)" },
+    }[recommendation?.action ?? "watch"] ?? {};
+
+    // Metric formatters
+    const fV  = (v, d = 1, s = "x") => v != null ? `${parseFloat(v.toFixed(d))}${s}` : "—";
+    const fP  = v => {
+      if (v == null) return "—";
+      const n = Math.abs(v) < 2 ? v * 100 : v; // normalize if raw decimal
+      return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+    };
+    const fPn = v => { // no +/- for margins
+      if (v == null) return "—";
+      const n = Math.abs(v) < 2 ? v * 100 : v;
+      return `${n.toFixed(1)}%`;
+    };
+
+    // 52-week bar
+    const w52bar = (wk52High && wk52Low && wk52Pos != null) ? `
+      <div class="sa-52w">
+        <div class="sa-52w-bar">
+          <span>$${wk52Low.toFixed(0)}</span>
+          <div class="sa-52w-track">
+            <div class="sa-52w-ptr" style="left:${wk52Pos}%"></div>
+          </div>
+          <span>$${wk52High.toFixed(0)}</span>
+          <span style="color:var(--fg-2)">@${wk52Pos}%分位</span>
+        </div>
+      </div>` : "";
+
+    // Earnings tag
+    const earnTag = nextEarnings
+      ? `<span class="sa-tag ${earningsRisk === "high" ? "earn-high" : earningsRisk === "moderate" ? "earn-mod" : ""}">财报 ${nextEarnings}（${daysToEarnings}天）</span>` : "";
+
+    // Score bars
+    const scoreBars = [
+      { lbl: "技术面", val: scores.trend },
+      { lbl: "估值",   val: scores.valuation },
+      { lbl: "成长性", val: scores.growth },
+      { lbl: "财务健康", val: scores.health },
+    ].map(({ lbl, val }) => val != null ? `
+      <div class="sa-score-row">
+        <div class="sa-score-lbl"><span>${lbl}</span><span class="sa-score-num">${val}</span></div>
+        <div class="sa-bar-track"><div class="sa-bar-fill" style="width:${val}%;background:${barColor(val)}"></div></div>
+      </div>` : "").join("");
+
+    // Key metrics
+    const metricRows = [
+      [
+        { v: fV(metrics.pe),            l: "P/E" },
+        { v: fV(metrics.peg),           l: "PEG" },
+        { v: fV(metrics.ps),            l: "P/S" },
+        { v: fV(metrics.pb),            l: "P/B" },
+      ],
+      [
+        { v: fP(metrics.revGrowth),     l: "收入增速" },
+        { v: fP(metrics.epsGrowth),     l: "EPS增速" },
+        { v: fPn(metrics.netMargin),    l: "净利率" },
+        { v: fPn(metrics.grossMargin),  l: "毛利率" },
+      ],
+      [
+        { v: fPn(metrics.roe),          l: "ROE" },
+        { v: fPn(metrics.roa),          l: "ROA" },
+        { v: metrics.deRatio?.toFixed(2) ?? "—", l: "D/E" },
+        { v: metrics.beta?.toFixed(2) ?? "—",    l: "Beta" },
+      ],
+    ];
+
+    const metricsHTML = metricRows.map(row =>
+      `<div class="sa-metrics-grid">${row.map(({ v, l }) =>
+        `<div class="sa-metric"><div class="sa-metric-val">${v}</div><div class="sa-metric-lbl">${l}</div></div>`
+      ).join("")}</div>`
+    ).join(`<div style="height:8px"></div>`);
+
+    const techStrip = (rsi || ma50 || ma200) ? `
+      <div class="sa-tech-strip">
+        ${rsi  ? `<div class="sa-metric"><div class="sa-metric-val">${rsi.toFixed(1)}</div><div class="sa-metric-lbl">RSI(14)</div></div>` : ""}
+        ${ma50 ? `<div class="sa-metric"><div class="sa-metric-val">$${ma50.toFixed(1)}</div><div class="sa-metric-lbl">MA50</div></div>` : ""}
+        ${ma200 ? `<div class="sa-metric"><div class="sa-metric-val">$${ma200.toFixed(1)}</div><div class="sa-metric-lbl">MA200</div></div>` : ""}
+        ${metrics.divYield ? `<div class="sa-metric"><div class="sa-metric-val">${metrics.divYield.toFixed(2)}%</div><div class="sa-metric-lbl">股息率</div></div>` : ""}
+      </div>` : "";
+
+    // Parse Claude sections
+    const secNames = ["公司简介", "估值分析", "成长性", "财务健康", "技术面", "综合建议"];
+    const sections = secNames.map(n => {
+      const m = summary?.match(new RegExp(`【${n}】\\s*([\\s\\S]*?)(?=【|$)`));
+      return m ? { n, body: m[1].trim() } : null;
+    }).filter(Boolean);
+
+    // Age tag
+    const ageStr = updatedAt ? (() => {
+      const diff = Math.round((Date.now() - new Date(updatedAt)) / 60000);
+      return diff < 1 ? "刚刚" : diff < 60 ? `${diff}分钟前` : `${Math.floor(diff / 60)}小时前`;
+    })() : "";
+
+    panel.innerHTML = `<div class="sa-card">
+      <div class="sa-header">
+        <div class="sa-company-row">
+          <div>
+            <div class="sa-sym">${sym}</div>
+            <div class="sa-name">${name}</div>
+          </div>
+          ${price != null ? `<div>
+            <div class="sa-price">$${price.toFixed(2)}</div>
+          </div>` : ""}
+        </div>
+        <div class="sa-tags">
+          ${industry ? `<span class="sa-tag">${industry}</span>` : ""}
+          ${exchange  ? `<span class="sa-tag">${exchange.split(" ")[0]}</span>` : ""}
+          ${marketCapStr && marketCapStr !== "N/A" ? `<span class="sa-tag">市值 ${marketCapStr}</span>` : ""}
+          ${ipoYear ? `<span class="sa-tag">上市 ${ipoYear}</span>` : ""}
+          ${earnTag}
+        </div>
+        ${w52bar}
+      </div>
+
+      <div class="sa-scores">
+        <div class="sa-grade-row">
+          <div class="sa-grade" style="color:${gradeColor(scores.overall)}">${scores.grade}</div>
+          <div>
+            <div class="sa-overall-num" style="color:${gradeColor(scores.overall)}">${scores.overall}<span style="font-size:13px;font-weight:400;color:var(--fg-3)">/100</span></div>
+            <div class="sa-overall-sub">综合评分</div>
+          </div>
+        </div>
+        <div class="sa-score-grid">${scoreBars}</div>
+      </div>
+
+      ${recommendation ? `<div class="sa-rec">
+        <span class="sa-rec-badge" style="background:${recStyle.bg};border-color:${recStyle.border};color:${recStyle.text}">${recommendation.label ?? ""}</span>
+        ${recommendation.entry ? `<span class="sa-rec-entry">${recommendation.entry}</span>` : ""}
+      </div>` : ""}
+
+      <div class="sa-metrics">
+        <div class="sa-metrics-hdr">关键指标</div>
+        ${metricsHTML}
+        ${techStrip}
+      </div>
+
+      ${sections.length ? `<div class="sa-analysis">
+        ${sections.map((s, i) => {
+          const isLast = i === sections.length - 1;
+          return `<div class="sa-sec">
+            <div class="sa-sec-hdr" data-sai="${i}">
+              <span class="sa-sec-title">${s.n}</span>
+              <span class="sa-sec-chev${isLast ? " open" : ""}">▶</span>
+            </div>
+            <div class="sa-sec-body${isLast ? " open" : ""}" id="sa-s-${i}">${s.body.replace(/\n/g, "<br>")}</div>
+          </div>`;
+        }).join("")}
+      </div>` : ""}
+
+      <div class="sa-actions">
+        <button class="btn primary" id="sa-btn-add" style="font-size:12px;padding:7px 14px">⭐ 加入自选</button>
+        <button class="btn" id="sa-btn-pos" style="font-size:12px;padding:7px 14px">📈 开仓</button>
+        <button class="btn" id="sa-btn-re" style="font-size:12px;padding:7px 14px;color:var(--fg-3)">↻ 重新分析</button>
+        ${ageStr ? `<span class="sa-age">${ageStr}更新</span>` : ""}
+      </div>
+    </div>`;
+
+    panel.style.display = "";
+
+    // Accordion
+    $$(".sa-sec-hdr", panel).forEach(hdr => {
+      hdr.addEventListener("click", () => {
+        const i = hdr.dataset.sai;
+        const body = $(`#sa-s-${i}`, panel);
+        const chev = hdr.querySelector(".sa-sec-chev");
+        if (!body) return;
+        const open = body.classList.toggle("open");
+        chev.classList.toggle("open", open);
+      });
+    });
+
+    // Add to watchlist
+    $("#sa-btn-add", panel)?.addEventListener("click", () => {
+      if (WATCHLIST.find(w => w.sym === data.sym)) { alert(`${data.sym} 已在自选列表`); return; }
+      WATCHLIST.push({
+        sym: data.sym, name: data.name,
+        sector: data.industry ?? "—",
+        color: "oklch(0.35 0.01 250)",
+        price: data.price ?? null,
+        setup: data.recommendation?.label ?? "",
+        bxScore: data.scores?.overall ?? 50,
+        bxSlope: 0,
+        note: "", addedAt: new Date().toISOString().slice(0, 10),
+        _aiGrade: data.scores?.grade,
+      });
+      saveToStorage(); renderWatchlist();
+      $("#sa-btn-add", panel).textContent = "✓ 已加入自选";
+      setTimeout(() => { const b = $("#sa-btn-add", panel); if (b) b.innerHTML = "⭐ 加入自选"; }, 2000);
+    });
+
+    // Open position
+    $("#sa-btn-pos", panel)?.addEventListener("click", () => {
+      switchPage("desk");
+      setTimeout(() => {
+        const ti = $("#form-ticker"); if (ti) ti.value = data.sym;
+        const ei = $("#form-entry");  if (ei && data.price) ei.value = data.price.toFixed(2);
+        const fd = $("#form-date");   if (fd) fd.value = new Date().toISOString().slice(0, 10);
+        openModal("new-position-modal");
+      }, 80);
+    });
+
+    // Re-analyze
+    $("#sa-btn-re", panel)?.addEventListener("click", () => triggerAnalysis(data.sym, true));
   }
 
   // ============ MARKET PAGE ============
