@@ -5532,6 +5532,130 @@
     return d;
   }
 
+  // ── Score dimension breakdown: per-stock factor attribution ──────────────
+  function buildDimBreakdown(dim, data) {
+    const m   = data.metrics || {};
+    const fN  = (v, d = 1) => v != null ? String(parseFloat(v.toFixed(d))) : "—";
+    const fPc = v => v != null ? `${fN(v)}%` : "—";
+    const row = (lbl, val, delta) => ({ lbl, val, delta, cls: delta > 0 ? "pos" : delta < 0 ? "neg" : "neu" });
+    const WEIGHTS = { trend: "25%", valuation: "20%", growth: "20%", health: "20%", analyst: "15%" };
+    const TITLES  = { trend: "技术面", valuation: "估值", growth: "成长性", health: "财务健康", analyst: "分析师" };
+    const BASES   = { trend: 50, valuation: 55, growth: 50, health: 55, analyst: 50 };
+    const rows = [{ lbl: "基准分", val: "", delta: BASES[dim] ?? 50, cls: "base" }];
+
+    if (dim === "trend") {
+      const { price, ema50, ema200, rsi, wk52High, wk52Low } = data;
+      if (ema50 && ema200 && price) {
+        if (price > ema50 && ema50 > ema200)      rows.push(row("多头排列 (price > EMA50 > EMA200)", "✓", +35));
+        else if (price > ema50)                    rows.push(row("价格在EMA50之上", "✓", +15));
+        else if (price > ema200)                   rows.push(row("价格在EMA200之上，EMA50以下", "✓", +5));
+        else                                       rows.push(row("价格低于EMA200 (空头区域)", "✗", -20));
+      }
+      if (rsi != null) {
+        if      (rsi >= 45 && rsi <= 65) rows.push(row("RSI 健康区间 (45~65)", fN(rsi), +15));
+        else if (rsi >  65 && rsi <= 75) rows.push(row("RSI 偏热 (65~75)", fN(rsi), +5));
+        else if (rsi >  75)              rows.push(row("RSI 超买 (>75)", fN(rsi), -12));
+        else if (rsi >= 35)              rows.push(row("RSI 偏弱 (35~45)", fN(rsi), +5));
+        else                             rows.push(row("RSI 超卖 (<35)", fN(rsi), -5));
+      }
+      if (wk52High && wk52Low && wk52High > wk52Low && price) {
+        const pos = Math.round((price - wk52Low) / (wk52High - wk52Low) * 100);
+        if      (pos > 75) rows.push(row("52周高分位 (>75%)", `${pos}%`, +5));
+        else if (pos < 25) rows.push(row("52周低分位 (<25%)", `${pos}%`, -5));
+        else               rows.push(row("52周分位 (中间区间)", `${pos}%`, 0));
+      }
+    }
+    else if (dim === "valuation") {
+      const { pe, forwardPE, peg, ps, evEbitda } = m;
+      const effPE = (forwardPE != null && forwardPE > 0 && (pe == null || forwardPE < pe)) ? forwardPE : pe;
+      if (peg != null && peg > 0) {
+        const d = peg < 0.75 ? +25 : peg < 1.2 ? +15 : peg < 2.0 ? 0 : peg < 3.0 ? -15 : -25;
+        rows.push(row("PEG", fN(peg), d));
+      } else if (effPE != null) {
+        const d = effPE < 0 ? -10 : effPE < 15 ? +20 : effPE < 22 ? +12 : effPE < 30 ? 0 : effPE < 45 ? -15 : -25;
+        rows.push(row(forwardPE != null && forwardPE === effPE ? "远期PE" : "PE(TTM)", fN(effPE), d));
+      } else {
+        rows.push({ lbl: "PE / PEG", val: "无数据", delta: 0, cls: "neu" });
+      }
+      if (ps != null) {
+        const d = ps < 1.5 ? +5 : ps > 20 ? -10 : ps > 10 ? -5 : 0;
+        rows.push(row("PS (市销率)", fN(ps), d));
+      }
+      if (evEbitda != null && evEbitda > 0) {
+        const d = evEbitda < 10 ? +8 : evEbitda < 20 ? +3 : evEbitda < 35 ? 0 : evEbitda < 60 ? -8 : -15;
+        rows.push(row("EV/EBITDA", fN(evEbitda), d));
+      }
+    }
+    else if (dim === "growth") {
+      const { revGrowth, epsGrowth } = m;
+      const qeps = data.quarterlyEPS || [];
+      if (revGrowth != null) {
+        const d = revGrowth > 30 ? +38 : revGrowth > 20 ? +28 : revGrowth > 10 ? +18 : revGrowth > 3 ? +8 : revGrowth > 0 ? +2 : revGrowth > -10 ? -12 : -25;
+        rows.push(row("营收增速 (YoY)", fPc(revGrowth), d));
+      }
+      if (epsGrowth != null) {
+        const d = epsGrowth > 25 ? +15 : epsGrowth > 10 ? +8 : epsGrowth > 0 ? +3 : epsGrowth < -15 ? -10 : 0;
+        rows.push(row("EPS增速 (YoY)", fPc(epsGrowth), d));
+      }
+      if (qeps.length >= 2) {
+        const wd = qeps.filter(q => q.beat != null);
+        const bc = wd.filter(q => q.beat).length;
+        const summary = `${bc}/${wd.length}季超预期`;
+        if      (wd.length >= 4 && wd.every(q => q.beat))            rows.push(row("连续4季EPS超预期", summary, +10));
+        else if (wd.length >= 3 && wd.slice(-3).every(q => q.beat))  rows.push(row("连续3季EPS超预期", summary, +5));
+        else if (wd.length >= 2 && wd.slice(-2).every(q => !q.beat)) rows.push(row("连续2季EPS未达预期", summary, -8));
+        else                                                           rows.push(row("季度EPS表现", summary, 0));
+      }
+    }
+    else if (dim === "health") {
+      const { netMargin, grossMargin, roe, deRatio, currentRatio, freeCashflow, revenueActual } = m;
+      if (netMargin != null) {
+        const d = netMargin > 20 ? +20 : netMargin > 10 ? +12 : netMargin > 3 ? +5 : netMargin < 0 ? -20 : 0;
+        rows.push(row("净利率", fPc(netMargin), d));
+      }
+      if (grossMargin != null) {
+        const d = grossMargin > 60 ? +10 : grossMargin > 40 ? +5 : grossMargin < 15 ? -5 : 0;
+        rows.push(row("毛利率", fPc(grossMargin), d));
+      }
+      if (roe != null) {
+        const d = roe > 30 ? +12 : roe > 15 ? +6 : roe < 0 ? -8 : 0;
+        rows.push(row("ROE", fPc(roe), d));
+      }
+      if (deRatio != null) {
+        const d = deRatio < 0.3 ? +5 : deRatio > 3.0 ? -12 : deRatio > 2.0 ? -6 : 0;
+        rows.push(row("D/E (负债率)", fN(deRatio, 2), d));
+      }
+      if (currentRatio != null) {
+        const d = currentRatio >= 2 ? +5 : currentRatio < 1 ? -8 : 0;
+        rows.push(row("流动比率", fN(currentRatio, 2), d));
+      }
+      if (freeCashflow != null) {
+        const netIncomeBN = (netMargin != null && revenueActual != null) ? (netMargin / 100) * revenueActual : null;
+        const highQ = freeCashflow > 0 && netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8;
+        const d = freeCashflow > 0 ? (highQ ? +8 : +4) : -6;
+        const lbl = freeCashflow > 0 ? (highQ ? "FCF为正（高质量）" : "FCF为正") : "FCF为负";
+        rows.push(row(lbl, `$${fN(freeCashflow, 1)}B`, d));
+      }
+    }
+    else if (dim === "analyst") {
+      const { recKey, recLabel, targetUpside, analystCount } = data.analyst || {};
+      if (recKey) {
+        const map = { strongBuy: +25, buy: +18, hold: 0, underperform: -18, sell: -30 };
+        rows.push(row("共识评级", recLabel ?? recKey, map[recKey] ?? 0));
+      }
+      if (targetUpside != null) {
+        const d = targetUpside > 40 ? +15 : targetUpside > 20 ? +10 : targetUpside > 10 ? +5 : targetUpside > 0 ? +2 : targetUpside < -10 ? -15 : -5;
+        rows.push(row("目标价空间", fPc(targetUpside), d));
+      }
+      if (analystCount != null) {
+        rows.push(row("分析师覆盖", `${analystCount}位`, analystCount >= 10 ? +3 : 0));
+      }
+    }
+
+    rows.push({ lbl: "综合得分", val: "", delta: data.scores?.[dim] ?? 0, cls: "total" });
+    return { title: `${TITLES[dim] ?? dim}  ·  权重 ${WEIGHTS[dim] ?? "—"}`, rows };
+  }
+
   // ── Metric tip popup: body-level singleton ────────────────────────────────
   // Mounted on document.body — .page-enter keeps transform applied (fill both),
   // which turns ancestors into containing blocks for position:fixed and breaks
@@ -5649,15 +5773,15 @@
     const earnTag = nextEarnings
       ? `<span class="sa-tag ${earningsRisk === "high" ? "earn-high" : earningsRisk === "moderate" ? "earn-mod" : ""}">财报 ${nextEarnings}（${daysToEarnings}天）</span>` : "";
 
-    // Score bars
+    // Score bars — clickable for per-stock breakdown
     const scoreBars = [
-      { lbl: "技术面",   val: scores.trend },
-      { lbl: "估值",     val: scores.valuation },
-      { lbl: "成长性",   val: scores.growth },
-      { lbl: "财务健康", val: scores.health },
-      { lbl: "分析师",   val: scores.analyst },
-    ].map(({ lbl, val }) => val != null ? `
-      <div class="sa-score-row">
+      { lbl: "技术面",   dim: "trend",     val: scores.trend },
+      { lbl: "估值",     dim: "valuation", val: scores.valuation },
+      { lbl: "成长性",   dim: "growth",    val: scores.growth },
+      { lbl: "财务健康", dim: "health",    val: scores.health },
+      { lbl: "分析师",   dim: "analyst",   val: scores.analyst },
+    ].map(({ lbl, dim, val }) => val != null ? `
+      <div class="sa-score-row" data-dim="${dim}" title="点击查看得分明细">
         <div class="sa-score-lbl"><span>${lbl}</span><span class="sa-score-num">${val}</span></div>
         <div class="sa-bar-track"><div class="sa-bar-fill" style="width:${val}%;background:${barColor(val)}"></div></div>
       </div>` : "").join("");
@@ -5984,6 +6108,47 @@
         popup.style.top  = top + "px";
         popup.style.visibility = "";
         overlay.classList.add("open");
+      });
+    });
+
+    // Score bar click → breakdown popup
+    $$(".sa-score-row[data-dim]", panel).forEach(scoreRow => {
+      scoreRow.addEventListener("click", e => {
+        e.stopPropagation();
+        const dim = scoreRow.dataset.dim;
+        const key = `dim:${dim}`;
+        const { overlay, popup, close } = ensureTipPopup();
+        if (popup._lastKey === key && popup.classList.contains("open")) { close(); return; }
+        const bd = buildDimBreakdown(dim, data);
+        const rowsHTML = bd.rows.map(r => {
+          const dStr = r.cls === "base" ? String(r.delta) : r.cls === "total" ? String(r.delta) : (r.delta > 0 ? `+${r.delta}` : r.delta === 0 ? "±0" : String(r.delta));
+          return `<div class="sa-bd-row sa-bd-${r.cls}">
+            <span class="sa-bd-lbl">${r.lbl}</span>
+            <span class="sa-bd-val">${r.val}</span>
+            <span class="sa-bd-delta">${dStr}</span>
+          </div>`;
+        }).join("");
+        popup.innerHTML = `
+          <div class="sa-tip-hdr">
+            <span class="sa-tip-name">${bd.title}</span>
+            <span class="sa-tip-close">✕</span>
+          </div>
+          <div class="sa-tip-body"><div class="sa-bd-rows">${rowsHTML}</div></div>`;
+        popup.querySelector(".sa-tip-close").addEventListener("click", close);
+        popup._lastKey = key;
+        popup.style.visibility = "hidden";
+        popup.classList.add("open");
+        overlay.classList.add("open");
+        const pw = popup.offsetWidth, ph = popup.offsetHeight;
+        const rect = scoreRow.getBoundingClientRect();
+        const pad = 8, gap = 6;
+        const left = Math.min(Math.max(rect.left + rect.width / 2 - pw / 2, pad), window.innerWidth - pw - pad);
+        let top = rect.bottom + gap;
+        if (top + ph > window.innerHeight - pad) top = rect.top - ph - gap;
+        if (top < pad) top = pad;
+        popup.style.left = left + "px";
+        popup.style.top  = top  + "px";
+        popup.style.visibility = "";
       });
     });
   }

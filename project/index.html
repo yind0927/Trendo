@@ -1915,11 +1915,28 @@
   .sa-radar-inline { margin-left: auto; flex-shrink: 0; }
   .sa-radar { width: 168px; height: 154px; overflow: visible; }
   .sa-score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
-  .sa-score-row { display: flex; flex-direction: column; gap: 4px; }
+  .sa-score-row { display: flex; flex-direction: column; gap: 4px; cursor: pointer; border-radius: 6px; padding: 4px 5px; margin: -4px -5px; transition: background .12s; }
+  .sa-score-row:hover { background: oklch(0.78 0.12 195 / 0.07); }
+  .sa-score-row:hover .sa-score-lbl > span:first-child { color: var(--accent); }
   .sa-score-lbl { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-3); }
   .sa-score-num { font-family: var(--f-mono); color: var(--fg-1); font-size: 11px; font-weight: 700; }
   .sa-bar-track { height: 5px; background: var(--bg-2); border-radius: 3px; overflow: hidden; }
   .sa-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s cubic-bezier(.4,0,.2,1); }
+  /* Score breakdown popup rows */
+  .sa-bd-rows { display: flex; flex-direction: column; padding: 4px 0 2px; }
+  .sa-bd-row { display: flex; align-items: baseline; gap: 6px; padding: 5px 16px; }
+  .sa-bd-row + .sa-bd-row { border-top: 1px solid oklch(0.26 0.01 250 / 0.5); }
+  .sa-bd-lbl { flex: 1; font-size: 11.5px; color: var(--fg-2); line-height: 1.4; }
+  .sa-bd-val { font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-3); flex-shrink: 0; }
+  .sa-bd-delta { font-size: 11px; font-family: var(--f-mono); font-weight: 700; flex-shrink: 0; min-width: 32px; text-align: right; }
+  .sa-bd-base .sa-bd-lbl { color: var(--fg-3); font-size: 10.5px; }
+  .sa-bd-base .sa-bd-delta { color: var(--fg-2); font-weight: 400; }
+  .sa-bd-pos .sa-bd-delta { color: var(--up); }
+  .sa-bd-neg .sa-bd-delta { color: var(--down); }
+  .sa-bd-neu .sa-bd-delta { color: var(--fg-3); }
+  .sa-bd-total { background: oklch(0.18 0.01 250); border-top: 1px solid var(--line) !important; margin-top: 2px; }
+  .sa-bd-total .sa-bd-lbl { color: var(--fg-1); font-weight: 700; font-size: 12px; }
+  .sa-bd-total .sa-bd-delta { font-size: 14px; color: var(--fg-0); }
 
   /* Recommendation */
   .sa-rec { padding: 12px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -3829,8 +3846,8 @@
   </div>
 </div>
 
-<script src="data.js?v=56"></script>
-<script src="desk.js?v=56"></script>
+<script src="data.js?v=57"></script>
+<script src="desk.js?v=57"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
