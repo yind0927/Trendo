@@ -624,7 +624,17 @@
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
-    if (Array.isArray(data.analysisHistory)) analysisHistory.splice(0, analysisHistory.length, ...data.analysisHistory);
+    if (Array.isArray(data.analysisHistory)) {
+      analysisHistory.splice(0, analysisHistory.length, ...data.analysisHistory);
+      // Restore wl_analysis_* from _fullData so fetchStockAnalysis finds cache immediately
+      analysisHistory.forEach(entry => {
+        if (!entry._fullData?._date) return;
+        try {
+          const k = `wl_analysis_${entry.sym}`;
+          if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(entry._fullData));
+        } catch (_) {}
+      });
+    }
     // Recalculate size% from qty after cloud data replaces HOLDINGS
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
     SIM_HOLDINGS.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
@@ -724,6 +734,15 @@
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
       if (ah) { try { const p = JSON.parse(ah); if (Array.isArray(p)) analysisHistory.splice(0, analysisHistory.length, ...p); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
+    // Restore wl_analysis_* from _fullData embedded in history entries.
+    // Runs synchronously so fetchStockAnalysis finds the cache even before cloud sync.
+    analysisHistory.forEach(entry => {
+      if (!entry._fullData?._date) return;
+      try {
+        const k = `wl_analysis_${entry.sym}`;
+        if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(entry._fullData));
+      } catch (_) {}
+    });
     // Migrate legacy wl_analysis_* entries (pre-v41 format) into analysisHistory on first load
     if (analysisHistory.length === 0) {
       try {
