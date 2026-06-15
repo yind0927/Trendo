@@ -5035,16 +5035,22 @@
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   }
 
-  function recordAnalysis(sym, data) {
+  function recordAnalysis(sym, data, forceNow = false) {
     const date = new Date().toLocaleDateString("en-CA");
+    // Preserve the original analysis timestamp (data._savedAt) so re-viewing
+    // a history card doesn't reset the "X分钟前" counter. Only force=true
+    // re-analysis gets a fresh Date.now().
+    const existing = analysisHistory.find(e => e.sym === sym && e.date === date);
+    const savedAt  = forceNow ? Date.now() : (data._savedAt ?? existing?.savedAt ?? Date.now());
     const entry = {
       sym,
-      grade:   data.scores?.grade ?? "",
-      overall: data.scores?.overall ?? 50,
-      name:    data.name ?? "",
-      price:   typeof data.price === "number" ? data.price : null,
-      savedAt: Date.now(),
+      grade:     data.scores?.grade ?? "",
+      overall:   data.scores?.overall ?? 50,
+      name:      data.name ?? "",
+      price:     typeof data.price === "number" ? data.price : null,
+      savedAt,
       date,
+      _fullData: data,  // full analysis object for cross-device cache restore
     };
     // One entry per sym per day — update if re-analyzed same day
     const idx = analysisHistory.findIndex(e => e.sym === sym && e.date === date);
@@ -5123,10 +5129,18 @@
   async function fetchStockAnalysis(sym, force = false) {
     const key = `wl_analysis_${sym}`;
     if (!force) {
+      // 1. Check localStorage (same device)
       try {
         const c = JSON.parse(localStorage.getItem(key) || "null");
-        if (c?._date) return c; // has cached analysis — use it regardless of age
+        if (c?._date) return c;
       } catch (_) {}
+      // 2. Check history _fullData (cross-device: another device synced this)
+      const histEntry = analysisHistory.find(e => e.sym === sym && e._fullData?._date);
+      if (histEntry?._fullData) {
+        // Restore to localStorage so future lookups are instant
+        try { localStorage.setItem(key, JSON.stringify(histEntry._fullData)); } catch (_) {}
+        return histEntry._fullData;
+      }
     }
     const today = new Date().toLocaleDateString("en-CA");
     const r = await fetch(`/api/stock-analysis?sym=${encodeURIComponent(sym)}${force ? "&force=1" : ""}`);
@@ -5176,7 +5190,9 @@
     // Record history after the panel renders — never let this block the display
     try {
       const cached = JSON.parse(localStorage.getItem(`wl_analysis_${sym}`) || "null");
-      if (cached) { recordAnalysis(sym, cached); renderAnalysisHistory(); }
+      // forceNow=true only when user explicitly re-analyzes (force=true), so the
+      // timestamp updates on genuine re-analysis but not on cache/history re-views.
+      if (cached) { recordAnalysis(sym, cached, force); renderAnalysisHistory(); }
     } catch (_) {}
   }
 
