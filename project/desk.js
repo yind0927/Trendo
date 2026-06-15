@@ -5130,6 +5130,23 @@
     return [...analysisHistory].sort((a, b) => b.savedAt - a.savedAt);
   }
 
+  let _histSort = "time"; // "time" | "score"
+
+  function saHistCardHTML(h) {
+    const gc = saGradeColor(h.overall);
+    const meta = [h.price != null ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
+    return `<div class="sa-hist-card" data-sym="${h.sym}" data-date="${h.date || ""}">
+      <div class="sa-hist-sym">${h.sym}</div>
+      ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}</div>` : ""}
+      <div class="sa-hist-info">
+        <div class="sa-hist-name">${h.name}</div>
+        ${meta ? `<div class="sa-hist-meta">${meta}</div>` : ""}
+      </div>
+      <div class="sa-hist-arrow">›</div>
+      <button class="sa-hist-del" data-sym="${h.sym}" data-date="${h.date || ""}" title="删除记录">✕</button>
+    </div>`;
+  }
+
   function renderAnalysisHistory() {
     const el = $("#wl-analyze-history");
     if (!el) return;
@@ -5137,37 +5154,41 @@
     if (!hist.length) { el.style.display = "none"; el.innerHTML = ""; return; }
     el.style.display = "";
 
-    // Group by date, most recent first
-    const groups = new Map();
-    hist.forEach(h => {
-      const d = h.date || new Date(h.savedAt).toLocaleDateString("en-CA");
-      if (!groups.has(d)) groups.set(d, []);
-      groups.get(d).push(h);
-    });
-    const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
-
-    const sections = sortedDates.map(date => {
-      const cards = groups.get(date).map(h => {
-        const gc = saGradeColor(h.overall);
-        const meta = [h.price != null ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
-        return `<div class="sa-hist-card" data-sym="${h.sym}" data-date="${h.date || ""}">
-          <div class="sa-hist-sym">${h.sym}</div>
-          ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}</div>` : ""}
-          <div class="sa-hist-info">
-            <div class="sa-hist-name">${h.name}</div>
-            ${meta ? `<div class="sa-hist-meta">${meta}</div>` : ""}
-          </div>
-          <div class="sa-hist-arrow">›</div>
-          <button class="sa-hist-del" data-sym="${h.sym}" data-date="${h.date || ""}" title="删除记录">✕</button>
-        </div>`;
-      }).join("");
-      return `<div class="wl-hist-group">
-        <div class="wl-hist-date-lbl">${saDateLabel(date)}</div>
-        <div class="wl-hist-cards">${cards}</div>
+    let sections;
+    if (_histSort === "score") {
+      // Flat list sorted by overall score (desc), then time as tiebreak — no date grouping
+      const ranked = [...hist].sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0) || (b.savedAt ?? 0) - (a.savedAt ?? 0));
+      sections = `<div class="wl-hist-group">
+        <div class="wl-hist-cards">${ranked.map(saHistCardHTML).join("")}</div>
       </div>`;
-    }).join("");
+    } else {
+      // Group by date, most recent first
+      const groups = new Map();
+      hist.forEach(h => {
+        const d = h.date || new Date(h.savedAt).toLocaleDateString("en-CA");
+        if (!groups.has(d)) groups.set(d, []);
+        groups.get(d).push(h);
+      });
+      const sortedDates = [...groups.keys()].sort((a, b) => b.localeCompare(a));
+      sections = sortedDates.map(date => `<div class="wl-hist-group">
+        <div class="wl-hist-date-lbl">${saDateLabel(date)}</div>
+        <div class="wl-hist-cards">${groups.get(date).map(saHistCardHTML).join("")}</div>
+      </div>`).join("");
+    }
 
-    el.innerHTML = `<div class="wl-hist-lbl">分析记录</div>${sections}`;
+    el.innerHTML = `<div class="wl-hist-head">
+      <div class="wl-hist-lbl">分析记录</div>
+      <div class="wl-hist-sort">
+        <button data-sort="time" class="${_histSort === "time" ? "active" : ""}">时间</button>
+        <button data-sort="score" class="${_histSort === "score" ? "active" : ""}">评分</button>
+      </div>
+    </div>${sections}`;
+    $$(".wl-hist-sort button", el).forEach(btn => {
+      btn.addEventListener("click", () => {
+        _histSort = btn.dataset.sort;
+        renderAnalysisHistory();
+      });
+    });
     $$(".sa-hist-card", el).forEach(card => {
       card.addEventListener("click", e => {
         if (e.target.closest(".sa-hist-del")) return; // let del button handle itself
