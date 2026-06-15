@@ -245,9 +245,9 @@ export default async function handler(req, res) {
   if (!aiKey) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const today    = new Date().toISOString().slice(0, 10);
-  // v3: force fresh Wilder RSI + English market cap format
-  // v4: 3-bullet-per-section narrative format
-  const cacheKey = `trendo:stock_analysis:v4:${sym}:${today}`;
+  // v4: cache key without date — persistent until force-refresh (↻), same as client-side cache.
+  // Cross-device: device B hits this cache even if device A analyzed days ago.
+  const cacheKey = `trendo:stock_analysis:v5:${sym}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
@@ -259,7 +259,7 @@ export default async function handler(req, res) {
       });
       const [{ result }] = await r.json();
       if (result) {
-        res.setHeader("Cache-Control", "s-maxage=43200");
+        res.setHeader("Cache-Control", "s-maxage=2592000");
         return res.json({ ...JSON.parse(result), cached: true });
       }
     } catch (_) {}
@@ -631,11 +631,11 @@ RECOMMENDATION:{"action":"watch","label":"可以关注","entry":"${ema50 ? '回�
     try {
       await fetch(`${kvUrl}/pipeline`, {
         method: "POST", headers: kvH,
-        body: JSON.stringify([["SET", cacheKey, JSON.stringify(result)], ["EXPIRE", cacheKey, 43200]]),
+        body: JSON.stringify([["SET", cacheKey, JSON.stringify(result)], ["EXPIRE", cacheKey, 2592000]]),
       });
     } catch (_) {}
   }
 
-  res.setHeader("Cache-Control", "s-maxage=43200");
+  res.setHeader("Cache-Control", "s-maxage=2592000");
   res.json({ ...result, cached: false });
 }

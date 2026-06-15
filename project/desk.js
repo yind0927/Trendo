@@ -7144,6 +7144,25 @@
 
   loadFromStorage();
 
+  // Backfill _fullData for existing history entries that have a localStorage cache
+  // (entries created before v47 don't have _fullData; this lets device A populate it
+  // so device B can get it via cloud sync without re-calling the API).
+  (() => {
+    let changed = false;
+    analysisHistory.forEach(entry => {
+      if (entry._fullData) return;
+      try {
+        const cached = JSON.parse(localStorage.getItem(`wl_analysis_${entry.sym}`) || "null");
+        if (cached?._date) { entry._fullData = cached; changed = true; }
+      } catch (_) {}
+    });
+    if (changed) {
+      saveLocalOnly();
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(syncPush, 4000); // slight delay, lower priority than startup
+    }
+  })();
+
   // Retroactively stamp existing data saved before savedAt tracking was added.
   // Use epoch 0 so cloud always wins on first sync — prevents mobile from pushing stale data.
   if (!localStorage.getItem("trendo_v4_savedAt")) {
