@@ -139,7 +139,7 @@ function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low }) {
 }
 
 function scoreValuation({ pe, forwardPE, peg, ps }) {
-  let s = 65;
+  let s = 55;
   const effPE = (forwardPE != null && forwardPE > 0 && (pe == null || forwardPE < pe)) ? forwardPE : pe;
   if (peg != null && peg > 0) {
     if      (peg < 0.75) s += 25;
@@ -245,8 +245,8 @@ export default async function handler(req, res) {
   if (!aiKey) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const today    = new Date().toISOString().slice(0, 10);
-  // v6: bumped to invalidate old 4-tier recommendation labels; now 5-tier with clearer criteria.
-  const cacheKey = `trendo:stock_analysis:v6:${sym}`;
+  // v7: valuation base 65→55 + decision-tree RECOMMENDATION replacing score-band rules.
+  const cacheKey = `trendo:stock_analysis:v7:${sym}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
@@ -559,13 +559,21 @@ ${nextEarnings ? `【财报日历】下次财报：${nextEarnings}（${daysToEar
 
 RECOMMENDATION:{"action":"watch","label":"可以关注","entry":"${ema50 ? '回调至EMA50($' + ema50.toFixed(0) + ')区域' : '等待技术信号'}"}
 
-注意：最后一行必须是 RECOMMENDATION: 紧接 JSON，不能换行，不能有其他内容。
-action 共5档，**按以下标准严格判断，不得默认选 watch**：
-• strong（积极进场）：综合评分≥75 且 多头排列(price>EMA50>EMA200) 且 RSI 42~68 且 估值合理/低估 且 无14天内财报风险。条件须**全部满足**。
-• immediate（立即关注）：综合评分≥62 且 price≥EMA50 且 RSI<75。一个或多个亮点明显但未达到 strong 全部标准。
-• watch（可以关注）：综合评分48~61，或技术面健康但估值偏高，或整体尚可但需等回调。信号混合但偏正面。
-• wait（等待信号）：综合评分30~47，或 RSI>75（超买），或 price<EMA50，或14天内有财报风险，或趋势方向不明。
-• avoid（建议回避）：综合评分<30，或 price<EMA200（空头区域），或盈利/现金流明显恶化，或存在重大基本面风险。
+注意：最后一行必须是 RECOMMENDATION: 紧接 JSON，不换行，不加任何其他内容。
+按以下**决策树**顺序判断，遇到首个匹配条件即停止，不得跳过或合并：
+
+【第一步 — 闸门，任一满足直接定结论】
+1. price < EMA200（空头区域）→ avoid
+2. 综合评分 < 45 → avoid
+3. 净利率 < 0 且 成长评分 < 55（亏损且无高增速支撑）→ avoid
+4. RSI > 75（严重超买，追高风险高）→ wait
+5. ${daysToEarnings != null ? `距下次财报 ≤ 14天（财报风险窗口）→ wait` : `无近期财报信息`}
+
+【第二步 — 通过闸门后按技术+质量分级】
+6. 多头排列(price>EMA50>EMA200) 且 RSI 42~68 且 综合评分≥70 且 估值评分≥45 → strong
+7. price ≥ EMA50 且 综合评分 ≥ 60 → immediate
+8. 其余 → watch
+
 label 固定对应：strong→积极进场，immediate→立即关注，watch→可以关注，wait→等待信号，avoid→建议回避。`;
 
   // Debug mode: return raw data-source diagnostics without calling Claude
