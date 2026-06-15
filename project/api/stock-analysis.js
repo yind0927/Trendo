@@ -235,25 +235,32 @@ function gradeFrom(score) {
 // First matching condition wins. Gates (avoid/wait) take priority over grading
 // so timing risk (overbought / earnings / broken trend) overrides a high quality
 // score. ⚠️ KEEP IN SYNC with computeRecommendation() in project/desk.js.
-function computeRecommendation({ price, ema50, ema200, rsi, scores, netMargin, daysToEarnings, entry }) {
+function computeRecommendation({ price, ema50, ema200, rsi, scores, netMargin, daysToEarnings }) {
   const ov  = scores.overall   ?? 50;
   const val = scores.valuation ?? 50;
   const gr  = scores.growth    ?? 50;
-  const e   = entry || (ema50 ? `回调至EMA50($${ema50.toFixed(0)})区域` : "等待技术信号");
-  const mk  = (action, label) => ({ action, label, entry: e });
+  const e50 = ema50 != null ? `$${ema50.toFixed(0)}` : null;
+  const mk  = (action, label, entry) => ({ action, label, entry });
   // Gates — any match stops here
-  if (price != null && ema200 != null && price < ema200)  return mk("avoid", "建议回避");
-  if (ov < 45)                                            return mk("avoid", "建议回避");
-  if (netMargin != null && netMargin < 0 && gr < 55)      return mk("avoid", "建议回避");
-  if (rsi != null && rsi > 75)                            return mk("wait",  "等待信号");
-  if (daysToEarnings != null && daysToEarnings <= 14)     return mk("wait",  "等待信号");
+  if (price != null && ema200 != null && price < ema200)
+    return mk("avoid", "建议回避", `价格已破EMA200，趋势偏空，暂不入场`);
+  if (ov < 45)
+    return mk("avoid", "建议回避", `综合评分偏低，基本面或技术面存在明显问题`);
+  if (netMargin != null && netMargin < 0 && gr < 55)
+    return mk("avoid", "建议回避", `亏损企业且增速不足以支撑估值，风险偏高`);
+  if (rsi != null && rsi > 75)
+    return mk("wait", "等待信号", `RSI ${rsi.toFixed(0)} 超买，等待回落至65以下再评估入场`);
+  if (daysToEarnings != null && daysToEarnings <= 14)
+    return mk("wait", "等待信号", `${daysToEarnings}天后财报，建议财报后再决定入场时机`);
   // Grading — passed all gates
   if (price != null && ema50 != null && ema200 != null &&
       price > ema50 && ema50 > ema200 &&
       rsi != null && rsi >= 42 && rsi <= 68 &&
-      ov >= 70 && val >= 45)                              return mk("strong",    "积极进场");
-  if (price != null && ema50 != null && price >= ema50 && ov >= 60) return mk("immediate", "立即关注");
-  return mk("watch", "可以关注");
+      ov >= 70 && val >= 45)
+    return mk("strong", "积极进场", e50 ? `多头排列成立，可分批建仓，止损参考EMA50(${e50})以下` : `多头排列成立，可分批建仓`);
+  if (price != null && ema50 != null && price >= ema50 && ov >= 60)
+    return mk("immediate", "立即关注", e50 ? `价格站稳EMA50(${e50})，等待量价配合信号入场` : `等待量价配合信号入场`);
+  return mk("watch", "可以关注", e50 ? `持续观察，回调至EMA50(${e50})区域可考虑入场` : `持续观察，等待更好入场时机`);
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
