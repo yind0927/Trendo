@@ -5381,8 +5381,9 @@
     const gradeColor = saGradeColor;
     const barColor   = s => s >= 75 ? "var(--up)" : s >= 60 ? "var(--accent)" : s >= 45 ? "var(--warn)" : "var(--down)";
 
-    // Recommendation badge style
+    // Recommendation badge style (5 tiers)
     const recStyle = {
+      strong:    { bg: "oklch(0.78 0.17 145/0.22)", border: "oklch(0.78 0.17 145/0.7)",  text: "var(--up)",     glow: "0 0 8px oklch(0.78 0.17 145/0.35)" },
       immediate: { bg: "oklch(0.78 0.17 145/0.14)", border: "oklch(0.78 0.17 145/0.45)", text: "var(--up)" },
       watch:     { bg: "oklch(0.78 0.12 195/0.12)", border: "oklch(0.78 0.12 195/0.4)",  text: "var(--accent)" },
       wait:      { bg: "oklch(0.80 0.15 75/0.12)",  border: "oklch(0.80 0.15 75/0.4)",   text: "var(--warn)" },
@@ -5640,7 +5641,7 @@
       </div>
 
       ${recommendation ? `<div class="sa-rec">
-        <span class="sa-rec-badge" style="background:${recStyle.bg};border-color:${recStyle.border};color:${recStyle.text}">${recommendation.label ?? ""}</span>
+        <span class="sa-rec-badge" style="background:${recStyle.bg};border-color:${recStyle.border};color:${recStyle.text}${recStyle.glow ? `;box-shadow:${recStyle.glow}` : ""}">${recommendation.label ?? ""}</span>
         ${recommendation.entry ? `<span class="sa-rec-entry">${recommendation.entry}</span>` : ""}
       </div>` : ""}
 
