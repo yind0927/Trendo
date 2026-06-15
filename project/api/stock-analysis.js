@@ -231,6 +231,31 @@ function gradeFrom(score) {
   return "D";
 }
 
+// ── Recommendation badge: deterministic timing decision tree ──────────────────
+// First matching condition wins. Gates (avoid/wait) take priority over grading
+// so timing risk (overbought / earnings / broken trend) overrides a high quality
+// score. ⚠️ KEEP IN SYNC with computeRecommendation() in project/desk.js.
+function computeRecommendation({ price, ema50, ema200, rsi, scores, netMargin, daysToEarnings, entry }) {
+  const ov  = scores.overall   ?? 50;
+  const val = scores.valuation ?? 50;
+  const gr  = scores.growth    ?? 50;
+  const e   = entry || (ema50 ? `回调至EMA50($${ema50.toFixed(0)})区域` : "等待技术信号");
+  const mk  = (action, label) => ({ action, label, entry: e });
+  // Gates — any match stops here
+  if (price != null && ema200 != null && price < ema200)  return mk("avoid", "建议回避");
+  if (ov < 45)                                            return mk("avoid", "建议回避");
+  if (netMargin != null && netMargin < 0 && gr < 55)      return mk("avoid", "建议回避");
+  if (rsi != null && rsi > 75)                            return mk("wait",  "等待信号");
+  if (daysToEarnings != null && daysToEarnings <= 14)     return mk("wait",  "等待信号");
+  // Grading — passed all gates
+  if (price != null && ema50 != null && ema200 != null &&
+      price > ema50 && ema50 > ema200 &&
+      rsi != null && rsi >= 42 && rsi <= 68 &&
+      ov >= 70 && val >= 45)                              return mk("strong",    "积极进场");
+  if (price != null && ema50 != null && price >= ema50 && ov >= 60) return mk("immediate", "立即关注");
+  return mk("watch", "可以关注");
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   const sym     = (req.query.sym || "").toUpperCase().replace(/[^A-Z0-9.\-^]/g, "").slice(0, 10);
@@ -555,26 +580,7 @@ ${nextEarnings ? `【财报日历】下次财报：${nextEarnings}（${daysToEar
 【综合建议】
 • 核心判断：[一句话最重要结论，综合评分${overall}/100 vs 分析师${analyst.recLabel ?? "N/A"}的一致/分歧分析]
 • 操作思路：[具体入场区间、止损位（EMA或关键支撑）、目标价及R/R比]
-• 最大风险：[最值得警惕的单一风险${nextEarnings ? `，以及${nextEarnings}财报的预期与应对` : ""}]
-
-RECOMMENDATION:{"action":"watch","label":"可以关注","entry":"${ema50 ? '回调至EMA50($' + ema50.toFixed(0) + ')区域' : '等待技术信号'}"}
-
-注意：最后一行必须是 RECOMMENDATION: 紧接 JSON，不换行，不加任何其他内容。
-按以下**决策树**顺序判断，遇到首个匹配条件即停止，不得跳过或合并：
-
-【第一步 — 闸门，任一满足直接定结论】
-1. price < EMA200（空头区域）→ avoid
-2. 综合评分 < 45 → avoid
-3. 净利率 < 0 且 成长评分 < 55（亏损且无高增速支撑）→ avoid
-4. RSI > 75（严重超买，追高风险高）→ wait
-5. ${daysToEarnings != null ? `距下次财报 ≤ 14天（财报风险窗口）→ wait` : `无近期财报信息`}
-
-【第二步 — 通过闸门后按技术+质量分级】
-6. 多头排列(price>EMA50>EMA200) 且 RSI 42~68 且 综合评分≥70 且 估值评分≥45 → strong
-7. price ≥ EMA50 且 综合评分 ≥ 60 → immediate
-8. 其余 → watch
-
-label 固定对应：strong→积极进场，immediate→立即关注，watch→可以关注，wait→等待信号，avoid→建议回避。`;
+• 最大风险：[最值得警惕的单一风险${nextEarnings ? `，以及${nextEarnings}财报的预期与应对` : ""}]`;
 
   // Debug mode: return raw data-source diagnostics without calling Claude
   if (debug) {
@@ -621,9 +627,9 @@ label 固定对应：strong→积极进场，immediate→立即关注，watch→
 
   if (!rawText) return res.status(500).json({ error: "Empty AI response" });
 
-  let recommendation = { action: "watch", label: "可以关注", entry: "" };
-  const recMatch = rawText.match(/RECOMMENDATION:\s*(\{[^}]+\})/);
-  if (recMatch) { try { recommendation = JSON.parse(recMatch[1]); } catch (_) {} }
+  // Recommendation is computed deterministically (not from Claude) so the badge
+  // is consistent and history records can be re-derived without a new API call.
+  const recommendation = computeRecommendation({ price, ema50, ema200, rsi, scores, netMargin: m.netMargin, daysToEarnings });
   const summary = rawText.replace(/RECOMMENDATION:.*$/m, "").trim();
 
   // ── 11. Assemble and cache ─────────────────────────────────────────────────

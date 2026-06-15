@@ -5213,14 +5213,19 @@
   async function fetchStockAnalysis(sym, force = false) {
     const key = `wl_analysis_${sym}`;
     if (!force) {
-      // 1. Check localStorage (same device)
+      // 1. Check localStorage (same device) — re-derive scores/badge on read
       try {
         const c = JSON.parse(localStorage.getItem(key) || "null");
-        if (c?._date) return c;
+        if (c?._date) {
+          _upgradeAnalysis(c);
+          try { localStorage.setItem(key, JSON.stringify(c)); } catch (_) {}
+          return c;
+        }
       } catch (_) {}
       // 2. Check history _fullData (cross-device: another device synced this)
       const histEntry = analysisHistory.find(e => e.sym === sym && e._fullData?._date);
       if (histEntry?._fullData) {
+        _upgradeAnalysis(histEntry._fullData); // mutates the stored object in place
         // Restore to localStorage so future lookups are instant
         try { localStorage.setItem(key, JSON.stringify(histEntry._fullData)); } catch (_) {}
         return histEntry._fullData;
@@ -5234,6 +5239,7 @@
     }
     const data = await r.json();
     if (data.error) throw new Error(data.error);
+    _upgradeAnalysis(data);
     try { localStorage.setItem(key, JSON.stringify({ ...data, _date: today, _savedAt: Date.now() })); } catch (_) {}
     return data;
   }
@@ -5327,6 +5333,167 @@
   // ── Grade color helper (also used in history cards) ──────────────────────
   function saGradeColor(score) {
     return score >= 80 ? "var(--up)" : score >= 65 ? "var(--accent)" : score >= 50 ? "var(--warn)" : "var(--down)";
+  }
+
+  // ── Deterministic re-scoring (mirror of api/stock-analysis.js) ─────────────
+  // Recompute scores + recommendation client-side so existing history records
+  // reflect rule changes WITHOUT a new Claude call. All inputs live in the
+  // stored _fullData (metrics + technicals). ⚠️ KEEP IN SYNC with the scoring
+  // functions and computeRecommendation() in project/api/stock-analysis.js.
+  const _clamp = s => Math.max(0, Math.min(100, Math.round(s)));
+  function _scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low }) {
+    if (price == null) return null;
+    let s = 50;
+    if (ema50 && ema200) {
+      if (price > ema50 && ema50 > ema200) s += 35;
+      else if (price > ema50)              s += 15;
+      else if (price > ema200)             s += 5;
+      else                                 s -= 20;
+    }
+    if (rsi != null) {
+      if      (rsi >= 45 && rsi <= 65) s += 15;
+      else if (rsi >  65 && rsi <= 75) s += 5;
+      else if (rsi >  75)              s -= 12;
+      else if (rsi >= 35 && rsi <  45) s += 5;
+      else if (rsi <  35)              s -= 5;
+    }
+    if (wk52High && wk52Low && wk52High > wk52Low) {
+      const pos = (price - wk52Low) / (wk52High - wk52Low);
+      if (pos > 0.75) s += 5; else if (pos < 0.25) s -= 5;
+    }
+    return _clamp(s);
+  }
+  function _scoreValuation({ pe, forwardPE, peg, ps }) {
+    let s = 55;
+    const effPE = (forwardPE != null && forwardPE > 0 && (pe == null || forwardPE < pe)) ? forwardPE : pe;
+    if (peg != null && peg > 0) {
+      if      (peg < 0.75) s += 25;
+      else if (peg < 1.2)  s += 15;
+      else if (peg < 2.0)  s +=  0;
+      else if (peg < 3.0)  s -= 15;
+      else                 s -= 25;
+    } else if (effPE != null) {
+      if      (effPE < 0)   s -= 10;
+      else if (effPE < 15)  s += 20;
+      else if (effPE < 22)  s += 12;
+      else if (effPE < 30)  s +=  0;
+      else if (effPE < 45)  s -= 15;
+      else                  s -= 25;
+    }
+    if (ps != null) {
+      if (ps < 1.5) s += 5; else if (ps > 20) s -= 10; else if (ps > 10) s -= 5;
+    }
+    return _clamp(s);
+  }
+  function _scoreGrowth({ revGrowth, epsGrowth }) {
+    let s = 50;
+    if (revGrowth != null) {
+      if      (revGrowth > 30)  s += 38;
+      else if (revGrowth > 20)  s += 28;
+      else if (revGrowth > 10)  s += 18;
+      else if (revGrowth >  3)  s +=  8;
+      else if (revGrowth >  0)  s +=  2;
+      else if (revGrowth > -10) s -= 12;
+      else                      s -= 25;
+    }
+    if (epsGrowth != null) {
+      if      (epsGrowth > 25)  s += 15;
+      else if (epsGrowth > 10)  s +=  8;
+      else if (epsGrowth >  0)  s +=  3;
+      else if (epsGrowth < -15) s -= 10;
+    }
+    return _clamp(s);
+  }
+  function _scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio }) {
+    let s = 55;
+    if (netMargin != null) {
+      if      (netMargin > 20) s += 20;
+      else if (netMargin > 10) s += 12;
+      else if (netMargin >  3) s +=  5;
+      else if (netMargin <  0) s -= 20;
+    }
+    if (roe != null) {
+      if (roe > 30) s += 12; else if (roe > 15) s += 6; else if (roe < 0) s -= 8;
+    }
+    if (deRatio != null) {
+      if (deRatio < 0.3) s += 5; else if (deRatio > 3.0) s -= 12; else if (deRatio > 2.0) s -= 6;
+    }
+    if (currentRatio != null) {
+      if (currentRatio >= 2) s += 5; else if (currentRatio < 1) s -= 8;
+    }
+    return _clamp(s);
+  }
+  function _scoreAnalyst({ targetUpside, recKey, analystCount }) {
+    if (recKey == null && targetUpside == null) return null;
+    let s = 50;
+    if (recKey) {
+      const map = { strongBuy: 30, buy: 18, hold: 0, underperform: -18, sell: -30 };
+      s += map[recKey] ?? 0;
+    }
+    if (targetUpside != null) {
+      if      (targetUpside > 40)  s += 15;
+      else if (targetUpside > 20)  s += 10;
+      else if (targetUpside > 10)  s +=  5;
+      else if (targetUpside >  0)  s +=  2;
+      else if (targetUpside < -10) s -= 15;
+      else if (targetUpside <  0)  s -=  5;
+    }
+    if (analystCount != null && analystCount >= 10) s += 3;
+    return _clamp(s);
+  }
+  function _gradeFrom(score) {
+    if (score >= 88) return "A";
+    if (score >= 82) return "A-";
+    if (score >= 76) return "B+";
+    if (score >= 70) return "B";
+    if (score >= 64) return "B-";
+    if (score >= 58) return "C+";
+    if (score >= 50) return "C";
+    return "D";
+  }
+  function recomputeScores(d) {
+    const m = d.metrics || {};
+    const s = {
+      trend:     _scoreTrend({ price: d.price, ema50: d.ema50, ema200: d.ema200, rsi: d.rsi, wk52High: d.wk52High, wk52Low: d.wk52Low }),
+      valuation: _scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps }),
+      growth:    _scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth }),
+      health:    _scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio }),
+      analyst:   _scoreAnalyst({ targetUpside: d.analyst?.targetUpside, recKey: d.analyst?.recKey, analystCount: d.analyst?.analystCount }),
+    };
+    s.overall = Math.round((s.trend ?? 50) * 0.25 + (s.valuation ?? 50) * 0.20 + (s.growth ?? 50) * 0.20 + (s.health ?? 50) * 0.15 + (s.analyst ?? 50) * 0.20);
+    s.grade = _gradeFrom(s.overall);
+    return s;
+  }
+  function computeRecommendation(d, scores) {
+    const { price, ema50, ema200, rsi, daysToEarnings } = d;
+    const ov  = scores.overall   ?? 50;
+    const val = scores.valuation ?? 50;
+    const gr  = scores.growth    ?? 50;
+    const nm  = d.metrics?.netMargin;
+    const e   = d.recommendation?.entry || (ema50 != null ? `回调至EMA50($${ema50.toFixed(0)})区域` : "等待技术信号");
+    const mk  = (action, label) => ({ action, label, entry: e });
+    if (price != null && ema200 != null && price < ema200)  return mk("avoid", "建议回避");
+    if (ov < 45)                                            return mk("avoid", "建议回避");
+    if (nm != null && nm < 0 && gr < 55)                    return mk("avoid", "建议回避");
+    if (rsi != null && rsi > 75)                            return mk("wait",  "等待信号");
+    if (daysToEarnings != null && daysToEarnings <= 14)     return mk("wait",  "等待信号");
+    if (price != null && ema50 != null && ema200 != null &&
+        price > ema50 && ema50 > ema200 &&
+        rsi != null && rsi >= 42 && rsi <= 68 &&
+        ov >= 70 && val >= 45)                              return mk("strong",    "积极进场");
+    if (price != null && ema50 != null && price >= ema50 && ov >= 60) return mk("immediate", "立即关注");
+    return mk("watch", "可以关注");
+  }
+  // Re-derive scores + recommendation in place (idempotent). Lets cached/older
+  // analyses pick up scoring-rule changes on open with no API call.
+  function _upgradeAnalysis(d) {
+    if (!d || typeof d !== "object" || d.price == null) return d;
+    try {
+      const s = recomputeScores(d);
+      d.scores = s;
+      d.recommendation = computeRecommendation(d, s);
+    } catch (_) {}
+    return d;
   }
 
   // ── Metric tip popup: body-level singleton ────────────────────────────────
@@ -7269,10 +7436,32 @@
   // the cloud. Runs AFTER reconciliation so bumping savedAt can't clobber newer cloud
   // data. This is what lets a stock analyzed days ago (before _fullData existed) become
   // visible on every other device without re-calling the API.
+  // Re-derive scores/grade/recommendation for every history record from its stored
+  // _fullData, so scoring-rule changes apply to ALL cards on load — not lazily on open
+  // — with zero API calls. Returns true if any entry's grade/overall shifted.
+  function upgradeAnalysisHistory() {
+    let changed = false;
+    analysisHistory.forEach(e => {
+      const fd = e._fullData;
+      if (!fd?._date || fd.price == null) return;
+      _upgradeAnalysis(fd);
+      const s = fd.scores || {};
+      if (e.grade !== s.grade || e.overall !== s.overall) {
+        e.grade = s.grade ?? e.grade;
+        e.overall = s.overall ?? e.overall;
+        changed = true;
+      }
+      // Keep the per-symbol localStorage cache consistent with the upgraded copy
+      try { localStorage.setItem(`wl_analysis_${e.sym}`, JSON.stringify(fd)); } catch (_) {}
+    });
+    return changed;
+  }
+
   function backfillAnalysisFullData() {
     const changed = _fillHistFullData(analysisHistory);
     _restoreHistCache(analysisHistory);
-    if (changed) {
+    const upgraded = upgradeAnalysisHistory();
+    if (changed || upgraded) {
       saveToStorage(); // bumps savedAt + schedules syncPush → other devices pull the full content
       if (currentPage === "watchlist") renderAnalysisHistory();
     }
