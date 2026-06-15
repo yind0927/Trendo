@@ -138,7 +138,7 @@ function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low }) {
   return Math.max(0, Math.min(100, Math.round(s)));
 }
 
-function scoreValuation({ pe, forwardPE, peg, ps }) {
+function scoreValuation({ pe, forwardPE, peg, ps, evEbitda }) {
   let s = 55;
   const effPE = (forwardPE != null && forwardPE > 0 && (pe == null || forwardPE < pe)) ? forwardPE : pe;
   if (peg != null && peg > 0) {
@@ -158,10 +158,17 @@ function scoreValuation({ pe, forwardPE, peg, ps }) {
   if (ps != null) {
     if (ps < 1.5) s += 5; else if (ps > 20) s -= 10; else if (ps > 10) s -= 5;
   }
+  if (evEbitda != null && evEbitda > 0) {
+    if      (evEbitda < 10) s +=  8;
+    else if (evEbitda < 20) s +=  3;
+    else if (evEbitda < 35) s +=  0;
+    else if (evEbitda < 60) s -=  8;
+    else                    s -= 15;
+  }
   return Math.max(0, Math.min(100, Math.round(s)));
 }
 
-function scoreGrowth({ revGrowth, epsGrowth }) {
+function scoreGrowth({ revGrowth, epsGrowth, quarterlyEPS }) {
   let s = 50;
   if (revGrowth != null) {
     if      (revGrowth > 30)  s += 38;
@@ -178,16 +185,27 @@ function scoreGrowth({ revGrowth, epsGrowth }) {
     else if (epsGrowth >  0)  s +=  3;
     else if (epsGrowth < -15) s -= 10;
   }
+  if (Array.isArray(quarterlyEPS) && quarterlyEPS.length >= 2) {
+    const wd = quarterlyEPS.filter(q => q.beat != null);
+    if      (wd.length >= 4 && wd.every(q => q.beat))              s += 10;
+    else if (wd.length >= 3 && wd.slice(-3).every(q => q.beat))    s +=  5;
+    else if (wd.length >= 2 && wd.slice(-2).every(q => !q.beat))   s -=  8;
+  }
   return Math.max(0, Math.min(100, Math.round(s)));
 }
 
-function scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio }) {
+function scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio, freeCashflow, revenueActual }) {
   let s = 55;
   if (netMargin != null) {
     if      (netMargin > 20) s += 20;
     else if (netMargin > 10) s += 12;
     else if (netMargin >  3) s +=  5;
     else if (netMargin <  0) s -= 20;
+  }
+  if (grossMargin != null) {
+    if      (grossMargin > 60) s += 10;
+    else if (grossMargin > 40) s +=  5;
+    else if (grossMargin < 15) s -=  5;
   }
   if (roe != null) {
     if (roe > 30) s += 12; else if (roe > 15) s += 6; else if (roe < 0) s -= 8;
@@ -198,6 +216,15 @@ function scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio }) {
   if (currentRatio != null) {
     if (currentRatio >= 2) s += 5; else if (currentRatio < 1) s -= 8;
   }
+  if (freeCashflow != null) {
+    if (freeCashflow > 0) {
+      const netIncomeBN = (netMargin != null && revenueActual != null) ? (netMargin / 100) * revenueActual : null;
+      if (netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8) s += 8;
+      else s += 4;
+    } else {
+      s -= 6;
+    }
+  }
   return Math.max(0, Math.min(100, Math.round(s)));
 }
 
@@ -205,7 +232,7 @@ function scoreAnalyst({ targetUpside, recKey, analystCount }) {
   if (recKey == null && targetUpside == null) return null;
   let s = 50;
   if (recKey) {
-    const map = { strongBuy: 30, buy: 18, hold: 0, underperform: -18, sell: -30 };
+    const map = { strongBuy: 25, buy: 18, hold: 0, underperform: -18, sell: -30 };
     s += map[recKey] ?? 0;
   }
   if (targetUpside != null) {
@@ -277,8 +304,9 @@ export default async function handler(req, res) {
   if (!aiKey) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const today    = new Date().toISOString().slice(0, 10);
-  // v7: valuation base 65→55 + decision-tree RECOMMENDATION replacing score-band rules.
-  const cacheKey = `trendo:stock_analysis:v7:${sym}`;
+  // v8: +EV/EBITDA valuation, +grossMargin/FCF health, +EPS beat streak growth,
+  //     analyst strongBuy 30→25, health weight 15→20%, analyst weight 20→15%.
+  const cacheKey = `trendo:stock_analysis:v8:${sym}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
@@ -465,17 +493,17 @@ export default async function handler(req, res) {
   // ── 8. Five-axis scoring ───────────────────────────────────────────────────
   const scores = {
     trend:     scoreTrend({ price, ema50, ema200, rsi, wk52High: wk52H, wk52Low: wk52L }),
-    valuation: scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps }),
-    growth:    scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth }),
-    health:    scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio }),
+    valuation: scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps, evEbitda: m.evEbitda }),
+    growth:    scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth, quarterlyEPS }),
+    health:    scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio, freeCashflow: m.freeCashflow, revenueActual: m.revenueActual }),
     analyst:   scoreAnalyst({ targetUpside, recKey: recKeyRaw, analystCount }),
   };
   const overall = Math.round(
     (scores.trend     ?? 50) * 0.25 +
     (scores.valuation ?? 50) * 0.20 +
     (scores.growth    ?? 50) * 0.20 +
-    (scores.health    ?? 50) * 0.15 +
-    (scores.analyst   ?? 50) * 0.20
+    (scores.health    ?? 50) * 0.20 +
+    (scores.analyst   ?? 50) * 0.15
   );
   scores.overall = overall;
   scores.grade   = gradeFrom(overall);

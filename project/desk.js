@@ -5363,7 +5363,7 @@
     }
     return _clamp(s);
   }
-  function _scoreValuation({ pe, forwardPE, peg, ps }) {
+  function _scoreValuation({ pe, forwardPE, peg, ps, evEbitda }) {
     let s = 55;
     const effPE = (forwardPE != null && forwardPE > 0 && (pe == null || forwardPE < pe)) ? forwardPE : pe;
     if (peg != null && peg > 0) {
@@ -5383,9 +5383,16 @@
     if (ps != null) {
       if (ps < 1.5) s += 5; else if (ps > 20) s -= 10; else if (ps > 10) s -= 5;
     }
+    if (evEbitda != null && evEbitda > 0) {
+      if      (evEbitda < 10) s +=  8;
+      else if (evEbitda < 20) s +=  3;
+      else if (evEbitda < 35) s +=  0;
+      else if (evEbitda < 60) s -=  8;
+      else                    s -= 15;
+    }
     return _clamp(s);
   }
-  function _scoreGrowth({ revGrowth, epsGrowth }) {
+  function _scoreGrowth({ revGrowth, epsGrowth, quarterlyEPS }) {
     let s = 50;
     if (revGrowth != null) {
       if      (revGrowth > 30)  s += 38;
@@ -5402,15 +5409,26 @@
       else if (epsGrowth >  0)  s +=  3;
       else if (epsGrowth < -15) s -= 10;
     }
+    if (Array.isArray(quarterlyEPS) && quarterlyEPS.length >= 2) {
+      const wd = quarterlyEPS.filter(q => q.beat != null);
+      if      (wd.length >= 4 && wd.every(q => q.beat))            s += 10;
+      else if (wd.length >= 3 && wd.slice(-3).every(q => q.beat))  s +=  5;
+      else if (wd.length >= 2 && wd.slice(-2).every(q => !q.beat)) s -=  8;
+    }
     return _clamp(s);
   }
-  function _scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio }) {
+  function _scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio, freeCashflow, revenueActual }) {
     let s = 55;
     if (netMargin != null) {
       if      (netMargin > 20) s += 20;
       else if (netMargin > 10) s += 12;
       else if (netMargin >  3) s +=  5;
       else if (netMargin <  0) s -= 20;
+    }
+    if (grossMargin != null) {
+      if      (grossMargin > 60) s += 10;
+      else if (grossMargin > 40) s +=  5;
+      else if (grossMargin < 15) s -=  5;
     }
     if (roe != null) {
       if (roe > 30) s += 12; else if (roe > 15) s += 6; else if (roe < 0) s -= 8;
@@ -5421,13 +5439,22 @@
     if (currentRatio != null) {
       if (currentRatio >= 2) s += 5; else if (currentRatio < 1) s -= 8;
     }
+    if (freeCashflow != null) {
+      if (freeCashflow > 0) {
+        const netIncomeBN = (netMargin != null && revenueActual != null) ? (netMargin / 100) * revenueActual : null;
+        if (netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8) s += 8;
+        else s += 4;
+      } else {
+        s -= 6;
+      }
+    }
     return _clamp(s);
   }
   function _scoreAnalyst({ targetUpside, recKey, analystCount }) {
     if (recKey == null && targetUpside == null) return null;
     let s = 50;
     if (recKey) {
-      const map = { strongBuy: 30, buy: 18, hold: 0, underperform: -18, sell: -30 };
+      const map = { strongBuy: 25, buy: 18, hold: 0, underperform: -18, sell: -30 };
       s += map[recKey] ?? 0;
     }
     if (targetUpside != null) {
@@ -5455,12 +5482,12 @@
     const m = d.metrics || {};
     const s = {
       trend:     _scoreTrend({ price: d.price, ema50: d.ema50, ema200: d.ema200, rsi: d.rsi, wk52High: d.wk52High, wk52Low: d.wk52Low }),
-      valuation: _scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps }),
-      growth:    _scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth }),
-      health:    _scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio }),
+      valuation: _scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps, evEbitda: m.evEbitda }),
+      growth:    _scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth, quarterlyEPS: d.quarterlyEPS }),
+      health:    _scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio, freeCashflow: m.freeCashflow, revenueActual: m.revenueActual }),
       analyst:   _scoreAnalyst({ targetUpside: d.analyst?.targetUpside, recKey: d.analyst?.recKey, analystCount: d.analyst?.analystCount }),
     };
-    s.overall = Math.round((s.trend ?? 50) * 0.25 + (s.valuation ?? 50) * 0.20 + (s.growth ?? 50) * 0.20 + (s.health ?? 50) * 0.15 + (s.analyst ?? 50) * 0.20);
+    s.overall = Math.round((s.trend ?? 50) * 0.25 + (s.valuation ?? 50) * 0.20 + (s.growth ?? 50) * 0.20 + (s.health ?? 50) * 0.20 + (s.analyst ?? 50) * 0.15);
     s.grade = _gradeFrom(s.overall);
     return s;
   }
