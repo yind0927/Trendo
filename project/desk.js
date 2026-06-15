@@ -544,11 +544,20 @@
     // here made the cloud copy permanently ~2s "newer" than local, so every
     // visibilitychange pull-if-newer re-applied identical cloud data and blanked the
     // in-memory prevClose (今日盈亏 empty until the next 30s fetch cycle).
+    // Carry full analysis content (_fullData) only for the 60 most-recent entries
+    // to bound the sync blob size; older entries keep metadata and fall back to the
+    // 30-day server-side Redis cache when reopened (no Claude call).
+    const histForSync = [...analysisHistory]
+      .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+      .map((e, i) => {
+        if (i < 60 || !e._fullData) return e;
+        const c = { ...e }; delete c._fullData; return c;
+      });
     const payload = {
       holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
       simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
-      analysisHistory,
+      analysisHistory: histForSync,
       savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
     };
     try {
@@ -625,15 +634,24 @@
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
     if (Array.isArray(data.analysisHistory)) {
-      analysisHistory.splice(0, analysisHistory.length, ...data.analysisHistory);
-      // Restore wl_analysis_* from _fullData so fetchStockAnalysis finds cache immediately
-      analysisHistory.forEach(entry => {
-        if (!entry._fullData?._date) return;
-        try {
-          const k = `wl_analysis_${entry.sym}`;
-          if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(entry._fullData));
-        } catch (_) {}
+      // MERGE, don't blindly replace: a cloud copy pushed by an older client (or
+      // before _fullData existed) may lack the full analysis content. Preserve any
+      // _fullData we already know locally so it isn't wiped — otherwise it can never
+      // propagate back up and every device keeps re-calling the API.
+      const localFull = {};
+      analysisHistory.forEach(e => { if (e._fullData?._date) localFull[e.sym] = e._fullData; });
+      let enriched = false;
+      const merged = data.analysisHistory.map(e => {
+        if (e._fullData?._date) return e;
+        const fd = localFull[e.sym] || _readLocalAnalysis(e.sym);
+        if (fd) { enriched = true; return { ...e, _fullData: fd }; }
+        return e;
       });
+      analysisHistory.splice(0, analysisHistory.length, ...merged);
+      _restoreHistCache(analysisHistory);
+      // We just enriched cloud-sourced entries with local content — push it back up
+      // (deferred) so other devices receive the full analysis and stop re-calling.
+      if (enriched) { clearTimeout(syncTimer); syncTimer = setTimeout(syncPush, 3000); }
     }
     // Recalculate size% from qty after cloud data replaces HOLDINGS
     HOLDINGS.forEach(h => { if (h.qty && h.cost && totalNotional > 0) h.size = (h.qty * h.cost / totalNotional) * 100; });
@@ -682,6 +700,36 @@
   // Strip live market fields before persisting — prevClose/changePct must only ever
   // come from a fresh API call, never from stale localStorage or Redis snapshots.
   const noMarket = arr => arr.map(h => { const c = {...h}; delete c.prevClose; delete c.changePct; return c; });
+
+  // ── Analysis full-content cache helpers (cross-device durability) ──────────
+  // The full analysis lives in localStorage (wl_analysis_{sym}) and is mirrored
+  // into each history entry's _fullData so it travels with cloud sync. These
+  // helpers keep the two representations in sync so an already-analyzed stock
+  // never re-calls the API on any device.
+  const _readLocalAnalysis = sym => {
+    try { const c = JSON.parse(localStorage.getItem(`wl_analysis_${sym}`) || "null"); return c?._date ? c : null; }
+    catch (_) { return null; }
+  };
+  // Fill _fullData on history entries that lack it, sourced from localStorage.
+  // Returns true if any entry was enriched.
+  const _fillHistFullData = arr => {
+    let changed = false;
+    arr.forEach(e => {
+      if (e._fullData?._date) return;
+      const fd = _readLocalAnalysis(e.sym);
+      if (fd) { e._fullData = fd; changed = true; }
+    });
+    return changed;
+  };
+  // Restore localStorage wl_analysis_{sym} from history _fullData so fetchStockAnalysis
+  // finds the cache (and never hits the network) — even on a device that never analyzed it.
+  const _restoreHistCache = arr => {
+    arr.forEach(e => {
+      if (!e._fullData?._date) return;
+      try { const k = `wl_analysis_${e.sym}`; if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(e._fullData)); }
+      catch (_) {}
+    });
+  };
 
   // ============ PERSISTENCE ============
   function saveLocalOnly() {
@@ -734,15 +782,11 @@
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
       if (ah) { try { const p = JSON.parse(ah); if (Array.isArray(p)) analysisHistory.splice(0, analysisHistory.length, ...p); } catch (_) {} }
     } catch (e) { /* corrupted storage, use defaults */ }
-    // Restore wl_analysis_* from _fullData embedded in history entries.
-    // Runs synchronously so fetchStockAnalysis finds the cache even before cloud sync.
-    analysisHistory.forEach(entry => {
-      if (!entry._fullData?._date) return;
-      try {
-        const k = `wl_analysis_${entry.sym}`;
-        if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(entry._fullData));
-      } catch (_) {}
-    });
+    // Two-way reconcile of the analysis cache, synchronously (before any user click):
+    //  - fill _fullData on entries that lack it, from local wl_analysis_* cache
+    //  - restore wl_analysis_* from _fullData so fetchStockAnalysis hits cache, no API call
+    _fillHistFullData(analysisHistory);
+    _restoreHistCache(analysisHistory);
     // Migrate legacy wl_analysis_* entries (pre-v41 format) into analysisHistory on first load
     if (analysisHistory.length === 0) {
       try {
@@ -7163,25 +7207,6 @@
 
   loadFromStorage();
 
-  // Backfill _fullData for existing history entries that have a localStorage cache
-  // (entries created before v47 don't have _fullData; this lets device A populate it
-  // so device B can get it via cloud sync without re-calling the API).
-  (() => {
-    let changed = false;
-    analysisHistory.forEach(entry => {
-      if (entry._fullData) return;
-      try {
-        const cached = JSON.parse(localStorage.getItem(`wl_analysis_${entry.sym}`) || "null");
-        if (cached?._date) { entry._fullData = cached; changed = true; }
-      } catch (_) {}
-    });
-    if (changed) {
-      saveLocalOnly();
-      clearTimeout(syncTimer);
-      syncTimer = setTimeout(syncPush, 4000); // slight delay, lower priority than startup
-    }
-  })();
-
   // Retroactively stamp existing data saved before savedAt tracking was added.
   // Use epoch 0 so cloud always wins on first sync — prevents mobile from pushing stale data.
   if (!localStorage.getItem("trendo_v4_savedAt")) {
@@ -7218,10 +7243,23 @@
   wireSimControls();
   wireSyncPanel();
   renderSyncStatus();
+  // After startup sync settles, propagate any local-only full analysis content up to
+  // the cloud. Runs AFTER reconciliation so bumping savedAt can't clobber newer cloud
+  // data. This is what lets a stock analyzed days ago (before _fullData existed) become
+  // visible on every other device without re-calling the API.
+  function backfillAnalysisFullData() {
+    const changed = _fillHistFullData(analysisHistory);
+    _restoreHistCache(analysisHistory);
+    if (changed) {
+      saveToStorage(); // bumps savedAt + schedules syncPush → other devices pull the full content
+      if (currentPage === "watchlist") renderAnalysisHistory();
+    }
+  }
   // Sync strategy: last-write-wins based on savedAt timestamp.
   // On startup: fetch cloud, compare timestamps, pull if cloud is newer else push.
   // This ensures cross-device changes (e.g. desktop → mobile) propagate automatically.
-  if (syncKey) syncOnStartup();
+  if (syncKey) syncOnStartup().finally(backfillAnalysisFullData);
+  else backfillAnalysisFullData();
   // Re-pull when the tab regains focus: the background order worker
   // (api/order-check.js) may have filled sim pending orders while this tab was
   // throttled/asleep. Pull-if-newer prevents a stale local push from
