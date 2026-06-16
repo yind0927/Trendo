@@ -5155,17 +5155,21 @@
     if (!hist.length) { el.style.display = "none"; el.innerHTML = ""; return; }
     el.style.display = "";
 
+    // Deduplicate by sym — keep only the most recent entry per stock
+    const seen = new Set();
+    const deduped = hist.filter(h => { if (seen.has(h.sym)) return false; seen.add(h.sym); return true; });
+
     let sections;
     if (_histSort === "score") {
       // Flat list sorted by overall score (desc), then time as tiebreak — no date grouping
-      const ranked = [...hist].sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0) || (b.savedAt ?? 0) - (a.savedAt ?? 0));
+      const ranked = [...deduped].sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0) || (b.savedAt ?? 0) - (a.savedAt ?? 0));
       sections = `<div class="wl-hist-group">
         <div class="wl-hist-cards">${ranked.map(saHistCardHTML).join("")}</div>
       </div>`;
     } else {
-      // Group by date, most recent first
+      // Group by the most-recent analysis date, most recent first
       const groups = new Map();
-      hist.forEach(h => {
+      deduped.forEach(h => {
         const d = h.date || new Date(h.savedAt).toLocaleDateString("en-CA");
         if (!groups.has(d)) groups.set(d, []);
         groups.get(d).push(h);
@@ -5199,9 +5203,11 @@
     $$(".sa-hist-del", el).forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        const sym = btn.dataset.sym, date = btn.dataset.date;
-        const idx = analysisHistory.findIndex(e => e.sym === sym && (e.date === date || !date));
-        if (idx >= 0) analysisHistory.splice(idx, 1);
+        const sym = btn.dataset.sym;
+        // Remove all entries for this sym (there may be multiple from re-analyses)
+        for (let i = analysisHistory.length - 1; i >= 0; i--) {
+          if (analysisHistory[i].sym === sym) analysisHistory.splice(i, 1);
+        }
         try { localStorage.removeItem(`wl_analysis_${sym}`); } catch (_) {}
         saveLocalOnly();
         clearTimeout(syncTimer); syncTimer = setTimeout(syncPush, 2000);
