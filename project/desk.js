@@ -591,7 +591,8 @@
     }
 
     const localSavedAt = localStorage.getItem("trendo_v4_savedAt");
-    const localTotal   = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length;
+    const localTotal   = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length
+                       + SIM_PENDING.length + SIM_CLOSE_PENDING.length;
     const cloudTime    = cloudData.savedAt ? new Date(cloudData.savedAt).getTime() : 0;
     const localTime    = localSavedAt      ? new Date(localSavedAt).getTime()      : 0;
 
