@@ -1,6 +1,9 @@
 // Vercel serverless function — real-time market data
 // Stocks/ETFs (per symbol, Finnhub + Yahoo in parallel):
-//   last      → Finnhub d.c (real-time) with Yahoo regularMarketPrice as fallback
+//   last      → Market OPEN: Finnhub d.c (real-time), guarded against gross divergence
+//               from Yahoo regularMarketPrice. Market CLOSED (pre/post/weekend): Yahoo
+//               regularMarketPrice (the REGULAR-session close) — Finnhub d.c can drift to
+//               an extended-hours print off-hours and mismatch the broker's day change.
 //   prevClose → Yahoo raw close series (unadjusted, broker-matching) using timestamps to
 //               pick the correct bar whether market is open or closed → Polygon daily bars
 //               with the SAME timestamp-based selection (NOT /prev: after the close /prev
@@ -115,28 +118,34 @@ export default async function handler(req, res) {
               // dividend): e.g. INTC after a ~$11 distribution Yahoo sets previousClose≈$99
               // while the broker compares to the actual session close of ~$110. Never use it.
               //
-              // Pick the right bar using timestamps + market session:
-              // - Market OPEN: `last` is live intraday → prevClose = yesterday's close
-              //   (bars[-2] if Yahoo already created today's partial bar, else bars[-1]).
-              // - Market CLOSED (after-hours / pre-market / weekend): `last` IS the close of
-              //   the most recent completed session (= the series' final bar), so the daily
-              //   change must reference the session BEFORE it → always bars[-2]. Brokers show
-              //   the last completed session's move until the next open; using bars[-1] here
-              //   makes prevClose === last and flattens every symbol to ±0% pre-market.
+              // prevClose = the unadjusted close of the most recent COMPLETED session
+              // STRICTLY BEFORE the session that `last` (regularMarketPrice) belongs to.
+              // We anchor to meta.regularMarketTime — the timestamp of the regular-session
+              // price — instead of the wall clock, so the choice stays correct across the
+              // UTC/ET date boundary, pre-market, after-hours and weekends WITHOUT a
+              // separate marketOpen heuristic (the old `new Date()` anchor could pick the
+              // wrong bar in the UTC-evening window). The in-progress intraday bar (whose
+              // close is the live price, same session date as regularMarketTime) is
+              // auto-excluded, and so is the just-finalized bar after the close — both
+              // share the session date, and we require bar date < session date.
               const rawCloses = d.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [];
               const timestamps = d.chart?.result?.[0]?.timestamp ?? [];
               const validBars  = rawCloses
                 .map((c, i) => ({ c, ts: timestamps[i] }))
-                .filter(b => b.c != null);
+                .filter(b => b.c != null && b.ts != null);
+              const rmt = meta.regularMarketTime;
               let derivedPc = null;
-              if (validBars.length >= 2) {
-                const lastTs   = validBars[validBars.length - 1].ts;
-                const todayUTC = new Date().toISOString().slice(0, 10);
-                const lastUTC  = new Date(lastTs * 1000).toISOString().slice(0, 10);
-                const todayBarIn = lastUTC === todayUTC;
-                derivedPc = (marketOpen && !todayBarIn)
-                  ? validBars[validBars.length - 1].c   // open, today's bar not yet created
-                  : validBars[validBars.length - 2].c;  // all other cases → bar before last
+              if (validBars.length >= 2 && rmt) {
+                const sessionUTC = new Date(rmt * 1000).toISOString().slice(0, 10);
+                for (let i = validBars.length - 1; i >= 0; i--) {
+                  const barUTC = new Date(validBars[i].ts * 1000).toISOString().slice(0, 10);
+                  if (barUTC < sessionUTC) { derivedPc = validBars[i].c; break; }
+                }
+                if (derivedPc == null) derivedPc = validBars[validBars.length - 2].c;
+              } else if (validBars.length >= 2) {
+                // No regularMarketTime — fall back to the second-to-last bar (correct
+                // off-hours and in the common case).
+                derivedPc = validBars[validBars.length - 2].c;
               } else if (validBars.length === 1) {
                 derivedPc = validBars[0].c;
               }
@@ -152,10 +161,27 @@ export default async function handler(req, res) {
       const yh = yhResult.status === "fulfilled" ? yhResult.value : null;
 
       if (fh || yh) {
-        // Finnhub wins for `last` (more real-time). Yahoo derivedPc is the sole source for
-        // `prevClose` from the Finnhub+Yahoo parallel fetch — Finnhub d.pc is excluded (see
-        // header comment). If Yahoo failed, prevClose stays null and Polygon /prev fills it.
-        const last      = fh?.last      ?? yh?.last      ?? null;
+        // `last` source selection — the crux of matching the broker's day change:
+        //  • Market OPEN: Finnhub d.c is the freshest regular-session print → prefer it,
+        //    but if it diverges grossly from Yahoo's regularMarketPrice (>12% → a stale or
+        //    bad tick) fall back to Yahoo so last/prevClose stay session-consistent.
+        //  • Market CLOSED (pre-market / after-hours / weekend): use Yahoo
+        //    regularMarketPrice — the REGULAR-session close. Finnhub d.c can drift to an
+        //    EXTENDED-HOURS print for liquid names, which then mismatches the broker's day
+        //    change (computed off the regular close) — the exact "some stocks match, some
+        //    don't" symptom. Yahoo regularMarketPrice excludes extended hours and pairs
+        //    exactly with the bar-derived prevClose (same regular session).
+        //  Yahoo derivedPc is the sole prevClose source here; Finnhub d.pc is excluded (see
+        //  header comment). If Yahoo failed, prevClose stays null and Polygon fills it.
+        const fhLast = fh?.last ?? null;
+        const yhLast = yh?.last ?? null;
+        let last;
+        if (marketOpen && fhLast != null) {
+          const diverged = yhLast != null && Math.abs(fhLast - yhLast) / yhLast > 0.12;
+          last = diverged ? yhLast : fhLast;
+        } else {
+          last = yhLast ?? fhLast;
+        }
         let   prevClose = yh?.prevClose ?? null;
 
         // Polygon daily bars when Yahoo failed to supply prevClose (common when Yahoo is
