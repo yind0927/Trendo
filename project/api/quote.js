@@ -47,12 +47,15 @@ export default async function handler(req, res) {
   // prevClose would equal today's close and flatten the daily change to ~0% for any
   // symbol whose Yahoo fetch happened to fail that cycle. With the bar list we apply
   // the same timestamp-based selection as the Yahoo path: skip today's bar if present.
+  // adjusted=false: unadjusted closes match Yahoo indicators.quote[0].close (raw) and
+  // broker display. adjusted=true gives dividend-adjusted historical prices that can
+  // diverge from the broker's "previous session close" on ex-dividend dates.
   const polygonBars = async sym => {
     const to   = new Date().toISOString().slice(0, 10);
     const from = new Date(Date.now() - 9 * 86400000).toISOString().slice(0, 10);
     const r = await fetch(
       `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(sym)}/range/1/day/${from}/${to}` +
-      `?adjusted=true&sort=asc&apiKey=${polygonKey}`,
+      `?adjusted=false&sort=asc&apiKey=${polygonKey}`,
       { signal: AbortSignal.timeout(3500) }
     );
     const d = await r.json();
