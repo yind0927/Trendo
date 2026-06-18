@@ -3813,6 +3813,24 @@
         : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>`;
     }
 
+    // Counts — run before card/list branch so card mode also updates chips
+    const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setCount("sim-c-open",   SIM_HOLDINGS.length);
+    setCount("sim-c-closed", SIM_CLOSED.length);
+    if (simActiveTab === "closed") {
+      setCount("sim-c-cl-all",    SIM_CLOSED.length);
+      setCount("sim-c-cl-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
+      setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length);
+    } else {
+      setCount("sim-c-all",   SIM_HOLDINGS.length);
+      setCount("sim-c-eq",    SIM_HOLDINGS.filter(h => h.kind === "equity").length);
+      setCount("sim-c-etf",   SIM_HOLDINGS.filter(h => h.kind === "etf").length);
+      setCount("sim-c-cr",    SIM_HOLDINGS.filter(h => h.kind === "crypto").length);
+      setCount("sim-c-rk",    SIM_HOLDINGS.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
+      setCount("sim-c-tg",    SIM_HOLDINGS.filter(h => progressBucket(h) === "Near Target").length);
+      setCount("sim-c-watch", SIM_HOLDINGS.filter(h => h.flagged).length);
+    }
+
     // Card / list branch
     const _stw = tbody.parentElement;
     const _shc = document.getElementById("sim-holdings-cards");
@@ -3911,24 +3929,6 @@
         renderSimOverview(); renderSimTable(); renderSimAnalytics();
       });
     });
-
-    // Counts
-    const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    setCount("sim-c-open",   SIM_HOLDINGS.length);
-    setCount("sim-c-closed", SIM_CLOSED.length);
-    if (simActiveTab === "closed") {
-      setCount("sim-c-cl-all",    SIM_CLOSED.length);
-      setCount("sim-c-cl-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
-      setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length);
-    } else {
-      setCount("sim-c-all",   SIM_HOLDINGS.length);
-      setCount("sim-c-eq",    SIM_HOLDINGS.filter(h => h.kind === "equity").length);
-      setCount("sim-c-etf",   SIM_HOLDINGS.filter(h => h.kind === "etf").length);
-      setCount("sim-c-cr",    SIM_HOLDINGS.filter(h => h.kind === "crypto").length);
-      setCount("sim-c-rk",    SIM_HOLDINGS.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
-      setCount("sim-c-tg",    SIM_HOLDINGS.filter(h => progressBucket(h) === "Near Target").length);
-      setCount("sim-c-watch", SIM_HOLDINGS.filter(h => h.flagged).length);
-    }
 
     renderSimTradeLog();
   }
@@ -5082,12 +5082,12 @@
   // ── Persistent analysis history (in-memory + cloud sync) ──────────────────
   function saHistTimeStr(ms) {
     if (!ms) return "";
-    const mins = Math.round((Date.now() - ms) / 60000);
-    if (mins < 1)  return "刚刚";
-    if (mins < 60) return `${mins}分钟前`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24)  return `${hrs}小时前`;
-    return new Date(ms).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const d = new Date(ms);
+    const today = new Date().toLocaleDateString("en-CA");
+    if (d.toLocaleDateString("en-CA") === today) {
+      return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    }
+    return `${d.getMonth() + 1}月${d.getDate()}日`;
   }
 
   function saDateLabel(dateStr) {
@@ -5100,12 +5100,12 @@
   }
 
   function recordAnalysis(sym, data, forceNow = false) {
-    const date = new Date().toLocaleDateString("en-CA");
-    // Preserve the original analysis timestamp (data._savedAt) so re-viewing
-    // a history card doesn't reset the "X分钟前" counter. Only force=true
-    // re-analysis gets a fresh Date.now().
-    const existing = analysisHistory.find(e => e.sym === sym && e.date === date);
-    const savedAt  = forceNow ? Date.now() : (data._savedAt ?? existing?.savedAt ?? Date.now());
+    // Anchor date to when the analysis was actually done (savedAt), not the
+    // current wall clock. This way, re-viewing a cached result from yesterday
+    // updates the existing yesterday entry in place and doesn't create a new
+    // "today" entry that would push the record to the top of the time sort.
+    const savedAt = forceNow ? Date.now() : (data._savedAt ?? Date.now());
+    const date    = new Date(savedAt).toLocaleDateString("en-CA");
     const entry = {
       sym,
       grade:     data.scores?.grade ?? "",
@@ -5933,10 +5933,14 @@
       return m ? { n, body: m[1].trim() } : null;
     }).filter(Boolean);
 
-    // Age tag
+    // Age tag — today shows HH:MM, older shows date
     const ageStr = updatedAt ? (() => {
-      const diff = Math.round((Date.now() - new Date(updatedAt)) / 60000);
-      return diff < 1 ? "刚刚" : diff < 60 ? `${diff}分钟前` : `${Math.floor(diff / 60)}小时前`;
+      const d = new Date(updatedAt);
+      const today = new Date().toLocaleDateString("en-CA");
+      if (d.toLocaleDateString("en-CA") === today) {
+        return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+      }
+      return `${d.getMonth() + 1}月${d.getDate()}日`;
     })() : "";
 
     panel.innerHTML = `<div class="sa-card">
