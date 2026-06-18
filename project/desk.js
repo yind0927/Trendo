@@ -7477,12 +7477,6 @@
           <button class="sp-action" id="sp-apply">载入</button>
         </div>
       </div>
-      ${syncKey ? `<div class="sp-sep"></div>
-      <div class="sp-section">
-        <div class="sp-label">强制同步</div>
-        <button class="sp-action" id="sp-force-pull" style="width:100%">↓ 拉取最新云端数据</button>
-        <div class="sp-hint" style="margin-top:6px">其他设备刚添加挂单或持仓，点此立即拉取</div>
-      </div>` : ""}
       <div id="sync-status" class="sp-status" data-state="${syncKey ? 'pending' : 'off'}">
         ${syncKey ? (lastSyncAt ? `已同步 ${String(lastSyncAt.getHours()).padStart(2,"0")}:${String(lastSyncAt.getMinutes()).padStart(2,"0")}` : "同步中…") : "未同步"}
       </div>
@@ -7555,20 +7549,6 @@
       }
     });
 
-    // Force pull — ignores timestamp comparison, always applies whatever is in cloud
-    document.getElementById("sp-force-pull")?.addEventListener("click", async () => {
-      const btn = document.getElementById("sp-force-pull");
-      btn.textContent = "拉取中…"; btn.disabled = true;
-      const data = await syncPull(syncKey);
-      if (data) {
-        applyCloudData(data);
-        lastSyncAt = new Date();
-        renderSyncPanel();
-      } else {
-        btn.textContent = "拉取失败，请重试";
-        setTimeout(() => renderSyncPanel(), 2000);
-      }
-    });
   }
 
   // ============ TICKER TAPE ============
