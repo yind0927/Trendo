@@ -611,7 +611,32 @@
       lastSyncAt = new Date();
       renderSyncStatus();
     } else {
-      // Local is newer — push to keep cloud in sync
+      // Local is newer — but first rescue any pending orders that were created on
+      // another device after our last sync (they'd be in cloud but not local,
+      // and a blind push would overwrite cloud and destroy them forever).
+      // Match by order id (Date.now().toString(36)); orders without id are legacy.
+      let pendingMerged = false;
+      if (Array.isArray(cloudData.simPending) && cloudData.simPending.length) {
+        const localIds = new Set(SIM_PENDING.map(p => p.id).filter(Boolean));
+        const newOrders = cloudData.simPending.filter(p => p.id && !localIds.has(p.id));
+        if (newOrders.length) {
+          SIM_PENDING.push(...newOrders);
+          pendingMerged = true;
+        }
+      }
+      if (Array.isArray(cloudData.simClosePending) && cloudData.simClosePending.length) {
+        const localIds = new Set(SIM_CLOSE_PENDING.map(p => p.id).filter(Boolean));
+        const newOrders = cloudData.simClosePending.filter(p => p.id && !localIds.has(p.id));
+        if (newOrders.length) {
+          SIM_CLOSE_PENDING.push(...newOrders);
+          pendingMerged = true;
+        }
+      }
+      if (pendingMerged) {
+        saveLocalOnly();
+        renderSim();
+      }
+      // Local is newer — push to keep cloud in sync (now includes any rescued orders)
       syncPush();
     }
   }
