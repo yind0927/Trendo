@@ -547,19 +547,7 @@
     // Carry full analysis content (_fullData) only for the 60 most-recent entries
     // to bound the sync blob size; older entries keep metadata and fall back to the
     // 30-day server-side Redis cache when reopened (no Claude call).
-    const histForSync = [...analysisHistory]
-      .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
-      .map((e, i) => {
-        if (i < 60 || !e._fullData) return e;
-        const c = { ...e }; delete c._fullData; return c;
-      });
-    const payload = {
-      holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
-      watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
-      simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
-      analysisHistory: histForSync,
-      savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
-    };
+    const payload = _buildSyncPayload();
     try {
       const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -568,6 +556,22 @@
       if (r.ok) { lastSyncAt = new Date(); renderSyncStatus(); }
       else       { renderSyncStatus("error"); }
     } catch (_) { renderSyncStatus("error"); }
+  }
+
+  function _buildSyncPayload() {
+    const histForSync = [...analysisHistory]
+      .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+      .map((e, i) => {
+        if (i < 60 || !e._fullData) return e;
+        const c = { ...e }; delete c._fullData; return c;
+      });
+    return {
+      holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
+      watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
+      simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
+      analysisHistory: histForSync,
+      savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
+    };
   }
 
   async function syncPull(key) {
@@ -7448,6 +7452,12 @@
           <button class="sp-action" id="sp-apply">载入</button>
         </div>
       </div>
+      ${syncKey ? `<div class="sp-sep"></div>
+      <div class="sp-section">
+        <div class="sp-label">强制同步</div>
+        <button class="sp-action" id="sp-force-pull" style="width:100%">↓ 拉取最新云端数据</button>
+        <div class="sp-hint" style="margin-top:6px">其他设备刚添加挂单或持仓，点此立即拉取</div>
+      </div>` : ""}
       <div id="sync-status" class="sp-status" data-state="${syncKey ? 'pending' : 'off'}">
         ${syncKey ? (lastSyncAt ? `已同步 ${String(lastSyncAt.getHours()).padStart(2,"0")}:${String(lastSyncAt.getMinutes()).padStart(2,"0")}` : "同步中…") : "未同步"}
       </div>
@@ -7517,6 +7527,21 @@
       } else {
         btn.textContent = "未找到数据"; btn.disabled = false;
         setTimeout(() => { btn.textContent = "载入"; btn.disabled = false; }, 2000);
+      }
+    });
+
+    // Force pull — ignores timestamp comparison, always applies whatever is in cloud
+    document.getElementById("sp-force-pull")?.addEventListener("click", async () => {
+      const btn = document.getElementById("sp-force-pull");
+      btn.textContent = "拉取中…"; btn.disabled = true;
+      const data = await syncPull(syncKey);
+      if (data) {
+        applyCloudData(data);
+        lastSyncAt = new Date();
+        renderSyncPanel();
+      } else {
+        btn.textContent = "拉取失败，请重试";
+        setTimeout(() => renderSyncPanel(), 2000);
       }
     });
   }
@@ -7693,6 +7718,18 @@
       // Force immediate price refresh so pending orders execute as soon as the tab is active
       lastPriceFetch = 0;
     }
+  });
+  // Push to cloud on page close so pending orders reach Redis even if the 2s
+  // debounce timer didn't fire (e.g. tab closed immediately after adding an order).
+  // sendBeacon is guaranteed to complete after page close; keepalive fetch would
+  // also work but sendBeacon needs no auth header (key travels in the URL).
+  window.addEventListener("pagehide", () => {
+    if (!syncKey) return;
+    clearTimeout(syncTimer);
+    try {
+      const blob = new Blob([JSON.stringify(_buildSyncPayload())], { type: "application/json" });
+      navigator.sendBeacon(`/api/data?key=${encodeURIComponent(syncKey)}`, blob);
+    } catch (_) {}
   });
   tick(); setInterval(tick, 1000);
 
