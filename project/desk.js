@@ -2899,13 +2899,21 @@
 
   async function fetchAndBuildHistory() {
     const allPos = [...HOLDINGS, ...CLOSED_POSITIONS];
-    if (!allPos.length) return;
+    if (!allPos.length) {
+      histLoading = false;
+      if (currentPage === "analytics") renderAnalytics();
+      return;
+    }
 
     const fromDate = allPos
       .map(h => h.entry?.slice(0, 10))
       .filter(Boolean)
       .sort()[0];
-    if (!fromDate) return;
+    if (!fromDate) {
+      histLoading = false;
+      if (currentPage === "analytics") renderAnalytics();
+      return;
+    }
 
     // Symbols not yet cached
     const needed = [...new Set(
@@ -2922,6 +2930,8 @@
           if (results) Object.assign(histCache, results);
         }
       } catch (_) {}
+      histLoading = false;
+    } else {
       histLoading = false;
     }
 
@@ -3301,7 +3311,7 @@
     applySidebarActiveColor(page);
     if (page === "journal")   renderJournal();
     if (page === "sim")       renderSim();
-    if (page === "analytics") { renderAnalytics(); fetchAndBuildHistory(); }
+    if (page === "analytics") { fetchAndBuildHistory(); }
     if (page === "watchlist") renderWatchlist();
     if (page === "market")    fetchMarketData();
     if (page === "desk" && HOLDINGS.length > 0) {
