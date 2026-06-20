@@ -5397,7 +5397,7 @@
             ${sub("EPS超预期 (连续季度)")}
             ${rows([["≥4次全超",8],["最近3次全超",5],["最近2次不及",-8]])}
           `)}
-          ${dim("Health","财务健康","20%",`
+          ${dim("Financial","财务","20%",`
             ${sub("净利润率")}
             ${rows([[">20%",16],["10–20%",10],["3–10%",5],["<0%",-16]])}
             ${sub("毛利率")}
@@ -5445,9 +5445,10 @@
     const key = `wl_analysis_${sym}`;
     if (!force) {
       // 1. Check localStorage (same device) — re-derive scores/badge on read
+      // Require rs20d + volUpDownRatio: caches from before v72 lack them and must refresh
       try {
         const c = JSON.parse(localStorage.getItem(key) || "null");
-        if (c?._date) {
+        if (c?._date && "rs20d" in c && "volUpDownRatio" in c) {
           _upgradeAnalysis(c);
           try { localStorage.setItem(key, JSON.stringify(c)); } catch (_) {}
           return c;
@@ -5792,7 +5793,7 @@
     const fPc = v => v != null ? `${fN(v)}%` : "—";
     const row = (lbl, val, delta) => ({ lbl, val, delta, cls: delta > 0 ? "pos" : delta < 0 ? "neg" : "neu" });
     const WEIGHTS = { trend: "25%", valuation: "20%", growth: "20%", health: "20%", analyst: "15%" };
-    const TITLES  = { trend: "技术面", valuation: "估值", growth: "成长性", health: "财务健康", analyst: "分析师" };
+    const TITLES  = { trend: "技术面", valuation: "估值", growth: "成长性", health: "财务", analyst: "分析师" };
     const BASES   = { trend: 50, valuation: 50, growth: 50, health: 50, analyst: 50 };
     const rows = [{ lbl: "基准分", val: "", delta: BASES[dim] ?? 50, cls: "base" }];
 
@@ -5946,6 +5947,7 @@
       <div class="sa-tip-body">
         <div class="sa-tip-desc"></div>
         <div class="sa-tip-thresh"></div>
+        <div class="sa-tip-bd" style="display:none"></div>
       </div>`;
     document.body.append(overlay, popup);
     const close = () => {
@@ -6050,7 +6052,7 @@
       { lbl: "技术面",   dim: "trend",     val: scores.trend },
       { lbl: "估值",     dim: "valuation", val: scores.valuation },
       { lbl: "成长性",   dim: "growth",    val: scores.growth },
-      { lbl: "财务健康", dim: "health",    val: scores.health },
+      { lbl: "财务",     dim: "health",    val: scores.health },
       { lbl: "分析师",   dim: "analyst",   val: scores.analyst },
     ].map(({ lbl, dim, val }) => val != null ? `
       <div class="sa-score-row" data-dim="${dim}" title="点击查看得分明细">
@@ -6142,7 +6144,7 @@
         ],
       },
       {
-        label: "财务健康",
+        label: "财务",
         items: [
           { v: metrics.freeCashflow != null ? `${metrics.freeCashflow >= 0 ? "" : "−"}$${Math.abs(metrics.freeCashflow).toFixed(1)}B` : "—", l: "FCF", raw: metrics.freeCashflow,      k: "fcf" },
           { v: metrics.operatingCashflow != null ? `$${metrics.operatingCashflow.toFixed(1)}B` : "—",                                       l: "OCF", raw: metrics.operatingCashflow, k: "ocf" },
@@ -6359,7 +6361,11 @@
           close(); return;
         }
         popup.querySelector(".sa-tip-name").textContent = tip[0];
-        popup.querySelector(".sa-tip-desc").textContent = tip[1];
+        const _mDesc = popup.querySelector(".sa-tip-desc");
+        _mDesc.textContent = tip[1];
+        _mDesc.style.display = "";
+        const _mBd = popup.querySelector(".sa-tip-bd");
+        if (_mBd) _mBd.style.display = "none";
         const thresh = popup.querySelector(".sa-tip-thresh");
         if (tip[2]) {
           thresh.innerHTML = tip[2].split('\n').map(line => {
@@ -6404,13 +6410,12 @@
             <span class="sa-bd-delta">${dStr}</span>
           </div>`;
         }).join("");
-        popup.innerHTML = `
-          <div class="sa-tip-hdr">
-            <span class="sa-tip-name">${bd.title}</span>
-            <span class="sa-tip-close">✕</span>
-          </div>
-          <div class="sa-tip-body"><div class="sa-bd-rows">${rowsHTML}</div></div>`;
-        popup.querySelector(".sa-tip-close").addEventListener("click", close);
+        popup.querySelector(".sa-tip-name").textContent = bd.title;
+        popup.querySelector(".sa-tip-desc").style.display = "none";
+        popup.querySelector(".sa-tip-thresh").style.display = "none";
+        const _dBd = popup.querySelector(".sa-tip-bd");
+        _dBd.innerHTML = `<div class="sa-bd-rows">${rowsHTML}</div>`;
+        _dBd.style.display = "";
         popup._lastKey = key;
         popup.style.visibility = "hidden";
         popup.classList.add("open");
