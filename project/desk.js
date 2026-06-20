@@ -5470,9 +5470,9 @@
   // stored _fullData (metrics + technicals). ⚠️ KEEP IN SYNC with the scoring
   // functions and computeRecommendation() in project/api/stock-analysis.js.
   const _clamp = s => Math.max(0, Math.min(100, Math.round(s)));
-  function _scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low }) {
+  function _scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector }) {
     if (price == null) return null;
-    let s = 50;
+    let s = 30;
     if (ema50 && ema200) {
       if (price > ema50 && ema50 > ema200) s += 35;
       else if (price > ema50)              s += 15;
@@ -5489,6 +5489,21 @@
     if (wk52High && wk52Low && wk52High > wk52Low) {
       const pos = (price - wk52Low) / (wk52High - wk52Low);
       if (pos > 0.75) s += 5; else if (pos < 0.25) s -= 5;
+    }
+    if (rsVsVoo != null) {
+      if      (rsVsVoo > 15)  s += 12;
+      else if (rsVsVoo > 5)   s += 8;
+      else if (rsVsVoo > 0)   s += 4;
+      else if (rsVsVoo > -5)  s += 0;
+      else if (rsVsVoo > -10) s -= 6;
+      else                    s -= 12;
+    }
+    if (rsVsSector != null) {
+      if      (rsVsSector > 10)  s += 8;
+      else if (rsVsSector > 3)   s += 4;
+      else if (rsVsSector > -3)  s += 0;
+      else if (rsVsSector > -10) s -= 4;
+      else                       s -= 8;
     }
     return _clamp(s);
   }
@@ -5610,7 +5625,7 @@
   function recomputeScores(d) {
     const m = d.metrics || {};
     const s = {
-      trend:     _scoreTrend({ price: d.price, ema50: d.ema50, ema200: d.ema200, rsi: d.rsi, wk52High: d.wk52High, wk52Low: d.wk52Low }),
+      trend:     _scoreTrend({ price: d.price, ema50: d.ema50, ema200: d.ema200, rsi: d.rsi, wk52High: d.wk52High, wk52Low: d.wk52Low, rsVsVoo: d.rs20d?.voo ?? null, rsVsSector: d.rs20d?.sector ?? null }),
       valuation: _scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps, evEbitda: m.evEbitda }),
       growth:    _scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth, quarterlyEPS: d.quarterlyEPS }),
       health:    _scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio, freeCashflow: m.freeCashflow, revenueActual: m.revenueActual }),
@@ -5669,7 +5684,7 @@
     const row = (lbl, val, delta) => ({ lbl, val, delta, cls: delta > 0 ? "pos" : delta < 0 ? "neg" : "neu" });
     const WEIGHTS = { trend: "25%", valuation: "20%", growth: "20%", health: "20%", analyst: "15%" };
     const TITLES  = { trend: "技术面", valuation: "估值", growth: "成长性", health: "财务健康", analyst: "分析师" };
-    const BASES   = { trend: 50, valuation: 50, growth: 50, health: 50, analyst: 50 };
+    const BASES   = { trend: 30, valuation: 50, growth: 50, health: 50, analyst: 50 };
     const rows = [{ lbl: "基准分", val: "", delta: BASES[dim] ?? 50, cls: "base" }];
 
     if (dim === "trend") {
@@ -5692,6 +5707,19 @@
         if      (pos > 75) rows.push(row("52周高分位 (>75%)", `${pos}%`, +5));
         else if (pos < 25) rows.push(row("52周低分位 (<25%)", `${pos}%`, -5));
         else               rows.push(row("52周分位 (中间区间)", `${pos}%`, 0));
+      }
+      if (data.rs20d?.voo != null) {
+        const rv = data.rs20d.voo;
+        const sign = rv >= 0 ? "+" : "";
+        const d = rv > 15 ? +12 : rv > 5 ? +8 : rv > 0 ? +4 : rv > -5 ? 0 : rv > -10 ? -6 : -12;
+        rows.push(row("RS vs 大盘 (VOO, 20D)", `${sign}${rv.toFixed(1)}%`, d));
+      }
+      if (data.rs20d?.sector != null) {
+        const rs = data.rs20d.sector;
+        const etfLabel = data.rs20d.sectorEtf || data.sectorEtf || "板块ETF";
+        const sign = rs >= 0 ? "+" : "";
+        const d = rs > 10 ? +8 : rs > 3 ? +4 : rs > -3 ? 0 : rs > -10 ? -4 : -8;
+        rows.push(row(`RS vs 板块 (${etfLabel}, 20D)`, `${sign}${rs.toFixed(1)}%`, d));
       }
     }
     else if (dim === "valuation") {

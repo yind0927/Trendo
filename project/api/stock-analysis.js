@@ -36,6 +36,32 @@ function normPct(v) {
   return Math.abs(v) < 2 ? parseFloat((v * 100).toFixed(2)) : parseFloat(v.toFixed(2));
 }
 
+// ── Sector ETF mapping (Yahoo Finance sector strings → SPDR ETF) ──────────────
+const SECTOR_ETF = {
+  "Technology":             "XLK",
+  "Healthcare":             "XLV",
+  "Financial Services":     "XLF",
+  "Consumer Cyclical":      "XLY",
+  "Consumer Defensive":     "XLP",
+  "Energy":                 "XLE",
+  "Basic Materials":        "XLB",
+  "Industrials":            "XLI",
+  "Utilities":              "XLU",
+  "Real Estate":            "XLRE",
+  "Communication Services": "XLC",
+};
+
+// RS: stock 20D return minus benchmark 20D return (in %-points)
+function calcRS(stockCloses, benchCloses, days = 20) {
+  if (!stockCloses?.length || !benchCloses?.length) return null;
+  const sn = Math.min(stockCloses.length - 1, days);
+  const bn = Math.min(benchCloses.length - 1, days);
+  if (sn < 1 || bn < 1) return null;
+  const sRet = (stockCloses[stockCloses.length - 1] - stockCloses[stockCloses.length - 1 - sn]) / stockCloses[stockCloses.length - 1 - sn] * 100;
+  const bRet = (benchCloses[benchCloses.length - 1] - benchCloses[benchCloses.length - 1 - bn]) / benchCloses[benchCloses.length - 1 - bn] * 100;
+  return parseFloat((sRet - bRet).toFixed(2));
+}
+
 // ── Yahoo Finance helpers ─────────────────────────────────────────────────────
 // Yahoo quoteSummary / v7 quote require a PAIRED session cookie + crumb since 2023.
 // A crumb fetched without first establishing the cookie is rejected (401 Invalid
@@ -91,7 +117,7 @@ async function fetchYahooQS(sym, headers, auth, mods) {
 const fetchYahooQSBasic = (sym, headers, auth) =>
   fetchYahooQS(sym, headers, auth, 'price%2CsummaryDetail');
 const fetchYahooQSFin = (sym, headers, auth) =>
-  fetchYahooQS(sym, headers, auth, 'financialData%2CdefaultKeyStatistics%2Cearnings');
+  fetchYahooQS(sym, headers, auth, 'financialData%2CdefaultKeyStatistics%2Cearnings%2CassetProfile');
 
 // Yahoo v7 quote — also crumb-gated since 2023; only useful with auth
 async function fetchYahooV7(sym, headers, auth) {
@@ -115,9 +141,9 @@ async function fetchYahooV7(sym, headers, auth) {
 }
 
 // ── Five-axis scoring ─────────────────────────────────────────────────────────
-function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low }) {
+function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector }) {
   if (!price) return null;
-  let s = 50;
+  let s = 30;
   if (ema50 && ema200) {
     if (price > ema50 && ema50 > ema200) s += 35;
     else if (price > ema50)              s += 15;
@@ -134,6 +160,21 @@ function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low }) {
   if (wk52High && wk52Low && wk52High > wk52Low) {
     const pos = (price - wk52Low) / (wk52High - wk52Low);
     if (pos > 0.75) s += 5; else if (pos < 0.25) s -= 5;
+  }
+  if (rsVsVoo != null) {
+    if      (rsVsVoo > 15)  s += 12;
+    else if (rsVsVoo > 5)   s += 8;
+    else if (rsVsVoo > 0)   s += 4;
+    else if (rsVsVoo > -5)  s += 0;
+    else if (rsVsVoo > -10) s -= 6;
+    else                    s -= 12;
+  }
+  if (rsVsSector != null) {
+    if      (rsVsSector > 10)  s += 8;
+    else if (rsVsSector > 3)   s += 4;
+    else if (rsVsSector > -3)  s += 0;
+    else if (rsVsSector > -10) s -= 4;
+    else                       s -= 8;
   }
   return Math.max(0, Math.min(100, Math.round(s)));
 }
@@ -304,9 +345,8 @@ export default async function handler(req, res) {
   if (!aiKey) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const today    = new Date().toISOString().slice(0, 10);
-  // v8: +EV/EBITDA valuation, +grossMargin/FCF health, +EPS beat streak growth,
-  //     analyst strongBuy 30→25, health weight 15→20%, analyst weight 20→15%.
-  const cacheKey = `trendo:stock_analysis:v8:${sym}`;
+  // v9: +20-day RS vs VOO + sector ETF (trend base 30, RS scoring added)
+  const cacheKey = `trendo:stock_analysis:v9:${sym}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
@@ -332,7 +372,7 @@ export default async function handler(req, res) {
   };
   const auth = await getYahooAuth(yH);
 
-  const [profileR, yv7R, ysBasicR, ysFinR, metricsR, newsR, historyR, earningsR] = await Promise.allSettled([
+  const [profileR, yv7R, ysBasicR, ysFinR, metricsR, newsR, historyR, vooHistR, earningsR] = await Promise.allSettled([
 
     // Finnhub profile
     fhKey ? fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${sym}&token=${fhKey}`, { signal: AbortSignal.timeout(5000) })
@@ -376,6 +416,20 @@ export default async function handler(req, res) {
       return { closes, meta: chart.meta };
     })().catch(() => null),
 
+    // Yahoo chart 35 calendar days for VOO (20-day RS benchmark)
+    (async () => {
+      const from = Math.floor(Date.now() / 1000) - 35 * 86400;
+      const to   = Math.floor(Date.now() / 1000) + 86400;
+      const r = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/VOO?interval=1d&period1=${from}&period2=${to}`,
+        { headers: yH, signal: AbortSignal.timeout(5000) }
+      );
+      if (!r.ok) return null;
+      const d = await r.json();
+      const cls = (d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
+      return cls.length >= 2 ? cls : null;
+    })().catch(() => null),
+
     // Finnhub earnings calendar
     fhKey ? (async () => {
       const to   = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10);
@@ -393,6 +447,7 @@ export default async function handler(req, res) {
   const rawM         = metricsR.status  === "fulfilled" ? (metricsR.value?.metric ?? {}) : {};
   const news         = newsR.status     === "fulfilled" ? (newsR.value ?? []) : [];
   const history      = historyR.status  === "fulfilled" ? historyR.value : null;
+  const vooCloses    = vooHistR.status  === "fulfilled" ? (vooHistR.value ?? null) : null;
   const nextEarnings = earningsR.status === "fulfilled" ? earningsR.value : null;
 
   // ── 3. Unpack quoteSummary modules ─────────────────────────────────────────
@@ -490,9 +545,32 @@ export default async function handler(req, res) {
     beat:     (q.actual?.raw != null && q.estimate?.raw != null) ? q.actual.raw >= q.estimate.raw : null,
   }));
 
-  // ── 8. Five-axis scoring ───────────────────────────────────────────────────
+  // ── 8. Relative Strength (RS): 20-day vs VOO + sector ETF ────────────────
+  const sectorName = ysFin?.assetProfile?.sector ?? null;
+  const sectorEtf  = SECTOR_ETF[sectorName] ?? null;
+  let etfCloses = null;
+  if (sectorEtf) {
+    try {
+      const from = Math.floor(Date.now() / 1000) - 35 * 86400;
+      const to   = Math.floor(Date.now() / 1000) + 86400;
+      const r = await fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${sectorEtf}?interval=1d&period1=${from}&period2=${to}`,
+        { headers: yH, signal: AbortSignal.timeout(4000) }
+      );
+      if (r.ok) {
+        const d = await r.json();
+        const cls = (d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
+        if (cls.length >= 2) etfCloses = cls;
+      }
+    } catch (_) {}
+  }
+  const rsVsVoo    = calcRS(closes, vooCloses, 20);
+  const rsVsSector = calcRS(closes, etfCloses, 20);
+  const rs20d = { voo: rsVsVoo, sector: rsVsSector, sectorEtf, sectorName };
+
+  // ── 9. Five-axis scoring ───────────────────────────────────────────────────
   const scores = {
-    trend:     scoreTrend({ price, ema50, ema200, rsi, wk52High: wk52H, wk52Low: wk52L }),
+    trend:     scoreTrend({ price, ema50, ema200, rsi, wk52High: wk52H, wk52Low: wk52L, rsVsVoo, rsVsSector }),
     valuation: scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps, evEbitda: m.evEbitda }),
     growth:    scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth, quarterlyEPS }),
     health:    scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio, freeCashflow: m.freeCashflow, revenueActual: m.revenueActual }),
@@ -676,6 +754,7 @@ ${nextEarnings ? `【财报日历】下次财报：${nextEarnings}（${daysToEar
     rsi:    rsi    != null ? parseFloat(rsi.toFixed(1))    : null,
     scores, metrics: m,
     analyst, quarterlyEPS,
+    rs20d, sectorName, sectorEtf,
     nextEarnings, daysToEarnings, earningsRisk,
     recommendation, summary,
     newsCount: news.length,
