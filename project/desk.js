@@ -4668,6 +4668,7 @@
     }
 
     const rows = [];
+    const pureLossRows = []; // trades where price never exceeded entry cost
     for (const [, records] of tradeMap) {
       const h0 = records[0];
       const ySym   = h0.kind === "crypto" ? `${h0.sym}-USD` : h0.sym;
@@ -4683,7 +4684,11 @@
       if (!datesInRange.length) continue;
 
       const peakPrice = Math.max(...datesInRange.map(d => prices[d]));
-      if (peakPrice <= h0.cost) continue;
+      if (peakPrice <= h0.cost) {
+        const actualPnl = records.reduce((s, r) => s + (r.pnlFinal ?? 0), 0);
+        pureLossRows.push({ h: { ...h0, closedAt: closeDate }, actualPnl });
+        continue;
+      }
 
       const totalQty  = records.reduce((s, r) => s + (r.qty ?? 0), 0);
       const peakPnl   = (peakPrice - h0.cost) * totalQty;
@@ -4695,10 +4700,18 @@
       rows.push({ h: { ...h0, closedAt: closeDate }, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt: records.length });
     }
 
-    if (!rows.length) {
+    if (!rows.length && !pureLossRows.length) {
       return histLoading
         ? `<div class="eq-empty">加载历史价格中…</div>`
         : `<div class="eq-empty">暂无数据 · 需要已平仓记录和历史价格</div>`;
+    }
+    if (!rows.length && pureLossRows.length) {
+      return histLoading
+        ? `<div class="eq-empty">加载历史价格中…</div>`
+        : `<div class="eq-empty" style="text-align:left;padding:12px 0">
+            <div style="margin-bottom:6px;color:var(--fg-2)">持仓期间价格未超过入场成本，无峰值盈利参考</div>
+            ${pureLossRows.map(r => `<div class="mono" style="font-size:11.5px;color:var(--down);padding:2px 0">${r.h.sym} ${fmt.signed(Math.round(r.actualPnl))}</div>`).join("")}
+           </div>`;
     }
 
     rows.sort((a, b) => b.leftOnTable - a.leftOnTable);
@@ -4755,7 +4768,16 @@
       </div>`;
     }).join("");
 
-    return summaryHTML + listHTML;
+    const pureLossFooter = pureLossRows.length
+      ? `<div style="margin-top:12px;padding:10px 14px;background:var(--bg-2);border-radius:8px;border:1px solid var(--line)">
+           <div style="font-size:10.5px;color:var(--fg-3);margin-bottom:6px;letter-spacing:0.04em">以下交易持仓期间价格未超过入场成本，无峰值盈利参考，不计入效率统计</div>
+           <div style="display:flex;flex-wrap:wrap;gap:8px">
+             ${pureLossRows.map(r => `<span style="font-size:11.5px;font-family:var(--f-mono);color:var(--down)">${r.h.sym} ${fmt.signed(Math.round(r.actualPnl))}</span>`).join("")}
+           </div>
+         </div>`
+      : "";
+
+    return summaryHTML + listHTML + pureLossFooter;
   }
 
   function equityCurveSVG(points, h) {
