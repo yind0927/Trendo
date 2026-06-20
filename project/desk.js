@@ -5247,7 +5247,7 @@
     const meta = [h.price != null ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
     return `<div class="sa-hist-card" data-sym="${h.sym}" data-date="${h.date || ""}">
       <div class="sa-hist-sym">${h.sym}</div>
-      ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}</div>` : ""}
+      ${h.grade ? `<div class="sa-hist-grade" style="color:${gc}">${h.grade}${h.overall != null ? `<span class="sa-hist-score">${h.overall}</span>` : ""}</div>` : ""}
       <div class="sa-hist-info">
         <div class="sa-hist-name">${h.name}</div>
         ${meta ? `<div class="sa-hist-meta">${meta}</div>` : ""}
@@ -5312,8 +5312,21 @@
     $$(".sa-hist-del", el).forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
+        if (!btn.dataset.confirming) {
+          btn.dataset.confirming = "1";
+          btn.textContent = "确认?";
+          btn.style.color = "var(--down)";
+          btn.style.opacity = "1";
+          btn._confirmTimer = setTimeout(() => {
+            btn.dataset.confirming = "";
+            btn.textContent = "✕";
+            btn.style.color = "";
+            btn.style.opacity = "";
+          }, 3000);
+          return;
+        }
+        clearTimeout(btn._confirmTimer);
         const sym = btn.dataset.sym;
-        // Remove all entries for this sym (there may be multiple from re-analyses)
         for (let i = analysisHistory.length - 1; i >= 0; i--) {
           if (analysisHistory[i].sym === sym) analysisHistory.splice(i, 1);
         }
@@ -5480,7 +5493,7 @@
     return _clamp(s);
   }
   function _scoreValuation({ pe, forwardPE, peg, ps, evEbitda }) {
-    let s = 55;
+    let s = 50;
     const effPE = (forwardPE != null && forwardPE > 0 && (pe == null || forwardPE < pe)) ? forwardPE : pe;
     if (peg != null && peg > 0) {
       if      (peg < 0.75) s += 25;
@@ -5511,43 +5524,43 @@
   function _scoreGrowth({ revGrowth, epsGrowth, quarterlyEPS }) {
     let s = 50;
     if (revGrowth != null) {
-      if      (revGrowth > 30)  s += 38;
-      else if (revGrowth > 20)  s += 28;
-      else if (revGrowth > 10)  s += 18;
-      else if (revGrowth >  3)  s +=  8;
+      if      (revGrowth > 30)  s += 28;
+      else if (revGrowth > 20)  s += 20;
+      else if (revGrowth > 10)  s += 12;
+      else if (revGrowth >  3)  s +=  6;
       else if (revGrowth >  0)  s +=  2;
       else if (revGrowth > -10) s -= 12;
-      else                      s -= 25;
+      else                      s -= 20;
     }
     if (epsGrowth != null) {
-      if      (epsGrowth > 25)  s += 15;
+      if      (epsGrowth > 25)  s += 12;
       else if (epsGrowth > 10)  s +=  8;
       else if (epsGrowth >  0)  s +=  3;
       else if (epsGrowth < -15) s -= 10;
     }
     if (Array.isArray(quarterlyEPS) && quarterlyEPS.length >= 2) {
       const wd = quarterlyEPS.filter(q => q.beat != null);
-      if      (wd.length >= 4 && wd.every(q => q.beat))            s += 10;
+      if      (wd.length >= 4 && wd.every(q => q.beat))            s +=  8;
       else if (wd.length >= 3 && wd.slice(-3).every(q => q.beat))  s +=  5;
       else if (wd.length >= 2 && wd.slice(-2).every(q => !q.beat)) s -=  8;
     }
     return _clamp(s);
   }
   function _scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio, freeCashflow, revenueActual }) {
-    let s = 55;
+    let s = 50;
     if (netMargin != null) {
-      if      (netMargin > 20) s += 20;
-      else if (netMargin > 10) s += 12;
+      if      (netMargin > 20) s += 16;
+      else if (netMargin > 10) s += 10;
       else if (netMargin >  3) s +=  5;
-      else if (netMargin <  0) s -= 20;
+      else if (netMargin <  0) s -= 16;
     }
     if (grossMargin != null) {
-      if      (grossMargin > 60) s += 10;
+      if      (grossMargin > 60) s +=  8;
       else if (grossMargin > 40) s +=  5;
       else if (grossMargin < 15) s -=  5;
     }
     if (roe != null) {
-      if (roe > 30) s += 12; else if (roe > 15) s += 6; else if (roe < 0) s -= 8;
+      if (roe > 30) s += 10; else if (roe > 15) s += 6; else if (roe < 0) s -= 8;
     }
     if (deRatio != null) {
       if (deRatio < 0.3) s += 5; else if (deRatio > 3.0) s -= 12; else if (deRatio > 2.0) s -= 6;
@@ -5558,7 +5571,7 @@
     if (freeCashflow != null) {
       if (freeCashflow > 0) {
         const netIncomeBN = (netMargin != null && revenueActual != null) ? (netMargin / 100) * revenueActual : null;
-        if (netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8) s += 8;
+        if (netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8) s += 6;
         else s += 4;
       } else {
         s -= 6;
@@ -5656,7 +5669,7 @@
     const row = (lbl, val, delta) => ({ lbl, val, delta, cls: delta > 0 ? "pos" : delta < 0 ? "neg" : "neu" });
     const WEIGHTS = { trend: "25%", valuation: "20%", growth: "20%", health: "20%", analyst: "15%" };
     const TITLES  = { trend: "技术面", valuation: "估值", growth: "成长性", health: "财务健康", analyst: "分析师" };
-    const BASES   = { trend: 50, valuation: 55, growth: 50, health: 55, analyst: 50 };
+    const BASES   = { trend: 50, valuation: 50, growth: 50, health: 50, analyst: 50 };
     const rows = [{ lbl: "基准分", val: "", delta: BASES[dim] ?? 50, cls: "base" }];
 
     if (dim === "trend") {
@@ -5706,18 +5719,18 @@
       const { revGrowth, epsGrowth } = m;
       const qeps = data.quarterlyEPS || [];
       if (revGrowth != null) {
-        const d = revGrowth > 30 ? +38 : revGrowth > 20 ? +28 : revGrowth > 10 ? +18 : revGrowth > 3 ? +8 : revGrowth > 0 ? +2 : revGrowth > -10 ? -12 : -25;
+        const d = revGrowth > 30 ? +28 : revGrowth > 20 ? +20 : revGrowth > 10 ? +12 : revGrowth > 3 ? +6 : revGrowth > 0 ? +2 : revGrowth > -10 ? -12 : -20;
         rows.push(row("营收增速 (YoY)", fPc(revGrowth), d));
       }
       if (epsGrowth != null) {
-        const d = epsGrowth > 25 ? +15 : epsGrowth > 10 ? +8 : epsGrowth > 0 ? +3 : epsGrowth < -15 ? -10 : 0;
+        const d = epsGrowth > 25 ? +12 : epsGrowth > 10 ? +8 : epsGrowth > 0 ? +3 : epsGrowth < -15 ? -10 : 0;
         rows.push(row("EPS增速 (YoY)", fPc(epsGrowth), d));
       }
       if (qeps.length >= 2) {
         const wd = qeps.filter(q => q.beat != null);
         const bc = wd.filter(q => q.beat).length;
         const summary = `${bc}/${wd.length}季超预期`;
-        if      (wd.length >= 4 && wd.every(q => q.beat))            rows.push(row("连续4季EPS超预期", summary, +10));
+        if      (wd.length >= 4 && wd.every(q => q.beat))            rows.push(row("连续4季EPS超预期", summary, +8));
         else if (wd.length >= 3 && wd.slice(-3).every(q => q.beat))  rows.push(row("连续3季EPS超预期", summary, +5));
         else if (wd.length >= 2 && wd.slice(-2).every(q => !q.beat)) rows.push(row("连续2季EPS未达预期", summary, -8));
         else                                                           rows.push(row("季度EPS表现", summary, 0));
@@ -5726,15 +5739,15 @@
     else if (dim === "health") {
       const { netMargin, grossMargin, roe, deRatio, currentRatio, freeCashflow, revenueActual } = m;
       if (netMargin != null) {
-        const d = netMargin > 20 ? +20 : netMargin > 10 ? +12 : netMargin > 3 ? +5 : netMargin < 0 ? -20 : 0;
+        const d = netMargin > 20 ? +16 : netMargin > 10 ? +10 : netMargin > 3 ? +5 : netMargin < 0 ? -16 : 0;
         rows.push(row("净利率", fPc(netMargin), d));
       }
       if (grossMargin != null) {
-        const d = grossMargin > 60 ? +10 : grossMargin > 40 ? +5 : grossMargin < 15 ? -5 : 0;
+        const d = grossMargin > 60 ? +8 : grossMargin > 40 ? +5 : grossMargin < 15 ? -5 : 0;
         rows.push(row("毛利率", fPc(grossMargin), d));
       }
       if (roe != null) {
-        const d = roe > 30 ? +12 : roe > 15 ? +6 : roe < 0 ? -8 : 0;
+        const d = roe > 30 ? +10 : roe > 15 ? +6 : roe < 0 ? -8 : 0;
         rows.push(row("ROE", fPc(roe), d));
       }
       if (deRatio != null) {
@@ -5748,7 +5761,7 @@
       if (freeCashflow != null) {
         const netIncomeBN = (netMargin != null && revenueActual != null) ? (netMargin / 100) * revenueActual : null;
         const highQ = freeCashflow > 0 && netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8;
-        const d = freeCashflow > 0 ? (highQ ? +8 : +4) : -6;
+        const d = freeCashflow > 0 ? (highQ ? +6 : +4) : -6;
         const lbl = freeCashflow > 0 ? (highQ ? "FCF为正（高质量）" : "FCF为正") : "FCF为负";
         rows.push(row(lbl, `$${fN(freeCashflow, 1)}B`, d));
       }

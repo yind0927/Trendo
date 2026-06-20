@@ -139,7 +139,7 @@ function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low }) {
 }
 
 function scoreValuation({ pe, forwardPE, peg, ps, evEbitda }) {
-  let s = 55;
+  let s = 50;
   const effPE = (forwardPE != null && forwardPE > 0 && (pe == null || forwardPE < pe)) ? forwardPE : pe;
   if (peg != null && peg > 0) {
     if      (peg < 0.75) s += 25;
@@ -171,23 +171,23 @@ function scoreValuation({ pe, forwardPE, peg, ps, evEbitda }) {
 function scoreGrowth({ revGrowth, epsGrowth, quarterlyEPS }) {
   let s = 50;
   if (revGrowth != null) {
-    if      (revGrowth > 30)  s += 38;
-    else if (revGrowth > 20)  s += 28;
-    else if (revGrowth > 10)  s += 18;
-    else if (revGrowth >  3)  s +=  8;
+    if      (revGrowth > 30)  s += 28;
+    else if (revGrowth > 20)  s += 20;
+    else if (revGrowth > 10)  s += 12;
+    else if (revGrowth >  3)  s +=  6;
     else if (revGrowth >  0)  s +=  2;
     else if (revGrowth > -10) s -= 12;
-    else                      s -= 25;
+    else                      s -= 20;
   }
   if (epsGrowth != null) {
-    if      (epsGrowth > 25)  s += 15;
+    if      (epsGrowth > 25)  s += 12;
     else if (epsGrowth > 10)  s +=  8;
     else if (epsGrowth >  0)  s +=  3;
     else if (epsGrowth < -15) s -= 10;
   }
   if (Array.isArray(quarterlyEPS) && quarterlyEPS.length >= 2) {
     const wd = quarterlyEPS.filter(q => q.beat != null);
-    if      (wd.length >= 4 && wd.every(q => q.beat))              s += 10;
+    if      (wd.length >= 4 && wd.every(q => q.beat))              s +=  8;
     else if (wd.length >= 3 && wd.slice(-3).every(q => q.beat))    s +=  5;
     else if (wd.length >= 2 && wd.slice(-2).every(q => !q.beat))   s -=  8;
   }
@@ -195,20 +195,20 @@ function scoreGrowth({ revGrowth, epsGrowth, quarterlyEPS }) {
 }
 
 function scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio, freeCashflow, revenueActual }) {
-  let s = 55;
+  let s = 50;
   if (netMargin != null) {
-    if      (netMargin > 20) s += 20;
-    else if (netMargin > 10) s += 12;
+    if      (netMargin > 20) s += 16;
+    else if (netMargin > 10) s += 10;
     else if (netMargin >  3) s +=  5;
-    else if (netMargin <  0) s -= 20;
+    else if (netMargin <  0) s -= 16;
   }
   if (grossMargin != null) {
-    if      (grossMargin > 60) s += 10;
+    if      (grossMargin > 60) s +=  8;
     else if (grossMargin > 40) s +=  5;
     else if (grossMargin < 15) s -=  5;
   }
   if (roe != null) {
-    if (roe > 30) s += 12; else if (roe > 15) s += 6; else if (roe < 0) s -= 8;
+    if (roe > 30) s += 10; else if (roe > 15) s += 6; else if (roe < 0) s -= 8;
   }
   if (deRatio != null) {
     if (deRatio < 0.3) s += 5; else if (deRatio > 3.0) s -= 12; else if (deRatio > 2.0) s -= 6;
@@ -219,7 +219,7 @@ function scoreHealth({ netMargin, grossMargin, roe, deRatio, currentRatio, freeC
   if (freeCashflow != null) {
     if (freeCashflow > 0) {
       const netIncomeBN = (netMargin != null && revenueActual != null) ? (netMargin / 100) * revenueActual : null;
-      if (netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8) s += 8;
+      if (netIncomeBN != null && netIncomeBN > 0 && freeCashflow / netIncomeBN > 0.8) s += 6;
       else s += 4;
     } else {
       s -= 6;

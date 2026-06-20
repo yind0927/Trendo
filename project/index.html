@@ -1873,7 +1873,8 @@
   .sa-hist-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: border-color .12s; }
   .sa-hist-card:hover { border-color: var(--accent); }
   .sa-hist-sym { font-size: 13px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.01em; flex-shrink: 0; min-width: 52px; color: var(--fg-0); }
-  .sa-hist-grade { font-size: 11px; font-weight: 800; font-family: var(--f-mono); flex-shrink: 0; min-width: 22px; }
+  .sa-hist-grade { font-size: 11px; font-weight: 800; font-family: var(--f-mono); flex-shrink: 0; min-width: 38px; display: flex; align-items: baseline; gap: 3px; }
+  .sa-hist-score { font-size: 9px; font-weight: 700; opacity: 0.7; }
   .sa-hist-info { flex: 1; min-width: 0; }
   .sa-hist-name { font-size: 11px; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sa-hist-meta { font-size: 10px; color: var(--fg-3); margin-top: 1px; font-family: var(--f-mono); }
@@ -3862,8 +3863,8 @@
   </div>
 </div>
 
-<script src="data.js?v=68"></script>
-<script src="desk.js?v=68"></script>
+<script src="data.js?v=69"></script>
+<script src="desk.js?v=69"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
