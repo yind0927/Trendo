@@ -5472,7 +5472,7 @@
   const _clamp = s => Math.max(0, Math.min(100, Math.round(s)));
   function _scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector }) {
     if (price == null) return null;
-    let s = 30;
+    let s = 50;
     if (ema50 && ema200) {
       if (price > ema50 && ema50 > ema200) s += 35;
       else if (price > ema50)              s += 15;
@@ -5684,7 +5684,7 @@
     const row = (lbl, val, delta) => ({ lbl, val, delta, cls: delta > 0 ? "pos" : delta < 0 ? "neg" : "neu" });
     const WEIGHTS = { trend: "25%", valuation: "20%", growth: "20%", health: "20%", analyst: "15%" };
     const TITLES  = { trend: "技术面", valuation: "估值", growth: "成长性", health: "财务健康", analyst: "分析师" };
-    const BASES   = { trend: 30, valuation: 50, growth: 50, health: 50, analyst: 50 };
+    const BASES   = { trend: 50, valuation: 50, growth: 50, health: 50, analyst: 50 };
     const rows = [{ lbl: "基准分", val: "", delta: BASES[dim] ?? 50, cls: "base" }];
 
     if (dim === "trend") {

@@ -143,7 +143,7 @@ async function fetchYahooV7(sym, headers, auth) {
 // ── Five-axis scoring ─────────────────────────────────────────────────────────
 function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector }) {
   if (!price) return null;
-  let s = 30;
+  let s = 50;
   if (ema50 && ema200) {
     if (price > ema50 && ema50 > ema200) s += 35;
     else if (price > ema50)              s += 15;
