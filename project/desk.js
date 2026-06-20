@@ -5087,6 +5087,7 @@
         if (item) { item.note = ta.value; saveToStorage(); }
       });
     });
+    renderScoringRulesPanel();
   }
 
   function watchlistCardHTML(item, idx) {
@@ -5223,7 +5224,7 @@
       price:     typeof data.price === "number" ? data.price : null,
       savedAt,
       date,
-      _fullData: data,  // full analysis object for cross-device cache restore
+      _fullData: { ...data, _date: date, _savedAt: savedAt },  // full analysis object for cross-device cache restore
     };
     // One entry per sym per day — update if re-analyzed same day
     const idx = analysisHistory.findIndex(e => e.sym === sym && e.date === date);
@@ -5336,6 +5337,107 @@
         renderAnalysisHistory();
       });
     });
+  }
+
+  // ── Scoring rules panel (collapsible, rendered once) ─────────────────────
+  function renderScoringRulesPanel() {
+    const el = $("#wl-scoring-rules");
+    if (!el || el._rendered) return;
+    el._rendered = true;
+
+    const sub = lbl => `<div class="wl-scoring-sub">${lbl}</div>`;
+    const rows = arr => arr.map(([cond, delta]) => {
+      const cls = delta > 0 ? "pos" : delta < 0 ? "neg" : "neu";
+      const d   = delta > 0 ? `+${delta}` : delta === 0 ? "±0" : String(delta);
+      return `<div class="wl-scoring-row"><span class="wl-scoring-cond">${cond}</span><span class="wl-scoring-delta ${cls}">${d}</span></div>`;
+    }).join("");
+    const dim = (en, zh, wt, body) => `
+      <div class="wl-scoring-dim">
+        <div class="wl-scoring-dim-head">
+          <span>${en} <span class="wl-scoring-dim-zh">${zh}</span></span>
+          <span class="wl-scoring-wt">${wt}</span>
+        </div>${body}
+      </div>`;
+
+    el.innerHTML = `
+      <button class="wl-scoring-toggle" aria-expanded="false" id="wl-scoring-toggle">
+        <span class="wl-scoring-chevron">▸</span>评分规则 · 五维度权重说明
+      </button>
+      <div class="wl-scoring-body" id="wl-scoring-body">
+        <div class="wl-scoring-grid">
+          ${dim("Trend","技术走势","25%",`
+            ${sub("均线结构")}
+            ${rows([["价格>EMA50>EMA200",35],["价格>EMA50",15],["价格>EMA200",5],["均线下方",-20]])}
+            ${sub("RSI")}
+            ${rows([["45–65",15],["65–75 / 35–45",5],[">75",-12],["<35",-5]])}
+            ${sub("52周位置")}
+            ${rows([["≥75% 区间",5],["≤25% 区间",-5]])}
+            ${sub("RS vs VOO (20日)")}
+            ${rows([[">15pp",12],["5–15pp",8],["0–5pp",4],["0~−5pp",0],["−5~−10pp",-6],["<−10pp",-12]])}
+            ${sub("RS vs 行业ETF (20日)")}
+            ${rows([[">10pp",8],["3–10pp",4],["−3~3pp",0],["−10~−3pp",-4],["<−10pp",-8]])}
+            ${sub("涨跌量比 (20日)")}
+            ${rows([[">65%",10],["55–65%",5],["45–55%",0],["35–45%",-5],["<35%",-10]])}
+          `)}
+          ${dim("Valuation","估值","20%",`
+            ${sub("PEG (优先使用)")}
+            ${rows([["<0.75",25],["0.75–1.2",15],["1.2–2.0",0],["2.0–3.0",-15],[">3.0",-25]])}
+            ${sub("PE (PEG缺失时)")}
+            ${rows([["<0 (亏损)",-10],["<15",20],["15–22",12],["22–30",0],["30–45",-15],[">45",-25]])}
+            ${sub("P/S")}
+            ${rows([["<1.5",5],["10–20",-5],[">20",-10]])}
+            ${sub("EV/EBITDA")}
+            ${rows([["<10",8],["10–20",3],["20–35",0],["35–60",-8],[">60",-15]])}
+          `)}
+          ${dim("Growth","成长","20%",`
+            ${sub("营收增速 (YoY)")}
+            ${rows([[">30%",28],["20–30%",20],["10–20%",12],["3–10%",6],["0–3%",2],["−10~0%",-12],["<−10%",-20]])}
+            ${sub("EPS增速 (YoY)")}
+            ${rows([[">25%",12],["10–25%",8],["0–10%",3],["<−15%",-10]])}
+            ${sub("EPS超预期 (连续季度)")}
+            ${rows([["≥4次全超",8],["最近3次全超",5],["最近2次不及",-8]])}
+          `)}
+          ${dim("Health","财务健康","20%",`
+            ${sub("净利润率")}
+            ${rows([[">20%",16],["10–20%",10],["3–10%",5],["<0%",-16]])}
+            ${sub("毛利率")}
+            ${rows([[">60%",8],["40–60%",5],["<15%",-5]])}
+            ${sub("ROE")}
+            ${rows([[">30%",10],["15–30%",6],["<0%",-8]])}
+            ${sub("负债率 D/E")}
+            ${rows([["<0.3",5],["2–3",-6],[">3",-12]])}
+            ${sub("流动比率")}
+            ${rows([["≥2",5],["<1",-8]])}
+            ${sub("FCF质量")}
+            ${rows([["正且 FCF/净利>80%",6],["正FCF",4],["负FCF",-6]])}
+          `)}
+          ${dim("Analyst","分析师","15%",`
+            ${sub("分析师评级")}
+            ${rows([["强烈买入",25],["买入",18],["中性",0],["减持",-18],["卖出",-30]])}
+            ${sub("目标价涨幅")}
+            ${rows([[">40%",15],["20–40%",10],["10–20%",5],["0–10%",2],["−10~0%",-5],["<−10%",-15]])}
+            ${sub("分析师覆盖")}
+            ${rows([["≥10家",3]])}
+          `)}
+        </div>
+        <div style="margin-top:10px;padding:0 2px">
+          <div class="wl-scoring-sub">评级对照 · 综合得分</div>
+          <div class="wl-scoring-grade-row">
+            ${[["A","88"],["A−","82"],["B+","76"],["B","70"],["B−","64"],["C+","58"],["C","50"],["D","<50"]].map(([g,t])=>`<div class="wl-scoring-grade-chip">${g}<span style="color:var(--fg-3);font-weight:400"> ≥${t}</span></div>`).join("")}
+          </div>
+          <div style="font-size:9px;color:var(--fg-3);margin-top:6px;line-height:1.6">基准分 50（无数据=中性）· 综合分 = 趋势×25% + 估值×20% + 成长×20% + 健康×20% + 分析师×15%</div>
+        </div>
+      </div>`;
+
+    const toggle = $("#wl-scoring-toggle");
+    const body   = $("#wl-scoring-body");
+    if (toggle && body) {
+      toggle.addEventListener("click", () => {
+        const open = toggle.getAttribute("aria-expanded") === "true";
+        toggle.setAttribute("aria-expanded", open ? "false" : "true");
+        body.classList.toggle("open", !open);
+      });
+    }
   }
 
   // ── Stock analysis: localStorage cache + API call ─────────────────────────

@@ -1882,6 +1882,30 @@
   .sa-hist-del { background: none; border: none; cursor: pointer; color: var(--fg-3); font-size: 13px; padding: 3px 5px; flex-shrink: 0; opacity: 0; transition: opacity .12s, color .12s; }
   .sa-hist-card:hover .sa-hist-del { opacity: 1; }
   .sa-hist-del:hover { color: var(--down); }
+  /* Scoring rules panel */
+  .wl-scoring-panel { max-width:960px; margin:6px auto 0; padding:0 20px; }
+  .wl-scoring-toggle { display:flex; align-items:center; gap:6px; background:none; border:none; cursor:pointer; color:var(--fg-3); font-size:9px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; padding:6px 2px; width:100%; text-align:left; }
+  .wl-scoring-toggle:hover { color:var(--fg-1); }
+  .wl-scoring-chevron { transition:transform .2s; font-size:10px; line-height:1; }
+  .wl-scoring-toggle[aria-expanded="true"] .wl-scoring-chevron { transform:rotate(90deg); }
+  .wl-scoring-body { display:none; padding-bottom:16px; }
+  .wl-scoring-body.open { display:block; }
+  .wl-scoring-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; margin-top:8px; }
+  .wl-scoring-dim { background:var(--bg-1); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .wl-scoring-dim-head { font-size:9px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--accent); margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; }
+  .wl-scoring-dim-zh { font-size:11px; font-weight:700; color:var(--fg-1); letter-spacing:0; text-transform:none; }
+  .wl-scoring-wt { background:var(--bg-2); border-radius:4px; padding:1px 6px; font-size:9px; color:var(--fg-3); letter-spacing:0.04em; font-weight:600; }
+  .wl-scoring-sub { font-size:8.5px; font-weight:700; color:var(--fg-3); letter-spacing:0.08em; margin:7px 0 3px; text-transform:uppercase; }
+  .wl-scoring-row { display:flex; justify-content:space-between; align-items:center; padding:1.5px 0; border-bottom:1px solid var(--bg-2); }
+  .wl-scoring-row:last-child { border-bottom:none; }
+  .wl-scoring-cond { font-size:10px; color:var(--fg-2); }
+  .wl-scoring-delta { font-size:10px; font-family:var(--f-mono); font-weight:700; }
+  .wl-scoring-delta.pos { color:var(--up); }
+  .wl-scoring-delta.neg { color:var(--down); }
+  .wl-scoring-delta.neu { color:var(--fg-3); }
+  .wl-scoring-grade-row { display:flex; gap:4px; flex-wrap:wrap; margin-top:5px; }
+  .wl-scoring-grade-chip { font-size:10px; font-family:var(--f-mono); font-weight:700; padding:2px 7px; border-radius:4px; border:1px solid var(--line); color:var(--fg-1); background:var(--bg-1); }
+  @media (max-width:600px) { .wl-scoring-grid { grid-template-columns:1fr; } }
   .wl-analyze-btn {
     background: var(--accent); color: #fff; border: none; border-radius: 9px;
     padding: 11px 20px; font-size: 12.5px; font-weight: 600; cursor: pointer;
@@ -3526,6 +3550,9 @@
   <!-- Today's analysis history cards (below the result panel) -->
   <div id="wl-analyze-history" class="wl-history" style="display:none"></div>
 
+  <!-- Collapsible scoring rules panel -->
+  <div id="wl-scoring-rules" class="wl-scoring-panel"></div>
+
   <!-- Watchlist Section -->
   <div style="max-width:960px;margin:0 auto;padding:0 20px">
     <div class="sim-section-label is-major" style="margin-top:20px">
@@ -3863,8 +3890,8 @@
   </div>
 </div>
 
-<script src="data.js?v=72"></script>
-<script src="desk.js?v=72"></script>
+<script src="data.js?v=73"></script>
+<script src="desk.js?v=73"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
