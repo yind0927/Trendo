@@ -5470,7 +5470,7 @@
   // stored _fullData (metrics + technicals). ⚠️ KEEP IN SYNC with the scoring
   // functions and computeRecommendation() in project/api/stock-analysis.js.
   const _clamp = s => Math.max(0, Math.min(100, Math.round(s)));
-  function _scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector }) {
+  function _scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector, volUpDownRatio }) {
     if (price == null) return null;
     let s = 50;
     if (ema50 && ema200) {
@@ -5504,6 +5504,13 @@
       else if (rsVsSector > -3)  s += 0;
       else if (rsVsSector > -10) s -= 4;
       else                       s -= 8;
+    }
+    if (volUpDownRatio != null) {
+      if      (volUpDownRatio > 65)  s += 10;
+      else if (volUpDownRatio > 55)  s += 5;
+      else if (volUpDownRatio >= 45) s += 0;
+      else if (volUpDownRatio >= 35) s -= 5;
+      else                           s -= 10;
     }
     return _clamp(s);
   }
@@ -5625,7 +5632,7 @@
   function recomputeScores(d) {
     const m = d.metrics || {};
     const s = {
-      trend:     _scoreTrend({ price: d.price, ema50: d.ema50, ema200: d.ema200, rsi: d.rsi, wk52High: d.wk52High, wk52Low: d.wk52Low, rsVsVoo: d.rs20d?.voo ?? null, rsVsSector: d.rs20d?.sector ?? null }),
+      trend:     _scoreTrend({ price: d.price, ema50: d.ema50, ema200: d.ema200, rsi: d.rsi, wk52High: d.wk52High, wk52Low: d.wk52Low, rsVsVoo: d.rs20d?.voo ?? null, rsVsSector: d.rs20d?.sector ?? null, volUpDownRatio: d.volUpDownRatio ?? null }),
       valuation: _scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps, evEbitda: m.evEbitda }),
       growth:    _scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth, quarterlyEPS: d.quarterlyEPS }),
       health:    _scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio, freeCashflow: m.freeCashflow, revenueActual: m.revenueActual }),
@@ -5720,6 +5727,12 @@
         const sign = rs >= 0 ? "+" : "";
         const d = rs > 10 ? +8 : rs > 3 ? +4 : rs > -3 ? 0 : rs > -10 ? -4 : -8;
         rows.push(row(`RS vs 板块 (${etfLabel}, 20D)`, `${sign}${rs.toFixed(1)}%`, d));
+      }
+      if (data.volUpDownRatio != null) {
+        const v = data.volUpDownRatio;
+        const d = v > 65 ? +10 : v > 55 ? +5 : v >= 45 ? 0 : v >= 35 ? -5 : -10;
+        const lbl = v > 65 ? "成交量积累" : v > 55 ? "成交量偏多" : v >= 45 ? "成交量中性" : v >= 35 ? "成交量偏空" : "成交量派发";
+        rows.push(row(`涨跌量比 (20D) · ${lbl}`, `${v.toFixed(1)}%`, d));
       }
     }
     else if (dim === "valuation") {

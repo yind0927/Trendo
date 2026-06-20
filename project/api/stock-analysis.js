@@ -62,6 +62,21 @@ function calcRS(stockCloses, benchCloses, days = 20) {
   return parseFloat((sRet - bRet).toFixed(2));
 }
 
+// Up/Down volume ratio: % of volume on up-days over last N trading days (0–100)
+function calcVolUpDownRatio(closes, volumes, days = 20) {
+  if (!closes?.length || !volumes?.length || closes.length < days + 1) return null;
+  const n = closes.length;
+  let upVol = 0, downVol = 0;
+  for (let i = n - days; i < n; i++) {
+    const chg = closes[i] - closes[i - 1];
+    if (chg > 0) upVol += (volumes[i] ?? 0);
+    else if (chg < 0) downVol += (volumes[i] ?? 0);
+  }
+  const total = upVol + downVol;
+  if (total === 0) return null;
+  return parseFloat((upVol / total * 100).toFixed(1));
+}
+
 // ── Yahoo Finance helpers ─────────────────────────────────────────────────────
 // Yahoo quoteSummary / v7 quote require a PAIRED session cookie + crumb since 2023.
 // A crumb fetched without first establishing the cookie is rejected (401 Invalid
@@ -141,7 +156,7 @@ async function fetchYahooV7(sym, headers, auth) {
 }
 
 // ── Five-axis scoring ─────────────────────────────────────────────────────────
-function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector }) {
+function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsVsSector, volUpDownRatio }) {
   if (!price) return null;
   let s = 50;
   if (ema50 && ema200) {
@@ -175,6 +190,13 @@ function scoreTrend({ price, ema50, ema200, rsi, wk52High, wk52Low, rsVsVoo, rsV
     else if (rsVsSector > -3)  s += 0;
     else if (rsVsSector > -10) s -= 4;
     else                       s -= 8;
+  }
+  if (volUpDownRatio != null) {
+    if      (volUpDownRatio > 65) s += 10;
+    else if (volUpDownRatio > 55) s += 5;
+    else if (volUpDownRatio >= 45) s += 0;
+    else if (volUpDownRatio >= 35) s -= 5;
+    else                          s -= 10;
   }
   return Math.max(0, Math.min(100, Math.round(s)));
 }
@@ -345,8 +367,8 @@ export default async function handler(req, res) {
   if (!aiKey) return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
   const today    = new Date().toISOString().slice(0, 10);
-  // v9: +20-day RS vs VOO + sector ETF (trend base 30, RS scoring added)
-  const cacheKey = `trendo:stock_analysis:v9:${sym}`;
+  // v10: +20-day volume up/down ratio (trend volume confirmation)
+  const cacheKey = `trendo:stock_analysis:v10:${sym}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
@@ -412,8 +434,10 @@ export default async function handler(req, res) {
       const d = await r.json();
       const chart = d?.chart?.result?.[0];
       if (!chart) return null;
-      const closes = (chart.indicators?.quote?.[0]?.close ?? []).filter(c => c != null);
-      return { closes, meta: chart.meta };
+      const rawCloses  = chart.indicators?.quote?.[0]?.close  ?? [];
+      const rawVolumes = chart.indicators?.quote?.[0]?.volume ?? [];
+      const pairs = rawCloses.map((c, i) => ({ c, v: rawVolumes[i] ?? 0 })).filter(p => p.c != null);
+      return { closes: pairs.map(p => p.c), volumes: pairs.map(p => p.v), meta: chart.meta };
     })().catch(() => null),
 
     // Yahoo chart 35 calendar days for VOO (20-day RS benchmark)
@@ -459,7 +483,8 @@ export default async function handler(req, res) {
   const yE     = ysFin?.earnings             ?? null;
 
   // ── 4. Technical calculations (EMA) ───────────────────────────────────────
-  const closes = history?.closes ?? [];
+  const closes  = history?.closes  ?? [];
+  const volumes = history?.volumes ?? [];
   const price  = history?.meta?.regularMarketPrice
     ?? yPrice.regularMarketPrice?.raw ?? yv7?.regularMarketPrice
     ?? closes[closes.length - 1] ?? null;
@@ -564,13 +589,14 @@ export default async function handler(req, res) {
       }
     } catch (_) {}
   }
-  const rsVsVoo    = calcRS(closes, vooCloses, 20);
-  const rsVsSector = calcRS(closes, etfCloses, 20);
-  const rs20d = { voo: rsVsVoo, sector: rsVsSector, sectorEtf, sectorName };
+  const rsVsVoo       = calcRS(closes, vooCloses, 20);
+  const rsVsSector    = calcRS(closes, etfCloses, 20);
+  const rs20d         = { voo: rsVsVoo, sector: rsVsSector, sectorEtf, sectorName };
+  const volUpDownRatio = calcVolUpDownRatio(closes, volumes, 20);
 
   // ── 9. Five-axis scoring ───────────────────────────────────────────────────
   const scores = {
-    trend:     scoreTrend({ price, ema50, ema200, rsi, wk52High: wk52H, wk52Low: wk52L, rsVsVoo, rsVsSector }),
+    trend:     scoreTrend({ price, ema50, ema200, rsi, wk52High: wk52H, wk52Low: wk52L, rsVsVoo, rsVsSector, volUpDownRatio }),
     valuation: scoreValuation({ pe: m.pe, forwardPE: m.forwardPE, peg: m.peg, ps: m.ps, evEbitda: m.evEbitda }),
     growth:    scoreGrowth({ revGrowth: m.revGrowth, epsGrowth: m.epsGrowth, quarterlyEPS }),
     health:    scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio, freeCashflow: m.freeCashflow, revenueActual: m.revenueActual }),
@@ -754,7 +780,7 @@ ${nextEarnings ? `【财报日历】下次财报：${nextEarnings}（${daysToEar
     rsi:    rsi    != null ? parseFloat(rsi.toFixed(1))    : null,
     scores, metrics: m,
     analyst, quarterlyEPS,
-    rs20d, sectorName, sectorEtf,
+    rs20d, sectorName, sectorEtf, volUpDownRatio,
     nextEarnings, daysToEarnings, earningsRisk,
     recommendation, summary,
     newsCount: news.length,
