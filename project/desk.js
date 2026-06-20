@@ -4538,20 +4538,22 @@
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
           <div class="analytics-card-title">BX Bars 效能</div>
-          <div class="analytics-card-sub">胜率 · 平均盈亏</div>
+          <div class="analytics-card-sub">胜率 · 总盈亏 · 平均每笔</div>
           <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
             ${Object.entries(bxBuckets).map(([b, pos]) => {
-              const cnt = pos.length;
-              const wn  = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
-              const avg = cnt > 0 ? Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0) / cnt) : 0;
-              const cls = b === "0-5" ? "bxbar-early" : b === "5-15" ? "bxbar-mid" : "bxbar-late";
-              const lbl = b === "0-5" ? "开始" : b === "5-15" ? "中间" : "延续";
-              const dc  = avg >= 0 ? "var(--up)" : "var(--down)";
+              const cnt  = pos.length;
+              const wn   = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
+              const total = cnt > 0 ? Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0)) : 0;
+              const avg  = cnt > 0 ? Math.round(total / cnt) : 0;
+              const cls  = b === "0-5" ? "bxbar-early" : b === "5-15" ? "bxbar-mid" : "bxbar-late";
+              const lbl  = b === "0-5" ? "开始" : b === "5-15" ? "中间" : "延续";
+              const dc   = total >= 0 ? "var(--up)" : "var(--down)";
               return `<div style="display:flex;align-items:center;gap:10px">
                 <span class="bx-bar-chip ${cls}" style="flex-shrink:0">${b}<span class="bx-bar-sub">${lbl}</span></span>
                 <div style="flex:1">
-                  <div class="muted" style="font-size:10px;margin-bottom:2px">${cnt > 0 ? `${cnt}笔 · ${Math.round(wn/cnt*100)}% 胜` : "暂无数据"}</div>
-                  <div class="mono" style="font-size:13px;font-weight:700;color:${dc}">${cnt > 0 ? fmt.signed(avg) : "—"}</div>
+                  <div class="muted" style="font-size:10px;margin-bottom:3px">${cnt > 0 ? `${cnt}笔 · ${Math.round(wn/cnt*100)}% 胜` : "暂无数据"}</div>
+                  <div class="mono" style="font-size:13px;font-weight:700;color:${dc}">${cnt > 0 ? fmt.signed(total) : "—"}</div>
+                  ${cnt > 1 ? `<div class="muted" style="font-size:10px;margin-top:1px">均 ${fmt.signed(avg)} / 笔</div>` : ""}
                 </div>
               </div>`;
             }).join("")}
