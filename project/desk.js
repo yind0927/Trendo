@@ -3245,17 +3245,16 @@
       return;
     }
 
-    // Sort: negative first (most attention-needed), then positive, neutral last
-    symSummaries.sort((a, b) => {
-      const order = { negative: 0, positive: 1, neutral: 2 };
-      return (order[a.overall] ?? 2) - (order[b.overall] ?? 2);
-    });
+    // Sort: by holding entry date descending (most recently opened first)
+    const entryMap = {};
+    HOLDINGS.forEach(h => { entryMap[h.sym] = h.entry || ""; });
+    symSummaries.sort((a, b) => (entryMap[b.sym] || "").localeCompare(entryMap[a.sym] || ""));
 
     if (panel) panel.style.display = "";
     if (label) label.style.display = "";
     if (count) count.textContent = `${symSummaries.length} 只`;
 
-    const sentLabel = s => s === "positive" ? "利好" : s === "negative" ? "利空" : "中性";
+    const sentLabel = s => s === "positive" ? "利多" : s === "negative" ? "利空" : "中性";
     const sentCls   = s => s === "positive" ? "pos"  : s === "negative" ? "neg"  : "neu";
 
     feed.innerHTML = symSummaries.map(({ sym, arts, overall, posCount, negCount, neuCount }) => {
@@ -3266,7 +3265,7 @@
         : "";
 
       const parts = [];
-      if (posCount) parts.push(`<span style="color:var(--up)">${posCount}利好</span>`);
+      if (posCount) parts.push(`<span style="color:var(--up)">${posCount}利多</span>`);
       if (negCount) parts.push(`<span style="color:var(--down)">${negCount}利空</span>`);
       if (neuCount) parts.push(`<span style="color:var(--fg-3)">${neuCount}中性</span>`);
       const countsHTML = parts.join('<span style="color:var(--fg-4)"> · </span>');
