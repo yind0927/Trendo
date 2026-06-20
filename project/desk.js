@@ -3217,54 +3217,101 @@
       return;
     }
 
-    // Max 5 per sym, 25 total — keeps feed balanced
-    const perSym = {};
-    const shown  = [];
+    // Group by symbol — max 6 articles per sym
+    const bySymbol = {};
     for (const a of articles) {
-      const n = perSym[a.sym] || 0;
-      if (n >= 5) continue;
-      perSym[a.sym] = n + 1;
-      shown.push(a);
-      if (shown.length >= 25) break;
+      if (!bySymbol[a.sym]) bySymbol[a.sym] = [];
+      if (bySymbol[a.sym].length < 6) bySymbol[a.sym].push(a);
     }
 
-    if (!shown.length) {
+    // Compute weighted sentiment per symbol
+    // Polygon ML articles (sentimentSource="ml") count double — higher reliability
+    const symSummaries = Object.entries(bySymbol).map(([sym, arts]) => {
+      let posW = 0, negW = 0;
+      let posCount = 0, negCount = 0, neuCount = 0;
+      for (const a of arts) {
+        const w = a.sentimentSource === "ml" ? 2 : 1;
+        if (a.sentiment === "positive")      { posW += w; posCount++; }
+        else if (a.sentiment === "negative") { negW += w; negCount++; }
+        else                                  { neuCount++; }
+      }
+      const overall = posW > negW ? "positive" : negW > posW ? "negative" : "neutral";
+      return { sym, arts, overall, posCount, negCount, neuCount };
+    });
+
+    if (!symSummaries.length) {
       if (panel) panel.style.display = "none";
       if (label) label.style.display = "none";
       return;
     }
 
+    // Sort: negative first (most attention-needed), then positive, neutral last
+    symSummaries.sort((a, b) => {
+      const order = { negative: 0, positive: 1, neutral: 2 };
+      return (order[a.overall] ?? 2) - (order[b.overall] ?? 2);
+    });
+
     if (panel) panel.style.display = "";
     if (label) label.style.display = "";
-    if (count) count.textContent = `${shown.length} 条`;
+    if (count) count.textContent = `${symSummaries.length} 只`;
 
     const sentLabel = s => s === "positive" ? "利好" : s === "negative" ? "利空" : "中性";
-    const sentClass = s => s === "positive" ? "pos"  : s === "negative" ? "neg"  : "neu";
+    const sentCls   = s => s === "positive" ? "pos"  : s === "negative" ? "neg"  : "neu";
 
-    feed.innerHTML = shown.map(a => {
-      const logoUrl    = logos[a.sym] || "";
-      const safeTitle  = a.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const safeSource = (a.source || "").replace(/</g, "&lt;");
-      const sent       = a.sentiment || "neutral";
-      const initials   = a.sym.slice(0, 3);
-
-      // Initials always render (pure CSS, same as holdings .avatar).
-      // Real logo loads on top — onerror hides it so initials show through.
-      const imgTag = logoUrl
+    feed.innerHTML = symSummaries.map(({ sym, arts, overall, posCount, negCount, neuCount }) => {
+      const logoUrl  = logos[sym] || "";
+      const initials = sym.slice(0, 3);
+      const imgTag   = logoUrl
         ? `<img src="${logoUrl}" alt="" loading="lazy" onerror="this.style.display='none'">`
         : "";
 
-      return `<a class="news-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
-        <div class="news-avatar">${initials}${imgTag}</div>
-        <div class="news-body">
-          <div class="news-title">${safeTitle}</div>
-          <div class="news-meta">
-            <span class="news-meta-txt">${safeSource}${safeSource ? " · " : ""}${timeAgo(a.publishedAt)}</span>
-            <span class="news-sent ${sentClass(sent)}">${sentLabel(sent)}</span>
+      const parts = [];
+      if (posCount) parts.push(`<span style="color:var(--up)">${posCount}利好</span>`);
+      if (negCount) parts.push(`<span style="color:var(--down)">${negCount}利空</span>`);
+      if (neuCount) parts.push(`<span style="color:var(--fg-3)">${neuCount}中性</span>`);
+      const countsHTML = parts.join('<span style="color:var(--fg-4)"> · </span>');
+
+      const detailsId = `nd-${sym}`;
+      const detailHTML = arts.map(a => {
+        const safeTitle  = a.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const safeSource = (a.source || "").replace(/</g, "&lt;");
+        const s = a.sentiment || "neutral";
+        return `<a class="news-detail-item" href="${a.url}" target="_blank" rel="noopener noreferrer">
+          <span class="news-sent ${sentCls(s)}" style="flex-shrink:0;margin-top:1px">${sentLabel(s)}</span>
+          <div class="news-detail-body">
+            <div class="news-detail-title">${safeTitle}</div>
+            <div class="news-detail-meta">${safeSource}${safeSource ? " · " : ""}${timeAgo(a.publishedAt)}</div>
           </div>
+        </a>`;
+      }).join("");
+
+      return `<div class="news-sym-row">
+        <div class="news-sym-header" data-nd="${detailsId}">
+          <div class="news-avatar">${initials}${imgTag}</div>
+          <div class="news-sym-main">
+            <span class="news-sym-ticker">${sym}</span>
+            <span class="news-sym-counts">${countsHTML}</span>
+          </div>
+          <span class="news-sent ${sentCls(overall)}">${sentLabel(overall)}</span>
+          <span class="news-nd-arrow">›</span>
         </div>
-      </a>`;
+        <div class="news-sym-details" id="${detailsId}" style="display:none">
+          ${detailHTML}
+        </div>
+      </div>`;
     }).join("");
+
+    // Wire expand/collapse per symbol
+    feed.querySelectorAll("[data-nd]").forEach(header => {
+      header.addEventListener("click", () => {
+        const details = document.getElementById(header.dataset.nd);
+        const arrow   = header.querySelector(".news-nd-arrow");
+        if (!details) return;
+        const open = details.style.display !== "none";
+        details.style.display = open ? "none" : "";
+        if (arrow) arrow.style.transform = open ? "" : "rotate(90deg)";
+      });
+    });
   }
 
   // ============ PAGE SWITCHING ============

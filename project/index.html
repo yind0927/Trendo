@@ -1398,6 +1398,22 @@
   .news-sent.neg { background:var(--down-dim); color:var(--down); }
   .news-sent.neu { background:var(--bg-4); color:var(--fg-3); }
   .news-loading { padding:20px 16px; color:var(--fg-3); font-size:12px; font-family:var(--f-mono); text-align:center; letter-spacing:.06em; }
+  /* Per-symbol sentiment rows */
+  .news-sym-row { border-bottom:1px solid var(--line); }
+  .news-sym-row:last-child { border-bottom:none; }
+  .news-sym-header { display:flex; align-items:center; gap:10px; padding:10px 16px; cursor:pointer; transition:background .12s; user-select:none; }
+  .news-sym-header:hover { background:var(--bg-3); }
+  .news-sym-main { flex:1; min-width:0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .news-sym-ticker { font-family:var(--f-mono); font-weight:700; font-size:13px; color:var(--fg-0); flex-shrink:0; }
+  .news-sym-counts { font-size:10.5px; font-family:var(--f-mono); }
+  .news-nd-arrow { color:var(--fg-3); font-size:15px; transition:transform .15s; flex-shrink:0; line-height:1; }
+  .news-sym-details { border-top:1px solid var(--line); background:var(--bg-1); }
+  .news-detail-item { display:flex; gap:8px; padding:9px 16px 9px 62px; border-bottom:1px solid var(--line); text-decoration:none; transition:background .1s; align-items:flex-start; }
+  .news-detail-item:last-child { border-bottom:none; }
+  .news-detail-item:hover { background:var(--bg-2); }
+  .news-detail-body { min-width:0; }
+  .news-detail-title { font-size:11.5px; color:var(--fg-1); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin-bottom:3px; }
+  .news-detail-meta { font-size:10px; color:var(--fg-3); font-family:var(--f-mono); }
 
   .tape:hover .track {
     animation-play-state: paused;
@@ -3846,8 +3862,8 @@
   </div>
 </div>
 
-<script src="data.js?v=66"></script>
-<script src="desk.js?v=66"></script>
+<script src="data.js?v=67"></script>
+<script src="desk.js?v=67"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
