@@ -632,6 +632,18 @@
           pendingMerged = true;
         }
       }
+      // Rescue SIM_HOLDINGS created on another device that aren't in local yet.
+      // Keyed by sym+entry+cost so partial fills aren't double-counted.
+      if (Array.isArray(cloudData.simHoldings) && cloudData.simHoldings.length) {
+        const localKey = h => `${h.sym}|${h.entry}|${h.cost}`;
+        const localKeys = new Set(SIM_HOLDINGS.map(localKey));
+        const newH = cloudData.simHoldings.filter(h => !localKeys.has(localKey(h)));
+        if (newH.length) {
+          SIM_HOLDINGS.push(...newH);
+          newH.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
+          pendingMerged = true;
+        }
+      }
       if (pendingMerged) {
         saveLocalOnly();
         renderSim();
@@ -762,7 +774,7 @@
   };
 
   // ============ PERSISTENCE ============
-  function saveLocalOnly() {
+  function saveLocalOnly(updateTimestamp = true) {
     try {
       localStorage.setItem("trendo_v4_holdings",     JSON.stringify(noMarket(HOLDINGS)));
       localStorage.setItem("trendo_v4_closed",       JSON.stringify(CLOSED_POSITIONS));
@@ -775,7 +787,9 @@
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_analysis_hist", JSON.stringify(analysisHistory));
-      localStorage.setItem("trendo_v4_savedAt",      new Date().toISOString());
+      // Skip timestamp update for price-only ticks so they don't make local appear "newer"
+      // than cloud (which would cause syncPush to overwrite cloud SIM_HOLDINGS from another device)
+      if (updateTimestamp) localStorage.setItem("trendo_v4_savedAt", new Date().toISOString());
     } catch (e) { /* storage unavailable */ }
   }
 
@@ -3135,9 +3149,13 @@
         renderSimPending();
       }
 
-      if (changed) {
+      const hasStructural = executed.length > 0 || closedIds.length > 0;
+      if (hasStructural) {
         recordDailyPnl();
         saveToStorage();
+      } else if (changed) {
+        recordDailyPnl();
+        saveLocalOnly(false); // price-only: local only, don't update savedAt / cloud
       }
       if (changed || needsRender) {
         renderTape();
@@ -4495,7 +4513,9 @@
 
     const sortedC = [...closedRaw].sort((a, b) => (a.closedAt||"").localeCompare(b.closedAt||""));
     const totalPnlDollar = open.reduce((s, h) => s + (h.pnlDollar || 0), 0);
-    const currentPortfolioValue = totalNotional + totalPnlDollar;
+    const realizedPnlTotal = CLOSED_POSITIONS.reduce((s, h) => s + (h.pnlFinal || 0), 0);
+    const currentPortfolioValue = totalNotional + totalPnlDollar + realizedPnlTotal;
+    const totalPnlDisplay = totalPnlDollar + realizedPnlTotal;
     const curveData = generatePortfolioCurve(equityPeriod);
 
     // BX buckets
@@ -4569,7 +4589,7 @@
             <div class="analytics-card-title">总资产曲线 · Portfolio Value</div>
             <div class="analytics-card-sub">
               <span class="mono" style="font-size:15px;font-weight:700;color:var(--fg-0)">${fmt.usd(Math.round(currentPortfolioValue))}</span>
-              <span class="mono ${fmt.sign(totalPnlDollar)}" style="font-size:11px;margin-left:6px">${fmt.signed(Math.round(totalPnlDollar))}</span>
+              <span class="mono ${fmt.sign(totalPnlDisplay)}" style="font-size:11px;margin-left:6px">${fmt.signed(Math.round(totalPnlDisplay))}</span>
             </div>
           </div>
           <div class="ec-period-seg">
