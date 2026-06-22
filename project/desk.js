@@ -3394,6 +3394,7 @@
 
   function switchPage(page) {
     currentPage = page;
+    localStorage.setItem("trendo_last_page", page);
     const VIEWS = { desk: "desk-view", journal: "journal-view", sim: "sim-view", analytics: "analytics-view", watchlist: "watchlist-view", market: "market-view" };
     const mainEl = document.querySelector("main");
     Object.entries(VIEWS).forEach(([p, id]) => {
@@ -8060,6 +8061,10 @@
       navigator.sendBeacon(`/api/data?key=${encodeURIComponent(syncKey)}`, blob);
     } catch (_) {}
   });
+  // Restore last visited page so refresh doesn't always reset to Dashboard
+  const _lastPage = localStorage.getItem("trendo_last_page");
+  if (_lastPage && _lastPage !== "desk") switchPage(_lastPage);
+
   tick(); setInterval(tick, 1000);
 
 })();
