@@ -617,16 +617,24 @@
       // Match by order id (Date.now().toString(36)); orders without id are legacy.
       let pendingMerged = false;
       if (Array.isArray(cloudData.simPending) && cloudData.simPending.length) {
-        const localIds = new Set(SIM_PENDING.map(p => p.id).filter(Boolean));
-        const newOrders = cloudData.simPending.filter(p => p.id && !localIds.has(p.id));
+        const localIds  = new Set(SIM_PENDING.map(p => p.id).filter(Boolean));
+        // Also skip if same sym is already open or already pending locally — prevents
+        // orders from two devices targeting the same sym from both surviving the merge.
+        const openSyms    = new Set(SIM_HOLDINGS.map(h => h.sym));
+        const pendingSyms = new Set(SIM_PENDING.map(p => p.sym));
+        const newOrders = cloudData.simPending.filter(p =>
+          p.id && !localIds.has(p.id) && !openSyms.has(p.sym) && !pendingSyms.has(p.sym));
         if (newOrders.length) {
           SIM_PENDING.push(...newOrders);
           pendingMerged = true;
         }
       }
       if (Array.isArray(cloudData.simClosePending) && cloudData.simClosePending.length) {
-        const localIds = new Set(SIM_CLOSE_PENDING.map(p => p.id).filter(Boolean));
-        const newOrders = cloudData.simClosePending.filter(p => p.id && !localIds.has(p.id));
+        const localIds  = new Set(SIM_CLOSE_PENDING.map(p => p.id).filter(Boolean));
+        // Skip close orders for syms already queued locally.
+        const closeSyms = new Set(SIM_CLOSE_PENDING.map(p => p.sym));
+        const newOrders = cloudData.simClosePending.filter(p =>
+          p.id && !localIds.has(p.id) && !closeSyms.has(p.sym));
         if (newOrders.length) {
           SIM_CLOSE_PENDING.push(...newOrders);
           pendingMerged = true;
@@ -2580,6 +2588,13 @@
       pos.exitReason = "manual";
       holdings.splice(holdings.indexOf(pos), 1);
       closed.push(pos);
+      // Remove any open pending orders for this sym — prevents stale orders from
+      // re-opening the position after a close (e.g. duplicate orders from two devices).
+      if (isSim) {
+        for (let i = SIM_PENDING.length - 1; i >= 0; i--) {
+          if (SIM_PENDING[i].sym === sym) SIM_PENDING.splice(i, 1);
+        }
+      }
     }
 
     const isFull = !holdings.find(h => h.sym === sym); // removed from holdings = full close
@@ -3088,7 +3103,7 @@
           order.orderType === "market" ||
           (order.orderType === "limit" && execPrice <= order.limitPrice));
         if (!shouldExecute) return;
-        if (SIM_HOLDINGS.find(h => h.sym === order.sym)) return; // already open
+        if (SIM_HOLDINGS.find(h => h.sym === order.sym)) { executed.push(order.id); return; } // already open — clean up stale order
 
         const entryDate = new Date(order.entryDate + "T00:00:00");
         const today     = new Date(); today.setHours(0, 0, 0, 0);
