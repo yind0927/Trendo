@@ -5385,7 +5385,7 @@
       </button>
       <div class="wl-scoring-body" id="wl-scoring-body">
         <div class="wl-scoring-grid">
-          ${dim("Trend","技术走势","25%",`
+          ${dim("Trend","技术走势","30%",`
             ${sub("均线结构")}
             ${rows([["价格>EMA50>EMA200",35],["价格>EMA50",15],["价格>EMA200",5],["均线下方",-20]])}
             ${sub("RSI")}
@@ -5431,7 +5431,7 @@
             ${sub("FCF质量")}
             ${rows([["正且 FCF/净利>80%",6],["正FCF",4],["负FCF",-6]])}
           `)}
-          ${dim("Analyst","分析师","15%",`
+          ${dim("Analyst","分析师","10%",`
             ${sub("分析师评级")}
             ${rows([["强烈买入",25],["买入",18],["中性",0],["减持",-18],["卖出",-30]])}
             ${sub("目标价涨幅")}
@@ -5761,7 +5761,7 @@
       health:    _scoreHealth({ netMargin: m.netMargin, grossMargin: m.grossMargin, roe: m.roe, deRatio: m.deRatio, currentRatio: m.currentRatio, freeCashflow: m.freeCashflow, revenueActual: m.revenueActual }),
       analyst:   _scoreAnalyst({ targetUpside: d.analyst?.targetUpside, recKey: d.analyst?.recKey, analystCount: d.analyst?.analystCount }),
     };
-    s.overall = Math.round((s.trend ?? 50) * 0.25 + (s.valuation ?? 50) * 0.20 + (s.growth ?? 50) * 0.20 + (s.health ?? 50) * 0.20 + (s.analyst ?? 50) * 0.15);
+    s.overall = Math.round((s.trend ?? 50) * 0.30 + (s.valuation ?? 50) * 0.20 + (s.growth ?? 50) * 0.20 + (s.health ?? 50) * 0.20 + (s.analyst ?? 50) * 0.10);
     s.grade = _gradeFrom(s.overall);
     return s;
   }

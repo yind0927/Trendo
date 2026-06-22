@@ -368,7 +368,7 @@ export default async function handler(req, res) {
 
   const today    = new Date().toISOString().slice(0, 10);
   // v10: +20-day volume up/down ratio (trend volume confirmation)
-  const cacheKey = `trendo:stock_analysis:v10:${sym}`;
+  const cacheKey = `trendo:stock_analysis:v11:${sym}`;
   const kvH      = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
   // ── 1. Redis cache ─────────────────────────────────────────────────────────
@@ -603,11 +603,11 @@ export default async function handler(req, res) {
     analyst:   scoreAnalyst({ targetUpside, recKey: recKeyRaw, analystCount }),
   };
   const overall = Math.round(
-    (scores.trend     ?? 50) * 0.25 +
+    (scores.trend     ?? 50) * 0.30 +
     (scores.valuation ?? 50) * 0.20 +
     (scores.growth    ?? 50) * 0.20 +
     (scores.health    ?? 50) * 0.20 +
-    (scores.analyst   ?? 50) * 0.15
+    (scores.analyst   ?? 50) * 0.10
   );
   scores.overall = overall;
   scores.grade   = gradeFrom(overall);
