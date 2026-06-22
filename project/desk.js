@@ -5445,7 +5445,7 @@
           <div class="wl-scoring-grade-row">
             ${[["A","88"],["A−","82"],["B+","76"],["B","70"],["B−","64"],["C+","58"],["C","50"],["D","<50"]].map(([g,t])=>`<div class="wl-scoring-grade-chip">${g}<span style="color:var(--fg-3);font-weight:400"> ≥${t}</span></div>`).join("")}
           </div>
-          <div style="font-size:9px;color:var(--fg-3);margin-top:6px;line-height:1.6">基准分 50（无数据=中性）· 综合分 = 趋势×25% + 估值×20% + 成长×20% + 健康×20% + 分析师×15%</div>
+          <div style="font-size:9px;color:var(--fg-3);margin-top:6px;line-height:1.6">基准分 50（无数据=中性）· 综合分 = 趋势×30% + 估值×20% + 成长×20% + 健康×20% + 分析师×10%</div>
         </div>
       </div>`;
 
@@ -5812,7 +5812,7 @@
     const fN  = (v, d = 1) => v != null ? String(parseFloat(v.toFixed(d))) : "—";
     const fPc = v => v != null ? `${fN(v)}%` : "—";
     const row = (lbl, val, delta) => ({ lbl, val, delta, cls: delta > 0 ? "pos" : delta < 0 ? "neg" : "neu" });
-    const WEIGHTS = { trend: "25%", valuation: "20%", growth: "20%", health: "20%", analyst: "15%" };
+    const WEIGHTS = { trend: "30%", valuation: "20%", growth: "20%", health: "20%", analyst: "10%" };
     const TITLES  = { trend: "技术面", valuation: "估值", growth: "成长性", health: "财务", analyst: "分析师" };
     const BASES   = { trend: 50, valuation: 50, growth: 50, health: 50, analyst: 50 };
     const rows = [{ lbl: "基准分", val: "", delta: BASES[dim] ?? 50, cls: "base" }];
