@@ -1501,6 +1501,7 @@
     } else {
       wireClosedDrawerEdits(h, false);
     }
+    wireExecRecordDeletes(h, false);
     wireDrawerSwipe(false);
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
@@ -1596,6 +1597,35 @@
     });
   }
 
+  function wireExecRecordDeletes(h, isSim) {
+    const closedArr = isSim ? SIM_CLOSED : CLOSED_POSITIONS;
+    const reopen = () => {
+      if (isSim) { renderSimTable(); renderSimOverview(); openSimDrawer(h, h.closedAt ? "closed" : "open"); }
+      else        { renderTable();    renderOverview();    openDrawer(h); }
+    };
+    $$(".exec-del", $("#drawer")).forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        if (btn.dataset.execType === "entry") {
+          const idx = parseInt(btn.dataset.execIdx);
+          if (Array.isArray(h.entries) && idx >= 0 && idx < h.entries.length) {
+            h.entries.splice(idx, 1);
+            saveToStorage();
+            reopen();
+          }
+        } else if (btn.dataset.execType === "partial") {
+          const closedAt = btn.dataset.execClosedat;
+          const qty = parseFloat(btn.dataset.execQty);
+          const idx = closedArr.findIndex(c =>
+            c.sym === h.sym && c.entry === h.entry &&
+            Math.abs(c.cost - h.cost) < 0.001 &&
+            c.closedAt === closedAt && Math.abs(c.qty - qty) < 0.001);
+          if (idx !== -1) { closedArr.splice(idx, 1); saveToStorage(); reopen(); }
+        }
+      });
+    });
+  }
+
   function wireDrawerCloseButton() {
     const closeBtn = $("#drawer-close-position");
     if (!closeBtn) return;
@@ -1613,8 +1643,8 @@
     const isClosed = activeTab === "closed";
     const closedArr = isSim ? SIM_CLOSED : CLOSED_POSITIONS;
     // Partial close records for this symbol (for open positions that have been partially exited)
-    const partialCloses = isClosed ? [] : closedArr
-      .filter(c => c.sym === h.sym && c.exitReason === "partial")
+    const partialCloses = closedArr
+      .filter(c => c.sym === h.sym && c.entry === h.entry && Math.abs(c.cost - h.cost) < 0.001 && c.exitReason === "partial")
       .sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
     // Status badge
     let badgeColor, badgeTxt;
@@ -1719,12 +1749,13 @@
 
           <div class="plan-subhead">执行记录</div>
           <div class="exec-list">
-            ${(h.entries || []).map(e => `
+            ${(h.entries || []).map((e, i) => `
               <div class="exec-item">
                 <span class="exec-type ${e.type === 'open' ? 'open' : 'add'}">${e.type === "open" ? "开仓" : "加仓"}</span>
                 <span class="exec-date">${fmt.date(e.date)}</span>
                 <span class="exec-price mono">$${price(e.price)}</span>
                 <span class="exec-qty muted">${e.qty} 股</span>
+                <button class="exec-del" data-exec-type="entry" data-exec-idx="${i}" title="删除记录">✕</button>
               </div>`).join("") || `
               <div class="exec-item">
                 <span class="exec-type open">开仓</span>
@@ -1739,6 +1770,7 @@
                 <span class="exec-price mono">$${price(c.closePrice)}</span>
                 <span class="exec-qty muted">${c.qty} 股</span>
                 <span class="exec-qty muted ${fmt.sign(c.pnlFinal)}" style="margin-left:auto">${fmt.signed(c.pnlFinal)}</span>
+                <button class="exec-del" data-exec-type="partial" data-exec-closedat="${c.closedAt}" data-exec-qty="${c.qty}" title="删除记录">✕</button>
               </div>`).join("")}
             ${h.closedAt ? `
               <div class="exec-item">
@@ -4132,6 +4164,7 @@
     } else {
       wireClosedDrawerEdits(h, true);
     }
+    wireExecRecordDeletes(h, true);
     wireDrawerSwipe(true);
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");

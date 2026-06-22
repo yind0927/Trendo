@@ -1475,11 +1475,11 @@
     border-radius: 5px; padding: 2px 8px; transition: background .15s;
   }
   .cc-add-btn:hover { background: color-mix(in oklch, var(--accent) 12%, transparent); }
-  .cc-del {
+  .cc-del, .exec-del {
     all: unset; cursor: pointer; color: var(--fg-3); font-size: 10px;
     width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; flex-shrink: 0;
   }
-  .cc-del:hover { color: var(--down); background: color-mix(in oklch, var(--down) 12%, transparent); }
+  .cc-del:hover, .exec-del:hover { color: var(--down); background: color-mix(in oklch, var(--down) 12%, transparent); }
   .exec-date  { color: var(--fg-2); font-size: 11px; flex: 1; }
   .exec-price { font-size: 12.5px; font-weight: 600; }
   .exec-qty   { font-size: 11px; }
@@ -3890,8 +3890,8 @@
   </div>
 </div>
 
-<script src="data.js?v=79"></script>
-<script src="desk.js?v=79"></script>
+<script src="data.js?v=80"></script>
+<script src="desk.js?v=80"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
