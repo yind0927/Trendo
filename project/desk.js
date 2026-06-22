@@ -1682,7 +1682,7 @@
             <div><div class="k">止损<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="stop" contenteditable="true" spellcheck="false">$${price(h.stop)}</span></div></div>
             <div><div class="k">目标<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="target" contenteditable="true" spellcheck="false">$${price(h.target)}</span></div></div>
             <div><div class="k">仓位占比<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="size" contenteditable="true" spellcheck="false">${h.size.toFixed(1)}</span><span class="sub">%</span></div></div>
-            <div><div class="k">盈亏比 (R:R)</div><div class="v big up">${((h.target - h.cost) / (h.cost - h.stop)).toFixed(2)}<span class="sub">R</span></div></div>
+            <div><div class="k">盈亏比 (R:R)</div><div class="v big up">${((h.target - ccAdjCost(h)) / (ccAdjCost(h) - h.stop)).toFixed(2)}<span class="sub">R</span></div></div>
           </div>`}
         </div>
 
@@ -1696,16 +1696,16 @@
             <div class="plan-price-item">
               <div class="k">止损价格</div>
               <div class="v mono down">$${price(h.stop)}</div>
-              <div class="sub">${h.cost > h.stop ? `-${((h.cost - h.stop) / h.cost * 100).toFixed(1)}%` : "—"}</div>
+              <div class="sub">${(() => { const adj = ccAdjCost(h); return adj > h.stop ? `-${((adj - h.stop) / adj * 100).toFixed(1)}%` : "—"; })()}</div>
             </div>
             <div class="plan-price-item">
               <div class="k">止盈价格</div>
               <div class="v mono up">$${price(h.target)}</div>
-              <div class="sub">${h.target > h.cost ? `+${((h.target - h.cost) / h.cost * 100).toFixed(1)}%` : "—"}</div>
+              <div class="sub">${(() => { const adj = ccAdjCost(h); return h.target > adj ? `+${((h.target - adj) / adj * 100).toFixed(1)}%` : "—"; })()}</div>
             </div>
             <div class="plan-price-item">
               <div class="k">盈亏比</div>
-              <div class="v big ${(h.target - h.cost) > (h.cost - h.stop) ? 'up' : 'down'}">${h.cost > h.stop && h.target > h.cost ? ((h.target - h.cost) / (h.cost - h.stop)).toFixed(2) : "—"}<span class="sub"> R</span></div>
+              <div class="v big ${(() => { const adj = ccAdjCost(h); return (h.target - adj) > (adj - h.stop) ? 'up' : 'down'; })()}">${(() => { const adj = ccAdjCost(h); return adj > h.stop && h.target > adj ? ((h.target - adj) / (adj - h.stop)).toFixed(2) : "—"; })()}<span class="sub"> R</span></div>
             </div>
           </div>
 
