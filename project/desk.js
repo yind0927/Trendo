@@ -4097,12 +4097,12 @@
     if (!hasAny) { el.innerHTML = ""; return; }
 
     // Merge open + closed, sort by most-recent date descending
-    const openEntries   = SIM_HOLDINGS.map(h => ({ h, isOpen: true,  date: h.entry || "" }));
-    const closedEntries = SIM_CLOSED.map(h   => ({ h, isOpen: false, date: h.closedAt || h.entry || "" }));
+    const openEntries   = SIM_HOLDINGS.map(h => ({ h, isOpen: true,  date: h.entry || "", simClosedIdx: -1 }));
+    const closedEntries = SIM_CLOSED.map((h, idx) => ({ h, isOpen: false, date: h.closedAt || h.entry || "", simClosedIdx: idx }));
     const sorted = [...openEntries, ...closedEntries].sort((a, b) => b.date.localeCompare(a.date));
 
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
-      sorted.map(({ h, isOpen }) => {
+      sorted.map(({ h, isOpen, simClosedIdx }) => {
         if (isOpen) {
           const entryD  = h.entry?.slice(0, 10) || "—";
           const pnlDollar = h.pnlDollar ?? 0;
@@ -4121,6 +4121,7 @@
               <div class="tl-pnl ${pnlCls}">${fmt.signed(Math.round(pnlDollar))}</div>
               <div class="tl-pnl-pct ${pnlCls}">${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(1)}%</div>
             </div>
+            <span></span>
           </div>`;
         } else {
           const pnl    = h.pnlFinal ?? 0;
@@ -4141,9 +4142,23 @@
               <div class="tl-pnl ${pnlCls}">${fmt.signed(Math.round(pnl))}</div>
               <div class="tl-pnl-pct ${pnlCls}">${pnlPct !== null ? (pnlPct >= 0 ? "+" : "") + pnlPct.toFixed(1) + "%" : ""}</div>
             </div>
+            <button class="tl-del" data-sim-closed-idx="${simClosedIdx}" title="删除">✕</button>
           </div>`;
         }
       }).join("") + `</div>`;
+
+    el.onclick = e => {
+      const btn = e.target.closest(".tl-del");
+      if (!btn) return;
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.simClosedIdx);
+      if (!isNaN(idx) && idx >= 0 && idx < SIM_CLOSED.length) {
+        SIM_CLOSED.splice(idx, 1);
+        saveToStorage();
+        renderSimTradeLog();
+        renderSimOverview();
+      }
+    };
   }
 
   function openSimDrawer(h, context) {
