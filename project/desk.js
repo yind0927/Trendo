@@ -1238,7 +1238,7 @@
           ${!isClosed && h.bx?.dailyBars ? (() => { const v = h.bx.dailyBars; const cls = v === "0-5" ? "bxbar-early" : v === "5-15" ? "bxbar-mid" : "bxbar-late"; const lbl = v === "0-5" ? "开始" : v === "5-15" ? "中间" : "延续"; return `<span class="hc-sep muted">·</span><span class="bx-bar-chip ${cls}" style="font-size:9.5px;padding:2px 6px;gap:0">${v}<span class="bx-bar-sub">${lbl}</span></span>`; })() : ""}
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
-          <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};${progPct<0?"margin-left:auto":""}"></div>
+          <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
         </div>` : ""}
         <div class="hc-price-row">
           <span class="hc-entry-price">${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>入 $${price(ccAdjCost(h))}` : `入 $${price(h.cost)}`}</span>
