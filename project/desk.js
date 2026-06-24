@@ -6533,12 +6533,12 @@
       ]
     },
     vxn: {
-      label: "VXN (Nasdaq)", cap: 70,
+      label: "VXN (Nasdaq)", cap: 80,
       zones: [
-        { max: 18,  color: "#22c55e", label: "充裕",   badge: "充裕" },
-        { max: 25,  color: "#3b82f6", label: "正常",   badge: "正常" },
-        { max: 35,  color: "#f97316", label: "收缩",   badge: "收缩" },
-        { max: 55,  color: "#ef4444", label: "极小",   badge: "极小" },
+        { max: 20,  color: "#22c55e", label: "充裕",   badge: "充裕" },
+        { max: 27,  color: "#3b82f6", label: "正常",   badge: "正常" },
+        { max: 40,  color: "#f97316", label: "收缩",   badge: "收缩" },
+        { max: 65,  color: "#ef4444", label: "极小",   badge: "极小" },
         { max: 9999,color: "#92400e", label: "恐慌",   badge: "恐慌" },
       ]
     },
