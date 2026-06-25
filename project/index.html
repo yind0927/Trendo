@@ -1261,8 +1261,14 @@
   .esc-action { font-size: 12.5px; font-weight: 700; }
   .esc-desc { font-size: 11px; color: var(--fg-2); margin-top: 2px; }
   .esc-pos { font-size: 11px; color: var(--fg-3); margin-top: 3px; }
-  .esc-rs-detail { font-size: 11px; color: var(--fg-3); margin-top: 3px; }
   .esc-empty { font-size: 11px; color: var(--fg-3); padding: 4px 0; }
+  .esc-divider { border-top: 1px solid var(--line); margin: 8px 0 7px; }
+  .esc-rs-table { display: flex; flex-direction: column; gap: 4px; }
+  .esc-rs-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+  .esc-rs-row.esc-rs-muted { opacity: .4; }
+  .esc-rs-lbl { color: var(--fg-3); width: 58px; font-size: 10.5px; font-family: var(--f-mono); flex-shrink: 0; }
+  .esc-rs-pct { flex: 1; font-family: var(--f-mono); font-weight: 600; font-size: 11px; }
+  .esc-rs-pts { font-family: var(--f-mono); font-size: 10.5px; min-width: 32px; text-align: right; }
 
   /* TABS */
   .panel-head .tab {
@@ -3946,8 +3952,8 @@
   </div>
 </div>
 
-<script src="data.js?v=93"></script>
-<script src="desk.js?v=93"></script>
+<script src="data.js?v=94"></script>
+<script src="desk.js?v=94"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

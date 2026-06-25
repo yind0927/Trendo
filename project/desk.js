@@ -2143,12 +2143,14 @@
 
     const GRADE_LADDER = ["Exit","C","C+","B-","B","B+","A-","A","A+"];
 
-    function rsAdjustGrade(grade, rsScore) {
-      if (grade === "Hold" || grade === "Exit") return grade;
+    function rsAdjustGrade(grade, rsResult) {
+      if (!rsResult || grade === "Hold" || grade === "Exit") return grade;
       const idx = GRADE_LADDER.indexOf(grade);
       if (idx < 0) return grade;
-      if (rsScore >= 6) return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
-      if (rsScore < 3)  return GRADE_LADDER[Math.max(idx - 1, 0)];
+      const norm = rsResult.max > 0 ? (rsResult.score / rsResult.max) * 8 : 0;
+      if (norm >= 6) return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
+      if (norm <= 0) return GRADE_LADDER[Math.max(idx - 2, 0)];  // RS=0: double downgrade
+      if (norm < 3)  return GRADE_LADDER[Math.max(idx - 1, 0)];
       return grade;
     }
 
@@ -2184,26 +2186,38 @@
     function calcRSScore(rsData) {
       const { stockRet, vooRet, sectRet } = rsData;
       if (stockRet == null || vooRet == null) return null;
-      let score = 0;
-      const vsVOO = stockRet - vooRet;
-      if (vsVOO > 5)        score += 3;
-      else if (vsVOO > 2)   score += 2;
-      else if (vsVOO > -2)  score += 1;
-      else if (vsVOO > -5)  score += 0.5;
-      if (sectRet != null) {
-        const vsSect    = stockRet - sectRet;
-        const sectVsVOO = sectRet  - vooRet;
-        if (vsSect > 3)        score += 3;
-        else if (vsSect > 1)   score += 2;
-        else if (vsSect > -1)  score += 1;
-        else if (vsSect > -3)  score += 0.5;
-        if (sectVsVOO > 2)       score += 2;
-        else if (sectVsVOO > -2) score += 1;
+      const hasSect   = sectRet != null;
+      const vsVOO     = stockRet - vooRet;
+      const vsSect    = hasSect ? stockRet - sectRet : null;
+      const sectVsVOO = hasSect ? sectRet  - vooRet  : null;
+
+      // Stock vs VOO (0-3 pts): clean integer thresholds
+      let vooScore = 0;
+      if (vsVOO > 5)       vooScore = 3;
+      else if (vsVOO > 0)  vooScore = 2;
+      else if (vsVOO > -5) vooScore = 1;
+
+      // Stock vs Sector (0-3 pts)
+      let sectScore = 0;
+      if (hasSect) {
+        if (vsSect > 3)       sectScore = 3;
+        else if (vsSect > 0)  sectScore = 2;
+        else if (vsSect > -3) sectScore = 1;
       }
-      return score;
+
+      // Sector vs VOO (0-2 pts) — conditional: only if stock beats sector
+      let sectBonusScore = 0;
+      if (hasSect && vsSect > 0 && sectVsVOO != null) {
+        if (sectVsVOO > 2)       sectBonusScore = 2;
+        else if (sectVsVOO > -2) sectBonusScore = 1;
+      }
+
+      const score = vooScore + sectScore + sectBonusScore;
+      const max   = hasSect ? 8 : 3;
+      return { score, max, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
     }
 
-    function renderEntryScorecard(bxGrade, rsScore, rsData, loading = false) {
+    function renderEntryScorecard(bxGrade, rsResult, loading = false) {
       const el = $("#entry-scorecard");
       if (!el) return;
       el.style.display = "";
@@ -2211,18 +2225,21 @@
         el.innerHTML = `<div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">RS: 计算中…</div></div><div class="esc-empty">正在获取相对强度数据…</div>`;
         return;
       }
-      const hasRS      = rsScore != null;
-      const finalGrade = hasRS ? rsAdjustGrade(bxGrade, rsScore) : bxGrade;
+      const hasRS      = rsResult != null;
+      const finalGrade = hasRS ? rsAdjustGrade(bxGrade, rsResult) : bxGrade;
       const meta       = BX_GRADE_META[finalGrade] || BX_GRADE_META["C"];
       const bxMeta     = BX_GRADE_META[bxGrade]    || BX_GRADE_META["C"];
-      const rsTag      = hasRS ? `RS: <strong style="color:var(--fg-0)">${rsScore.toFixed(1)}/8</strong>` : "RS: —";
       const gradeChanged = hasRS && finalGrade !== bxGrade;
+
+      const rsTag = hasRS
+        ? `RS: <strong style="color:var(--fg-0)">${rsResult.score}/${rsResult.max}</strong>`
+        : "RS: —";
 
       let gradeHTML;
       if (gradeChanged) {
         gradeHTML = `
           <div class="esc-grade-box">
-            <div class="esc-grade-val" style="font-size:14px;opacity:.55;color:${bxMeta.color}">${bxGrade}</div>
+            <div class="esc-grade-val" style="font-size:14px;opacity:.5;color:${bxMeta.color}">${bxGrade}</div>
             <div class="esc-grade-lbl">BX</div>
           </div>
           <div class="esc-arrow">→</div>
@@ -2234,19 +2251,29 @@
         gradeHTML = `<div class="esc-grade-box"><div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div><div class="esc-grade-lbl">评级</div></div>`;
       }
 
-      let rsDetail = "";
-      if (rsData && rsData.stockRet != null && rsData.vooRet != null) {
-        const vsVOO  = (rsData.stockRet - rsData.vooRet).toFixed(1);
-        const vSign  = vsVOO >= 0 ? "+" : "";
-        const vColor = vsVOO >= 0 ? "var(--up)" : "var(--down)";
-        let parts = `<span style="color:${vColor}">${vSign}${vsVOO}% vs VOO</span>`;
-        if (rsData.sectRet != null) {
-          const vsSect  = (rsData.stockRet - rsData.sectRet).toFixed(1);
-          const sSign   = vsSect >= 0 ? "+" : "";
-          const sColor  = vsSect >= 0 ? "var(--up)" : "var(--down)";
-          parts += ` · <span style="color:${sColor}">${sSign}${vsSect}% vs ETF</span>`;
+      // RS breakdown table
+      let rsBreakdown = "";
+      if (hasRS) {
+        const fmtPct  = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+        const pColor  = v => v == null ? "var(--fg-3)" : v >= 0 ? "var(--up)" : "var(--down)";
+        const pts     = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
+        const vooRow = `<div class="esc-rs-row">
+          <span class="esc-rs-lbl">vs VOO</span>
+          <span class="esc-rs-pct" style="color:${pColor(rsResult.vsVOO)}">${fmtPct(rsResult.vsVOO)}</span>
+          <span class="esc-rs-pts">${pts(rsResult.vooScore, 3)}</span></div>`;
+        let sectRows = "";
+        if (rsResult.hasSect) {
+          const stockBeats = rsResult.vsSect > 0;
+          sectRows = `<div class="esc-rs-row">
+            <span class="esc-rs-lbl">vs ETF</span>
+            <span class="esc-rs-pct" style="color:${pColor(rsResult.vsSect)}">${fmtPct(rsResult.vsSect)}</span>
+            <span class="esc-rs-pts">${pts(rsResult.sectScore, 3)}</span></div>
+          <div class="esc-rs-row${!stockBeats ? " esc-rs-muted" : ""}">
+            <span class="esc-rs-lbl">ETF/VOO</span>
+            <span class="esc-rs-pct" style="color:${stockBeats ? pColor(rsResult.sectVsVOO) : "var(--fg-3)"}">${fmtPct(rsResult.sectVsVOO)}</span>
+            <span class="esc-rs-pts">${stockBeats ? pts(rsResult.sectBonusScore, 2) : '<span style="color:var(--fg-3)">—/2</span>'}</span></div>`;
         }
-        rsDetail = `<div class="esc-rs-detail">${parts}</div>`;
+        rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${vooRow}${sectRows}</div>`;
       }
 
       el.innerHTML = `
@@ -2257,9 +2284,9 @@
             <div class="esc-action" style="color:${meta.color}">${meta.action}</div>
             <div class="esc-desc">${meta.desc}</div>
             <div class="esc-pos">建议仓位: <strong style="color:var(--fg-0)">${meta.pos}</strong></div>
-            ${rsDetail}
           </div>
-        </div>`;
+        </div>
+        ${rsBreakdown}`;
     }
 
     const readFormBX = () => {
@@ -2485,7 +2512,7 @@
         const wk  = parseFloat(formBxBody.querySelector("[data-fbx='weekly'].active")?.dataset.val)  || 0;
         const mo  = parseFloat(formBxBody.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
         const grade = calcBXGrade(cur, wk, mo);
-        renderEntryScorecard(grade, null, null);
+        renderEntryScorecard(grade, null);
       };
       formBxBody.addEventListener("click", e => {
         if (e.target.closest("[data-fbx='current'],[data-fbx='weekly'],[data-fbx='monthly']")) {
@@ -2507,13 +2534,13 @@
         const wk   = parseFloat(body?.querySelector("[data-fbx='weekly'].active")?.dataset.val)  || 0;
         const mo   = parseFloat(body?.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
         const grade = calcBXGrade(cur, wk, mo);
-        renderEntryScorecard(grade, null, null, true);
+        renderEntryScorecard(grade, null, true);
         try {
-          const rsData  = await computeEntryRS(sym, sectorEtf);
-          const rsScore = calcRSScore(rsData);
-          renderEntryScorecard(grade, rsScore, rsData);
+          const rsData   = await computeEntryRS(sym, sectorEtf);
+          const rsResult = calcRSScore(rsData);
+          renderEntryScorecard(grade, rsResult);
         } catch (_) {
-          renderEntryScorecard(grade, null, null);
+          renderEntryScorecard(grade, null);
         }
       });
     }
