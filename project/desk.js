@@ -3446,20 +3446,47 @@
     const feed = $("#journal-feed");
     if (!feed) return;
 
-    const combined = [
-      ...HOLDINGS.map(h => ({ h, from: "open" })),
-      ...CLOSED_POSITIONS.map(h => ({ h, from: "closed" })),
-    ].filter(({ h, from }) => {
-      if (journalFilter === "open")   return from === "open";
-      if (journalFilter === "closed") return from === "closed";
-      return true;
-    }).sort((a, b) => {
-      const dA = a.from === "closed" ? (a.h.closedAt || a.h.entry) : a.h.entry;
-      const dB = b.from === "closed" ? (b.h.closedAt || b.h.entry) : b.h.entry;
-      return dB.localeCompare(dA);
-    });
+    // Build open items — attach their partial close records
+    const openItems = HOLDINGS.map(h => {
+      const partials = CLOSED_POSITIONS.filter(c =>
+        c.sym === h.sym && c.entry === h.entry &&
+        Math.abs(c.cost - h.cost) < 0.001 && c.exitReason === "partial"
+      ).sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+      return { h, from: "open", partials };
+    }).sort((a, b) => b.h.entry.localeCompare(a.h.entry));
 
-    // Top stats bar (all-time closed, grouped by trade)
+    // Build closed grouped trades — skip positions that still have an open holding
+    const openKeys = new Set(HOLDINGS.map(h => `${h.sym}|${h.entry}|${Math.round(h.cost * 10000)}`));
+    const tradeMap = new Map();
+    CLOSED_POSITIONS.forEach(c => {
+      const key = `${c.sym}|${c.entry}|${Math.round(c.cost * 10000)}`;
+      (tradeMap.get(key) || tradeMap.set(key, []).get(key)).push(c);
+    });
+    const closedItems = [];
+    tradeMap.forEach((records, key) => {
+      if (openKeys.has(key)) return; // still held — shown in openItems with partials
+      const sorted = [...records].sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+      const totalPnl = sorted.reduce((s, c) => s + (c.pnlFinal || 0), 0);
+      const totalQty = sorted.reduce((s, c) => s + (c.qty || 0), 0);
+      const base = sorted[0];
+      const lastClose = sorted[sorted.length - 1]?.closedAt || base.entry;
+      const risk = base.risk1R || (base.cost - base.stop) || 1;
+      const compositeR = totalQty > 0 && risk > 0
+        ? totalPnl / risk / totalQty * (base.qty || 1)
+        : sorted.reduce((s, c) => s + (c.rMult || 0), 0) / sorted.length;
+      closedItems.push({
+        h: { ...base, pnlFinal: totalPnl, rMult: compositeR, closedAt: lastClose, days: calcTradingDays(base.entry, lastClose) },
+        from: "closed",
+        records: sorted,
+      });
+    });
+    closedItems.sort((a, b) => (b.h.closedAt || "").localeCompare(a.h.closedAt || ""));
+
+    // Apply filter
+    const filteredOpen   = journalFilter === "closed" ? [] : openItems;
+    const filteredClosed = journalFilter === "open"   ? [] : closedItems;
+
+    // Top stats bar
     const allClosedTrades = groupTrades(CLOSED_POSITIONS);
     const wins = allClosedTrades.filter(t => t.pnlFinal > 0);
     const totalPnl = allClosedTrades.reduce((s, t) => s + t.pnlFinal, 0);
@@ -3487,42 +3514,49 @@
         </div>
       </div>` : "";
 
-    // Group by year-month
+    // Group into year-month buckets
+    const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
     const groups = {};
-    combined.forEach(({ h, from }) => {
-      const date = from === "closed" ? (h.closedAt || h.entry) : h.entry;
-      const key = date?.slice(0, 7) || "0000-00";
-      (groups[key] = groups[key] || []).push({ h, from });
+    filteredOpen.forEach(item => {
+      const key = item.h.entry?.slice(0, 7) || "0000-00";
+      if (!groups[key]) groups[key] = { open: [], closed: [] };
+      groups[key].open.push(item);
+    });
+    filteredClosed.forEach(item => {
+      const key = item.h.closedAt?.slice(0, 7) || "0000-00";
+      if (!groups[key]) groups[key] = { open: [], closed: [] };
+      groups[key].closed.push(item);
     });
 
-    const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
     const groupsHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(key => {
-      const items = groups[key];
+      const { open: openG, closed: closedG } = groups[key];
       const [yr, mo] = key.split("-");
       const label = key === "0000-00" ? "未知日期" : `${yr}年 ${MO_ZH[parseInt(mo) - 1]}`;
-      const mClosed = items.filter(x => x.from === "closed");
-      const mTrades = groupTrades(mClosed.map(x => x.h));
-      const mWins   = mTrades.filter(t => t.pnlFinal > 0);
-      const mPnl    = mTrades.reduce((s, t) => s + t.pnlFinal, 0);
-      const mOpen   = items.filter(x => x.from === "open").length;
+      const mWins = closedG.filter(x => (x.h.pnlFinal || 0) > 0);
+      const mPnl  = closedG.reduce((s, x) => s + (x.h.pnlFinal || 0), 0);
       let mStats = "";
-      if (mTrades.length > 0) {
-        mStats = `${mTrades.length}笔 · ${mWins.length}胜${mTrades.length - mWins.length}负 · ${fmt.signed(Math.round(mPnl))}`;
-      } else if (mOpen > 0) {
-        mStats = `${mOpen}笔持仓中`;
-      }
-      // Open positions first (entry-date desc), closed at bottom (closedAt desc)
-      const orderedItems = [
-        ...items.filter(x => x.from === "open"),
-        ...items.filter(x => x.from === "closed"),
-      ];
+      if (closedG.length > 0 && openG.length > 0)
+        mStats = `${closedG.length}笔平 · ${mWins.length}胜 · ${fmt.signed(Math.round(mPnl))} · ${openG.length}笔持仓`;
+      else if (closedG.length > 0)
+        mStats = `${closedG.length}笔 · ${mWins.length}胜${closedG.length - mWins.length}负 · ${fmt.signed(Math.round(mPnl))}`;
+      else if (openG.length > 0)
+        mStats = `${openG.length}笔持仓中`;
+
+      const needsSep = openG.length > 0 && closedG.length > 0;
+      const openHTML = openG.length ? `
+        ${needsSep ? `<div class="jc-section-sep">持仓中</div>` : ""}
+        ${openG.map(x => journalCardHTML(x.h, "open", x.partials)).join("")}` : "";
+      const closedHTML = closedG.length ? `
+        ${needsSep ? `<div class="jc-section-sep">已平仓</div>` : ""}
+        ${closedG.map(x => journalCardHTML(x.h, "closed", [], x.records)).join("")}` : "";
+
       return `<div class="jm-group">
         <div class="jm-header">
           <span class="jm-title">${label}</span>
           <span class="jm-rule"></span>
           ${mStats ? `<span class="jm-stats">${mStats}</span>` : ""}
         </div>
-        ${orderedItems.map(({ h, from }) => journalCardHTML(h, from)).join("")}
+        ${openHTML}${closedHTML}
       </div>`;
     }).join("");
 
@@ -3532,19 +3566,14 @@
       btn.classList.toggle("active", btn.dataset.journalFilter === journalFilter);
       btn.addEventListener("click", () => { journalFilter = btn.dataset.journalFilter; renderJournal(); });
     });
-
     $$(".jc-note-toggle", feed).forEach(toggle => {
       toggle.addEventListener("click", () => {
         toggle.classList.toggle("open");
         const body = toggle.nextElementSibling;
         body.classList.toggle("open");
-        if (body.classList.contains("open")) {
-          const ta = body.querySelector("textarea");
-          if (ta) autoResizeTA(ta);
-        }
+        if (body.classList.contains("open")) { const ta = body.querySelector("textarea"); if (ta) autoResizeTA(ta); }
       });
     });
-
     $$(".journal-note-area", feed).forEach(ta => {
       autoResizeTA(ta);
       ta.addEventListener("input", () => autoResizeTA(ta));
@@ -3556,28 +3585,58 @@
     });
   }
 
-  function journalCardHTML(h, from) {
+  // partials: partial-close records for an open position
+  // records:  all exit records for a grouped closed trade
+  function journalCardHTML(h, from, partials = [], records = []) {
     const isClosed = from === "closed";
+    const hasPartials = partials.length > 0;
+    const multiExit = records.length > 1;
     const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
     const pnlSign = pnlAmt != null ? fmt.sign(pnlAmt) : "neu";
     const bx = h.bx || {};
 
+    // Status badge
     let badgeColor, badgeTxt;
     if (isClosed) {
       const win = (pnlAmt ?? 0) > 0;
       badgeColor = win ? "var(--up)" : "var(--down)";
       badgeTxt = win ? "盈利" : "亏损";
+      if (multiExit) badgeTxt += ` · ${records.length}次出场`;
+    } else if (hasPartials) {
+      const closedQty = partials.reduce((s, c) => s + (c.qty || 0), 0);
+      const origQty = closedQty + (h.qty || 0);
+      const trimPct = origQty > 0 ? Math.round(closedQty / origQty * 100) : 0;
+      badgeColor = "var(--warn)"; badgeTxt = `持仓中 · 已减仓${trimPct}%`;
     } else {
       const bs = BUCKET_STATUS[progressBucket(h)];
       badgeColor = bs.color; badgeTxt = bs.label.split("·")[0].trim();
     }
 
-    const barsCls = bx.dailyBars === "0-5" ? "bxbar-early" : bx.dailyBars === "5-15" ? "bxbar-mid" : "bxbar-late";
-    const barsLbl = bx.dailyBars === "0-5" ? "开始" : bx.dailyBars === "5-15" ? "中间" : "延续";
     const dateStr = isClosed
       ? `${fmt.date(h.entry)} → ${fmt.date(h.closedAt)} · ${h.days ?? "—"}d`
       : `${fmt.date(h.entry)} · ${h.days}d`;
     const hasNote = !!(h.journalNote?.trim());
+    const barsCls = bx.dailyBars === "0-5" ? "bxbar-early" : bx.dailyBars === "5-15" ? "bxbar-mid" : "bxbar-late";
+    const barsLbl = bx.dailyBars === "0-5" ? "开始" : bx.dailyBars === "5-15" ? "中间" : "延续";
+
+    // Exit records mini-list (partial closes on open, all exits on closed multi-exit)
+    const exitRows = isClosed && multiExit ? records : hasPartials ? partials : [];
+    const exitsHTML = exitRows.length ? `
+      <div class="jc-exits">
+        ${exitRows.map(c => {
+          const isFull = c.exitReason !== "partial";
+          const typeCls = isFull ? "jc-exit-full" : "jc-exit-partial";
+          const typeLabel = isFull ? "平仓" : "减仓";
+          return `<div class="jc-exit-item">
+            <span class="jc-exit-type ${typeCls}">${typeLabel}</span>
+            <span class="jc-exit-date">${fmt.date(c.closedAt)}</span>
+            <span class="jc-exit-price">@$${price(c.closePrice ?? c.last ?? c.cost)}</span>
+            <span class="jc-exit-qty">${c.qty}股</span>
+            <span class="jc-exit-pnl ${fmt.sign(c.pnlFinal ?? 0)}">${fmt.signed(c.pnlFinal ?? 0)}</span>
+            ${c.rMult != null ? `<span class="jc-exit-r">${fmt.rMult(c.rMult)}</span>` : ""}
+          </div>`;
+        }).join("")}
+      </div>` : "";
 
     return `<div class="journal-card">
       <div class="jc-head">
@@ -3597,6 +3656,8 @@
           ${isClosed && h.rMult != null ? `<span class="jc-rmult ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</span>` : ""}
         </div>
       </div>
+
+      ${exitsHTML}
 
       <div class="jc-bx">
         <span class="bx-bar-chip ${barsCls}">${bx.dailyBars ?? "—"}<span class="bx-bar-sub">${barsLbl}</span></span>
