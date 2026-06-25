@@ -64,7 +64,7 @@
         label: "总浮盈 / 浮亏", info: false,
         value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
         sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners}W · ${losers}L</span>${avgWinLossLine}`,
-        spark: barBalanceSVG(Math.max(winners, 1), Math.max(losers, 0), 90, 36)
+        spark: ""
       })}
       ${card({
         label: "今日盈亏", info: false,
