@@ -2162,7 +2162,12 @@
   .hc-bx   { font-size: 11px; color: var(--fg-3); font-family: var(--f-mono); }
   .hc-pnl.up, .hc-pct.up, .hc-r.up   { color: var(--up); }
   .hc-pnl.down, .hc-pct.down, .hc-r.down { color: var(--down); }
-.hc-price-row {
+  .hc-prog-wrap {
+    height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden;
+    display: flex;
+  }
+  .hc-prog-fill { height: 100%; border-radius: 2px; transition: width .3s; min-width: 2px; }
+  .hc-price-row {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     font-size: 12px; font-family: var(--f-mono);
   }
@@ -3887,8 +3892,8 @@
   </div>
 </div>
 
-<script src="data.js?v=89"></script>
-<script src="desk.js?v=89"></script>
+<script src="data.js?v=90"></script>
+<script src="desk.js?v=90"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
