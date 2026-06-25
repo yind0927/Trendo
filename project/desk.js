@@ -4574,6 +4574,8 @@
     const avgWinDays  = wins.length > 0   ? Math.round(wins.reduce((s, t) => s + (t.days || 0), 0) / wins.length) : null;
     const avgLossDays = losses.length > 0 ? Math.round(losses.reduce((s, t) => s + (t.days || 0), 0) / losses.length) : null;
     const holdRatio   = avgWinDays !== null && avgLossDays > 0 ? (avgWinDays / avgLossDays).toFixed(1) : null;
+    const avgWinPct  = wins.length > 0   ? (wins.reduce((s, t) => s + t.pnlFinal / Math.max(t.cost * t.qty, 1), 0) / wins.length * 100).toFixed(1) : null;
+    const avgLossPct = losses.length > 0 ? (losses.reduce((s, t) => s + Math.abs(t.pnlFinal) / Math.max(t.cost * t.qty, 1), 0) / losses.length * 100).toFixed(1) : null;
 
     const sortedC = [...closedRaw].sort((a, b) => (a.closedAt||"").localeCompare(b.closedAt||""));
     const totalPnlDollar = open.reduce((s, h) => s + (h.pnlDollar || 0), 0);
@@ -4637,8 +4639,8 @@
         ${ametric("已实现盈亏",  total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl), total ? `${total} 笔交易` : "暂无数据")}
         ${ametric("胜率",        winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", winRate !== null ? `${wins.length}胜/${losses.length}负` : "")}
         ${ametric("盈亏因子",    pfStr || "—", parseFloat(pfStr) >= 1.5 ? "up" : "down", "总盈 ÷ 总亏")}
-        ${ametric("平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `${wins.length} 笔赢` : "")}
-        ${ametric("平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `${losses.length} 笔亏` : "")}
+        ${ametric("平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `+${avgWinPct}% · ${wins.length} 笔赢` : "")}
+        ${ametric("平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `−${avgLossPct}% · ${losses.length} 笔亏` : "")}
         ${ametric("平均持仓",
           holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
           holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "neu" : "down") : "neu",
