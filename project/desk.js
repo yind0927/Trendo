@@ -3455,32 +3455,25 @@
       return { h, from: "open", partials };
     }).sort((a, b) => b.h.entry.localeCompare(a.h.entry));
 
-    // Build closed grouped trades — skip positions that still have an open holding
-    const openKeys = new Set(HOLDINGS.map(h => `${h.sym}|${h.entry}|${Math.round(h.cost * 10000)}`));
-    const tradeMap = new Map();
+    // Build closed grouped trades — skip positions that still have an open holding.
+    // Use groupTrades() for correct rMult (totalPnl / riskPerShare / totalQty),
+    // then attach the raw sorted records for the exit mini-list display.
+    const openKeys = new Set(HOLDINGS.map(h => `${h.sym}|${h.entry}|${h.cost}`));
+    const rawRecordsMap = new Map();
     CLOSED_POSITIONS.forEach(c => {
-      const key = `${c.sym}|${c.entry}|${Math.round(c.cost * 10000)}`;
-      (tradeMap.get(key) || tradeMap.set(key, []).get(key)).push(c);
+      const key = `${c.sym}|${c.entry}|${c.cost}`;
+      (rawRecordsMap.get(key) || rawRecordsMap.set(key, []).get(key)).push(c);
     });
-    const closedItems = [];
-    tradeMap.forEach((records, key) => {
-      if (openKeys.has(key)) return; // still held — shown in openItems with partials
-      const sorted = [...records].sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
-      const totalPnl = sorted.reduce((s, c) => s + (c.pnlFinal || 0), 0);
-      const totalQty = sorted.reduce((s, c) => s + (c.qty || 0), 0);
-      const base = sorted[0];
-      const lastClose = sorted[sorted.length - 1]?.closedAt || base.entry;
-      const risk = base.risk1R || (base.cost - base.stop) || 1;
-      const compositeR = totalQty > 0 && risk > 0
-        ? totalPnl / risk / totalQty * (base.qty || 1)
-        : sorted.reduce((s, c) => s + (c.rMult || 0), 0) / sorted.length;
-      closedItems.push({
-        h: { ...base, pnlFinal: totalPnl, rMult: compositeR, closedAt: lastClose, days: calcTradingDays(base.entry, lastClose) },
+    const grouped = groupTrades(CLOSED_POSITIONS); // canonical rMult + pnlFinal
+    const closedItems = grouped
+      .filter(t => !openKeys.has(`${t.sym}|${t.entry}|${t.cost}`))
+      .map(t => ({
+        h: t,
         from: "closed",
-        records: sorted,
-      });
-    });
-    closedItems.sort((a, b) => (b.h.closedAt || "").localeCompare(a.h.closedAt || ""));
+        records: (rawRecordsMap.get(`${t.sym}|${t.entry}|${t.cost}`) || [])
+          .sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || "")),
+      }))
+      .sort((a, b) => (b.h.closedAt || "").localeCompare(a.h.closedAt || ""));
 
     // Apply filter
     const filteredOpen   = journalFilter === "closed" ? [] : openItems;
