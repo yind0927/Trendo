@@ -2310,17 +2310,13 @@
       const current   = parseFloat(body?.querySelector("[data-fbx='current'].active")?.dataset.val) || 0;
       const weekly    = parseFloat(body?.querySelector("[data-fbx='weekly'].active")?.dataset.val) || 0;
       const monthly   = parseFloat(body?.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
-      const snameEl   = $("#fbx-sname");
-      const sname     = snameEl?.textContent.trim() || "—";
-      const scolor    = snameEl?.style.background || "oklch(0.35 0.01 250)";
-      const sscore    = parseFloat($("#fbx-sscore")?.value) || 0;
-      const sslope    = parseFloat($("#fbx-sslope")?.value) || 0;
-      const oscore    = parseFloat($("#fbx-oscore")?.value) || 0;
-      const oslope    = parseFloat($("#fbx-oslope")?.value) || 0;
+      const snameEl = $("#fbx-sname");
+      const sname   = snameEl?.textContent.trim() || "—";
+      const scolor  = snameEl?.style.background || "oklch(0.35 0.01 250)";
       return {
         dailyBars, current, weekly, monthly,
-        sector:  { name: sname, color: scolor, score: String(sscore), slope: sslope, slopeDir: Math.sign(sslope) },
-        overall: { score: String(oscore), slope: oslope, slopeDir: Math.sign(oslope) }
+        sector:  { name: sname, color: scolor, score: "0", slope: 0, slopeDir: 0 },
+        overall: { score: "0", slope: 0, slopeDir: 0 }
       };
     };
 
@@ -2332,13 +2328,6 @@
       [["dailyBars","0-5"],["current","0"],["weekly","0"],["monthly","0"]].forEach(([field, def]) => {
         $$(`[data-fbx="${field}"]`, body).forEach(b => b.classList.toggle("active", b.dataset.val === def));
       });
-      ["fbx-sscore","fbx-sslope","fbx-oscore","fbx-oslope"].forEach(id => {
-        const el = $(`#${id}`);
-        if (el) { el.value = "0"; el.className = "bx-slope-input tint-flat"; }
-      });
-      const fbqS = $("#fbq-sector"), fbqO = $("#fbq-overall");
-      if (fbqS) fbqS.innerHTML = bqBadgeHTML(0, 0);
-      if (fbqO) fbqO.innerHTML = bqBadgeHTML(0, 0);
       const snameEl = $("#fbx-sname");
       if (snameEl) { snameEl.textContent = "—"; snameEl.style.background = "oklch(0.35 0.01 250)"; }
       $$(".bx-color-opt", body).forEach(b => b.classList.toggle("active", b.dataset.colorVal === "oklch(0.35 0.01 250)"));
@@ -2486,28 +2475,6 @@
         const field = btn.dataset.fbx;
         $$(`[data-fbx="${field}"]`, formBxBody).forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
-      });
-
-      // Slope/score inputs: tint + badge refresh
-      const refreshFormBadge = which => {
-        const score = parseFloat((which === "sector" ? $("#fbx-sscore") : $("#fbx-oscore"))?.value) || 0;
-        const slope = parseFloat((which === "sector" ? $("#fbx-sslope") : $("#fbx-oslope"))?.value) || 0;
-        const badgeEl = which === "sector" ? $("#fbq-sector") : $("#fbq-overall");
-        if (badgeEl) badgeEl.innerHTML = bqBadgeHTML(score, Math.sign(slope));
-      };
-      [["fbx-sscore","sector",false],["fbx-sslope","sector",true],
-       ["fbx-oscore","overall",false],["fbx-oslope","overall",true]].forEach(([id, which, isSlope]) => {
-        const el = $(`#${id}`);
-        if (!el) return;
-        const commit = () => {
-          if (isSlope) {
-            const n = parseFloat(el.value) || 0;
-            el.className = "bx-slope-input " + (n > 0 ? "tint-up" : n < 0 ? "tint-down" : "tint-flat");
-          }
-          refreshFormBadge(which);
-        };
-        el.addEventListener("input", commit);
-        el.addEventListener("blur", commit);
       });
 
       // Color swatch selection

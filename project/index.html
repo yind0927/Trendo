@@ -3762,29 +3762,12 @@
             <button type="button" class="bx-score-btn bx-up"     data-fbx="monthly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">Bullish</span></button>
           </div>
         </div>
-        <div class="bx-align-grid" style="margin-top:4px">
-          <div class="bx-align-hdr">
-            <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
+        <div class="bx-row" style="margin-top:2px">
+          <div class="bx-row-label">板块</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span id="fbx-sname" class="bx-name" contenteditable="true" spellcheck="false" style="background:oklch(0.35 0.01 250)">—</span>
+            <div id="fbx-color-div" style="display:flex;flex-wrap:wrap;gap:5px;align-items:center"></div>
           </div>
-          <div class="bx-align-row">
-            <div class="bx-align-label">
-              <span id="fbx-sname" class="bx-name" contenteditable="true" spellcheck="false" style="background:oklch(0.35 0.01 250)">—</span>
-            </div>
-            <input type="number" id="fbx-sscore" class="bx-slope-input" value="0" step="0.01">
-            <input type="number" id="fbx-sslope" class="bx-slope-input tint-flat" value="0" step="0.01">
-          </div>
-          <div class="bx-quad-row" id="fbq-sector"><span class="bq-badge bq-neu">中性<span class="bq-sub">暂无明显趋势</span></span></div>
-          <div class="bx-color-divider" id="fbx-color-div">
-            <span class="bx-meta-lbl" style="white-space:nowrap;margin-right:4px">板块色</span>
-          </div>
-          <div class="bx-align-row">
-            <div class="bx-align-label">
-              <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">VS VOO</span>
-            </div>
-            <input type="number" id="fbx-oscore" class="bx-slope-input" value="0" step="0.01">
-            <input type="number" id="fbx-oslope" class="bx-slope-input tint-flat" value="0" step="0.01">
-          </div>
-          <div class="bx-quad-row" id="fbq-overall"><span class="bq-badge bq-neu">中性<span class="bq-sub">暂无明显趋势</span></span></div>
         </div>
         <div class="bx-row" style="margin-bottom:4px">
           <div class="bx-row-label">行业ETF <span style="color:var(--fg-3);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">相对强度 RS</span></div>
@@ -3954,8 +3937,8 @@
   </div>
 </div>
 
-<script src="data.js?v=95"></script>
-<script src="desk.js?v=95"></script>
+<script src="data.js?v=96"></script>
+<script src="desk.js?v=96"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
