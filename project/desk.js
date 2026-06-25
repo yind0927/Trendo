@@ -2147,17 +2147,19 @@
       if (!rsResult || grade === "Hold" || grade === "Exit") return grade;
       const idx = GRADE_LADDER.indexOf(grade);
       if (idx < 0) return grade;
-      const norm = rsResult.max > 0 ? (rsResult.score / rsResult.max) * 8 : 0;
-      if (norm >= 6) return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
-      if (norm <= 0) return GRADE_LADDER[Math.max(idx - 2, 0)];  // RS=0: double downgrade
-      if (norm < 3)  return GRADE_LADDER[Math.max(idx - 1, 0)];
+      // Normalize to 0-10 scale regardless of denominator
+      const norm = rsResult.max > 0 ? (rsResult.score / rsResult.max) * 10 : 0;
+      if (norm >= 7)  return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
+      if (norm <= 0)  return GRADE_LADDER[Math.max(idx - 2, 0)];  // RS=0: double downgrade
+      if (norm < 4)   return GRADE_LADDER[Math.max(idx - 1, 0)];
       return grade;
     }
 
     async function computeEntryRS(sym, sectorEtf) {
+      // Fetch 60 calendar days to guarantee ≥22 trading bars after holidays
       const syms = sectorEtf ? `${sym},${sectorEtf},VOO` : `${sym},VOO`;
       const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - 40);
+      fromDate.setDate(fromDate.getDate() - 60);
       const fromStr = fromDate.toISOString().slice(0, 10);
       const res = await fetch(`/api/history?symbols=${encodeURIComponent(syms)}&from=${fromStr}`);
       if (!res.ok) throw new Error("history error");
@@ -2167,9 +2169,10 @@
         if (!obj) return null;
         return Object.keys(obj).sort().map(d => obj[d]).filter(v => v != null);
       };
+      // Exactly 20 trading days: prices[N-21] → prices[N-1] = 20 intervals
       const get20dReturn = prices => {
-        if (!prices || prices.length < 5) return null;
-        const start = prices[Math.max(0, prices.length - 22)];
+        if (!prices || prices.length < 22) return null;
+        const start = prices[prices.length - 21];
         const end   = prices[prices.length - 1];
         return start ? (end - start) / start * 100 : null;
       };
@@ -2191,21 +2194,23 @@
       const vsSect    = hasSect ? stockRet - sectRet : null;
       const sectVsVOO = hasSect ? sectRet  - vooRet  : null;
 
-      // Stock vs VOO (0-3 pts): clean integer thresholds
+      // vs VOO (0-4 pts)
       let vooScore = 0;
-      if (vsVOO > 5)       vooScore = 3;
-      else if (vsVOO > 0)  vooScore = 2;
-      else if (vsVOO > -5) vooScore = 1;
+      if (vsVOO > 5)        vooScore = 4;
+      else if (vsVOO > 2)   vooScore = 3;
+      else if (vsVOO > 0)   vooScore = 2;
+      else if (vsVOO > -3)  vooScore = 1;
 
-      // Stock vs Sector (0-3 pts)
+      // vs Sector (0-4 pts)
       let sectScore = 0;
       if (hasSect) {
-        if (vsSect > 3)       sectScore = 3;
+        if (vsSect > 3)       sectScore = 4;
+        else if (vsSect > 1)  sectScore = 3;
         else if (vsSect > 0)  sectScore = 2;
-        else if (vsSect > -3) sectScore = 1;
+        else if (vsSect > -2) sectScore = 1;
       }
 
-      // Sector vs VOO (0-2 pts) — conditional: only if stock beats sector
+      // Sector vs VOO (0-2 pts) — only if stock beats sector
       let sectBonusScore = 0;
       if (hasSect && vsSect > 0 && sectVsVOO != null) {
         if (sectVsVOO > 2)       sectBonusScore = 2;
@@ -2213,8 +2218,9 @@
       }
 
       const score = vooScore + sectScore + sectBonusScore;
-      const max   = hasSect ? 8 : 3;
-      return { score, max, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
+      const max   = hasSect ? 10 : 4;
+      // Include abs returns for display
+      return { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
     }
 
     function renderEntryScorecard(bxGrade, rsResult, loading = false) {
@@ -2251,29 +2257,38 @@
         gradeHTML = `<div class="esc-grade-box"><div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div><div class="esc-grade-lbl">评级</div></div>`;
       }
 
-      // RS breakdown table
+      // RS breakdown table — shows absolute returns so user can verify on chart
       let rsBreakdown = "";
       if (hasRS) {
-        const fmtPct  = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-        const pColor  = v => v == null ? "var(--fg-3)" : v >= 0 ? "var(--up)" : "var(--down)";
-        const pts     = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
+        const fmt   = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+        const pc    = v => v == null ? "var(--fg-3)" : v >= 0 ? "var(--up)" : "var(--down)";
+        const pts   = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
+        // Header row: absolute returns for verification
+        const stockBeats = rsResult.hasSect && rsResult.vsSect > 0;
+        const stockRow = `<div class="esc-rs-row esc-rs-header">
+          <span class="esc-rs-lbl">股票 20d</span>
+          <span class="esc-rs-abs" style="color:${pc(rsResult.stockRet)};font-weight:700">${fmt(rsResult.stockRet)}</span>
+          <span class="esc-rs-abs2">VOO ${fmt(rsResult.vooRet)}</span>
+          <span class="esc-rs-pts"></span></div>`;
         const vooRow = `<div class="esc-rs-row">
           <span class="esc-rs-lbl">vs VOO</span>
-          <span class="esc-rs-pct" style="color:${pColor(rsResult.vsVOO)}">${fmtPct(rsResult.vsVOO)}</span>
-          <span class="esc-rs-pts">${pts(rsResult.vooScore, 3)}</span></div>`;
+          <span class="esc-rs-abs" style="color:${pc(rsResult.vsVOO)}">${fmt(rsResult.vsVOO)}</span>
+          <span class="esc-rs-abs2"></span>
+          <span class="esc-rs-pts">${pts(rsResult.vooScore, 4)}</span></div>`;
         let sectRows = "";
         if (rsResult.hasSect) {
-          const stockBeats = rsResult.vsSect > 0;
           sectRows = `<div class="esc-rs-row">
             <span class="esc-rs-lbl">vs ETF</span>
-            <span class="esc-rs-pct" style="color:${pColor(rsResult.vsSect)}">${fmtPct(rsResult.vsSect)}</span>
-            <span class="esc-rs-pts">${pts(rsResult.sectScore, 3)}</span></div>
+            <span class="esc-rs-abs" style="color:${pc(rsResult.vsSect)}">${fmt(rsResult.vsSect)}</span>
+            <span class="esc-rs-abs2">ETF ${fmt(rsResult.sectRet)}</span>
+            <span class="esc-rs-pts">${pts(rsResult.sectScore, 4)}</span></div>
           <div class="esc-rs-row${!stockBeats ? " esc-rs-muted" : ""}">
             <span class="esc-rs-lbl">ETF/VOO</span>
-            <span class="esc-rs-pct" style="color:${stockBeats ? pColor(rsResult.sectVsVOO) : "var(--fg-3)"}">${fmtPct(rsResult.sectVsVOO)}</span>
+            <span class="esc-rs-abs" style="color:${stockBeats ? pc(rsResult.sectVsVOO) : "var(--fg-3)"}">${fmt(rsResult.sectVsVOO)}</span>
+            <span class="esc-rs-abs2"></span>
             <span class="esc-rs-pts">${stockBeats ? pts(rsResult.sectBonusScore, 2) : '<span style="color:var(--fg-3)">—/2</span>'}</span></div>`;
         }
-        rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${vooRow}${sectRows}</div>`;
+        rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${vooRow}${sectRows}</div>`;
       }
 
       el.innerHTML = `

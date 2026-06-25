@@ -1266,9 +1266,11 @@
   .esc-rs-table { display: flex; flex-direction: column; gap: 4px; }
   .esc-rs-row { display: flex; align-items: center; gap: 6px; font-size: 11px; }
   .esc-rs-row.esc-rs-muted { opacity: .4; }
-  .esc-rs-lbl { color: var(--fg-3); width: 58px; font-size: 10.5px; font-family: var(--f-mono); flex-shrink: 0; }
-  .esc-rs-pct { flex: 1; font-family: var(--f-mono); font-weight: 600; font-size: 11px; }
-  .esc-rs-pts { font-family: var(--f-mono); font-size: 10.5px; min-width: 32px; text-align: right; }
+  .esc-rs-row.esc-rs-header { margin-bottom: 2px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .esc-rs-lbl { color: var(--fg-3); width: 56px; font-size: 10.5px; font-family: var(--f-mono); flex-shrink: 0; }
+  .esc-rs-abs { width: 52px; font-family: var(--f-mono); font-weight: 600; font-size: 11px; flex-shrink: 0; }
+  .esc-rs-abs2 { flex: 1; font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); }
+  .esc-rs-pts { font-family: var(--f-mono); font-size: 10.5px; min-width: 32px; text-align: right; flex-shrink: 0; }
 
   /* TABS */
   .panel-head .tab {
@@ -3952,8 +3954,8 @@
   </div>
 </div>
 
-<script src="data.js?v=94"></script>
-<script src="desk.js?v=94"></script>
+<script src="data.js?v=95"></script>
+<script src="desk.js?v=95"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
