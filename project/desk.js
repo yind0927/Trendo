@@ -27,6 +27,15 @@
     const totalPnlPct = totalNotional > 0 ? totalPnlDollar / totalNotional : 0;
     const winners = HOLDINGS.filter(h => (h.pnlDollar || 0) > 0).length;
     const losers  = HOLDINGS.filter(h => (h.pnlDollar || 0) <= 0).length;
+    const openWins   = HOLDINGS.filter(h => (h.pnlDollar || 0) > 0);
+    const openLosses = HOLDINGS.filter(h => (h.pnlDollar || 0) <= 0 && HOLDINGS.length > 0);
+    const avgOpenWinPct  = openWins.length   ? (openWins.reduce((s, h) => s + (h.pnlPct || 0), 0) / openWins.length * 100).toFixed(1) : null;
+    const avgOpenLossPct = openLosses.length ? (openLosses.reduce((s, h) => s + Math.abs(h.pnlPct || 0), 0) / openLosses.length * 100).toFixed(1) : null;
+    const avgWinLossParts = [
+      avgOpenWinPct  !== null ? `<span class="up">盈均+${avgOpenWinPct}%</span>`  : "",
+      avgOpenLossPct !== null ? `<span class="down">亏均−${avgOpenLossPct}%</span>` : "",
+    ].filter(Boolean).join(" · ");
+    const avgWinLossLine = avgWinLossParts ? `<div style="margin-top:1px;font-size:10px">${avgWinLossParts}</div>` : "";
     const eqCount  = HOLDINGS.filter(h => h.kind === "equity").length;
     const etfCount = HOLDINGS.filter(h => h.kind === "etf").length;
     const crCount  = HOLDINGS.filter(h => h.kind === "crypto").length;
@@ -54,7 +63,7 @@
       ${card({
         label: "总浮盈 / 浮亏", info: false,
         value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
-        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners}W · ${losers}L</span>`,
+        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners}W · ${losers}L</span>${avgWinLossLine}`,
         spark: barBalanceSVG(Math.max(winners, 1), Math.max(losers, 0), 90, 36)
       })}
       ${card({
