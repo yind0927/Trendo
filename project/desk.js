@@ -3868,6 +3868,14 @@
     const winRate = closedTotal > 0 ? (wins / closedTotal * 100).toFixed(0) + "%" : "—";
     const nav = simNotional + pnl + realizedPnl;
     const navSign = fmt.sign(pnl);
+    const openWins   = SIM_HOLDINGS.filter(h => (h.pnlDollar || 0) > 0);
+    const openLosses = SIM_HOLDINGS.filter(h => (h.pnlDollar || 0) <= 0 && SIM_HOLDINGS.length > 0);
+    const avgOpenWinPct  = openWins.length   ? (openWins.reduce((s, h) => s + (h.pnlPct || 0), 0) / openWins.length * 100).toFixed(1) : null;
+    const avgOpenLossPct = openLosses.length ? (openLosses.reduce((s, h) => s + Math.abs(h.pnlPct || 0), 0) / openLosses.length * 100).toFixed(1) : null;
+    const floatSubParts = [];
+    if (avgOpenWinPct !== null)  floatSubParts.push(`<span class="up">盈均+${avgOpenWinPct}%</span>`);
+    if (avgOpenLossPct !== null) floatSubParts.push(`<span class="down">亏均−${avgOpenLossPct}%</span>`);
+    const floatSub = floatSubParts.length ? floatSubParts.join(" · ") + ` · ${open}笔` : `${open} 笔持仓中`;
     el.innerHTML = `
       <div class="sim-card">
         <div class="sim-card-label" style="display:flex;justify-content:space-between;align-items:center">
@@ -3882,7 +3890,7 @@
       <div class="sim-card">
         <div class="sim-card-label">模拟浮盈亏</div>
         <div class="sim-card-value ${navSign}">${fmt.signed(Math.round(pnl))}</div>
-        <div class="sim-card-sub">${open} 笔持仓中</div>
+        <div class="sim-card-sub">${floatSub}</div>
       </div>
       <div class="sim-card">
         <div class="sim-card-label">已实现盈亏</div>
