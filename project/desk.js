@@ -2210,9 +2210,9 @@
         else if (vsSect > -2) sectScore = 1;
       }
 
-      // Sector vs VOO (0-2 pts) — only if stock beats sector
+      // Sector vs VOO (0-2 pts) — always scored when sector ETF provided
       let sectBonusScore = 0;
-      if (hasSect && vsSect > 0 && sectVsVOO != null) {
+      if (hasSect && sectVsVOO != null) {
         if (sectVsVOO > 2)       sectBonusScore = 2;
         else if (sectVsVOO > -2) sectBonusScore = 1;
       }
@@ -2260,33 +2260,31 @@
       // RS breakdown table — shows absolute returns so user can verify on chart
       let rsBreakdown = "";
       if (hasRS) {
-        const fmt   = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-        const pc    = v => v == null ? "var(--fg-3)" : v >= 0 ? "var(--up)" : "var(--down)";
-        const pts   = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
-        // Header row: absolute returns for verification
-        const stockBeats = rsResult.hasSect && rsResult.vsSect > 0;
+        const fmt  = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+        const pts  = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
+        // Header row: absolute returns for verification (all white, no color coding)
         const stockRow = `<div class="esc-rs-row esc-rs-header">
           <span class="esc-rs-lbl">股票 20d</span>
-          <span class="esc-rs-abs" style="color:${pc(rsResult.stockRet)};font-weight:700">${fmt(rsResult.stockRet)}</span>
+          <span class="esc-rs-abs" style="color:var(--fg-0);font-weight:700">${fmt(rsResult.stockRet)}</span>
           <span class="esc-rs-abs2">VOO ${fmt(rsResult.vooRet)}</span>
           <span class="esc-rs-pts"></span></div>`;
         const vooRow = `<div class="esc-rs-row">
           <span class="esc-rs-lbl">vs VOO</span>
-          <span class="esc-rs-abs" style="color:${pc(rsResult.vsVOO)}">${fmt(rsResult.vsVOO)}</span>
+          <span class="esc-rs-abs" style="color:var(--fg-0)">${fmt(rsResult.vsVOO)}</span>
           <span class="esc-rs-abs2"></span>
           <span class="esc-rs-pts">${pts(rsResult.vooScore, 4)}</span></div>`;
         let sectRows = "";
         if (rsResult.hasSect) {
           sectRows = `<div class="esc-rs-row">
             <span class="esc-rs-lbl">vs ETF</span>
-            <span class="esc-rs-abs" style="color:${pc(rsResult.vsSect)}">${fmt(rsResult.vsSect)}</span>
+            <span class="esc-rs-abs" style="color:var(--fg-0)">${fmt(rsResult.vsSect)}</span>
             <span class="esc-rs-abs2">ETF ${fmt(rsResult.sectRet)}</span>
             <span class="esc-rs-pts">${pts(rsResult.sectScore, 4)}</span></div>
-          <div class="esc-rs-row${!stockBeats ? " esc-rs-muted" : ""}">
+          <div class="esc-rs-row">
             <span class="esc-rs-lbl">ETF/VOO</span>
-            <span class="esc-rs-abs" style="color:${stockBeats ? pc(rsResult.sectVsVOO) : "var(--fg-3)"}">${fmt(rsResult.sectVsVOO)}</span>
+            <span class="esc-rs-abs" style="color:var(--fg-0)">${fmt(rsResult.sectVsVOO)}</span>
             <span class="esc-rs-abs2"></span>
-            <span class="esc-rs-pts">${stockBeats ? pts(rsResult.sectBonusScore, 2) : '<span style="color:var(--fg-3)">—/2</span>'}</span></div>`;
+            <span class="esc-rs-pts">${pts(rsResult.sectBonusScore, 2)}</span></div>`;
         }
         rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${vooRow}${sectRows}</div>`;
       }
