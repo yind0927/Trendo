@@ -2194,31 +2194,36 @@
       const vsSect    = hasSect ? stockRet - sectRet : null;
       const sectVsVOO = hasSect ? sectRet  - vooRet  : null;
 
-      // vs VOO (0-4 pts)
+      // vs VOO (0-5 pts)
       let vooScore = 0;
-      if (vsVOO > 5)        vooScore = 4;
+      if (vsVOO > 8)        vooScore = 5;
+      else if (vsVOO > 5)   vooScore = 4;
       else if (vsVOO > 2)   vooScore = 3;
       else if (vsVOO > 0)   vooScore = 2;
       else if (vsVOO > -3)  vooScore = 1;
 
-      // vs Sector (0-4 pts)
+      // vs Sector (0-5 pts)
       let sectScore = 0;
       if (hasSect) {
-        if (vsSect > 3)       sectScore = 4;
+        if (vsSect > 5)       sectScore = 5;
+        else if (vsSect > 3)  sectScore = 4;
         else if (vsSect > 1)  sectScore = 3;
         else if (vsSect > 0)  sectScore = 2;
         else if (vsSect > -2) sectScore = 1;
       }
 
-      // Sector vs VOO (0-2 pts) — always scored when sector ETF provided
+      // Sector vs VOO (0-5 pts)
       let sectBonusScore = 0;
       if (hasSect && sectVsVOO != null) {
-        if (sectVsVOO > 2)       sectBonusScore = 2;
-        else if (sectVsVOO > -2) sectBonusScore = 1;
+        if (sectVsVOO > 5)        sectBonusScore = 5;
+        else if (sectVsVOO > 2)   sectBonusScore = 4;
+        else if (sectVsVOO > 0)   sectBonusScore = 3;
+        else if (sectVsVOO > -2)  sectBonusScore = 2;
+        else if (sectVsVOO > -5)  sectBonusScore = 1;
       }
 
       const score = vooScore + sectScore + sectBonusScore;
-      const max   = hasSect ? 10 : 4;
+      const max   = hasSect ? 15 : 5;
       // Include abs returns for display
       return { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
     }
@@ -2260,33 +2265,35 @@
       // RS breakdown table — shows absolute returns so user can verify on chart
       let rsBreakdown = "";
       if (hasRS) {
-        const fmt  = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-        const pts  = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
-        // Header row: absolute returns for verification (all white, no color coding)
+        const fmt = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+        const pc  = v => v == null ? "var(--fg-0)" : v >= 0 ? "var(--up)" : "var(--down)";
+        const pts = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
+        // Row 1: raw 20d returns — stock colored, VOO stays dim grey for reference
         const stockRow = `<div class="esc-rs-row esc-rs-header">
           <span class="esc-rs-lbl">股票 20d</span>
-          <span class="esc-rs-abs" style="color:var(--fg-0);font-weight:700">${fmt(rsResult.stockRet)}</span>
+          <span class="esc-rs-abs" style="color:${pc(rsResult.stockRet)};font-weight:700">${fmt(rsResult.stockRet)}</span>
           <span class="esc-rs-abs2">VOO ${fmt(rsResult.vooRet)}</span>
           <span class="esc-rs-pts"></span></div>`;
-        const vooRow = `<div class="esc-rs-row">
-          <span class="esc-rs-lbl">vs VOO</span>
-          <span class="esc-rs-abs" style="color:var(--fg-0)">${fmt(rsResult.vsVOO)}</span>
-          <span class="esc-rs-abs2"></span>
-          <span class="esc-rs-pts">${pts(rsResult.vooScore, 4)}</span></div>`;
         let sectRows = "";
         if (rsResult.hasSect) {
           sectRows = `<div class="esc-rs-row">
             <span class="esc-rs-lbl">vs ETF</span>
-            <span class="esc-rs-abs" style="color:var(--fg-0)">${fmt(rsResult.vsSect)}</span>
+            <span class="esc-rs-abs" style="color:${pc(rsResult.vsSect)}">${fmt(rsResult.vsSect)}</span>
             <span class="esc-rs-abs2">ETF ${fmt(rsResult.sectRet)}</span>
-            <span class="esc-rs-pts">${pts(rsResult.sectScore, 4)}</span></div>
+            <span class="esc-rs-pts">${pts(rsResult.sectScore, 5)}</span></div>
           <div class="esc-rs-row">
             <span class="esc-rs-lbl">ETF/VOO</span>
-            <span class="esc-rs-abs" style="color:var(--fg-0)">${fmt(rsResult.sectVsVOO)}</span>
+            <span class="esc-rs-abs" style="color:${pc(rsResult.sectVsVOO)}">${fmt(rsResult.sectVsVOO)}</span>
             <span class="esc-rs-abs2"></span>
-            <span class="esc-rs-pts">${pts(rsResult.sectBonusScore, 2)}</span></div>`;
+            <span class="esc-rs-pts">${pts(rsResult.sectBonusScore, 5)}</span></div>`;
         }
-        rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${vooRow}${sectRows}</div>`;
+        // vs VOO always last
+        const vooRow = `<div class="esc-rs-row">
+          <span class="esc-rs-lbl">vs VOO</span>
+          <span class="esc-rs-abs" style="color:${pc(rsResult.vsVOO)}">${fmt(rsResult.vsVOO)}</span>
+          <span class="esc-rs-abs2"></span>
+          <span class="esc-rs-pts">${pts(rsResult.vooScore, 5)}</span></div>`;
+        rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${sectRows}${vooRow}</div>`;
       }
 
       el.innerHTML = `
