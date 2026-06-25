@@ -2123,14 +2123,23 @@
 
     function calcBXGrade(cur, wk, mo) {
       if (cur <= -1) return "Exit";
-      if (cur === 1) return "Hold";
       if (cur === 2) {
         if (wk <= -1 || mo <= -1) return "C";
         if (wk === 2 && mo >= 1)  return "A+";
         if (wk === 1 && mo === 2) return "A";
         if (wk === 1 && mo === 1) return "A-";
-        if (wk === 0 && mo >= 1)  return "B+";
-        if (wk >= 1 && mo === 0)  return "B";
+        if (wk >= 1 && mo === 0)  return "B+";  // 周线有，月线中性
+        if (wk === 0 && mo >= 1)  return "B";   // 周线中性，月线支持
+        return "C";
+      }
+      if (cur === 1) {
+        if (wk <= -1 || mo <= -1) return "C";
+        if (wk === 2 && mo >= 1)  return "B+";
+        if (wk === 2 && mo === 0) return "B";
+        if (wk === 1 && mo === 2) return "B";
+        if (wk === 1 && mo === 1) return "B-";
+        if (wk === 1 && mo === 0) return "C+";
+        if (wk === 0 && mo >= 1)  return "C+";
         return "C";
       }
       if (cur === 0) {
