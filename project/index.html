@@ -1241,6 +1241,29 @@
   .form-bx-chevron { transition: transform .2s; flex-shrink: 0; }
   .form-bx-toggle.open .form-bx-chevron { transform: rotate(180deg); }
 
+  /* Entry scorecard */
+  .bx-etf-row { display: flex; gap: 8px; align-items: center; }
+  .bx-etf-input { background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; color: var(--fg-0); font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; padding: 6px 10px; width: 110px; text-transform: uppercase; }
+  .bx-etf-input::placeholder { color: var(--fg-3); font-weight: 400; text-transform: none; }
+  .bx-etf-input:focus { outline: none; border-color: var(--accent); }
+  .bx-rs-calc-btn { all: unset; padding: 6px 12px; border-radius: 6px; background: var(--bg-3); border: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--fg-1); cursor: pointer; transition: all .12s; white-space: nowrap; }
+  .bx-rs-calc-btn:hover { background: var(--accent); color: oklch(0.14 0.012 250); border-color: var(--accent); }
+  .esc-wrap { margin-top: 12px; padding: 10px 12px 11px; background: var(--bg-2); border-radius: 8px; border: 1px solid var(--line); }
+  .esc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .esc-title { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-2); font-weight: 600; }
+  .esc-rs-badge { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  .esc-body { display: flex; align-items: flex-start; gap: 12px; }
+  .esc-grade-box { display: flex; flex-direction: column; align-items: center; min-width: 44px; }
+  .esc-grade-val { font-size: 22px; font-weight: 800; font-family: var(--f-mono); line-height: 1; }
+  .esc-grade-lbl { font-size: 9px; color: var(--fg-3); margin-top: 3px; text-align: center; letter-spacing: .04em; text-transform: uppercase; }
+  .esc-arrow { font-size: 14px; color: var(--fg-3); padding-top: 3px; }
+  .esc-info { flex: 1; }
+  .esc-action { font-size: 12.5px; font-weight: 700; }
+  .esc-desc { font-size: 11px; color: var(--fg-2); margin-top: 2px; }
+  .esc-pos { font-size: 11px; color: var(--fg-3); margin-top: 3px; }
+  .esc-rs-detail { font-size: 11px; color: var(--fg-3); margin-top: 3px; }
+  .esc-empty { font-size: 11px; color: var(--fg-3); padding: 4px 0; }
+
   /* TABS */
   .panel-head .tab {
     all: unset; cursor: pointer; padding: 5px 14px; border-radius: 6px;
@@ -3702,6 +3725,16 @@
           </div>
         </div>
         <div class="bx-row">
+          <div class="bx-row-label">Current BX <span style="color:var(--accent);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">(日线)</span></div>
+          <div class="bx-score-seg">
+            <button type="button" class="bx-score-btn bx-down"   data-fbx="current" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">Bearish</span></button>
+            <button type="button" class="bx-score-btn bx-warn"   data-fbx="current" data-val="-1"><span class="bx-val">−1</span><span class="bx-sub">→ Bull</span></button>
+            <button type="button" class="bx-score-btn bx-neu active" data-fbx="current" data-val="0"><span class="bx-val"> 0</span><span class="bx-sub">Neutral</span></button>
+            <button type="button" class="bx-score-btn bx-softup" data-fbx="current" data-val="1"><span class="bx-val">+1</span><span class="bx-sub">Less Bull</span></button>
+            <button type="button" class="bx-score-btn bx-up"     data-fbx="current" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">Bullish</span></button>
+          </div>
+        </div>
+        <div class="bx-row">
           <div class="bx-row-label">Weekly BX</div>
           <div class="bx-score-seg">
             <button type="button" class="bx-score-btn bx-down"   data-fbx="weekly" data-val="-2"><span class="bx-val">−2</span><span class="bx-sub">Bearish</span></button>
@@ -3745,6 +3778,14 @@
           </div>
           <div class="bx-quad-row" id="fbq-overall"><span class="bq-badge bq-neu">中性<span class="bq-sub">暂无明显趋势</span></span></div>
         </div>
+        <div class="bx-row" style="margin-bottom:4px">
+          <div class="bx-row-label">行业ETF <span style="color:var(--fg-3);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">相对强度 RS</span></div>
+          <div class="bx-etf-row">
+            <input type="text" id="fbx-sector-etf" class="bx-etf-input" placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"/>
+            <button type="button" id="fbx-rs-calc" class="bx-rs-calc-btn">计算 RS</button>
+          </div>
+        </div>
+        <div id="entry-scorecard" class="esc-wrap" style="display:none"></div>
       </div>
       <div class="form-actions">
         <button type="submit" class="btn primary">确认开仓</button>
@@ -3905,8 +3946,8 @@
   </div>
 </div>
 
-<script src="data.js?v=92"></script>
-<script src="desk.js?v=92"></script>
+<script src="data.js?v=93"></script>
+<script src="desk.js?v=93"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

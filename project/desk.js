@@ -2107,9 +2107,165 @@
       } catch (_) { nameEl.placeholder = "公司名称（可留空）"; }
     });
 
+    // Entry Scoring System helpers
+    const BX_GRADE_META = {
+      "A+":  { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "三时框架全面看涨" },
+      "A":   { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "周月线强势对齐" },
+      "A-":  { color: "oklch(0.78 0.17 145/.85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
+      "B+":  { color: "var(--accent)",             action: "可以开仓", pos: "75%",  desc: "日线领先，中线中性" },
+      "B":   { color: "var(--accent)",             action: "谨慎开仓", pos: "50%",  desc: "周月线分歧，观察为主" },
+      "B-":  { color: "var(--warn)",               action: "谨慎开仓", pos: "50%",  desc: "日线中性，有条件进场" },
+      "C+":  { color: "var(--warn)",               action: "观望",     pos: "25%",  desc: "中线不明确，等待信号" },
+      "C":   { color: "oklch(0.70 0.19 25/.85)",   action: "暂缓",     pos: "跳过", desc: "多时框架不对齐" },
+      "Hold":{ color: "var(--fg-2)",               action: "持有现有", pos: "—",    desc: "日线→Bull，等待日线确认" },
+      "Exit":{ color: "var(--down)",               action: "回避",     pos: "跳过", desc: "看跌信号，不宜开仓" },
+    };
+
+    function calcBXGrade(cur, wk, mo) {
+      if (cur <= -1) return "Exit";
+      if (cur === 1) return "Hold";
+      if (cur === 2) {
+        if (wk <= -1 || mo <= -1) return "C";
+        if (wk === 2 && mo >= 1)  return "A+";
+        if (wk === 1 && mo === 2) return "A";
+        if (wk === 1 && mo === 1) return "A-";
+        if (wk === 0 && mo >= 1)  return "B+";
+        if (wk >= 1 && mo === 0)  return "B";
+        return "C";
+      }
+      if (cur === 0) {
+        if (wk >= 1 && mo >= -1) return "B-";
+        if (wk === 0 && mo >= -1) return "C+";
+        return "C";
+      }
+      return "C";
+    }
+
+    const GRADE_LADDER = ["Exit","C","C+","B-","B","B+","A-","A","A+"];
+
+    function rsAdjustGrade(grade, rsScore) {
+      if (grade === "Hold" || grade === "Exit") return grade;
+      const idx = GRADE_LADDER.indexOf(grade);
+      if (idx < 0) return grade;
+      if (rsScore >= 6) return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
+      if (rsScore < 3)  return GRADE_LADDER[Math.max(idx - 1, 0)];
+      return grade;
+    }
+
+    async function computeEntryRS(sym, sectorEtf) {
+      const syms = sectorEtf ? `${sym},${sectorEtf},VOO` : `${sym},VOO`;
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - 40);
+      const fromStr = fromDate.toISOString().slice(0, 10);
+      const res = await fetch(`/api/history?symbols=${encodeURIComponent(syms)}&from=${fromStr}`);
+      if (!res.ok) throw new Error("history error");
+      const { results } = await res.json();
+      const getPrices = key => {
+        const obj = results[key] || results[key.toUpperCase()] || results[key.toLowerCase()];
+        if (!obj) return null;
+        return Object.keys(obj).sort().map(d => obj[d]).filter(v => v != null);
+      };
+      const get20dReturn = prices => {
+        if (!prices || prices.length < 5) return null;
+        const start = prices[Math.max(0, prices.length - 22)];
+        const end   = prices[prices.length - 1];
+        return start ? (end - start) / start * 100 : null;
+      };
+      const stockPrices = getPrices(sym);
+      const vooPrices   = getPrices("VOO");
+      const sectPrices  = sectorEtf ? getPrices(sectorEtf) : null;
+      return {
+        stockRet: get20dReturn(stockPrices),
+        vooRet:   get20dReturn(vooPrices),
+        sectRet:  get20dReturn(sectPrices),
+      };
+    }
+
+    function calcRSScore(rsData) {
+      const { stockRet, vooRet, sectRet } = rsData;
+      if (stockRet == null || vooRet == null) return null;
+      let score = 0;
+      const vsVOO = stockRet - vooRet;
+      if (vsVOO > 5)        score += 3;
+      else if (vsVOO > 2)   score += 2;
+      else if (vsVOO > -2)  score += 1;
+      else if (vsVOO > -5)  score += 0.5;
+      if (sectRet != null) {
+        const vsSect    = stockRet - sectRet;
+        const sectVsVOO = sectRet  - vooRet;
+        if (vsSect > 3)        score += 3;
+        else if (vsSect > 1)   score += 2;
+        else if (vsSect > -1)  score += 1;
+        else if (vsSect > -3)  score += 0.5;
+        if (sectVsVOO > 2)       score += 2;
+        else if (sectVsVOO > -2) score += 1;
+      }
+      return score;
+    }
+
+    function renderEntryScorecard(bxGrade, rsScore, rsData, loading = false) {
+      const el = $("#entry-scorecard");
+      if (!el) return;
+      el.style.display = "";
+      if (loading) {
+        el.innerHTML = `<div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">RS: 计算中…</div></div><div class="esc-empty">正在获取相对强度数据…</div>`;
+        return;
+      }
+      const hasRS      = rsScore != null;
+      const finalGrade = hasRS ? rsAdjustGrade(bxGrade, rsScore) : bxGrade;
+      const meta       = BX_GRADE_META[finalGrade] || BX_GRADE_META["C"];
+      const bxMeta     = BX_GRADE_META[bxGrade]    || BX_GRADE_META["C"];
+      const rsTag      = hasRS ? `RS: <strong style="color:var(--fg-0)">${rsScore.toFixed(1)}/8</strong>` : "RS: —";
+      const gradeChanged = hasRS && finalGrade !== bxGrade;
+
+      let gradeHTML;
+      if (gradeChanged) {
+        gradeHTML = `
+          <div class="esc-grade-box">
+            <div class="esc-grade-val" style="font-size:14px;opacity:.55;color:${bxMeta.color}">${bxGrade}</div>
+            <div class="esc-grade-lbl">BX</div>
+          </div>
+          <div class="esc-arrow">→</div>
+          <div class="esc-grade-box">
+            <div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div>
+            <div class="esc-grade-lbl">Final</div>
+          </div>`;
+      } else {
+        gradeHTML = `<div class="esc-grade-box"><div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div><div class="esc-grade-lbl">评级</div></div>`;
+      }
+
+      let rsDetail = "";
+      if (rsData && rsData.stockRet != null && rsData.vooRet != null) {
+        const vsVOO  = (rsData.stockRet - rsData.vooRet).toFixed(1);
+        const vSign  = vsVOO >= 0 ? "+" : "";
+        const vColor = vsVOO >= 0 ? "var(--up)" : "var(--down)";
+        let parts = `<span style="color:${vColor}">${vSign}${vsVOO}% vs VOO</span>`;
+        if (rsData.sectRet != null) {
+          const vsSect  = (rsData.stockRet - rsData.sectRet).toFixed(1);
+          const sSign   = vsSect >= 0 ? "+" : "";
+          const sColor  = vsSect >= 0 ? "var(--up)" : "var(--down)";
+          parts += ` · <span style="color:${sColor}">${sSign}${vsSect}% vs ETF</span>`;
+        }
+        rsDetail = `<div class="esc-rs-detail">${parts}</div>`;
+      }
+
+      el.innerHTML = `
+        <div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">${rsTag}</div></div>
+        <div class="esc-body">
+          ${gradeHTML}
+          <div class="esc-info">
+            <div class="esc-action" style="color:${meta.color}">${meta.action}</div>
+            <div class="esc-desc">${meta.desc}</div>
+            <div class="esc-pos">建议仓位: <strong style="color:var(--fg-0)">${meta.pos}</strong></div>
+            ${rsDetail}
+          </div>
+        </div>`;
+    }
+
     const readFormBX = () => {
       const body = $("#form-bx-body");
       const dailyBars = body?.querySelector("[data-fbx='dailyBars'].active")?.dataset.val || "0-5";
+      const current   = parseFloat(body?.querySelector("[data-fbx='current'].active")?.dataset.val) || 0;
       const weekly    = parseFloat(body?.querySelector("[data-fbx='weekly'].active")?.dataset.val) || 0;
       const monthly   = parseFloat(body?.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
       const snameEl   = $("#fbx-sname");
@@ -2120,7 +2276,7 @@
       const oscore    = parseFloat($("#fbx-oscore")?.value) || 0;
       const oslope    = parseFloat($("#fbx-oslope")?.value) || 0;
       return {
-        dailyBars, weekly, monthly,
+        dailyBars, current, weekly, monthly,
         sector:  { name: sname, color: scolor, score: String(sscore), slope: sslope, slopeDir: Math.sign(sslope) },
         overall: { score: String(oscore), slope: oslope, slopeDir: Math.sign(oslope) }
       };
@@ -2131,7 +2287,7 @@
       if (toggle) toggle.classList.remove("open");
       if (!body) return;
       body.style.display = "none";
-      [["dailyBars","0-5"],["weekly","0"],["monthly","0"]].forEach(([field, def]) => {
+      [["dailyBars","0-5"],["current","0"],["weekly","0"],["monthly","0"]].forEach(([field, def]) => {
         $$(`[data-fbx="${field}"]`, body).forEach(b => b.classList.toggle("active", b.dataset.val === def));
       });
       ["fbx-sscore","fbx-sslope","fbx-oscore","fbx-oslope"].forEach(id => {
@@ -2144,6 +2300,10 @@
       const snameEl = $("#fbx-sname");
       if (snameEl) { snameEl.textContent = "—"; snameEl.style.background = "oklch(0.35 0.01 250)"; }
       $$(".bx-color-opt", body).forEach(b => b.classList.toggle("active", b.dataset.colorVal === "oklch(0.35 0.01 250)"));
+      const etfInput = $("#fbx-sector-etf");
+      if (etfInput) etfInput.value = "";
+      const esc = $("#entry-scorecard");
+      if (esc) esc.style.display = "none";
     };
 
     const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -2318,6 +2478,48 @@
         const snameEl = $("#fbx-sname");
         if (snameEl) snameEl.style.background = c;
       });
+
+      // Entry scorecard: update on any BX button click
+      const _refreshScorecard = () => {
+        const cur = parseFloat(formBxBody.querySelector("[data-fbx='current'].active")?.dataset.val) || 0;
+        const wk  = parseFloat(formBxBody.querySelector("[data-fbx='weekly'].active")?.dataset.val)  || 0;
+        const mo  = parseFloat(formBxBody.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
+        const grade = calcBXGrade(cur, wk, mo);
+        renderEntryScorecard(grade, null, null);
+      };
+      formBxBody.addEventListener("click", e => {
+        if (e.target.closest("[data-fbx='current'],[data-fbx='weekly'],[data-fbx='monthly']")) {
+          setTimeout(_refreshScorecard, 10);
+        }
+      });
+    }
+
+    // RS calc button
+    const rsCalcBtn   = $("#fbx-rs-calc");
+    const etfInput    = $("#fbx-sector-etf");
+    if (rsCalcBtn) {
+      rsCalcBtn.addEventListener("click", async () => {
+        const sym      = $("#form-ticker")?.value.toUpperCase().trim();
+        if (!sym) return;
+        const sectorEtf = etfInput?.value.toUpperCase().trim() || null;
+        const body = $("#form-bx-body");
+        const cur  = parseFloat(body?.querySelector("[data-fbx='current'].active")?.dataset.val) || 0;
+        const wk   = parseFloat(body?.querySelector("[data-fbx='weekly'].active")?.dataset.val)  || 0;
+        const mo   = parseFloat(body?.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
+        const grade = calcBXGrade(cur, wk, mo);
+        renderEntryScorecard(grade, null, null, true);
+        try {
+          const rsData  = await computeEntryRS(sym, sectorEtf);
+          const rsScore = calcRSScore(rsData);
+          renderEntryScorecard(grade, rsScore, rsData);
+        } catch (_) {
+          renderEntryScorecard(grade, null, null);
+        }
+      });
+    }
+    if (etfInput) {
+      etfInput.addEventListener("input", () => { etfInput.value = etfInput.value.toUpperCase(); });
+      etfInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); rsCalcBtn?.click(); } });
     }
 
     form.addEventListener("submit", e => {
