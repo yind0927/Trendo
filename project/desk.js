@@ -1532,20 +1532,26 @@
           <span class="hc-pct ${pnlSign}">${fmt.pct(pct)}</span>
           <span class="hc-sep muted">·</span>
           <span class="hc-days muted">${h.days ?? 0}天</span>
-          ${!isClosed ? (() => {
-            const grade = h.bx?.entryFinalGrade;
-            if (grade) {
-              const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
-              const rs = h.bx?.entryRsResult;
-              const rsLabel = rs ? `<span class="hc-sep muted" style="margin:0 2px">·</span><span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${rs.score}/${rs.max}</span>` : "";
-              return `<span class="hc-sep muted">·</span><span class="bxg-val" style="color:${meta.color};font-size:11px;font-weight:700">${grade}</span>${rsLabel}`;
-            }
-            return `<span class="hc-sep muted">·</span><span style="color:var(--fg-3);font-size:11px">—</span>`;
-          })() : ""}
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
         </div>` : ""}
+        ${!isClosed ? (() => {
+          const grade = h.bx?.entryFinalGrade;
+          if (grade) {
+            const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
+            const rs = h.bx?.entryRsResult;
+            const rsLabel = rs
+              ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>`
+              : "";
+            return `<div class="hc-grade-row">
+              <span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:color-mix(in oklch,${meta.color} 12%,transparent)">${grade}</span>
+              <span class="hc-grade-action" style="color:${meta.color}">${meta.action}</span>
+              ${rsLabel}
+            </div>`;
+          }
+          return `<div class="hc-grade-row"><span class="hc-grade-chip hc-grade-empty">—</span></div>`;
+        })() : ""}
         <div class="hc-price-row">
           <span class="hc-entry-price">${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>入 $${price(ccAdjCost(h))}` : `入 $${price(h.cost)}`}</span>
           <span class="hc-price-arrow">→</span>
