@@ -246,26 +246,220 @@
     return `<span class="bq-badge ${q.cls}">${q.label}<span class="bq-sub">${q.sub}</span></span>`;
   }
 
+  // ===== Entry Scoring System (BX grade + RS) — shared by modal, drawer, table, cards =====
+  // Entry Scoring System helpers
+  const BX_GRADE_META = {
+    "A+":  { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "三时框架全面看涨" },
+    "A":   { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "周月线强势对齐" },
+    "A-":  { color: "oklch(0.78 0.17 145/.85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
+    "B+":  { color: "var(--accent)",             action: "可以开仓", pos: "75%",  desc: "日线领先，中线中性" },
+    "B":   { color: "var(--accent)",             action: "谨慎开仓", pos: "50%",  desc: "周月线分歧，观察为主" },
+    "B-":  { color: "var(--warn)",               action: "谨慎开仓", pos: "50%",  desc: "日线中性，有条件进场" },
+    "C+":  { color: "var(--warn)",               action: "观望",     pos: "25%",  desc: "中线不明确，等待信号" },
+    "C":   { color: "oklch(0.70 0.19 25/.85)",   action: "暂缓",     pos: "跳过", desc: "多时框架不对齐" },
+    "Hold":{ color: "var(--fg-2)",               action: "持有现有", pos: "—",    desc: "日线→Bull，等待日线确认" },
+    "Exit":{ color: "var(--down)",               action: "回避",     pos: "跳过", desc: "看跌信号，不宜开仓" },
+  };
+
+  function calcBXGrade(cur, wk, mo) {
+    if (cur <= -1) return "Exit";
+    if (cur === 2) {
+      if (wk <= -1 || mo <= -1) return "C";
+      if (wk === 2 && mo >= 1)  return "A+";
+      if (wk === 1 && mo === 2) return "A";
+      if (wk === 1 && mo === 1) return "A-";
+      if (wk >= 1 && mo === 0)  return "B+";  // 周线有，月线中性
+      if (wk === 0 && mo >= 1)  return "B";   // 周线中性，月线支持
+      return "C";
+    }
+    if (cur === 1) {
+      if (wk <= -1 || mo <= -1) return "C";
+      if (wk === 2 && mo >= 1)  return "B+";
+      if (wk === 2 && mo === 0) return "B";
+      if (wk === 1 && mo === 2) return "B";
+      if (wk === 1 && mo === 1) return "B-";
+      if (wk === 1 && mo === 0) return "C+";
+      if (wk === 0 && mo >= 1)  return "C+";
+      return "C";
+    }
+    if (cur === 0) {
+      if (wk >= 1 && mo >= -1) return "B-";
+      if (wk === 0 && mo >= -1) return "C+";
+      return "C";
+    }
+    return "C";
+  }
+
+  const GRADE_LADDER = ["Exit","C","C+","B-","B","B+","A-","A","A+"];
+
+  function rsAdjustGrade(grade, rsResult) {
+    if (!rsResult || grade === "Hold" || grade === "Exit") return grade;
+    const idx = GRADE_LADDER.indexOf(grade);
+    if (idx < 0) return grade;
+    // Normalize to 0-10 scale regardless of denominator
+    const norm = rsResult.max > 0 ? (rsResult.score / rsResult.max) * 10 : 0;
+    if (norm >= 7)  return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
+    if (norm <= 0)  return GRADE_LADDER[Math.max(idx - 2, 0)];  // RS=0: double downgrade
+    if (norm < 4)   return GRADE_LADDER[Math.max(idx - 1, 0)];
+    return grade;
+  }
+
+  async function computeEntryRS(sym, sectorEtf) {
+    // Fetch 60 calendar days to guarantee ≥22 trading bars after holidays
+    const syms = sectorEtf ? `${sym},${sectorEtf},VOO` : `${sym},VOO`;
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 60);
+    const fromStr = fromDate.toISOString().slice(0, 10);
+    const res = await fetch(`/api/history?symbols=${encodeURIComponent(syms)}&from=${fromStr}`);
+    if (!res.ok) throw new Error("history error");
+    const { results } = await res.json();
+    const getPrices = key => {
+      const obj = results[key] || results[key.toUpperCase()] || results[key.toLowerCase()];
+      if (!obj) return null;
+      return Object.keys(obj).sort().map(d => obj[d]).filter(v => v != null);
+    };
+    // Exactly 20 trading days: prices[N-21] → prices[N-1] = 20 intervals
+    const get20dReturn = prices => {
+      if (!prices || prices.length < 22) return null;
+      const start = prices[prices.length - 21];
+      const end   = prices[prices.length - 1];
+      return start ? (end - start) / start * 100 : null;
+    };
+    const stockPrices = getPrices(sym);
+    const vooPrices   = getPrices("VOO");
+    const sectPrices  = sectorEtf ? getPrices(sectorEtf) : null;
+    return {
+      stockRet: get20dReturn(stockPrices),
+      vooRet:   get20dReturn(vooPrices),
+      sectRet:  get20dReturn(sectPrices),
+    };
+  }
+
+  function calcRSScore(rsData) {
+    const { stockRet, vooRet, sectRet } = rsData;
+    if (stockRet == null || vooRet == null) return null;
+    const hasSect   = sectRet != null;
+    const vsVOO     = stockRet - vooRet;
+    const vsSect    = hasSect ? stockRet - sectRet : null;
+    const sectVsVOO = hasSect ? sectRet  - vooRet  : null;
+
+    // vs VOO (0-5 pts)
+    let vooScore = 0;
+    if (vsVOO > 8)        vooScore = 5;
+    else if (vsVOO > 5)   vooScore = 4;
+    else if (vsVOO > 2)   vooScore = 3;
+    else if (vsVOO > 0)   vooScore = 2;
+    else if (vsVOO > -3)  vooScore = 1;
+
+    // vs Sector (0-5 pts)
+    let sectScore = 0;
+    if (hasSect) {
+      if (vsSect > 5)       sectScore = 5;
+      else if (vsSect > 3)  sectScore = 4;
+      else if (vsSect > 1)  sectScore = 3;
+      else if (vsSect > 0)  sectScore = 2;
+      else if (vsSect > -2) sectScore = 1;
+    }
+
+    // Sector vs VOO (0-5 pts)
+    let sectBonusScore = 0;
+    if (hasSect && sectVsVOO != null) {
+      if (sectVsVOO > 5)        sectBonusScore = 5;
+      else if (sectVsVOO > 2)   sectBonusScore = 4;
+      else if (sectVsVOO > 0)   sectBonusScore = 3;
+      else if (sectVsVOO > -2)  sectBonusScore = 2;
+      else if (sectVsVOO > -5)  sectBonusScore = 1;
+    }
+
+    const score = vooScore + sectScore + sectBonusScore;
+    const max   = hasSect ? 15 : 5;
+    // Include abs returns for display
+    return { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
+  }
+
+  function renderEntryScorecard(bxGrade, rsResult, loading = false, targetEl = null) {
+    const el = targetEl || $("#entry-scorecard");
+    if (!el) return;
+    el.style.display = "";
+    if (loading) {
+      el.innerHTML = `<div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">RS: 计算中…</div></div><div class="esc-empty">正在获取相对强度数据…</div>`;
+      return;
+    }
+    const hasRS      = rsResult != null;
+    const finalGrade = hasRS ? rsAdjustGrade(bxGrade, rsResult) : bxGrade;
+    const meta       = BX_GRADE_META[finalGrade] || BX_GRADE_META["C"];
+    const bxMeta     = BX_GRADE_META[bxGrade]    || BX_GRADE_META["C"];
+    const gradeChanged = hasRS && finalGrade !== bxGrade;
+
+    const rsTag = hasRS
+      ? `RS: <strong style="color:var(--fg-0)">${rsResult.score}/${rsResult.max}</strong>`
+      : "RS: —";
+
+    let gradeHTML;
+    if (gradeChanged) {
+      gradeHTML = `
+        <div class="esc-grade-box">
+          <div class="esc-grade-val" style="font-size:14px;opacity:.5;color:${bxMeta.color}">${bxGrade}</div>
+          <div class="esc-grade-lbl">BX</div>
+        </div>
+        <div class="esc-arrow">→</div>
+        <div class="esc-grade-box">
+          <div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div>
+          <div class="esc-grade-lbl">Final</div>
+        </div>`;
+    } else {
+      gradeHTML = `<div class="esc-grade-box"><div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div><div class="esc-grade-lbl">评级</div></div>`;
+    }
+
+    // RS breakdown table — shows absolute returns so user can verify on chart
+    let rsBreakdown = "";
+    if (hasRS) {
+      const fmt = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+      const pc  = v => v == null ? "var(--fg-0)" : v >= 0 ? "var(--up)" : "var(--down)";
+      const pts = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
+      // Row 1: raw 20d returns — stock colored, VOO stays dim grey for reference
+      const stockRow = `<div class="esc-rs-row esc-rs-header">
+        <span class="esc-rs-lbl">股票 20d</span>
+        <span class="esc-rs-abs" style="color:${pc(rsResult.stockRet)};font-weight:700">${fmt(rsResult.stockRet)}</span>
+        <span class="esc-rs-abs2">VOO ${fmt(rsResult.vooRet)}</span>
+        <span class="esc-rs-pts"></span></div>`;
+      let sectRows = "";
+      if (rsResult.hasSect) {
+        sectRows = `<div class="esc-rs-row">
+          <span class="esc-rs-lbl">vs ETF</span>
+          <span class="esc-rs-abs" style="color:${pc(rsResult.vsSect)}">${fmt(rsResult.vsSect)}</span>
+          <span class="esc-rs-abs2">ETF ${fmt(rsResult.sectRet)}</span>
+          <span class="esc-rs-pts">${pts(rsResult.sectScore, 5)}</span></div>
+        <div class="esc-rs-row">
+          <span class="esc-rs-lbl">ETF/VOO</span>
+          <span class="esc-rs-abs" style="color:${pc(rsResult.sectVsVOO)}">${fmt(rsResult.sectVsVOO)}</span>
+          <span class="esc-rs-abs2"></span>
+          <span class="esc-rs-pts">${pts(rsResult.sectBonusScore, 5)}</span></div>`;
+      }
+      // vs VOO always last
+      const vooRow = `<div class="esc-rs-row">
+        <span class="esc-rs-lbl">vs VOO</span>
+        <span class="esc-rs-abs" style="color:${pc(rsResult.vsVOO)}">${fmt(rsResult.vsVOO)}</span>
+        <span class="esc-rs-abs2"></span>
+        <span class="esc-rs-pts">${pts(rsResult.vooScore, 5)}</span></div>`;
+      rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${sectRows}${vooRow}</div>`;
+    }
+
+    el.innerHTML = `
+      <div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">${rsTag}</div></div>
+      <div class="esc-body">
+        ${gradeHTML}
+        <div class="esc-info">
+          <div class="esc-action" style="color:${meta.color}">${meta.action}</div>
+          <div class="esc-desc">${meta.desc}</div>
+          <div class="esc-pos">建议仓位: <strong style="color:var(--fg-0)">${meta.pos}</strong></div>
+        </div>
+      </div>
+      ${rsBreakdown}`;
+  }
+
   function bxSectionHTML(h) {
     const bx = h.bx;
-    const scoreButtons = field => BX_SCORE_OPTS.map(o => `
-      <button class="bx-score-btn ${o.cls} ${bx[field] === o.val ? "active" : ""}"
-              data-bx-field="${field}" data-bx-val="${o.val}">
-        <span class="bx-val">${o.label}</span>
-        <span class="bx-sub">${o.sub}</span>
-      </button>`).join("");
-    const getSlopeDir = obj => Math.sign(parseFloat(obj.slope) || 0);
-    const slopeCell = (field, val) => {
-      const n = parseFloat(val) || 0;
-      const tint = n > 0 ? "tint-up" : n < 0 ? "tint-down" : "tint-flat";
-      return `<input type="number" class="bx-slope-input ${tint}" data-slope-field="${field}" value="${n}" step="0.1">`;
-    };
-    const colorDivider = () => `
-      <div class="bx-color-divider">
-        <span class="bx-meta-lbl" style="white-space:nowrap;margin-right:4px">板块色</span>
-        ${SWATCH_COLORS.map(c => `<button class="bx-color-opt${bx.sector.color===c?' active':''}"
-          style="background:${c}" data-color-val="${c}" title="${c}"></button>`).join('')}
-      </div>`;
 
     // ── Entry scorecard: static display of stored entry-time grade + RS ──
     let entryScorecardHTML = `<div class="dsc-empty">开仓时未记录评分</div>`;
@@ -325,13 +519,28 @@
         </div>`;
     }
 
-    // ── Live panel: all three BX period selectors + ETF input + compute button ─
-    const livePeriodBtns = period => BX_SCORE_OPTS.map(o => `
-      <button class="bx-score-btn ${o.cls} ${(bx[period] ?? 0) === o.val ? "active" : ""}"
-              data-drawer-bx="${period}" data-bx-val="${o.val}">
-        <span class="bx-val">${o.label}</span>
-        <span class="bx-sub">${o.sub}</span>
+    // ── Live panel: clone of the new-position modal BX form ──────────────
+    const periodRow = (label, period, hint = "") => {
+      const btns = BX_SCORE_OPTS.map(o => `
+        <button type="button" class="bx-score-btn ${o.cls} ${(bx[period] ?? 0) === o.val ? "active" : ""}"
+                data-drawer-bx="${period}" data-bx-val="${o.val}">
+          <span class="bx-val">${o.label}</span>
+          <span class="bx-sub">${o.sub}</span>
+        </button>`).join("");
+      return `
+        <div class="bx-row">
+          <div class="bx-row-label">${label}${hint}</div>
+          <div class="bx-score-seg">${btns}</div>
+        </div>`;
+    };
+    const dailyBtns = ["0-5","5-15","15+"].map(v => `
+      <button type="button" class="bx-daily-btn ${bx.dailyBars === v ? "active" : ""}"
+              data-drawer-bx="dailyBars" data-bx-val="${v}">
+        ${v}<span class="bx-sub">bars</span>
       </button>`).join("");
+    const colorSwatches = SWATCH_COLORS.map(c => `
+      <button type="button" class="bx-color-opt${bx.sector.color === c ? ' active' : ''}"
+        style="background:${c}" data-drawer-color="${c}" title="${c}"></button>`).join('');
 
     return `
       <div class="drawer-section">
@@ -346,74 +555,31 @@
             ${entryScorecardHTML}
           </div>
           <div class="dsc-panel" data-dsc-panel="live" style="display:none">
-            <div class="bx-row" style="margin-bottom:4px">
-              <div class="bx-row-label">Current BX</div>
-              <div class="bx-score-seg">${livePeriodBtns("current")}</div>
+            <div class="bx-row">
+              <div class="bx-row-label">Daily Bars <span class="bx-hint">入场后第 ${calcTradingDays(h.entry)} 交易日</span></div>
+              <div class="bx-daily-seg">${dailyBtns}</div>
+            </div>
+            ${periodRow("Current BX", "current", ' <span style="color:var(--accent);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">(日线)</span>')}
+            ${periodRow("Weekly BX", "weekly")}
+            ${periodRow("Monthly BX", "monthly")}
+            <div class="bx-row" style="margin-top:2px">
+              <div class="bx-row-label">板块</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span id="drawer-sname" class="bx-name" contenteditable="true" data-drawer-sname spellcheck="false" style="background:${bx.sector.color}">${bx.sector.name}</span>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${colorSwatches}</div>
+              </div>
             </div>
             <div class="bx-row" style="margin-bottom:4px">
-              <div class="bx-row-label">Weekly BX</div>
-              <div class="bx-score-seg">${livePeriodBtns("weekly")}</div>
-            </div>
-            <div class="bx-row" style="margin-bottom:6px">
-              <div class="bx-row-label">Monthly BX</div>
-              <div class="bx-score-seg">${livePeriodBtns("monthly")}</div>
-            </div>
-            <div class="bx-etf-row" style="margin-bottom:6px">
-              <input type="text" id="drawer-rs-etf" class="bx-etf-input"
-                     placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"
-                     value="${bx.entrySectorEtf || ''}"/>
-              <button type="button" id="drawer-rs-calc" class="bx-rs-calc-btn">计算 RS</button>
+              <div class="bx-row-label">行业ETF <span style="color:var(--fg-3);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">相对强度 RS</span></div>
+              <div class="bx-etf-row">
+                <input type="text" id="drawer-rs-etf" class="bx-etf-input"
+                       placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"
+                       value="${bx.entrySectorEtf || ''}"/>
+                <button type="button" id="drawer-rs-calc" class="bx-rs-calc-btn">计算 RS</button>
+              </div>
             </div>
             <div id="drawer-live-scorecard" class="esc-wrap" style="display:none"></div>
           </div>
-        </div>
-
-        <div class="bx-row">
-          <div class="bx-row-label">Daily BX Trend <span class="bx-hint">入场后第 ${calcTradingDays(h.entry)} 交易日</span></div>
-          <div class="bx-daily-seg">
-            ${["0-5","5-15","15+"].map(v => `
-              <button class="bx-daily-btn ${bx.dailyBars === v ? "active" : ""}"
-                      data-bx-field="dailyBars" data-bx-val="${v}">
-                ${v}<span class="bx-sub">bars</span>
-              </button>`).join("")}
-          </div>
-        </div>
-
-        <div class="bx-row">
-          <div class="bx-row-label">Weekly BX</div>
-          <div class="bx-score-seg">${scoreButtons("weekly")}</div>
-        </div>
-
-        <div class="bx-row">
-          <div class="bx-row-label">Monthly BX</div>
-          <div class="bx-score-seg">${scoreButtons("monthly")}</div>
-        </div>
-
-        <div class="bx-align-grid">
-          <div class="bx-align-hdr">
-            <span></span><span class="bx-meta-lbl">Score</span><span class="bx-meta-lbl">Slope</span>
-          </div>
-          <div class="bx-align-row">
-            <div class="bx-align-label">
-              <span class="bx-name" contenteditable="true"
-                    data-bx-field="sectorName" spellcheck="false"
-                    style="background:${bx.sector.color}">${bx.sector.name}</span>
-            </div>
-            <span class="bx-chip-score" contenteditable="true"
-                  data-bx-field="sectorScore">${bx.sector.score}</span>
-            ${slopeCell("sectorSlope", bx.sector.slope)}
-          </div>
-          <div class="bx-quad-row" id="bq-sector">${bqBadgeHTML(bx.sector.score, getSlopeDir(bx.sector))}</div>
-          ${colorDivider()}
-          <div class="bx-align-row">
-            <div class="bx-align-label">
-              <span class="bx-meta-lbl" style="font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-1)">VS VOO</span>
-            </div>
-            <span class="bx-chip-score" contenteditable="true"
-                  data-bx-field="overallScore">${bx.overall.score}</span>
-            ${slopeCell("overallSlope", bx.overall.slope)}
-          </div>
-          <div class="bx-quad-row" id="bq-overall">${bqBadgeHTML(bx.overall.score, getSlopeDir(bx.overall))}</div>
         </div>
       </div>`;
   }
@@ -516,68 +682,20 @@
 
   function wireBX(h) {
     const dr = $("#drawer");
+    const liveEl = () => dr.querySelector("#drawer-live-scorecard");
 
-    const refreshBadge = which => {
-      const el = $(`#bq-${which}`, dr);
-      if (!el) return;
-      const score = which === "sector" ? h.bx.sector.score : h.bx.overall.score;
-      const slope = which === "sector" ? (h.bx.sector.slope || 0) : (h.bx.overall.slope || 0);
-      el.innerHTML = bqBadgeHTML(score, Math.sign(slope));
+    // Read the currently-selected live BX value for a given period
+    const liveBX = period => {
+      const v = dr.querySelector(`[data-drawer-bx="${period}"].active`)?.dataset.bxVal;
+      return parseFloat(v) || 0;
     };
-
-    // Slope number input — tints by sign, refreshes badge
-    $$(".bx-slope-input", dr).forEach(input => {
-      const commit = () => {
-        const n = parseFloat(input.value) || 0;
-        const which = input.dataset.slopeField === "sectorSlope" ? "sector" : "overall";
-        if (which === "sector") h.bx.sector.slope = n; else h.bx.overall.slope = n;
-        input.classList.remove("tint-up", "tint-flat", "tint-down");
-        input.classList.add(n > 0 ? "tint-up" : n < 0 ? "tint-down" : "tint-flat");
-        refreshBadge(which);
-        saveToStorage();
-      };
-      input.addEventListener("blur", commit);
-      input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
-    });
-
-    // Inline color strip — click a color to immediately apply it
-    $$(".bx-color-opt", dr).forEach(opt => {
-      opt.addEventListener("click", () => {
-        const c = opt.dataset.colorVal;
-        h.bx.sector.color = c;
-        const nameEl = $("[data-bx-field='sectorName']", dr);
-        if (nameEl) nameEl.style.background = c;
-        $$(".bx-color-opt", dr).forEach(o => o.classList.toggle("active", o.dataset.colorVal === c));
-        saveToStorage();
-      });
-    });
-
-    // Score/bars buttons
-    $$("[data-bx-field][data-bx-val]", dr).forEach(btn => {
-      if (btn.tagName !== "BUTTON") return;
-      btn.addEventListener("click", () => {
-        const field = btn.dataset.bxField;
-        if (field === "dailyBars") {
-          h.bx.dailyBars = btn.dataset.bxVal;
-          $$(`[data-bx-field="dailyBars"]`, dr).forEach(b => b.classList.toggle("active", b.dataset.bxVal === h.bx.dailyBars));
-        } else if (field === "weekly" || field === "monthly") {
-          h.bx[field] = +btn.dataset.bxVal;
-          $$(`[data-bx-field="${field}"]`, dr).forEach(b => b.classList.toggle("active", +b.dataset.bxVal === h.bx[field]));
-        }
-        saveToStorage();
-      });
-    });
-
-    $$("[contenteditable][data-bx-field]", dr).forEach(el => {
-      el.addEventListener("blur", () => {
-        const v = el.textContent.trim(), f = el.dataset.bxField;
-        if (f === "sectorName")   h.bx.sector.name   = v;
-        if (f === "sectorScore")  { h.bx.sector.score  = v; refreshBadge("sector");  }
-        if (f === "overallScore") { h.bx.overall.score = v; refreshBadge("overall"); }
-        saveToStorage();
-      });
-      el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
-    });
+    // Re-render the live scorecard grade (BX only, no RS) — mirrors the modal
+    const refreshLiveGrade = () => {
+      const el = liveEl();
+      if (!el) return;
+      const grade = calcBXGrade(liveBX("current"), liveBX("weekly"), liveBX("monthly"));
+      renderEntryScorecard(grade, null, false, el);
+    };
 
     // ── DSC tab switching ─────────────────────────────────────────────────
     $$(".dsc-tab", dr).forEach(tab => {
@@ -590,33 +708,59 @@
       });
     });
 
-    // ── Live RS calc in drawer ────────────────────────────────────────────
+    // ── Live BX selectors (dailyBars / current / weekly / monthly) ────────
+    $$("[data-drawer-bx][data-bx-val]", dr).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const period = btn.dataset.drawerBx;
+        $$(`[data-drawer-bx="${period}"]`, dr).forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        // Persist to the holding's current BX state
+        if (period === "dailyBars") h.bx.dailyBars = btn.dataset.bxVal;
+        else                        h.bx[period]   = +btn.dataset.bxVal;
+        saveToStorage();
+        // Show / refresh the live grade on any period change — same as the modal
+        if (period !== "dailyBars") refreshLiveGrade();
+      });
+    });
+
+    // ── Sector color swatches ─────────────────────────────────────────────
+    $$("[data-drawer-color]", dr).forEach(opt => {
+      opt.addEventListener("click", () => {
+        const c = opt.dataset.drawerColor;
+        h.bx.sector.color = c;
+        const nameEl = dr.querySelector("[data-drawer-sname]");
+        if (nameEl) nameEl.style.background = c;
+        $$("[data-drawer-color]", dr).forEach(o => o.classList.toggle("active", o.dataset.drawerColor === c));
+        saveToStorage();
+      });
+    });
+
+    // ── Sector name (editable) ────────────────────────────────────────────
+    const snameEl = dr.querySelector("[data-drawer-sname]");
+    if (snameEl) {
+      snameEl.addEventListener("blur", () => {
+        h.bx.sector.name = snameEl.textContent.trim() || "—";
+        saveToStorage();
+      });
+      snameEl.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); snameEl.blur(); } });
+    }
+
+    // ── Live RS calc — identical logic to the new-position modal ──────────
     const drawerRsCalc = dr.querySelector("#drawer-rs-calc");
     const drawerEtfInp = dr.querySelector("#drawer-rs-etf");
     if (drawerRsCalc) {
       drawerRsCalc.addEventListener("click", async () => {
-        const liveCur   = parseFloat(dr.querySelector("[data-drawer-bx='current'].active")?.dataset.bxVal) ?? 0;
-        const liveWk    = parseFloat(dr.querySelector("[data-drawer-bx='weekly'].active")?.dataset.bxVal) ?? 0;
-        const liveMo    = parseFloat(dr.querySelector("[data-drawer-bx='monthly'].active")?.dataset.bxVal) ?? 0;
         const sectorEtf = drawerEtfInp?.value.toUpperCase().trim() || null;
-        const grade     = calcBXGrade(liveCur, liveWk, liveMo);
-        const liveEl    = dr.querySelector("#drawer-live-scorecard");
-        renderEntryScorecard(grade, null, true, liveEl);
+        const grade     = calcBXGrade(liveBX("current"), liveBX("weekly"), liveBX("monthly"));
+        const el        = liveEl();
+        renderEntryScorecard(grade, null, true, el);
         try {
           const rsData   = await computeEntryRS(h.sym, sectorEtf);
           const rsResult = calcRSScore(rsData);
-          renderEntryScorecard(grade, rsResult, false, liveEl);
+          renderEntryScorecard(grade, rsResult, false, el);
         } catch (_) {
-          renderEntryScorecard(grade, null, false, liveEl);
+          renderEntryScorecard(grade, null, false, el);
         }
-      });
-      ["current", "weekly", "monthly"].forEach(period => {
-        $$(`[data-drawer-bx="${period}"]`, dr).forEach(btn => {
-          btn.addEventListener("click", () => {
-            $$(`[data-drawer-bx="${period}"]`, dr).forEach(b => b.classList.remove("active"));
-            btn.classList.add("active");
-          });
-        });
       });
       if (drawerEtfInp) {
         drawerEtfInp.addEventListener("input",   () => { drawerEtfInp.value = drawerEtfInp.value.toUpperCase(); });
@@ -2271,217 +2415,6 @@
         else nameEl.placeholder = "公司名称（可留空）";
       } catch (_) { nameEl.placeholder = "公司名称（可留空）"; }
     });
-
-    // Entry Scoring System helpers
-    const BX_GRADE_META = {
-      "A+":  { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "三时框架全面看涨" },
-      "A":   { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "周月线强势对齐" },
-      "A-":  { color: "oklch(0.78 0.17 145/.85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
-      "B+":  { color: "var(--accent)",             action: "可以开仓", pos: "75%",  desc: "日线领先，中线中性" },
-      "B":   { color: "var(--accent)",             action: "谨慎开仓", pos: "50%",  desc: "周月线分歧，观察为主" },
-      "B-":  { color: "var(--warn)",               action: "谨慎开仓", pos: "50%",  desc: "日线中性，有条件进场" },
-      "C+":  { color: "var(--warn)",               action: "观望",     pos: "25%",  desc: "中线不明确，等待信号" },
-      "C":   { color: "oklch(0.70 0.19 25/.85)",   action: "暂缓",     pos: "跳过", desc: "多时框架不对齐" },
-      "Hold":{ color: "var(--fg-2)",               action: "持有现有", pos: "—",    desc: "日线→Bull，等待日线确认" },
-      "Exit":{ color: "var(--down)",               action: "回避",     pos: "跳过", desc: "看跌信号，不宜开仓" },
-    };
-
-    function calcBXGrade(cur, wk, mo) {
-      if (cur <= -1) return "Exit";
-      if (cur === 2) {
-        if (wk <= -1 || mo <= -1) return "C";
-        if (wk === 2 && mo >= 1)  return "A+";
-        if (wk === 1 && mo === 2) return "A";
-        if (wk === 1 && mo === 1) return "A-";
-        if (wk >= 1 && mo === 0)  return "B+";  // 周线有，月线中性
-        if (wk === 0 && mo >= 1)  return "B";   // 周线中性，月线支持
-        return "C";
-      }
-      if (cur === 1) {
-        if (wk <= -1 || mo <= -1) return "C";
-        if (wk === 2 && mo >= 1)  return "B+";
-        if (wk === 2 && mo === 0) return "B";
-        if (wk === 1 && mo === 2) return "B";
-        if (wk === 1 && mo === 1) return "B-";
-        if (wk === 1 && mo === 0) return "C+";
-        if (wk === 0 && mo >= 1)  return "C+";
-        return "C";
-      }
-      if (cur === 0) {
-        if (wk >= 1 && mo >= -1) return "B-";
-        if (wk === 0 && mo >= -1) return "C+";
-        return "C";
-      }
-      return "C";
-    }
-
-    const GRADE_LADDER = ["Exit","C","C+","B-","B","B+","A-","A","A+"];
-
-    function rsAdjustGrade(grade, rsResult) {
-      if (!rsResult || grade === "Hold" || grade === "Exit") return grade;
-      const idx = GRADE_LADDER.indexOf(grade);
-      if (idx < 0) return grade;
-      // Normalize to 0-10 scale regardless of denominator
-      const norm = rsResult.max > 0 ? (rsResult.score / rsResult.max) * 10 : 0;
-      if (norm >= 7)  return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
-      if (norm <= 0)  return GRADE_LADDER[Math.max(idx - 2, 0)];  // RS=0: double downgrade
-      if (norm < 4)   return GRADE_LADDER[Math.max(idx - 1, 0)];
-      return grade;
-    }
-
-    async function computeEntryRS(sym, sectorEtf) {
-      // Fetch 60 calendar days to guarantee ≥22 trading bars after holidays
-      const syms = sectorEtf ? `${sym},${sectorEtf},VOO` : `${sym},VOO`;
-      const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - 60);
-      const fromStr = fromDate.toISOString().slice(0, 10);
-      const res = await fetch(`/api/history?symbols=${encodeURIComponent(syms)}&from=${fromStr}`);
-      if (!res.ok) throw new Error("history error");
-      const { results } = await res.json();
-      const getPrices = key => {
-        const obj = results[key] || results[key.toUpperCase()] || results[key.toLowerCase()];
-        if (!obj) return null;
-        return Object.keys(obj).sort().map(d => obj[d]).filter(v => v != null);
-      };
-      // Exactly 20 trading days: prices[N-21] → prices[N-1] = 20 intervals
-      const get20dReturn = prices => {
-        if (!prices || prices.length < 22) return null;
-        const start = prices[prices.length - 21];
-        const end   = prices[prices.length - 1];
-        return start ? (end - start) / start * 100 : null;
-      };
-      const stockPrices = getPrices(sym);
-      const vooPrices   = getPrices("VOO");
-      const sectPrices  = sectorEtf ? getPrices(sectorEtf) : null;
-      return {
-        stockRet: get20dReturn(stockPrices),
-        vooRet:   get20dReturn(vooPrices),
-        sectRet:  get20dReturn(sectPrices),
-      };
-    }
-
-    function calcRSScore(rsData) {
-      const { stockRet, vooRet, sectRet } = rsData;
-      if (stockRet == null || vooRet == null) return null;
-      const hasSect   = sectRet != null;
-      const vsVOO     = stockRet - vooRet;
-      const vsSect    = hasSect ? stockRet - sectRet : null;
-      const sectVsVOO = hasSect ? sectRet  - vooRet  : null;
-
-      // vs VOO (0-5 pts)
-      let vooScore = 0;
-      if (vsVOO > 8)        vooScore = 5;
-      else if (vsVOO > 5)   vooScore = 4;
-      else if (vsVOO > 2)   vooScore = 3;
-      else if (vsVOO > 0)   vooScore = 2;
-      else if (vsVOO > -3)  vooScore = 1;
-
-      // vs Sector (0-5 pts)
-      let sectScore = 0;
-      if (hasSect) {
-        if (vsSect > 5)       sectScore = 5;
-        else if (vsSect > 3)  sectScore = 4;
-        else if (vsSect > 1)  sectScore = 3;
-        else if (vsSect > 0)  sectScore = 2;
-        else if (vsSect > -2) sectScore = 1;
-      }
-
-      // Sector vs VOO (0-5 pts)
-      let sectBonusScore = 0;
-      if (hasSect && sectVsVOO != null) {
-        if (sectVsVOO > 5)        sectBonusScore = 5;
-        else if (sectVsVOO > 2)   sectBonusScore = 4;
-        else if (sectVsVOO > 0)   sectBonusScore = 3;
-        else if (sectVsVOO > -2)  sectBonusScore = 2;
-        else if (sectVsVOO > -5)  sectBonusScore = 1;
-      }
-
-      const score = vooScore + sectScore + sectBonusScore;
-      const max   = hasSect ? 15 : 5;
-      // Include abs returns for display
-      return { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
-    }
-
-    function renderEntryScorecard(bxGrade, rsResult, loading = false, targetEl = null) {
-      const el = targetEl || $("#entry-scorecard");
-      if (!el) return;
-      el.style.display = "";
-      if (loading) {
-        el.innerHTML = `<div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">RS: 计算中…</div></div><div class="esc-empty">正在获取相对强度数据…</div>`;
-        return;
-      }
-      const hasRS      = rsResult != null;
-      const finalGrade = hasRS ? rsAdjustGrade(bxGrade, rsResult) : bxGrade;
-      const meta       = BX_GRADE_META[finalGrade] || BX_GRADE_META["C"];
-      const bxMeta     = BX_GRADE_META[bxGrade]    || BX_GRADE_META["C"];
-      const gradeChanged = hasRS && finalGrade !== bxGrade;
-
-      const rsTag = hasRS
-        ? `RS: <strong style="color:var(--fg-0)">${rsResult.score}/${rsResult.max}</strong>`
-        : "RS: —";
-
-      let gradeHTML;
-      if (gradeChanged) {
-        gradeHTML = `
-          <div class="esc-grade-box">
-            <div class="esc-grade-val" style="font-size:14px;opacity:.5;color:${bxMeta.color}">${bxGrade}</div>
-            <div class="esc-grade-lbl">BX</div>
-          </div>
-          <div class="esc-arrow">→</div>
-          <div class="esc-grade-box">
-            <div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div>
-            <div class="esc-grade-lbl">Final</div>
-          </div>`;
-      } else {
-        gradeHTML = `<div class="esc-grade-box"><div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div><div class="esc-grade-lbl">评级</div></div>`;
-      }
-
-      // RS breakdown table — shows absolute returns so user can verify on chart
-      let rsBreakdown = "";
-      if (hasRS) {
-        const fmt = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
-        const pc  = v => v == null ? "var(--fg-0)" : v >= 0 ? "var(--up)" : "var(--down)";
-        const pts = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
-        // Row 1: raw 20d returns — stock colored, VOO stays dim grey for reference
-        const stockRow = `<div class="esc-rs-row esc-rs-header">
-          <span class="esc-rs-lbl">股票 20d</span>
-          <span class="esc-rs-abs" style="color:${pc(rsResult.stockRet)};font-weight:700">${fmt(rsResult.stockRet)}</span>
-          <span class="esc-rs-abs2">VOO ${fmt(rsResult.vooRet)}</span>
-          <span class="esc-rs-pts"></span></div>`;
-        let sectRows = "";
-        if (rsResult.hasSect) {
-          sectRows = `<div class="esc-rs-row">
-            <span class="esc-rs-lbl">vs ETF</span>
-            <span class="esc-rs-abs" style="color:${pc(rsResult.vsSect)}">${fmt(rsResult.vsSect)}</span>
-            <span class="esc-rs-abs2">ETF ${fmt(rsResult.sectRet)}</span>
-            <span class="esc-rs-pts">${pts(rsResult.sectScore, 5)}</span></div>
-          <div class="esc-rs-row">
-            <span class="esc-rs-lbl">ETF/VOO</span>
-            <span class="esc-rs-abs" style="color:${pc(rsResult.sectVsVOO)}">${fmt(rsResult.sectVsVOO)}</span>
-            <span class="esc-rs-abs2"></span>
-            <span class="esc-rs-pts">${pts(rsResult.sectBonusScore, 5)}</span></div>`;
-        }
-        // vs VOO always last
-        const vooRow = `<div class="esc-rs-row">
-          <span class="esc-rs-lbl">vs VOO</span>
-          <span class="esc-rs-abs" style="color:${pc(rsResult.vsVOO)}">${fmt(rsResult.vsVOO)}</span>
-          <span class="esc-rs-abs2"></span>
-          <span class="esc-rs-pts">${pts(rsResult.vooScore, 5)}</span></div>`;
-        rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${sectRows}${vooRow}</div>`;
-      }
-
-      el.innerHTML = `
-        <div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">${rsTag}</div></div>
-        <div class="esc-body">
-          ${gradeHTML}
-          <div class="esc-info">
-            <div class="esc-action" style="color:${meta.color}">${meta.action}</div>
-            <div class="esc-desc">${meta.desc}</div>
-            <div class="esc-pos">建议仓位: <strong style="color:var(--fg-0)">${meta.pos}</strong></div>
-          </div>
-        </div>
-        ${rsBreakdown}`;
-    }
 
     const readFormBX = () => {
       const body = $("#form-bx-body");
