@@ -325,10 +325,10 @@
         </div>`;
     }
 
-    // ── Live panel: current BX selector + ETF input + compute button ──────
-    const liveCurBtns = BX_SCORE_OPTS.map(o => `
-      <button class="bx-score-btn ${o.cls} ${(bx.current ?? 0) === o.val ? "active" : ""}"
-              data-drawer-bx="current" data-bx-val="${o.val}">
+    // ── Live panel: all three BX period selectors + ETF input + compute button ─
+    const livePeriodBtns = period => BX_SCORE_OPTS.map(o => `
+      <button class="bx-score-btn ${o.cls} ${(bx[period] ?? 0) === o.val ? "active" : ""}"
+              data-drawer-bx="${period}" data-bx-val="${o.val}">
         <span class="bx-val">${o.label}</span>
         <span class="bx-sub">${o.sub}</span>
       </button>`).join("");
@@ -348,7 +348,15 @@
           <div class="dsc-panel" data-dsc-panel="live" style="display:none">
             <div class="bx-row" style="margin-bottom:4px">
               <div class="bx-row-label">Current BX</div>
-              <div class="bx-score-seg">${liveCurBtns}</div>
+              <div class="bx-score-seg">${livePeriodBtns("current")}</div>
+            </div>
+            <div class="bx-row" style="margin-bottom:4px">
+              <div class="bx-row-label">Weekly BX</div>
+              <div class="bx-score-seg">${livePeriodBtns("weekly")}</div>
+            </div>
+            <div class="bx-row" style="margin-bottom:6px">
+              <div class="bx-row-label">Monthly BX</div>
+              <div class="bx-score-seg">${livePeriodBtns("monthly")}</div>
             </div>
             <div class="bx-etf-row" style="margin-bottom:6px">
               <input type="text" id="drawer-rs-etf" class="bx-etf-input"
@@ -587,9 +595,11 @@
     const drawerEtfInp = dr.querySelector("#drawer-rs-etf");
     if (drawerRsCalc) {
       drawerRsCalc.addEventListener("click", async () => {
-        const liveCur   = parseFloat(dr.querySelector("[data-drawer-bx='current'].active")?.dataset.bxVal) || 0;
+        const liveCur   = parseFloat(dr.querySelector("[data-drawer-bx='current'].active")?.dataset.bxVal) ?? 0;
+        const liveWk    = parseFloat(dr.querySelector("[data-drawer-bx='weekly'].active")?.dataset.bxVal) ?? 0;
+        const liveMo    = parseFloat(dr.querySelector("[data-drawer-bx='monthly'].active")?.dataset.bxVal) ?? 0;
         const sectorEtf = drawerEtfInp?.value.toUpperCase().trim() || null;
-        const grade     = calcBXGrade(liveCur, h.bx.weekly, h.bx.monthly);
+        const grade     = calcBXGrade(liveCur, liveWk, liveMo);
         const liveEl    = dr.querySelector("#drawer-live-scorecard");
         renderEntryScorecard(grade, null, true, liveEl);
         try {
@@ -600,10 +610,12 @@
           renderEntryScorecard(grade, null, false, liveEl);
         }
       });
-      $$("[data-drawer-bx='current']", dr).forEach(btn => {
-        btn.addEventListener("click", () => {
-          $$("[data-drawer-bx='current']", dr).forEach(b => b.classList.remove("active"));
-          btn.classList.add("active");
+      ["current", "weekly", "monthly"].forEach(period => {
+        $$(`[data-drawer-bx="${period}"]`, dr).forEach(btn => {
+          btn.addEventListener("click", () => {
+            $$(`[data-drawer-bx="${period}"]`, dr).forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+          });
         });
       });
       if (drawerEtfInp) {
@@ -1375,7 +1387,22 @@
           <span class="hc-pct ${pnlSign}">${fmt.pct(pct)}</span>
           <span class="hc-sep muted">·</span>
           <span class="hc-days muted">${h.days ?? 0}天</span>
-          ${!isClosed && h.bx?.dailyBars ? (() => { const v = h.bx.dailyBars; const cls = v === "0-5" ? "bxbar-early" : v === "5-15" ? "bxbar-mid" : "bxbar-late"; const lbl = v === "0-5" ? "开始" : v === "5-15" ? "中间" : "延续"; return `<span class="hc-sep muted">·</span><span class="bx-bar-chip ${cls}" style="font-size:9.5px;padding:2px 6px;gap:0">${v}<span class="bx-bar-sub">${lbl}</span></span>`; })() : ""}
+          ${!isClosed ? (() => {
+            const grade = h.bx?.entryFinalGrade;
+            if (grade) {
+              const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
+              const rs = h.bx?.entryRsResult;
+              const rsLabel = rs ? `<span class="hc-sep muted" style="margin:0 2px">·</span><span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${rs.score}/${rs.max}</span>` : "";
+              return `<span class="hc-sep muted">·</span><span class="bxg-val" style="color:${meta.color};font-size:11px;font-weight:700">${grade}</span>${rsLabel}`;
+            }
+            if (h.bx?.dailyBars) {
+              const v = h.bx.dailyBars;
+              const cls = v === "0-5" ? "bxbar-early" : v === "5-15" ? "bxbar-mid" : "bxbar-late";
+              const lbl = v === "0-5" ? "开始" : v === "5-15" ? "中间" : "延续";
+              return `<span class="hc-sep muted">·</span><span class="bx-bar-chip ${cls}" style="font-size:9.5px;padding:2px 6px;gap:0">${v}<span class="bx-bar-sub">${lbl}</span></span>`;
+            }
+            return "";
+          })() : ""}
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
