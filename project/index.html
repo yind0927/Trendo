@@ -1272,6 +1272,31 @@
   .esc-rs-abs2 { flex: 1; font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); }
   .esc-rs-pts { font-family: var(--f-mono); font-size: 10.5px; min-width: 32px; text-align: right; flex-shrink: 0; }
 
+  /* ── Drawer scorecard (DSC) ── */
+  .dsc-wrap { background: var(--bg-1); border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin-bottom: 14px; }
+  .dsc-tab-bar { display: flex; border-bottom: 1px solid var(--line); }
+  .dsc-tab { flex: 1; all: unset; cursor: pointer; padding: 7px 12px; font-size: 11.5px; color: var(--fg-3); text-align: center; transition: color .12s, background .12s; }
+  .dsc-tab:hover { color: var(--fg-1); background: oklch(1 0 0 / .03); }
+  .dsc-tab.active { color: var(--fg-0); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+  .dsc-panel { padding: 12px; }
+  .dsc-empty { font-size: 11.5px; color: var(--fg-3); text-align: center; padding: 8px 0; }
+  .dsc-entry { display: flex; flex-direction: column; gap: 8px; }
+  .dsc-grade-row { display: flex; align-items: center; gap: 14px; }
+  .dsc-grade-chip { font-family: var(--f-mono); font-weight: 800; font-size: 22px; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .dsc-grade-orig { font-size: 14px; opacity: .5; }
+  .dsc-arrow { font-size: 14px; color: var(--fg-3); }
+  .dsc-grade-val { }
+  .dsc-grade-info { display: flex; flex-direction: column; gap: 2px; }
+  .dsc-rs-table { display: flex; flex-direction: column; gap: 3px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .dsc-rs-row { display: flex; align-items: center; gap: 8px; }
+  .dsc-rs-hdr { margin-bottom: 2px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .dsc-rs-lbl { color: var(--fg-3); width: 56px; font-size: 10.5px; font-family: var(--f-mono); flex-shrink: 0; }
+  .dsc-rs-badge { margin-left: auto; font-family: var(--f-mono); font-size: 10px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; color: var(--fg-2); }
+  /* Table grade chip (replaces BX Bars when entry grade stored) */
+  .bxg-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .bxg-val { font-family: var(--f-mono); font-weight: 800; font-size: 13px; line-height: 1; }
+  .bxg-rs { font-family: var(--f-mono); font-size: 9px; color: var(--fg-3); }
+
   /* TABS */
   .panel-head .tab {
     all: unset; cursor: pointer; padding: 5px 14px; border-radius: 6px;
@@ -3937,8 +3962,8 @@
   </div>
 </div>
 
-<script src="data.js?v=98.1"></script>
-<script src="desk.js?v=98.1"></script>
+<script src="data.js?v=99"></script>
+<script src="desk.js?v=99"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

@@ -266,9 +266,99 @@
         ${SWATCH_COLORS.map(c => `<button class="bx-color-opt${bx.sector.color===c?' active':''}"
           style="background:${c}" data-color-val="${c}" title="${c}"></button>`).join('')}
       </div>`;
+
+    // ── Entry scorecard: static display of stored entry-time grade + RS ──
+    let entryScorecardHTML = `<div class="dsc-empty">开仓时未记录评分</div>`;
+    const efg = bx.entryFinalGrade;
+    if (efg) {
+      const meta   = BX_GRADE_META[efg] || BX_GRADE_META["C"];
+      const bxgOld = (bx.entryBxGrade && bx.entryBxGrade !== efg) ? bx.entryBxGrade : null;
+      const bxMeta = bxgOld ? (BX_GRADE_META[bxgOld] || meta) : meta;
+      const gradeChip = bxgOld
+        ? `<span class="dsc-grade-orig" style="color:${bxMeta.color}">${bxgOld}</span><span class="dsc-arrow">→</span><span class="dsc-grade-val" style="color:${meta.color}">${efg}</span>`
+        : `<span class="dsc-grade-val" style="color:${meta.color}">${efg}</span>`;
+      const rs = bx.entryRsResult;
+      let rsRowsHTML = "";
+      if (rs) {
+        const fmt = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+        const pc  = v => v == null ? "var(--fg-0)" : v >= 0 ? "var(--up)" : "var(--down)";
+        rsRowsHTML = `
+          <div class="dsc-rs-table">
+            <div class="dsc-rs-row dsc-rs-hdr">
+              <span class="dsc-rs-lbl">股票 20d</span>
+              <span style="color:${pc(rs.stockRet)};font-weight:700;font-family:var(--f-mono);font-size:11px">${fmt(rs.stockRet)}</span>
+              <span style="color:var(--fg-3);font-size:10px;font-family:var(--f-mono)">VOO ${fmt(rs.vooRet)}</span>
+              <span class="dsc-rs-badge">RS ${rs.score}/${rs.max}</span>
+            </div>
+            ${rs.hasSect ? `
+            <div class="dsc-rs-row">
+              <span class="dsc-rs-lbl">vs ETF</span>
+              <span style="color:${pc(rs.vsSect)};font-family:var(--f-mono);font-size:11px">${fmt(rs.vsSect)}</span>
+              <span style="color:var(--fg-3);font-size:10px;font-family:var(--f-mono)">ETF ${fmt(rs.sectRet)}</span>
+              <span style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${rs.sectScore}/5</span>
+            </div>
+            <div class="dsc-rs-row">
+              <span class="dsc-rs-lbl">ETF/VOO</span>
+              <span style="color:${pc(rs.sectVsVOO)};font-family:var(--f-mono);font-size:11px">${fmt(rs.sectVsVOO)}</span>
+              <span></span>
+              <span style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${rs.sectBonusScore}/5</span>
+            </div>` : ""}
+            <div class="dsc-rs-row">
+              <span class="dsc-rs-lbl">vs VOO</span>
+              <span style="color:${pc(rs.vsVOO)};font-family:var(--f-mono);font-size:11px">${fmt(rs.vsVOO)}</span>
+              <span></span>
+              <span style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${rs.vooScore}/5</span>
+            </div>
+          </div>`;
+      }
+      entryScorecardHTML = `
+        <div class="dsc-entry">
+          <div class="dsc-grade-row">
+            <div class="dsc-grade-chip">${gradeChip}</div>
+            <div class="dsc-grade-info">
+              <div style="color:${meta.color};font-size:12px;font-weight:600">${meta.action}</div>
+              <div style="color:var(--fg-3);font-size:10.5px">${meta.desc}</div>
+              <div style="font-size:11px;color:var(--fg-2)">建议仓位 <strong style="color:var(--fg-0)">${meta.pos}</strong></div>
+            </div>
+          </div>
+          ${rsRowsHTML}
+        </div>`;
+    }
+
+    // ── Live panel: current BX selector + ETF input + compute button ──────
+    const liveCurBtns = BX_SCORE_OPTS.map(o => `
+      <button class="bx-score-btn ${o.cls} ${(bx.current ?? 0) === o.val ? "active" : ""}"
+              data-drawer-bx="current" data-bx-val="${o.val}">
+        <span class="bx-val">${o.label}</span>
+        <span class="bx-sub">${o.sub}</span>
+      </button>`).join("");
+
     return `
       <div class="drawer-section">
         <h4><span class="idx">02</span>BX Trend &amp; 市场背景</h4>
+
+        <div class="dsc-wrap">
+          <div class="dsc-tab-bar">
+            <button class="dsc-tab active" data-dsc-tab="entry">入场评分</button>
+            <button class="dsc-tab" data-dsc-tab="live">实时评分</button>
+          </div>
+          <div class="dsc-panel" data-dsc-panel="entry">
+            ${entryScorecardHTML}
+          </div>
+          <div class="dsc-panel" data-dsc-panel="live" style="display:none">
+            <div class="bx-row" style="margin-bottom:4px">
+              <div class="bx-row-label">Current BX</div>
+              <div class="bx-score-seg">${liveCurBtns}</div>
+            </div>
+            <div class="bx-etf-row" style="margin-bottom:6px">
+              <input type="text" id="drawer-rs-etf" class="bx-etf-input"
+                     placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"
+                     value="${bx.entrySectorEtf || ''}"/>
+              <button type="button" id="drawer-rs-calc" class="bx-rs-calc-btn">计算 RS</button>
+            </div>
+            <div id="drawer-live-scorecard" class="esc-wrap" style="display:none"></div>
+          </div>
+        </div>
 
         <div class="bx-row">
           <div class="bx-row-label">Daily BX Trend <span class="bx-hint">入场后第 ${calcTradingDays(h.entry)} 交易日</span></div>
@@ -480,6 +570,47 @@
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
     });
+
+    // ── DSC tab switching ─────────────────────────────────────────────────
+    $$(".dsc-tab", dr).forEach(tab => {
+      tab.addEventListener("click", () => {
+        $$(".dsc-tab", dr).forEach(t => t.classList.remove("active"));
+        $$(".dsc-panel", dr).forEach(p => { p.style.display = "none"; });
+        tab.classList.add("active");
+        const panel = $(`[data-dsc-panel="${tab.dataset.dscTab}"]`, dr);
+        if (panel) panel.style.display = "";
+      });
+    });
+
+    // ── Live RS calc in drawer ────────────────────────────────────────────
+    const drawerRsCalc = dr.querySelector("#drawer-rs-calc");
+    const drawerEtfInp = dr.querySelector("#drawer-rs-etf");
+    if (drawerRsCalc) {
+      drawerRsCalc.addEventListener("click", async () => {
+        const liveCur   = parseFloat(dr.querySelector("[data-drawer-bx='current'].active")?.dataset.bxVal) || 0;
+        const sectorEtf = drawerEtfInp?.value.toUpperCase().trim() || null;
+        const grade     = calcBXGrade(liveCur, h.bx.weekly, h.bx.monthly);
+        const liveEl    = dr.querySelector("#drawer-live-scorecard");
+        renderEntryScorecard(grade, null, true, liveEl);
+        try {
+          const rsData   = await computeEntryRS(h.sym, sectorEtf);
+          const rsResult = calcRSScore(rsData);
+          renderEntryScorecard(grade, rsResult, false, liveEl);
+        } catch (_) {
+          renderEntryScorecard(grade, null, false, liveEl);
+        }
+      });
+      $$("[data-drawer-bx='current']", dr).forEach(btn => {
+        btn.addEventListener("click", () => {
+          $$("[data-drawer-bx='current']", dr).forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+      });
+      if (drawerEtfInp) {
+        drawerEtfInp.addEventListener("input",   () => { drawerEtfInp.value = drawerEtfInp.value.toUpperCase(); });
+        drawerEtfInp.addEventListener("keydown", e  => { if (e.key === "Enter") { e.preventDefault(); drawerRsCalc.click(); } });
+      }
+    }
   }
 
   // ============ GLOBAL STATE ============
@@ -1341,7 +1472,14 @@
           </div></td>`;
       }
       case "bxbars": {
-        const v = h.bx.dailyBars;
+        const grade = h.bx?.entryFinalGrade;
+        if (grade) {
+          const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
+          const rs = h.bx?.entryRsResult;
+          const rsLabel = rs ? `<span class="bxg-rs">${rs.score}/${rs.max}</span>` : "";
+          return `<td><div class="bxg-cell"><span class="bxg-val" style="color:${meta.color}">${grade}</span>${rsLabel}</div></td>`;
+        }
+        const v = h.bx?.dailyBars || "0-5";
         const cls = v === "0-5" ? "bxbar-early" : (v === "5-15" ? "bxbar-mid" : "bxbar-late");
         const lbl = v === "0-5" ? "开始" : (v === "5-15" ? "中间" : "延续");
         return `<td><span class="bx-bar-chip ${cls}">${v}<span class="bx-bar-sub">${lbl}</span></span></td>`;
@@ -2237,8 +2375,8 @@
       return { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
     }
 
-    function renderEntryScorecard(bxGrade, rsResult, loading = false) {
-      const el = $("#entry-scorecard");
+    function renderEntryScorecard(bxGrade, rsResult, loading = false, targetEl = null) {
+      const el = targetEl || $("#entry-scorecard");
       if (!el) return;
       el.style.display = "";
       if (loading) {
@@ -2518,6 +2656,8 @@
     }
 
     // RS calc button
+    let _pendingRsResult = null;   // captured when user clicks 计算RS, read at submit
+    let _pendingRsEtf    = null;
     const rsCalcBtn   = $("#fbx-rs-calc");
     const etfInput    = $("#fbx-sector-etf");
     if (rsCalcBtn) {
@@ -2534,6 +2674,8 @@
         try {
           const rsData   = await computeEntryRS(sym, sectorEtf);
           const rsResult = calcRSScore(rsData);
+          _pendingRsResult = rsResult;
+          _pendingRsEtf    = sectorEtf;
           renderEntryScorecard(grade, rsResult);
         } catch (_) {
           renderEntryScorecard(grade, null);
@@ -2623,12 +2765,23 @@
         rMult: 0,
         days: daysHeld,
         spark: [entry],
-        bx: readFormBX()
+        bx: (() => {
+          const bxData = readFormBX();
+          const ebxg = calcBXGrade(bxData.current, bxData.weekly, bxData.monthly);
+          const efg  = _pendingRsResult ? rsAdjustGrade(ebxg, _pendingRsResult) : ebxg;
+          bxData.entryBxGrade    = ebxg;
+          bxData.entryFinalGrade = efg;
+          bxData.entryRsResult   = _pendingRsResult;
+          bxData.entrySectorEtf  = _pendingRsEtf;
+          return bxData;
+        })()
       };
 
       targetHoldings.push(newPos);
       saveToStorage();
       form.reset();
+      _pendingRsResult = null;
+      _pendingRsEtf    = null;
       resetFormBX();
       closeModal("new-position-modal");
       if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); }
