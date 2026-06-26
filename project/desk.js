@@ -253,12 +253,12 @@
     "A":   { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "周月线强势对齐" },
     "A-":  { color: "oklch(0.78 0.17 145/.85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
     "B+":  { color: "var(--accent)",             action: "可以开仓", pos: "75%",  desc: "日线领先，中线中性" },
-    "B":   { color: "var(--accent)",             action: "谨慎开仓", pos: "50%",  desc: "周月线分歧，观察为主" },
-    "B-":  { color: "var(--warn)",               action: "谨慎开仓", pos: "50%",  desc: "日线中性，有条件进场" },
-    "C+":  { color: "var(--warn)",               action: "观望",     pos: "25%",  desc: "中线不明确，等待信号" },
-    "C":   { color: "oklch(0.70 0.19 25/.85)",   action: "暂缓",     pos: "跳过", desc: "多时框架不对齐" },
+    "B":   { color: "var(--accent)",             action: "普通开仓", pos: "50%",  desc: "日线普通，周月线中等" },
+    "B-":  { color: "var(--warn)",               action: "普通开仓", pos: "50%",  desc: "三时框均比较普通" },
+    "C+":  { color: "var(--warn)",               action: "小仓进入", pos: "25%",  desc: "多时框整体较差" },
+    "C":   { color: "oklch(0.70 0.19 25/.85)",   action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
     "Hold":{ color: "var(--fg-2)",               action: "持有现有", pos: "—",    desc: "日线→Bull，等待日线确认" },
-    "Exit":{ color: "var(--down)",               action: "回避",     pos: "跳过", desc: "看跌信号，不宜开仓" },
+    "Exit":{ color: "var(--down)",               action: "回避",     pos: "不进场", desc: "看跌信号，不宜开仓" },
   };
 
   function calcBXGrade(cur, wk, mo) {
