@@ -462,7 +462,7 @@
     const bx = h.bx;
 
     // ── Entry scorecard: static display of stored entry-time grade + RS ──
-    let entryScorecardHTML = `<div class="dsc-empty">开仓时未记录评分</div>`;
+    let entryScorecardHTML = `<div class="dsc-empty">开仓时未记录评级</div>`;
     const efg = bx.entryFinalGrade;
     if (efg) {
       const meta   = BX_GRADE_META[efg] || BX_GRADE_META["C"];
@@ -548,8 +548,8 @@
 
         <div class="dsc-wrap">
           <div class="dsc-tab-bar">
-            <button class="dsc-tab active" data-dsc-tab="entry">入场评分</button>
-            <button class="dsc-tab" data-dsc-tab="live">实时评分</button>
+            <button class="dsc-tab active" data-dsc-tab="entry">入场评级</button>
+            <button class="dsc-tab" data-dsc-tab="live">实时评级</button>
           </div>
           <div class="dsc-panel" data-dsc-panel="entry">
             ${entryScorecardHTML}
@@ -562,13 +562,6 @@
             ${periodRow("Current BX", "current", ' <span style="color:var(--accent);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">(日线)</span>')}
             ${periodRow("Weekly BX", "weekly")}
             ${periodRow("Monthly BX", "monthly")}
-            <div class="bx-row" style="margin-top:2px">
-              <div class="bx-row-label">板块</div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                <span id="drawer-sname" class="bx-name" contenteditable="true" data-drawer-sname spellcheck="false" style="background:${bx.sector.color}">${bx.sector.name}</span>
-                <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${colorSwatches}</div>
-              </div>
-            </div>
             <div class="bx-row" style="margin-bottom:4px">
               <div class="bx-row-label">行业ETF <span style="color:var(--fg-3);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">相对强度 RS</span></div>
               <div class="bx-etf-row">
@@ -579,6 +572,14 @@
               </div>
             </div>
             <div id="drawer-live-scorecard" class="esc-wrap" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="bx-row" style="margin-top:10px">
+          <div class="bx-row-label">板块</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span id="drawer-sname" class="bx-name" contenteditable="true" data-drawer-sname spellcheck="false" style="background:${bx.sector.color}">${bx.sector.name}</span>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${colorSwatches}</div>
           </div>
         </div>
       </div>`;
@@ -1650,10 +1651,7 @@
           const rsLabel = rs ? `<span class="bxg-rs">${rs.score}/${rs.max}</span>` : "";
           return `<td><div class="bxg-cell"><span class="bxg-val" style="color:${meta.color}">${grade}</span>${rsLabel}</div></td>`;
         }
-        const v = h.bx?.dailyBars || "0-5";
-        const cls = v === "0-5" ? "bxbar-early" : (v === "5-15" ? "bxbar-mid" : "bxbar-late");
-        const lbl = v === "0-5" ? "开始" : (v === "5-15" ? "中间" : "延续");
-        return `<td><span class="bx-bar-chip ${cls}">${v}<span class="bx-bar-sub">${lbl}</span></span></td>`;
+        return `<td><span style="color:var(--fg-3);font-size:12px">—</span></td>`;
       }
       case "cost": return ccNet(h) > 0
         ? `<td class="right num muted" style="font-size:12px" title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"><span class="cc-tag">cc</span>$${price(ccAdjCost(h))}</td>`
