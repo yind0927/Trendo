@@ -2678,10 +2678,21 @@
           entryDate: entryDateStr,
           earnings: earningsStr,
           createdAt: new Date().toISOString(),
-          bx: readFormBX()
+          bx: (() => {
+            const bxData = readFormBX();
+            const ebxg = calcBXGrade(bxData.current, bxData.weekly, bxData.monthly);
+            const efg  = _pendingRsResult ? rsAdjustGrade(ebxg, _pendingRsResult) : ebxg;
+            bxData.entryBxGrade    = ebxg;
+            bxData.entryFinalGrade = efg;
+            bxData.entryRsResult   = _pendingRsResult;
+            bxData.entrySectorEtf  = _pendingRsEtf;
+            return bxData;
+          })()
         });
         saveToStorage();
         form.reset();
+        _pendingRsResult = null;
+        _pendingRsEtf    = null;
         resetFormBX();
         closeModal("new-position-modal");
         renderSimPending();
