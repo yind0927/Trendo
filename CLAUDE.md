@@ -539,6 +539,127 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 
 ---
 
+## BX 评级 & RS 开仓评分系统（v200+）
+
+### 入场评分总流程
+
+```
+用户填写 BX 三周期 → calcBXGrade → bxGrade (A+/A…Exit)
+用户点击"计算RS" → computeEntryRS → calcRSScore → rsResult
+rsAdjustGrade(bxGrade, rsResult) → finalGrade
+renderEntryScorecard(bxGrade, rsResult) → 展示在开仓弹窗/抽屉实时评级
+开仓保存时写入 h.bx: { entryBxGrade, entryFinalGrade, entryRsResult, entrySectorEtf }
+```
+
+### BX 三周期评分映射 `calcBXGrade(cur, wk, mo)`
+
+BX 输入值：`-1`=看跌 / `0`=中性 / `1`=偏多 / `2`=强势
+
+| Daily (cur) | Weekly (wk) | Monthly (mo) | 等级 |
+|-------------|-------------|--------------|------|
+| ≤−1（任意）  | 任意         | 任意          | Exit |
+| 2           | 2           | ≥1           | A+   |
+| 2           | 1           | 2            | A    |
+| 2           | 1           | 1            | A−   |
+| 2           | ≥1          | 0            | B+   |
+| 2           | 0           | ≥1           | B    |
+| 2           | ≤−1 或 mo≤−1 | —            | C    |
+| 1           | 2           | ≥1           | B+   |
+| 1           | 2           | 0            | B    |
+| 1           | 1           | 2            | B    |
+| 1           | 1           | 1            | B−   |
+| 1           | 1 或 0      | 0 或 ≥1      | C+   |
+| 0           | ≥1          | ≥−1          | B−   |
+| 0           | 0           | ≥−1          | C+   |
+| 其余                                       | C    |
+
+### BX_GRADE_META — 等级元数据
+
+```js
+const BX_GRADE_META = {
+  "A+":  { action: "积极开仓", pos: "满仓",   desc: "三时框架全面看涨" },
+  "A":   { action: "积极开仓", pos: "满仓",   desc: "周月线强势对齐" },
+  "A-":  { action: "可以开仓", pos: "75%",   desc: "日线领先，周月支持" },
+  "B+":  { action: "可以开仓", pos: "75%",   desc: "日线领先，中线中性" },
+  "B":   { action: "普通开仓", pos: "50%",   desc: "日线普通，周月线中等" },
+  "B-":  { action: "普通开仓", pos: "50%",   desc: "三时框均比较普通" },
+  "C+":  { action: "小仓进入", pos: "25%",   desc: "多时框整体较差" },
+  "C":   { action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
+  "Hold":{ action: "持有现有", pos: "—",      desc: "日线→Bull，等待日线确认" },
+  "Exit":{ action: "回避",     pos: "不进场", desc: "看跌信号，不宜开仓" },
+};
+```
+
+等级排序（`GRADE_LADDER`）：`Exit < C < C+ < B- < B < B+ < A- < A < A+`
+
+### RS 评分 `calcRSScore(rsData)` — 4 个维度（v208 后）
+
+所有维度基于最近 **20 个交易日**（60 日日历区间获取数据保证足够 bar 数）。
+
+| 维度 | 满分 | 评分规则 |
+|------|------|---------|
+| vs VOO（相对大盘） | 5 | >8pp=5 · >5pp=4 · >2pp=3 · >0pp=2 · >−3pp=1 · ≤−3pp=0 |
+| vs 板块ETF | 5 | >5pp=5 · >3pp=4 · >1pp=3 · >0pp=2 · >−2pp=1 · ≤−2pp=0 |
+| 板块ETF vs VOO | 5 | >5pp=5 · >2pp=4 · >0pp=3 · >−2pp=2 · >−5pp=1 · ≤−5pp=0 |
+| 涨跌量比（20日量比） | 5 | >65%=5 · >55%=4 · ≥45%=3 · ≥35%=1 · <35%=0 |
+
+- **有板块ETF时**：max = 20（4 维度全参与）
+- **无板块ETF时**：max = 10（仅 vs VOO + 量比两维）
+- 如无量比数据（API失败）：回退到旧 max 15 / 5
+
+涨跌量比计算：`calcVolUpDownRatio(closes, volumes, 20)` — 涨日成交量 / (涨日+跌日成交量) × 100%，量比标签：>65% 积累 / >55% 偏多 / ≥45% 中性 / ≥35% 偏空 / <35% 派发。
+
+### RS 调整等级 `rsAdjustGrade(grade, rsResult)`
+
+```js
+const norm = rsResult.score / rsResult.max * 10;  // 归一化到 0-10 分
+// norm >= 7  → +1 级（强RS升档）
+// norm < 4   → −1 级（弱RS降档）
+// norm <= 0  → −2 级（极弱RS双降）
+// 4 ≤ norm < 7 → 不变
+// Hold / Exit 等级不受RS影响
+```
+
+### `computeEntryRS(sym, sectorEtf)` — 数据获取
+
+- 调用 `/api/history?symbols=${sym},${etf},VOO&from=60daysAgo`
+- API 返回 `{ results: { [sym]: { [date]: close } }, volumeResults: { [sym]: { [date]: vol } } }`
+- 从 `volumeResults[sym]` 提取与 closes 对齐的成交量数组
+- 返回 `{ stockRet, vooRet, sectRet, volRatio }`
+
+### 数据持久化字段（写入 `h.bx`）
+
+```js
+h.bx.entryBxGrade    // 纯BX等级（未经RS调整）
+h.bx.entryFinalGrade // 最终等级（RS调整后）
+h.bx.entryRsResult   // 完整RS对象 { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore,
+                     //   vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect,
+                     //   volRatio, volScore }
+h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
+```
+
+### 抽屉 BX 区块（`bxSectionHTML`）
+
+两个 Tab：
+- **入场评级**（`data-dsc-panel="entry"`）— 静态展示开仓时记录的 `entryFinalGrade` + RS 分解表
+- **实时评级**（`data-dsc-panel="live"`）— 与开仓弹窗相同的实时 BX 表单 + "计算RS" 按钮
+
+持仓列表中的等级 chip（`hc-grade-chip`）展示 `h.bx.entryFinalGrade`，无值时显示 `—`。
+
+### 相关函数（均为顶层作用域，`desk.js`）
+
+| 函数 | 作用 |
+|------|------|
+| `calcBXGrade(cur, wk, mo)` | 三周期 BX → 等级字符串 |
+| `calcRSScore(rsData)` | RS 数据 → `{ score, max, …各维度 }` |
+| `calcVolUpDownRatio(closes, volumes, days)` | 涨日量 / 总量 % |
+| `rsAdjustGrade(grade, rsResult)` | 等级 + RS → 最终等级 |
+| `computeEntryRS(sym, sectorEtf)` | 异步拉取历史价格+量，返回 RS 原始数据 |
+| `renderEntryScorecard(bxGrade, rsResult, loading, el)` | 渲染开仓弹窗评分卡 |
+| `bxSectionHTML(h)` | 抽屉 BX 区块 HTML（含入场/实时双 Tab） |
+
+---
+
 ## ETF 成分股（api/holdings.js）
 
 静态数据，每个ETF前20大持仓，手动维护。数据来源：StockAnalysis/iShares/Global X/VanEck。
@@ -570,6 +691,14 @@ KV_REST_API_TOKEN    — Upstash Redis Token
 | v8.0 | **Covered Call 权利金记录**：抽屉"交易计划"区新增权利金记录块（+记录权利金弹窗：每股权利金/股数/日期，可删除），`ccNet/ccAdjCost` 计算调整后成本，入场成本显示 `$原始 → $调整后`，表格成本列和卡片入场价带 `cc` 标记显示调整后成本（title 显示原始成本+累计权利金）。h.cost 保持纯净，R/止损不受影响。**抽屉滑动切换**：手机端在抽屉头部左右滑动切换持仓卡片（50px阈值，横向位移需大于纵向），头部显示 `X / Y` 位置计数器，真实仓/模拟仓、列表/卡片模式均支持。 |
 | v7.9 | 综合建议6档加emoji(❌⚠️🔄⏫⏸️✅)。VIX风险轴止损放宽(充裕−10%/正常−8%/收缩·极小−5%)。市场模型详情三表用`table-layout:fixed`列对齐。**市场模型基准 SPY→VOO**(方向轴价格/50MA/200MA + RSI 统一为VOO)。**历史回撤参考**(`api/drawdown-context.js`)：VOO/QQQ近15年单日大跌分4档(普通−2~−3%/显著−3~−5%/急跌−5~−8%/崩跌≤−8%)，统计后续5/10/20/60交易日中位涨跌+胜率+p10尾部；当日跌幅自动匹配档位高亮，叠加Claude解读(历史规律/本次异同/操作建议)，含市场上下文(vix/dir/senti)。Redis按日缓存(统计`drawdown_stats`+解读`drawdown_ai`)，localStorage跨日重置。Market页`#drawdown-card`，手动触发，收起/展开。 |
 | v8.2 | **今日盈亏彻底修复**：`prevClose` 不再持久化到 localStorage/Redis（`noMarket()` 在保存前剥离），页面加载和云同步时始终从 null 开始，由当次 API 调用填充，消除了跨会话累积的"幽灵旧收盘"问题。`api/quote.js` prevClose 来源改为 Yahoo `indicators.quote[0].close` 原始未调整序列（非 `meta.previousClose`，后者被 Yahoo 针对分拆/特别股息调整，ex-date 当天数值偏低导致虚高涨幅），用 `timestamp` 判断今日 bar 是否已收盘来选正确的 bar（收盘后取倒数第2，开盘前取倒数第1），开盘/非开盘均准确。移除 Finnhub d.pc（长期滞后）。缓存破坏：`desk.js?v=21`+`vercel.json` `must-revalidate` 保证新代码到达客户端。 |
+| v200 | **BX/RS 开仓评级系统**：抽屉 BX 区块重设计为"入场评级/实时评级"双 Tab；`calcBXGrade` + `BX_GRADE_META`（10级，A+→Exit，建议仓位/操作描述）；`calcRSScore`（3维度×0-5分，最高15分）；`rsAdjustGrade`（RS归一化后±1~2级）；`renderEntryScorecard` 渲染开仓弹窗评分卡；所有函数从 `wireNewPositionModal` 闭包提升至顶层作用域，解决 `wireBX` 调用 ReferenceError 根因。 |
+| v201 | 板块区块移至双 Tab 下方；Tab 重命名为"入场评级/实时评级"；持仓表格"BX Bars"列更名为"评级"（`data.js` COLS 同步更新）；旧持仓无评级时展示 `—`。 |
+| v202 | 更新 BX_GRADE_META 描述语：B="日线普通，周月线中等"/B-="三时框均比较普通"/C+="多时框整体较差"；建议仓位"跳过"→"不进场"。 |
+| v203 | 卡片模式无评级时展示 `—` chip（替换原 BX Bars 信息）。 |
+| v205 | 卡片模式评级 chip 内联在盈亏行：彩色边框+浅色背景 pill，RS 分数 `score/max` 显示在旁边；CSS 新增 `.hc-grade-chip`/`.hc-grade-rs`/`.hc-grade-empty`。 |
+| v206 | 修复模拟仓挂单 BX/RS 字段缺失：`SIM_PENDING.push` 时用 IIFE 即时计算 `entryBxGrade`/`entryFinalGrade`/`entryRsResult`/`entrySectorEtf` 写入 `bx` 对象；提交后重置 `_pendingRsResult`/`_pendingRsEtf`。 |
+| v207 | 版本缓存破坏 bump（`desk.js?v=207`，`sw.js trendo-v207`）。 |
+| v208 | **涨跌量比（20日量比）加入 RS 评分第4维度**：`/api/history.js` 新增 `volumeResults`（Yahoo 日线成交量）；`calcVolUpDownRatio(closes,volumes,20)` 计算涨日量占比；`calcRSScore` 增量比得分（0-5分，>65%=5/>55%=4/≥45%=3/≥35%=1/<35%=0）；新满分 max=20（有ETF）/10（无ETF），无量比数据时回退 15/5；评分卡（弹窗+抽屉入场评级）均展示"涨跌量比"明细行。 |
 
 ---
 
