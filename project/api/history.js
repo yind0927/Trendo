@@ -12,6 +12,7 @@ export default async function handler(req, res) {
   const toTs   = Math.floor(Date.now() / 1000) + 86400;
 
   const results = {};
+  const volumeResults = {};
 
   await Promise.all(syms.map(async sym => {
     try {
@@ -29,15 +30,22 @@ export default async function handler(req, res) {
       if (!chart) return;
       const timestamps = chart.timestamp || [];
       const closes     = chart.indicators?.quote?.[0]?.close || [];
+      const volumes    = chart.indicators?.quote?.[0]?.volume || [];
       const prices     = {};
+      const vols       = {};
       timestamps.forEach((ts, i) => {
         if (closes[i] == null) return;
-        prices[new Date(ts * 1000).toISOString().slice(0, 10)] = closes[i];
+        const d = new Date(ts * 1000).toISOString().slice(0, 10);
+        prices[d] = closes[i];
+        if (volumes[i] != null) vols[d] = volumes[i];
       });
-      if (Object.keys(prices).length) results[sym] = prices;
+      if (Object.keys(prices).length) {
+        results[sym] = prices;
+        volumeResults[sym] = vols;
+      }
     } catch (_) {}
   }));
 
   res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
-  res.json({ results });
+  res.json({ results, volumeResults });
 }

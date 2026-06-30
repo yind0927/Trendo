@@ -312,11 +312,17 @@
     const fromStr = fromDate.toISOString().slice(0, 10);
     const res = await fetch(`/api/history?symbols=${encodeURIComponent(syms)}&from=${fromStr}`);
     if (!res.ok) throw new Error("history error");
-    const { results } = await res.json();
+    const { results, volumeResults } = await res.json();
     const getPrices = key => {
       const obj = results[key] || results[key.toUpperCase()] || results[key.toLowerCase()];
       if (!obj) return null;
       return Object.keys(obj).sort().map(d => obj[d]).filter(v => v != null);
+    };
+    const getVolumes = key => {
+      const pobj = results[key] || results[key.toUpperCase()] || results[key.toLowerCase()];
+      const vobj = (volumeResults || {})[key] || (volumeResults || {})[key.toUpperCase()] || (volumeResults || {})[key.toLowerCase()];
+      if (!vobj || !pobj) return null;
+      return Object.keys(pobj).sort().map(d => vobj[d] ?? null);
     };
     // Exactly 20 trading days: prices[N-21] → prices[N-1] = 20 intervals
     const get20dReturn = prices => {
@@ -325,13 +331,16 @@
       const end   = prices[prices.length - 1];
       return start ? (end - start) / start * 100 : null;
     };
-    const stockPrices = getPrices(sym);
-    const vooPrices   = getPrices("VOO");
-    const sectPrices  = sectorEtf ? getPrices(sectorEtf) : null;
+    const stockPrices  = getPrices(sym);
+    const vooPrices    = getPrices("VOO");
+    const sectPrices   = sectorEtf ? getPrices(sectorEtf) : null;
+    const stockVolumes = getVolumes(sym);
+    const volRatio     = calcVolUpDownRatio(stockPrices, stockVolumes, 20);
     return {
       stockRet: get20dReturn(stockPrices),
       vooRet:   get20dReturn(vooPrices),
       sectRet:  get20dReturn(sectPrices),
+      volRatio,
     };
   }
 
@@ -371,10 +380,35 @@
       else if (sectVsVOO > -5)  sectBonusScore = 1;
     }
 
-    const score = vooScore + sectScore + sectBonusScore;
-    const max   = hasSect ? 15 : 5;
+    // 涨跌量比 (0-5 pts)
+    const { volRatio } = rsData;
+    let volScore = null;
+    if (volRatio != null) {
+      if      (volRatio > 65)  volScore = 5;
+      else if (volRatio > 55)  volScore = 4;
+      else if (volRatio >= 45) volScore = 3;
+      else if (volRatio >= 35) volScore = 1;
+      else                     volScore = 0;
+    }
+
+    const score = vooScore + sectScore + sectBonusScore + (volScore ?? 0);
+    const max   = hasSect ? (volScore != null ? 20 : 15) : (volScore != null ? 10 : 5);
     // Include abs returns for display
-    return { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect };
+    return { score, max, stockRet, vooRet, sectRet, vsVOO, vooScore, vsSect, sectScore, sectVsVOO, sectBonusScore, hasSect, volRatio, volScore };
+  }
+
+  function calcVolUpDownRatio(closes, volumes, days = 20) {
+    if (!closes?.length || !volumes?.length || closes.length < days + 1) return null;
+    const n = closes.length;
+    let upVol = 0, downVol = 0;
+    for (let i = n - days; i < n; i++) {
+      const chg = closes[i] - closes[i - 1];
+      if (chg > 0)      upVol   += (volumes[i] ?? 0);
+      else if (chg < 0) downVol += (volumes[i] ?? 0);
+    }
+    const total = upVol + downVol;
+    if (total === 0) return null;
+    return parseFloat((upVol / total * 100).toFixed(1));
   }
 
   function renderEntryScorecard(bxGrade, rsResult, loading = false, targetEl = null) {
@@ -442,7 +476,18 @@
         <span class="esc-rs-abs" style="color:${pc(rsResult.vsVOO)}">${fmt(rsResult.vsVOO)}</span>
         <span class="esc-rs-abs2"></span>
         <span class="esc-rs-pts">${pts(rsResult.vooScore, 5)}</span></div>`;
-      rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${sectRows}${vooRow}</div>`;
+      let volRow = "";
+      if (rsResult.volScore != null) {
+        const vPct   = rsResult.volRatio.toFixed(1);
+        const vLbl   = rsResult.volRatio > 65 ? "积累" : rsResult.volRatio > 55 ? "偏多" : rsResult.volRatio >= 45 ? "中性" : rsResult.volRatio >= 35 ? "偏空" : "派发";
+        const vColor = rsResult.volRatio >= 55 ? "var(--up)" : rsResult.volRatio >= 45 ? "var(--fg-0)" : "var(--down)";
+        volRow = `<div class="esc-rs-row">
+          <span class="esc-rs-lbl">涨跌量比</span>
+          <span class="esc-rs-abs" style="color:${vColor}">${vPct}%</span>
+          <span class="esc-rs-abs2">${vLbl}</span>
+          <span class="esc-rs-pts">${pts(rsResult.volScore, 5)}</span></div>`;
+      }
+      rsBreakdown = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${sectRows}${vooRow}${volRow}</div>`;
     }
 
     el.innerHTML = `
@@ -503,6 +548,13 @@
               <span></span>
               <span style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${rs.vooScore}/5</span>
             </div>
+            ${rs.volScore != null ? `
+            <div class="dsc-rs-row">
+              <span class="dsc-rs-lbl">涨跌量比</span>
+              <span style="color:${rs.volRatio >= 55 ? 'var(--up)' : rs.volRatio >= 45 ? 'var(--fg-0)' : 'var(--down)'};font-family:var(--f-mono);font-size:11px">${rs.volRatio.toFixed(1)}%</span>
+              <span style="color:var(--fg-3);font-size:10px">${rs.volRatio > 65 ? '积累' : rs.volRatio > 55 ? '偏多' : rs.volRatio >= 45 ? '中性' : rs.volRatio >= 35 ? '偏空' : '派发'}</span>
+              <span style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${rs.volScore}/5</span>
+            </div>` : ''}
           </div>`;
       }
       entryScorecardHTML = `
