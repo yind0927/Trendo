@@ -5813,7 +5813,8 @@
     // ── 基本分析 section ──────────────────────────────────────────
     const grade    = analysis?.scores?.grade || item._aiGrade;
     const bxScore  = analysis?.scores?.overall ?? item.bxScore;
-    const gradeColor = grade === "A" ? "var(--up)" : grade === "B" ? "var(--accent)" : grade === "C" ? "var(--warn)" : "var(--down)";
+    const gradeLetterColor = l => l === "A" ? "var(--up)" : l === "B" ? "var(--accent)" : l === "C" ? "var(--warn)" : l === "D" ? "var(--down)" : "var(--fg-2)";
+    const gradeColor = gradeLetterColor(grade?.[0]);
     const scoreColor = bxScore >= 70 ? "var(--up)" : bxScore >= 50 ? "var(--warn)" : "var(--down)";
 
     let basicSection = "";
@@ -6008,7 +6009,8 @@
   let _histSort = "time"; // "time" | "score"
 
   function saHistCardHTML(h) {
-    const gc = h.grade === "A" ? "var(--up)" : h.grade === "B" ? "var(--accent)" : h.grade === "C" ? "var(--warn)" : h.grade === "D" ? "var(--down)" : saGradeColor(h.overall);
+    const _gl = h.grade?.[0];
+    const gc = _gl === "A" ? "var(--up)" : _gl === "B" ? "var(--accent)" : _gl === "C" ? "var(--warn)" : _gl === "D" ? "var(--down)" : saGradeColor(h.overall);
     const meta = [h.price != null ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
     return `<div class="sa-hist-card" data-sym="${h.sym}" data-date="${h.date || ""}">
       <div class="sa-hist-sym">${h.sym}</div>
@@ -6041,8 +6043,8 @@
       const groups = new Map(GRADE_ORDER.map(g => [g, []]));
       const noGrade = [];
       deduped.forEach(h => {
-        const g = h.grade || (h.overall != null ? (h.overall >= 80 ? "A" : h.overall >= 65 ? "B" : h.overall >= 50 ? "C" : "D") : null);
-        if (g && groups.has(g)) groups.get(g).push(h);
+        const letter = h.grade?.[0] || (h.overall != null ? (h.overall >= 80 ? "A" : h.overall >= 65 ? "B" : h.overall >= 50 ? "C" : "D") : null);
+        if (letter && groups.has(letter)) groups.get(letter).push(h);
         else noGrade.push(h);
       });
       const gradeBlocks = GRADE_ORDER
@@ -6765,7 +6767,7 @@
     } = data;
 
     // Grade / bar colors
-    const gradeColor = g => g === "A" ? "var(--up)" : g === "B" ? "var(--accent)" : g === "C" ? "var(--warn)" : g === "D" ? "var(--down)" : saGradeColor(scores?.overall);
+    const gradeColor = g => { const l = g?.[0]; return l === "A" ? "var(--up)" : l === "B" ? "var(--accent)" : l === "C" ? "var(--warn)" : l === "D" ? "var(--down)" : saGradeColor(scores?.overall); };
     const barColor   = s => s >= 75 ? "var(--up)" : s >= 60 ? "var(--accent)" : s >= 45 ? "var(--warn)" : "var(--down)";
 
     // Recommendation badge style (5 tiers)
