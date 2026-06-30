@@ -1926,6 +1926,10 @@
   .wl-chip { font-size: 10.5px; font-family: var(--f-mono); }
   .wl-chip-sep { color: var(--line); font-size: 10px; }
   .wl-chip-grade { font-family: var(--f-mono); font-weight: 800; font-size: 11px; line-height: 1; padding: 2px 7px; border-radius: 5px; border: 1.5px solid; letter-spacing: 0.02em; }
+  .wl-section { border-top: 1px solid var(--line); padding-top: 10px; }
+  .wl-section-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .wl-section-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
+  .wl-rs-bar { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
 
   /* ── Stock Analysis Panel ──────────────────────────────────────────────── */
   .wl-analyze-wrap { max-width: 960px; margin: 0 auto; padding: 14px 20px 6px; }
@@ -2577,15 +2581,11 @@
     .wl-card-main {
       display: grid;
       grid-template-columns: 1fr auto;
-      row-gap: 9px; column-gap: 10px;
+      row-gap: 8px; column-gap: 10px;
     }
     .wl-card-main > .jc-ticker  { grid-column: 1; grid-row: 1; min-width: 0; }
     .wl-card-main > .wl-actions { grid-column: 2; grid-row: 1; margin-left: 0; }
-    .wl-card-main > .wl-meta    { grid-column: 1 / -1; grid-row: 2; flex-direction: row; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
-    .wl-card-main > .wl-bx-score { grid-column: 1; grid-row: 3; flex-direction: row; align-items: center; gap: 4px; min-width: 0; }
-    .wl-card-main > .wl-slope   { grid-column: 2; grid-row: 3; flex-direction: row; align-items: center; gap: 4px; min-width: 0; }
-    .wl-card-main > .wl-price   { grid-column: 1 / -1; grid-row: 4; flex-direction: row; align-items: center; gap: 6px; }
-    .wl-bx-score .mono { font-size: 16px !important; }
+    .wl-card-main > .wl-price   { grid-column: 1 / -1; grid-row: 2; flex-direction: row; align-items: center; gap: 6px; }
 
     /* ---- FAB 开仓按钮 ---- */
     .mobile-fab {
@@ -3970,8 +3970,8 @@
   </div>
 </div>
 
-<script src="data.js?v=210"></script>
-<script src="desk.js?v=210"></script>
+<script src="data.js?v=211"></script>
+<script src="desk.js?v=211"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

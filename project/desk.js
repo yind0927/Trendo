@@ -5645,8 +5645,89 @@
         if (item) { item.note = ta.value; saveToStorage(); }
       });
     });
+    // BX period buttons
+    $$(".wl-bx-btn", content).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx    = parseInt(btn.dataset.wlIdx);
+        const period = btn.dataset.period;
+        const val    = parseInt(btn.dataset.val);
+        const item   = WATCHLIST[idx];
+        if (!item) return;
+        if (!item._bx) item._bx = { daily: 0, weekly: 0, monthly: 0 };
+        item._bx[period] = val;
+        const bxg = calcBXGrade(item._bx.daily ?? 0, item._bx.weekly ?? 0, item._bx.monthly ?? 0);
+        item._entryBxGrade   = bxg;
+        item._entryFinalGrade = item._entryRsResult ? rsAdjustGrade(bxg, item._entryRsResult) : bxg;
+        saveToStorage();
+        // update active state on this row's buttons
+        $$(`[data-wl-idx="${idx}"][data-period="${period}"]`, content).forEach(b =>
+          b.classList.toggle("active", parseInt(b.dataset.val) === val));
+        _updateWlEntryGrade(content, idx, item);
+      });
+    });
+
+    // RS calc buttons
+    $$(".wl-rs-calc-btn", content).forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const idx  = parseInt(btn.dataset.wlIdx);
+        const item = WATCHLIST[idx];
+        if (!item) return;
+        const analysis = _readLocalAnalysis(item.sym);
+        const etf = analysis?.rs20d?.sectorEtf || null;
+        btn.textContent = "计算中…";
+        btn.disabled = true;
+        try {
+          const rsData   = await computeEntryRS(item.sym, etf);
+          const rsResult = calcRSScore(rsData);
+          item._entryRsResult = rsResult;
+          const bxg = item._entryBxGrade ||
+            calcBXGrade(item._bx?.daily ?? 0, item._bx?.weekly ?? 0, item._bx?.monthly ?? 0);
+          item._entryBxGrade    = bxg;
+          item._entryFinalGrade = rsAdjustGrade(bxg, rsResult);
+          saveToStorage();
+          _updateWlEntryGrade(content, idx, item);
+          btn.textContent = "重算RS";
+        } catch (_) {
+          btn.textContent = "失败，重试";
+        } finally {
+          btn.disabled = false;
+          if (btn.textContent === "计算中…") btn.textContent = item._entryRsResult ? "重算RS" : "计算RS";
+        }
+      });
+    });
+
     renderScoringRulesPanel();
     fetchWatchlistPrices();
+  }
+
+  function _wlEntryGradeHTML(item) {
+    const bx  = item._bx;
+    const bxg = item._entryBxGrade ||
+      (bx ? calcBXGrade(bx.daily ?? 0, bx.weekly ?? 0, bx.monthly ?? 0) : null);
+    if (!bxg) return `<span style="font-size:10.5px;color:var(--fg-3)">选择BX后显示评级</span>`;
+    const rs   = item._entryRsResult;
+    const fg   = item._entryFinalGrade || (rs ? rsAdjustGrade(bxg, rs) : bxg);
+    const meta  = BX_GRADE_META[fg]  || BX_GRADE_META["C"];
+    const bxMeta = BX_GRADE_META[bxg] || BX_GRADE_META["C"];
+    const changed = rs && fg !== bxg;
+    const chip = changed
+      ? `<span style="font-family:var(--f-mono);font-weight:800;font-size:13px;color:${bxMeta.color};opacity:.5">${bxg}</span><span style="color:var(--fg-3);margin:0 2px;font-size:11px">→</span><span style="font-family:var(--f-mono);font-weight:800;font-size:15px;color:${meta.color}">${fg}</span>`
+      : `<span style="font-family:var(--f-mono);font-weight:800;font-size:15px;color:${meta.color}">${fg}</span>`;
+    const rsTag = rs
+      ? `<span style="font-size:10px;color:var(--fg-3);font-family:var(--f-mono)">RS ${rs.score}/${rs.max}</span>`
+      : "";
+    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${chip} ${rsTag}
+      <span style="font-size:10.5px;color:${meta.color};font-weight:600">${meta.action}</span>
+      <span style="font-size:10px;color:var(--fg-3)">${meta.pos !== "—" ? meta.pos : ""}</span>
+    </div>`;
+  }
+
+  function _updateWlEntryGrade(content, idx, item) {
+    const el  = $(`.wl-entry-result[data-wl-idx="${idx}"]`, content);
+    if (el) el.innerHTML = _wlEntryGradeHTML(item);
+    const btn = $(`.wl-rs-calc-btn[data-wl-idx="${idx}"]`, content);
+    if (btn && !btn.disabled) btn.textContent = item._entryRsResult ? "重算RS" : "计算RS";
   }
 
   async function fetchWatchlistPrices() {
@@ -5676,30 +5757,68 @@
   }
 
   function watchlistCardHTML(item, idx, analysis = null) {
-    const bxScoreNum = parseFloat(item.bxScore) || 0;
-    const scoreColor = bxScoreNum >= 70 ? "var(--up)" : bxScoreNum >= 50 ? "var(--warn)" : "var(--down)";
-    const bxCls = slopeNumClass(item.bxSlope ?? 0);
-
-    // ── Analysis chips (grade / RS vs VOO / 涨跌量比) ──
+    // ── 基本分析 section ──────────────────────────────────────────
     const grade    = analysis?.scores?.grade || item._aiGrade;
+    const bxScore  = analysis?.scores?.overall ?? item.bxScore;
     const rsVoo    = analysis?.rs20d?.voo;
     const volRatio = analysis?.volUpDownRatio;
-    const gradeColor = grade === "A" ? "var(--up)" : grade === "B" ? "var(--accent)" : grade === "C" ? "var(--warn)" : grade === "D" ? "var(--down)" : "var(--fg-3)";
-    const gradeChip = grade
-      ? `<span class="wl-chip-grade" style="color:${gradeColor};border-color:${gradeColor};background:color-mix(in oklch,${gradeColor} 12%,transparent)">${grade}</span>`
-      : "";
-    const rsChip = rsVoo != null
-      ? `<span class="wl-chip" style="color:${rsVoo >= 0 ? "var(--up)" : "var(--down)"}">${rsVoo >= 0 ? "+" : ""}${rsVoo.toFixed(1)}% vs VOO</span>`
-      : "";
-    const volChip = volRatio != null ? (() => {
-      const lbl   = volRatio > 65 ? "积累" : volRatio > 55 ? "偏多" : volRatio >= 45 ? "中性" : volRatio >= 35 ? "偏空" : "派发";
-      const color = volRatio >= 55 ? "var(--up)" : volRatio >= 45 ? "var(--fg-2)" : "var(--down)";
-      return `<span class="wl-chip" style="color:${color}">${volRatio.toFixed(1)}% ${lbl}</span>`;
-    })() : "";
-    const chipParts = [gradeChip, rsChip, volChip].filter(Boolean);
-    const chipsHTML = chipParts.length
-      ? `<div class="wl-chips">${chipParts.join('<span class="wl-chip-sep">·</span>')}</div>`
-      : "";
+    const gradeColor = grade === "A" ? "var(--up)" : grade === "B" ? "var(--accent)" : grade === "C" ? "var(--warn)" : "var(--down)";
+    const scoreColor = bxScore >= 70 ? "var(--up)" : bxScore >= 50 ? "var(--warn)" : "var(--down)";
+
+    let basicSection = "";
+    if (analysis) {
+      const gradeChip = grade
+        ? `<span class="wl-chip-grade" style="color:${gradeColor};border-color:${gradeColor};background:color-mix(in oklch,${gradeColor} 12%,transparent)">${grade}</span>`
+        : "";
+      const scoreSpan = `<span style="font-family:var(--f-mono);font-size:12px;font-weight:700;color:${scoreColor}">${bxScore}<span style="font-size:9.5px;color:var(--fg-3);font-weight:400">/100</span></span>`;
+      const rsChip = rsVoo != null
+        ? `<span class="wl-chip" style="color:${rsVoo >= 0 ? "var(--up)" : "var(--down)"}">${rsVoo >= 0 ? "+" : ""}${rsVoo.toFixed(1)}% vs VOO</span>`
+        : "";
+      const volChip = volRatio != null ? (() => {
+        const lbl   = volRatio > 65 ? "积累" : volRatio > 55 ? "偏多" : volRatio >= 45 ? "中性" : volRatio >= 35 ? "偏空" : "派发";
+        const color = volRatio >= 55 ? "var(--up)" : volRatio >= 45 ? "var(--fg-2)" : "var(--down)";
+        return `<span class="wl-chip" style="color:${color}">${volRatio.toFixed(1)}% ${lbl}</span>`;
+      })() : "";
+      const dataChips = [rsChip, volChip].filter(Boolean).join('<span class="wl-chip-sep">·</span>');
+      basicSection = `
+        <div class="wl-section">
+          <div class="wl-section-hd">
+            <span class="wl-section-lbl">基本分析</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+              ${gradeChip} ${scoreSpan}
+            </div>
+          </div>
+          ${dataChips ? `<div class="wl-chips" style="margin-top:4px">${dataChips}</div>` : ""}
+        </div>`;
+    }
+
+    // ── 入场分析 section ──────────────────────────────────────────
+    const bx = item._bx || { daily: 0, weekly: 0, monthly: 0 };
+    const periodRow = (label, period) => {
+      const cur  = bx[period] ?? 0;
+      const btns = BX_SCORE_OPTS.map(o => `
+        <button type="button" class="bx-score-btn wl-bx-btn ${o.cls} ${cur === o.val ? "active" : ""}"
+                data-wl-idx="${idx}" data-period="${period}" data-val="${o.val}">
+          <span class="bx-val">${o.label}</span>
+          <span class="bx-sub">${o.sub}</span>
+        </button>`).join("");
+      return `<div class="bx-row" style="margin-bottom:7px">
+        <div class="bx-row-label" style="margin-bottom:4px">${label}</div>
+        <div class="bx-score-seg">${btns}</div>
+      </div>`;
+    };
+    const rsBtnLabel = item._entryRsResult ? "重算RS" : "计算RS";
+    const entrySection = `
+      <div class="wl-section">
+        <div class="wl-section-hd"><span class="wl-section-lbl">入场分析</span></div>
+        ${periodRow("日线 Daily", "daily")}
+        ${periodRow("周线 Weekly", "weekly")}
+        ${periodRow("月线 Monthly", "monthly")}
+        <div class="wl-rs-bar">
+          <button class="btn wl-rs-calc-btn" data-wl-idx="${idx}" style="font-size:11px;padding:5px 12px">${rsBtnLabel}</button>
+          <div class="wl-entry-result" data-wl-idx="${idx}">${_wlEntryGradeHTML(item)}</div>
+        </div>
+      </div>`;
 
     return `<div class="wl-card">
       <div class="wl-card-main">
@@ -5709,20 +5828,6 @@
             <div class="mono" style="font-size:13px;font-weight:600">${item.sym}</div>
             <div class="muted" style="font-size:10.5px">${item.name}</div>
           </div>
-        </div>
-        <div class="wl-meta">
-          <span style="display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--fg-2)">
-            <span style="width:8px;height:8px;border-radius:50%;background:${item.color};display:inline-block;flex-shrink:0"></span>${item.sector}
-          </span>
-          ${item.setup ? `<span class="setup-chip" style="font-size:10px;padding:2px 6px">${item.setup}</span>` : ""}
-        </div>
-        <div class="wl-bx-score" style="color:${scoreColor}">
-          <span class="mono" style="font-size:20px;font-weight:700">${item.bxScore}</span>
-          <span class="muted" style="font-size:9.5px">/ 100</span>
-        </div>
-        <div class="wl-slope">
-          <span class="bx-chip-slope ${bxCls}" style="min-width:36px;text-align:center;font-size:12px">${slopeNumDisplay(item.bxSlope ?? 0)}</span>
-          <span class="muted" style="font-size:9.5px">Slope</span>
         </div>
         <div class="wl-price" data-wl-price-sym="${item.sym}">
           <span class="wl-live-price mono" style="font-size:13px;font-weight:600">${item.price ? `$${price(item.price)}` : "—"}</span>
@@ -5735,7 +5840,8 @@
           <button class="btn wl-delete" data-idx="${idx}" style="color:var(--down);border-color:var(--down-dim);padding:6px 10px">✕</button>
         </div>
       </div>
-      ${chipsHTML}
+      ${basicSection}
+      ${entrySection}
       <textarea class="wl-note journal-note-area" data-idx="${idx}" rows="2"
                 placeholder="观察笔记、入场条件、关键价位…">${item.note || ""}</textarea>
     </div>`;
