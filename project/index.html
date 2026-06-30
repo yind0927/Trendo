@@ -1930,7 +1930,14 @@
   .wl-section-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .wl-section-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
   .wl-rs-bar { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-  .wl-bx-rs-grid { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; align-items: start; }
+  .wl-bx-rs-grid { display: grid; grid-template-columns: 55fr 45fr; gap: 10px; align-items: start; }
+  .wl-module { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px; }
+  .wl-module-hd { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 10px; }
+  .wl-bx-compact .bx-score-btn { padding: 5px 3px; font-size: 11.5px; }
+  .wl-bx-compact .bx-sub { font-size: 7.5px; }
+  .wl-bx-compact .bx-row { margin-bottom: 10px; }
+  .wl-bx-compact .bx-row:last-child { margin-bottom: 0; }
+  .wl-bx-compact .bx-row-label { font-size: 10px; margin-bottom: 5px; }
 
   /* ── Stock Analysis Panel ──────────────────────────────────────────────── */
   .wl-analyze-wrap { max-width: 960px; margin: 0 auto; padding: 14px 20px 6px; }
@@ -3968,8 +3975,8 @@
   </div>
 </div>
 
-<script src="data.js?v=214"></script>
-<script src="desk.js?v=214"></script>
+<script src="data.js?v=215"></script>
+<script src="desk.js?v=215"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

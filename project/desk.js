@@ -5855,13 +5855,14 @@
       <div class="wl-section">
         <div class="wl-section-hd"><span class="wl-section-lbl">入场分析</span></div>
         <div class="wl-bx-rs-grid">
-          <div>
+          <div class="wl-module wl-bx-compact">
+            <div class="wl-module-hd">BX 趋势评分</div>
             ${periodRow("Current BX", "daily")}
             ${periodRow("Weekly BX", "weekly")}
             ${periodRow("Monthly BX", "monthly")}
           </div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            <div class="bx-row-label">相对强度 RS</div>
+          <div class="wl-module" style="display:flex;flex-direction:column;gap:8px">
+            <div class="wl-module-hd" style="margin-bottom:2px">相对强度 RS</div>
             <div class="bx-etf-row">
               <input type="text" class="bx-etf-input wl-rs-etf" data-wl-idx="${idx}"
                      placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"
