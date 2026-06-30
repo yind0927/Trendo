@@ -6008,7 +6008,7 @@
   let _histSort = "time"; // "time" | "score"
 
   function saHistCardHTML(h) {
-    const gc = saGradeColor(h.overall);
+    const gc = h.grade === "A" ? "var(--up)" : h.grade === "B" ? "var(--accent)" : h.grade === "C" ? "var(--warn)" : h.grade === "D" ? "var(--down)" : saGradeColor(h.overall);
     const meta = [h.price != null ? `$${h.price.toFixed(2)}` : null, saHistTimeStr(h.savedAt)].filter(Boolean).join(" · ");
     return `<div class="sa-hist-card" data-sym="${h.sym}" data-date="${h.date || ""}">
       <div class="sa-hist-sym">${h.sym}</div>
@@ -6035,11 +6035,32 @@
 
     let sections;
     if (_histSort === "score") {
-      // Flat list sorted by overall score (desc), then time as tiebreak — no date grouping
-      const ranked = [...deduped].sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0) || (b.savedAt ?? 0) - (a.savedAt ?? 0));
-      sections = `<div class="wl-hist-group">
-        <div class="wl-hist-cards">${ranked.map(saHistCardHTML).join("")}</div>
-      </div>`;
+      // Group by grade letter A→B→C→D, within each group sort by score desc
+      const GRADE_ORDER = ["A", "B", "C", "D"];
+      const GRADE_COLORS = { A: "var(--up)", B: "var(--accent)", C: "var(--warn)", D: "var(--down)" };
+      const groups = new Map(GRADE_ORDER.map(g => [g, []]));
+      const noGrade = [];
+      deduped.forEach(h => {
+        if (h.grade && groups.has(h.grade)) groups.get(h.grade).push(h);
+        else noGrade.push(h);
+      });
+      const gradeBlocks = GRADE_ORDER
+        .filter(g => groups.get(g).length > 0)
+        .map(g => {
+          const items = [...groups.get(g)].sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0));
+          return `<div class="wl-hist-group">
+            <div class="wl-hist-grade-lbl" style="color:${GRADE_COLORS[g]}">${g}</div>
+            <div class="wl-hist-cards">${items.map(saHistCardHTML).join("")}</div>
+          </div>`;
+        });
+      if (noGrade.length) {
+        const ranked = noGrade.sort((a, b) => (b.overall ?? 0) - (a.overall ?? 0));
+        gradeBlocks.push(`<div class="wl-hist-group">
+          <div class="wl-hist-date-lbl">其他</div>
+          <div class="wl-hist-cards">${ranked.map(saHistCardHTML).join("")}</div>
+        </div>`);
+      }
+      sections = gradeBlocks.join("");
     } else {
       // Group by the most-recent analysis date, most recent first
       const groups = new Map();
@@ -6059,7 +6080,7 @@
       <div class="wl-hist-lbl">分析记录</div>
       <div class="wl-hist-sort">
         <button data-sort="time" class="${_histSort === "time" ? "active" : ""}">时间</button>
-        <button data-sort="score" class="${_histSort === "score" ? "active" : ""}">评分</button>
+        <button data-sort="score" class="${_histSort === "score" ? "active" : ""}">评级</button>
       </div>
     </div>${sections}`;
     $$(".wl-hist-sort button", el).forEach(btn => {
