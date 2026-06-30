@@ -5666,14 +5666,26 @@
       });
     });
 
+    // ETF input — auto-uppercase
+    $$(".wl-rs-etf", content).forEach(inp => {
+      inp.addEventListener("input", () => {
+        const p = inp.selectionStart;
+        inp.value = inp.value.toUpperCase();
+        try { inp.setSelectionRange(p, p); } catch (_) {}
+      });
+    });
+
     // RS calc buttons
     $$(".wl-rs-calc-btn", content).forEach(btn => {
       btn.addEventListener("click", async () => {
         const idx  = parseInt(btn.dataset.wlIdx);
         const item = WATCHLIST[idx];
         if (!item) return;
+        const etfInput = $(`.wl-rs-etf[data-wl-idx="${idx}"]`, content);
         const analysis = _readLocalAnalysis(item.sym);
-        const etf = analysis?.rs20d?.sectorEtf || null;
+        const etf = etfInput?.value.trim().toUpperCase() || analysis?.rs20d?.sectorEtf || null;
+        if (!item._bx) item._bx = { daily: 0, weekly: 0, monthly: 0 };
+        if (etf) item._bx.sectorEtf = etf;
         btn.textContent = "计算中…";
         btn.disabled = true;
         try {
@@ -5690,7 +5702,7 @@
           btn.textContent = "失败，重试";
         } finally {
           btn.disabled = false;
-          if (btn.textContent !== "失败，重试") btn.textContent = "计算RS";
+          if (btn.textContent !== "失败，重试") btn.textContent = "计算 RS";
         }
       });
     });
@@ -5828,7 +5840,7 @@
     const periodRow = (label, period) => {
       const cur  = bx[period] ?? 0;
       const btns = BX_SCORE_OPTS.map(o => `
-        <button type="button" class="bx-score-btn ${o.cls} ${cur === o.val ? "active" : ""}"
+        <button type="button" class="bx-score-btn wl-bx-btn ${o.cls} ${cur === o.val ? "active" : ""}"
                 data-wl-idx="${idx}" data-period="${period}" data-val="${o.val}">
           <span class="bx-val">${o.label}</span>
           <span class="bx-sub">${o.sub}</span>
@@ -5838,19 +5850,27 @@
         <div class="bx-score-seg">${btns}</div>
       </div>`;
     };
+    const sectorEtf = bx.sectorEtf || analysis?.rs20d?.sectorEtf || "";
     const entrySection = `
       <div class="wl-section">
         <div class="wl-section-hd"><span class="wl-section-lbl">入场分析</span></div>
-        <div style="background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:12px">
-          ${periodRow("Current BX", "daily")}
-          ${periodRow("Weekly BX", "weekly")}
-          ${periodRow("Monthly BX", "monthly")}
-          <div class="bx-row" style="margin-bottom:0">
+        <div class="wl-bx-rs-grid">
+          <div>
+            ${periodRow("Current BX", "daily")}
+            ${periodRow("Weekly BX", "weekly")}
+            ${periodRow("Monthly BX", "monthly")}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
             <div class="bx-row-label">相对强度 RS</div>
-            <button type="button" class="bx-rs-calc-btn wl-rs-calc-btn" data-wl-idx="${idx}">计算 RS</button>
+            <div class="bx-etf-row">
+              <input type="text" class="bx-etf-input wl-rs-etf" data-wl-idx="${idx}"
+                     placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"
+                     value="${sectorEtf}"/>
+              <button type="button" class="bx-rs-calc-btn wl-rs-calc-btn" data-wl-idx="${idx}">计算 RS</button>
+            </div>
+            <div class="wl-entry-result" data-wl-idx="${idx}">${_wlEntryGradeHTML(item)}</div>
           </div>
         </div>
-        <div class="wl-entry-result" data-wl-idx="${idx}">${_wlEntryGradeHTML(item)}</div>
       </div>`;
 
     return `<div class="wl-card">

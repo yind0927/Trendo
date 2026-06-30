@@ -1930,7 +1930,7 @@
   .wl-section-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .wl-section-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
   .wl-rs-bar { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-  .wl-entry-result { margin-top: 10px; }
+  .wl-bx-rs-grid { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; align-items: start; }
 
   /* ── Stock Analysis Panel ──────────────────────────────────────────────── */
   .wl-analyze-wrap { max-width: 960px; margin: 0 auto; padding: 14px 20px 6px; }
@@ -2579,6 +2579,7 @@
     /* ---- Watchlist ---- */
     #watchlist-view { padding: 12px 12px 86px; }
     .wl-card { padding: 11px 13px; }
+    .wl-bx-rs-grid { grid-template-columns: 1fr; }
     .wl-card-main {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -3967,8 +3968,8 @@
   </div>
 </div>
 
-<script src="data.js?v=213"></script>
-<script src="desk.js?v=213"></script>
+<script src="data.js?v=214"></script>
+<script src="desk.js?v=214"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
