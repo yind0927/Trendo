@@ -5850,7 +5850,7 @@
         <div class="bx-score-seg">${btns}</div>
       </div>`;
     };
-    const sectorEtf = bx.sectorEtf || analysis?.rs20d?.sectorEtf || "";
+    const sectorEtf = bx.sectorEtf || "";
     const entrySection = `
       <div class="wl-section">
         <div class="wl-section-hd"><span class="wl-section-lbl">入场分析</span></div>
