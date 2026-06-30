@@ -613,10 +613,15 @@ const BX_GRADE_META = {
 
 ```js
 const norm = rsResult.score / rsResult.max * 10;  // 归一化到 0-10 分
-// norm >= 7  → +1 级（强RS升档）
-// norm < 4   → −1 级（弱RS降档）
-// norm <= 0  → −2 级（极弱RS双降）
-// 4 ≤ norm < 7 → 不变
+const isDistrib = rsResult.volScore === 0;         // 派发（涨跌量比 <35%）；null=无数据不惩罚
+
+// norm >= 7  + 非派发 → +1 级（强RS升档）
+// norm >= 7  + 派发   → 不变（派发阻止升级）
+// norm <= 0           → −2 级（极弱RS双降）
+// 派发 + norm < 4     → −2 级（派发叠加弱RS，复合双降）
+// 派发 + norm 4–6     → −1 级（派发叠加一般RS，触发降级）
+// norm < 4  无派发    → −1 级（弱RS降档）
+// 4 ≤ norm < 7 无派发 → 不变
 // Hold / Exit 等级不受RS影响
 ```
 
@@ -699,6 +704,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v206 | 修复模拟仓挂单 BX/RS 字段缺失：`SIM_PENDING.push` 时用 IIFE 即时计算 `entryBxGrade`/`entryFinalGrade`/`entryRsResult`/`entrySectorEtf` 写入 `bx` 对象；提交后重置 `_pendingRsResult`/`_pendingRsEtf`。 |
 | v207 | 版本缓存破坏 bump（`desk.js?v=207`，`sw.js trendo-v207`）。 |
 | v208 | **涨跌量比（20日量比）加入 RS 评分第4维度**：`/api/history.js` 新增 `volumeResults`（Yahoo 日线成交量）；`calcVolUpDownRatio(closes,volumes,20)` 计算涨日量占比；`calcRSScore` 增量比得分（0-5分，>65%=5/>55%=4/≥45%=3/≥35%=1/<35%=0）；新满分 max=20（有ETF）/10（无ETF），无量比数据时回退 15/5；评分卡（弹窗+抽屉入场评级）均展示"涨跌量比"明细行。 |
+| v209 | **派发成交量降级机制**：`rsAdjustGrade` 新增三条派发规则（`volScore===0` 时）：①强RS（norm≥7）时禁止升级，维持原级；②一般RS（norm 4–6）时触发降1级；③弱RS（norm<4）时复合双降（原本只降1级）。`volScore===null`（无量数据）不受影响保持向后兼容。 |
 
 ---
 

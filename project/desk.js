@@ -296,11 +296,19 @@
     if (!rsResult || grade === "Hold" || grade === "Exit") return grade;
     const idx = GRADE_LADDER.indexOf(grade);
     if (idx < 0) return grade;
-    // Normalize to 0-10 scale regardless of denominator
     const norm = rsResult.max > 0 ? (rsResult.score / rsResult.max) * 10 : 0;
-    if (norm >= 7)  return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
-    if (norm <= 0)  return GRADE_LADDER[Math.max(idx - 2, 0)];  // RS=0: double downgrade
-    if (norm < 4)   return GRADE_LADDER[Math.max(idx - 1, 0)];
+    // volScore===0 means distribution (涨跌量比 <35%); null means no data — no penalty
+    const isDistrib = rsResult.volScore === 0;
+    // Strong RS: upgrade, but distribution blocks it
+    if (norm >= 7)               return isDistrib ? grade : GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
+    // Worst RS: always double downgrade
+    if (norm <= 0)               return GRADE_LADDER[Math.max(idx - 2, 0)];
+    // Distribution + bad RS (<4): compound to double downgrade
+    if (isDistrib && norm < 4)   return GRADE_LADDER[Math.max(idx - 2, 0)];
+    // Distribution + mediocre RS (4–6): trigger a downgrade
+    if (isDistrib && norm < 6)   return GRADE_LADDER[Math.max(idx - 1, 0)];
+    // Bad RS without distribution: single downgrade
+    if (norm < 4)                return GRADE_LADDER[Math.max(idx - 1, 0)];
     return grade;
   }
 
