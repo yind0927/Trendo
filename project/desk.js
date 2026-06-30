@@ -6041,7 +6041,8 @@
       const groups = new Map(GRADE_ORDER.map(g => [g, []]));
       const noGrade = [];
       deduped.forEach(h => {
-        if (h.grade && groups.has(h.grade)) groups.get(h.grade).push(h);
+        const g = h.grade || (h.overall != null ? (h.overall >= 80 ? "A" : h.overall >= 65 ? "B" : h.overall >= 50 ? "C" : "D") : null);
+        if (g && groups.has(g)) groups.get(g).push(h);
         else noGrade.push(h);
       });
       const gradeBlocks = GRADE_ORDER
@@ -6764,7 +6765,7 @@
     } = data;
 
     // Grade / bar colors
-    const gradeColor = saGradeColor;
+    const gradeColor = g => g === "A" ? "var(--up)" : g === "B" ? "var(--accent)" : g === "C" ? "var(--warn)" : g === "D" ? "var(--down)" : saGradeColor(scores?.overall);
     const barColor   = s => s >= 75 ? "var(--up)" : s >= 60 ? "var(--accent)" : s >= 45 ? "var(--warn)" : "var(--down)";
 
     // Recommendation badge style (5 tiers)
@@ -7020,9 +7021,9 @@
       <div id="sa-body">
       <div class="sa-scores">
         <div class="sa-grade-row">
-          <div class="sa-grade" style="color:${gradeColor(scores.overall)}">${scores.grade}</div>
+          <div class="sa-grade" style="color:${gradeColor(scores.grade)}">${scores.grade}</div>
           <div>
-            <div class="sa-overall-num" style="color:${gradeColor(scores.overall)}">${scores.overall}<span style="font-size:13px;font-weight:400;color:var(--fg-3)">/100</span></div>
+            <div class="sa-overall-num" style="color:${gradeColor(scores.grade)}">${scores.overall}<span style="font-size:13px;font-weight:400;color:var(--fg-3)">/100</span></div>
             <div class="sa-overall-sub">综合评分</div>
           </div>
           <div class="sa-radar-inline">${buildRadarSVG(scores)}</div>
