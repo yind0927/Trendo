@@ -1930,7 +1930,7 @@
   .wl-section-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .wl-section-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
   .wl-rs-bar { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-  .wl-bx-rs-grid { display: grid; grid-template-columns: 55fr 45fr; gap: 10px; align-items: start; }
+  .wl-bx-rs-grid { display: grid; grid-template-columns: 55fr 45fr; gap: 10px; align-items: stretch; }
   .wl-module { background: var(--bg-2); border: 1px solid var(--line); border-radius: 9px; padding: 11px 12px; }
   .wl-module-hd { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 10px; }
   .wl-bx-compact .bx-score-btn { padding: 5px 3px; font-size: 11.5px; }
@@ -3810,7 +3810,7 @@
         <div class="bx-row" style="margin-bottom:4px">
           <div class="bx-row-label">行业ETF <span style="color:var(--fg-3);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">相对强度 RS</span></div>
           <div class="bx-etf-row">
-            <input type="text" id="fbx-sector-etf" class="bx-etf-input" placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"/>
+            <input type="text" id="fbx-sector-etf" class="bx-etf-input" placeholder="如 XLK / XLB" maxlength="8" autocomplete="off" spellcheck="false"/>
             <button type="button" id="fbx-rs-calc" class="bx-rs-calc-btn">计算 RS</button>
           </div>
         </div>
@@ -3975,8 +3975,8 @@
   </div>
 </div>
 
-<script src="data.js?v=215"></script>
-<script src="desk.js?v=215"></script>
+<script src="data.js?v=216"></script>
+<script src="desk.js?v=216"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

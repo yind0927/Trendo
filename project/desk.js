@@ -626,7 +626,7 @@
               <div class="bx-row-label">行业ETF <span style="color:var(--fg-3);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">相对强度 RS</span></div>
               <div class="bx-etf-row">
                 <input type="text" id="drawer-rs-etf" class="bx-etf-input"
-                       placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"
+                       placeholder="如 XLK / XLB" maxlength="8" autocomplete="off" spellcheck="false"
                        value="${bx.entrySectorEtf || ''}"/>
                 <button type="button" id="drawer-rs-calc" class="bx-rs-calc-btn">计算 RS</button>
               </div>
@@ -5865,7 +5865,7 @@
             <div class="wl-module-hd" style="margin-bottom:2px">相对强度 RS</div>
             <div class="bx-etf-row">
               <input type="text" class="bx-etf-input wl-rs-etf" data-wl-idx="${idx}"
-                     placeholder="如 XLK / XLY" maxlength="8" autocomplete="off" spellcheck="false"
+                     placeholder="如 XLK / XLB" maxlength="8" autocomplete="off" spellcheck="false"
                      value="${sectorEtf}"/>
               <button type="button" class="bx-rs-calc-btn wl-rs-calc-btn" data-wl-idx="${idx}">计算 RS</button>
             </div>
