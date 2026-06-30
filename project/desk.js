@@ -5615,7 +5615,7 @@
 
     content.innerHTML = WATCHLIST.length === 0
       ? `<div style="text-align:center;padding:48px;color:var(--fg-3);font-size:13px">暂无列表记录</div>`
-      : WATCHLIST.map((item, idx) => watchlistCardHTML(item, idx)).join("");
+      : WATCHLIST.map((item, idx) => watchlistCardHTML(item, idx, _readLocalAnalysis(item.sym))).join("");
 
     $$(".wl-delete", content).forEach(btn => {
       btn.addEventListener("click", e => {
@@ -5646,12 +5646,61 @@
       });
     });
     renderScoringRulesPanel();
+    fetchWatchlistPrices();
   }
 
-  function watchlistCardHTML(item, idx) {
+  async function fetchWatchlistPrices() {
+    if (!WATCHLIST.length) return;
+    const syms = [...new Set(WATCHLIST.map(w => w.sym))];
+    try {
+      const res = await fetch(`/api/quote?stocks=${encodeURIComponent(syms.join(","))}`);
+      if (!res.ok) return;
+      const { results } = await res.json();
+      $$("[data-wl-price-sym]").forEach(el => {
+        const sym = el.dataset.wlPriceSym;
+        const r   = results?.[sym];
+        if (!r?.last) return;
+        const pct = r.prevClose > 0 ? (r.last - r.prevClose) / r.prevClose * 100 : null;
+        el.querySelector(".wl-live-price").textContent = `$${price(r.last)}`;
+        const chgEl = el.querySelector(".wl-live-chg");
+        if (pct != null) {
+          chgEl.textContent = `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
+          chgEl.style.color = pct >= 0 ? "var(--up)" : "var(--down)";
+          chgEl.style.fontWeight = "600";
+        } else {
+          chgEl.textContent = "实时";
+          chgEl.style.color = "";
+        }
+      });
+    } catch (_) {}
+  }
+
+  function watchlistCardHTML(item, idx, analysis = null) {
     const bxScoreNum = parseFloat(item.bxScore) || 0;
     const scoreColor = bxScoreNum >= 70 ? "var(--up)" : bxScoreNum >= 50 ? "var(--warn)" : "var(--down)";
     const bxCls = slopeNumClass(item.bxSlope ?? 0);
+
+    // ── Analysis chips (grade / RS vs VOO / 涨跌量比) ──
+    const grade    = analysis?.scores?.grade || item._aiGrade;
+    const rsVoo    = analysis?.rs20d?.voo;
+    const volRatio = analysis?.volUpDownRatio;
+    const gradeColor = grade === "A" ? "var(--up)" : grade === "B" ? "var(--accent)" : grade === "C" ? "var(--warn)" : grade === "D" ? "var(--down)" : "var(--fg-3)";
+    const gradeChip = grade
+      ? `<span class="wl-chip-grade" style="color:${gradeColor};border-color:${gradeColor};background:color-mix(in oklch,${gradeColor} 12%,transparent)">${grade}</span>`
+      : "";
+    const rsChip = rsVoo != null
+      ? `<span class="wl-chip" style="color:${rsVoo >= 0 ? "var(--up)" : "var(--down)"}">${rsVoo >= 0 ? "+" : ""}${rsVoo.toFixed(1)}% vs VOO</span>`
+      : "";
+    const volChip = volRatio != null ? (() => {
+      const lbl   = volRatio > 65 ? "积累" : volRatio > 55 ? "偏多" : volRatio >= 45 ? "中性" : volRatio >= 35 ? "偏空" : "派发";
+      const color = volRatio >= 55 ? "var(--up)" : volRatio >= 45 ? "var(--fg-2)" : "var(--down)";
+      return `<span class="wl-chip" style="color:${color}">${volRatio.toFixed(1)}% ${lbl}</span>`;
+    })() : "";
+    const chipParts = [gradeChip, rsChip, volChip].filter(Boolean);
+    const chipsHTML = chipParts.length
+      ? `<div class="wl-chips">${chipParts.join('<span class="wl-chip-sep">·</span>')}</div>`
+      : "";
+
     return `<div class="wl-card">
       <div class="wl-card-main">
         <div class="jc-ticker" style="min-width:140px">
@@ -5675,10 +5724,10 @@
           <span class="bx-chip-slope ${bxCls}" style="min-width:36px;text-align:center;font-size:12px">${slopeNumDisplay(item.bxSlope ?? 0)}</span>
           <span class="muted" style="font-size:9.5px">Slope</span>
         </div>
-        ${item.price ? `<div class="wl-price">
-          <span class="mono" style="font-size:13px;font-weight:600">$${price(item.price)}</span>
-          <span class="muted" style="font-size:9.5px">参考价</span>
-        </div>` : ""}
+        <div class="wl-price" data-wl-price-sym="${item.sym}">
+          <span class="wl-live-price mono" style="font-size:13px;font-weight:600">${item.price ? `$${price(item.price)}` : "—"}</span>
+          <span class="wl-live-chg muted" style="font-size:9.5px">${item.price ? "参考价" : "—"}</span>
+        </div>
         <div class="wl-actions">
           <button class="btn primary wl-add-pos" data-idx="${idx}" style="font-size:11.5px;padding:6px 12px">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>入仓
@@ -5686,6 +5735,7 @@
           <button class="btn wl-delete" data-idx="${idx}" style="color:var(--down);border-color:var(--down-dim);padding:6px 10px">✕</button>
         </div>
       </div>
+      ${chipsHTML}
       <textarea class="wl-note journal-note-area" data-idx="${idx}" rows="2"
                 placeholder="观察笔记、入场条件、关键价位…">${item.note || ""}</textarea>
     </div>`;

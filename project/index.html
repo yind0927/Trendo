@@ -1922,6 +1922,10 @@
   .wl-price { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
   .wl-actions { display: flex; gap: 6px; margin-left: auto; align-items: center; }
   .wl-note { width: 100% !important; box-sizing: border-box; resize: vertical; }
+  .wl-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .wl-chip { font-size: 10.5px; font-family: var(--f-mono); }
+  .wl-chip-sep { color: var(--line); font-size: 10px; }
+  .wl-chip-grade { font-family: var(--f-mono); font-weight: 800; font-size: 11px; line-height: 1; padding: 2px 7px; border-radius: 5px; border: 1.5px solid; letter-spacing: 0.02em; }
 
   /* ── Stock Analysis Panel ──────────────────────────────────────────────── */
   .wl-analyze-wrap { max-width: 960px; margin: 0 auto; padding: 14px 20px 6px; }
@@ -3966,8 +3970,8 @@
   </div>
 </div>
 
-<script src="data.js?v=209"></script>
-<script src="desk.js?v=209"></script>
+<script src="data.js?v=210"></script>
+<script src="desk.js?v=210"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
