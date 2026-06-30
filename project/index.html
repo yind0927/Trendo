@@ -1930,6 +1930,8 @@
   .wl-section-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .wl-section-lbl { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); }
   .wl-rs-bar { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .wl-bx-btn { padding: 5px 2px !important; font-size: 11px !important; }
+  .wl-bx-btn .bx-sub { display: none; }
 
   /* ── Stock Analysis Panel ──────────────────────────────────────────────── */
   .wl-analyze-wrap { max-width: 960px; margin: 0 auto; padding: 14px 20px 6px; }
@@ -3646,13 +3648,9 @@
   <div id="wl-form-body" style="display:none;max-width:960px;margin:0 auto;padding:0 20px 8px">
     <form id="wl-add-form" class="wl-add-form">
       <div class="wl-form-row">
-        <input id="wl-sym"      class="form-input" placeholder="代码 e.g. TSLA" required style="width:90px"/>
-        <input id="wl-name"     class="form-input" placeholder="名称" style="flex:1"/>
-        <input id="wl-sector"   class="form-input" placeholder="Sector" style="width:120px"/>
-        <input id="wl-price"    class="form-input" type="number" placeholder="参考价" step="0.01" style="width:85px"/>
-        <input id="wl-setup"    class="form-input" placeholder="Setup" style="width:100px"/>
-        <input id="wl-bx-score" class="form-input" type="number" placeholder="BX Score" min="0" max="100" style="width:82px"/>
-        <input id="wl-bx-slope" class="form-input" type="number" placeholder="Slope" style="width:76px"/>
+        <input id="wl-sym"   class="form-input" placeholder="代码 e.g. TSLA" required style="width:90px"/>
+        <input id="wl-name"  class="form-input" placeholder="名称" style="flex:1"/>
+        <input id="wl-price" class="form-input" type="number" placeholder="参考价" step="0.01" style="width:85px"/>
         <button type="submit" class="btn primary" style="flex-shrink:0">添加</button>
       </div>
     </form>
@@ -3970,8 +3968,8 @@
   </div>
 </div>
 
-<script src="data.js?v=211"></script>
-<script src="desk.js?v=211"></script>
+<script src="data.js?v=212"></script>
+<script src="desk.js?v=212"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

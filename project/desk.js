@@ -5686,12 +5686,11 @@
           item._entryFinalGrade = rsAdjustGrade(bxg, rsResult);
           saveToStorage();
           _updateWlEntryGrade(content, idx, item);
-          btn.textContent = "重算RS";
         } catch (_) {
           btn.textContent = "失败，重试";
         } finally {
           btn.disabled = false;
-          if (btn.textContent === "计算中…") btn.textContent = item._entryRsResult ? "重算RS" : "计算RS";
+          if (btn.textContent !== "失败，重试") btn.textContent = "计算RS";
         }
       });
     });
@@ -5705,8 +5704,8 @@
     const bxg = item._entryBxGrade ||
       (bx ? calcBXGrade(bx.daily ?? 0, bx.weekly ?? 0, bx.monthly ?? 0) : null);
     if (!bxg) return `<span style="font-size:10.5px;color:var(--fg-3)">选择BX后显示评级</span>`;
-    const rs   = item._entryRsResult;
-    const fg   = item._entryFinalGrade || (rs ? rsAdjustGrade(bxg, rs) : bxg);
+    const rs    = item._entryRsResult;
+    const fg    = item._entryFinalGrade || (rs ? rsAdjustGrade(bxg, rs) : bxg);
     const meta  = BX_GRADE_META[fg]  || BX_GRADE_META["C"];
     const bxMeta = BX_GRADE_META[bxg] || BX_GRADE_META["C"];
     const changed = rs && fg !== bxg;
@@ -5716,10 +5715,54 @@
     const rsTag = rs
       ? `<span style="font-size:10px;color:var(--fg-3);font-family:var(--f-mono)">RS ${rs.score}/${rs.max}</span>`
       : "";
-    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      ${chip} ${rsTag}
-      <span style="font-size:10.5px;color:${meta.color};font-weight:600">${meta.action}</span>
-      <span style="font-size:10px;color:var(--fg-3)">${meta.pos !== "—" ? meta.pos : ""}</span>
+    let rsDetail = "";
+    if (rs) {
+      const fmt = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+      const pc  = v => v == null ? "var(--fg-0)" : v >= 0 ? "var(--up)" : "var(--down)";
+      const pts = (n, m) => `<span style="font-weight:700;color:var(--fg-0)">${n}</span><span style="color:var(--fg-3)">/${m}</span>`;
+      const stockRow = `<div class="esc-rs-row esc-rs-header">
+        <span class="esc-rs-lbl">股票 20d</span>
+        <span class="esc-rs-abs" style="color:${pc(rs.stockRet)};font-weight:700">${fmt(rs.stockRet)}</span>
+        <span class="esc-rs-abs2">VOO ${fmt(rs.vooRet)}</span>
+        <span class="esc-rs-pts"></span></div>`;
+      let sectRows = "";
+      if (rs.hasSect) {
+        sectRows = `<div class="esc-rs-row">
+          <span class="esc-rs-lbl">vs ETF</span>
+          <span class="esc-rs-abs" style="color:${pc(rs.vsSect)}">${fmt(rs.vsSect)}</span>
+          <span class="esc-rs-abs2">ETF ${fmt(rs.sectRet)}</span>
+          <span class="esc-rs-pts">${pts(rs.sectScore, 5)}</span></div>
+        <div class="esc-rs-row">
+          <span class="esc-rs-lbl">ETF/VOO</span>
+          <span class="esc-rs-abs" style="color:${pc(rs.sectVsVOO)}">${fmt(rs.sectVsVOO)}</span>
+          <span class="esc-rs-abs2"></span>
+          <span class="esc-rs-pts">${pts(rs.sectBonusScore, 5)}</span></div>`;
+      }
+      const vooRow = `<div class="esc-rs-row">
+        <span class="esc-rs-lbl">vs VOO</span>
+        <span class="esc-rs-abs" style="color:${pc(rs.vsVOO)}">${fmt(rs.vsVOO)}</span>
+        <span class="esc-rs-abs2"></span>
+        <span class="esc-rs-pts">${pts(rs.vooScore, 5)}</span></div>`;
+      let volRow = "";
+      if (rs.volScore != null) {
+        const vPct   = rs.volRatio.toFixed(1);
+        const vLbl   = rs.volRatio > 65 ? "积累" : rs.volRatio > 55 ? "偏多" : rs.volRatio >= 45 ? "中性" : rs.volRatio >= 35 ? "偏空" : "派发";
+        const vColor = rs.volRatio >= 55 ? "var(--up)" : rs.volRatio >= 45 ? "var(--fg-0)" : "var(--down)";
+        volRow = `<div class="esc-rs-row">
+          <span class="esc-rs-lbl">涨跌量比</span>
+          <span class="esc-rs-abs" style="color:${vColor}">${vPct}%</span>
+          <span class="esc-rs-abs2">${vLbl}</span>
+          <span class="esc-rs-pts">${pts(rs.volScore, 5)}</span></div>`;
+      }
+      rsDetail = `<div class="esc-divider"></div><div class="esc-rs-table">${stockRow}${sectRows}${vooRow}${volRow}</div>`;
+    }
+    return `<div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:${rs ? "4px" : "0"}">
+        ${chip} ${rsTag}
+        <span style="font-size:10.5px;color:${meta.color};font-weight:600">${meta.action}</span>
+        <span style="font-size:10px;color:var(--fg-3)">${meta.pos !== "—" ? meta.pos : ""}</span>
+      </div>
+      ${rsDetail}
     </div>`;
   }
 
@@ -5760,8 +5803,6 @@
     // ── 基本分析 section ──────────────────────────────────────────
     const grade    = analysis?.scores?.grade || item._aiGrade;
     const bxScore  = analysis?.scores?.overall ?? item.bxScore;
-    const rsVoo    = analysis?.rs20d?.voo;
-    const volRatio = analysis?.volUpDownRatio;
     const gradeColor = grade === "A" ? "var(--up)" : grade === "B" ? "var(--accent)" : grade === "C" ? "var(--warn)" : "var(--down)";
     const scoreColor = bxScore >= 70 ? "var(--up)" : bxScore >= 50 ? "var(--warn)" : "var(--down)";
 
@@ -5770,16 +5811,9 @@
       const gradeChip = grade
         ? `<span class="wl-chip-grade" style="color:${gradeColor};border-color:${gradeColor};background:color-mix(in oklch,${gradeColor} 12%,transparent)">${grade}</span>`
         : "";
-      const scoreSpan = `<span style="font-family:var(--f-mono);font-size:12px;font-weight:700;color:${scoreColor}">${bxScore}<span style="font-size:9.5px;color:var(--fg-3);font-weight:400">/100</span></span>`;
-      const rsChip = rsVoo != null
-        ? `<span class="wl-chip" style="color:${rsVoo >= 0 ? "var(--up)" : "var(--down)"}">${rsVoo >= 0 ? "+" : ""}${rsVoo.toFixed(1)}% vs VOO</span>`
+      const scoreSpan = bxScore != null
+        ? `<span style="font-family:var(--f-mono);font-size:12px;font-weight:700;color:${scoreColor}">${bxScore}<span style="font-size:9.5px;color:var(--fg-3);font-weight:400">/100</span></span>`
         : "";
-      const volChip = volRatio != null ? (() => {
-        const lbl   = volRatio > 65 ? "积累" : volRatio > 55 ? "偏多" : volRatio >= 45 ? "中性" : volRatio >= 35 ? "偏空" : "派发";
-        const color = volRatio >= 55 ? "var(--up)" : volRatio >= 45 ? "var(--fg-2)" : "var(--down)";
-        return `<span class="wl-chip" style="color:${color}">${volRatio.toFixed(1)}% ${lbl}</span>`;
-      })() : "";
-      const dataChips = [rsChip, volChip].filter(Boolean).join('<span class="wl-chip-sep">·</span>');
       basicSection = `
         <div class="wl-section">
           <div class="wl-section-hd">
@@ -5788,7 +5822,6 @@
               ${gradeChip} ${scoreSpan}
             </div>
           </div>
-          ${dataChips ? `<div class="wl-chips" style="margin-top:4px">${dataChips}</div>` : ""}
         </div>`;
     }
 
@@ -5807,7 +5840,7 @@
         <div class="bx-score-seg">${btns}</div>
       </div>`;
     };
-    const rsBtnLabel = item._entryRsResult ? "重算RS" : "计算RS";
+    const rsBtnLabel = "计算RS";
     const entrySection = `
       <div class="wl-section">
         <div class="wl-section-hd"><span class="wl-section-lbl">入场分析</span></div>
@@ -5868,12 +5901,8 @@
       if (WATCHLIST.find(w => w.sym === sym)) { alert("已在观察列表中"); return; }
       WATCHLIST.push({
         sym, name: $("#wl-name").value.trim() || sym,
-        sector: $("#wl-sector").value.trim() || "—",
         color: "oklch(0.35 0.01 250)",
         price: parseFloat($("#wl-price").value) || null,
-        setup: $("#wl-setup").value.trim() || "",
-        bxScore: parseInt($("#wl-bx-score").value) || 50,
-        bxSlope: parseInt($("#wl-bx-slope").value) || 0,
         note: "", addedAt: new Date().toISOString().slice(0, 10),
       });
       saveToStorage();
