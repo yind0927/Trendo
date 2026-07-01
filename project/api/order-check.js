@@ -12,9 +12,14 @@
 // is a member iff its last pushed blob contains pending orders. This worker scans
 // only those keys and prunes ones whose queues have emptied.
 //
-// Conflict model: last-write-wins on savedAt (same as device↔device sync). If the
-// page is open and active it fills the order itself within 30s and its push wins —
-// same outcome either way, no duplication (arrays are replaced wholesale on pull).
+// Conflict model: last-write-wins, plain blob overwrite (no compare-and-swap) — same
+// as device↔device sync. If the page is open and active it fills the order itself
+// within 30s and its push wins; whichever write lands last in Redis is final. The
+// client's syncOnStartup() "local is newer" merge path used to be able to resurrect
+// a position this cron (or another device) had just closed — by re-adding it from a
+// stale cloud snapshot read before the close landed — causing the client to auto-close
+// it a second time and record a duplicate. Fixed by excluding cloud simHoldings/
+// simClosePending entries that match an already-closed local SIM_CLOSED record.
 
 export default async function handler(req, res) {
   const url    = process.env.KV_REST_API_URL;

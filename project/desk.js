@@ -986,26 +986,37 @@
           pendingMerged = true;
         }
       }
-      if (Array.isArray(cloudData.simClosePending) && cloudData.simClosePending.length) {
-        const localIds  = new Set(SIM_CLOSE_PENDING.map(p => p.id).filter(Boolean));
-        // Skip close orders for syms already queued locally.
-        const closeSyms = new Set(SIM_CLOSE_PENDING.map(p => p.sym));
-        const newOrders = cloudData.simClosePending.filter(p =>
-          p.id && !localIds.has(p.id) && !closeSyms.has(p.sym));
-        if (newOrders.length) {
-          SIM_CLOSE_PENDING.push(...newOrders);
-          pendingMerged = true;
-        }
-      }
       // Rescue SIM_HOLDINGS created on another device that aren't in local yet.
-      // Keyed by sym+entry+cost so partial fills aren't double-counted.
+      // Keyed by sym+entry+cost so partial fills aren't double-counted. Also skip
+      // any cloud entry matching a position we already closed locally (same key
+      // found in SIM_CLOSED) — otherwise a stale cloud snapshot (e.g. read by the
+      // order-check cron just before our own close landed, or a tab-switch pull
+      // racing the 2s save debounce right after we closed) resurrects the position
+      // as "open" again, its matching pending close order gets rescued right after,
+      // and the next fetchPrices tick auto-closes it a second time → duplicate
+      // closed record for the same trade.
+      const closedKeys = new Set(SIM_CLOSED.map(c => `${c.sym}|${c.entry}|${c.cost}`));
       if (Array.isArray(cloudData.simHoldings) && cloudData.simHoldings.length) {
         const localKey = h => `${h.sym}|${h.entry}|${h.cost}`;
         const localKeys = new Set(SIM_HOLDINGS.map(localKey));
-        const newH = cloudData.simHoldings.filter(h => !localKeys.has(localKey(h)));
+        const newH = cloudData.simHoldings.filter(h => !localKeys.has(localKey(h)) && !closedKeys.has(localKey(h)));
         if (newH.length) {
           SIM_HOLDINGS.push(...newH);
           newH.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
+          pendingMerged = true;
+        }
+      }
+      if (Array.isArray(cloudData.simClosePending) && cloudData.simClosePending.length) {
+        const localIds  = new Set(SIM_CLOSE_PENDING.map(p => p.id).filter(Boolean));
+        // Skip close orders for syms already queued locally, and orders whose
+        // position isn't (or is no longer, per the rescue/exclusion above) open
+        // locally — a close order for a position we don't hold is orphaned.
+        const closeSyms  = new Set(SIM_CLOSE_PENDING.map(p => p.sym));
+        const openSyms   = new Set(SIM_HOLDINGS.map(h => h.sym));
+        const newOrders = cloudData.simClosePending.filter(p =>
+          p.id && !localIds.has(p.id) && !closeSyms.has(p.sym) && openSyms.has(p.sym));
+        if (newOrders.length) {
+          SIM_CLOSE_PENDING.push(...newOrders);
           pendingMerged = true;
         }
       }
