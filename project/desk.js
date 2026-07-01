@@ -8178,19 +8178,27 @@
   }
 
   function calcEtfStats(closes, vooCloses) {
-    if (!closes || closes.length < 62 || !vooCloses || vooCloses.length < 62) return null;
+    // The 5-day slope loop below anchors its oldest point 4 trading days back and
+    // needs a 60-day-ago close relative to THAT day, i.e. index closes.length-65 —
+    // not closes.length-61. A closes.length<62 guard let that index go negative
+    // for borderline history windows (e.g. 95 calendar days ~ 65 trading days minus
+    // a holiday cluster), silently falling back to today's score for the early
+    // points and flattening/corrupting the slope. Require the full 65 here.
+    if (!closes || closes.length < 65 || !vooCloses || vooCloses.length < 65) return null;
     const last = closes.at(-1), c20 = closes.at(-21), c60 = closes.at(-61);
     const retF = last / c20 - 1, retS = last / c60 - 1;
     const score = (retF * 1.0 + retS * 1.5) * 100;
     const vLast = vooCloses.at(-1), v20 = vooCloses.at(-21), v60 = vooCloses.at(-61);
     const a20 = retF - (vLast / v20 - 1);
     const a60 = retS - (vLast / v60 - 1);
-    // 5-day score slope
+    // 5-day score slope: rebuild the composite score as of each of the last 5
+    // trading days (each using its own 20D/60D lookback anchor, matching a
+    // per-bar Pine `score` series), then fit a line through those 5 points.
     const recent = [];
     for (let i = 4; i >= 0; i--) {
       const idx = closes.length - 1 - i;
       const c = closes[idx], c2 = closes[idx - 20], c6 = closes[idx - 60];
-      recent.push(c && c2 && c6 ? ((c / c2 - 1) * 1.0 + (c / c6 - 1) * 1.5) * 100 : score);
+      recent.push(((c / c2 - 1) * 1.0 + (c / c6 - 1) * 1.5) * 100);
     }
     const slope = linregSlope(recent);
     let state, stateColor, stateClass;
@@ -8424,7 +8432,10 @@
     if (!el) return;
     el.innerHTML = `<div class="mkt-loading" style="padding:28px 20px">加载板块数据…</div>`;
     try {
-      const from = (() => { const d = new Date(); d.setDate(d.getDate() - 95); return d.toISOString().slice(0, 10); })();
+      // 95 calendar days ~= 65 trading days, right at calcEtfStats' minimum for the
+      // 5-day slope (needs 65 trading bars) — a holiday-heavy stretch could dip
+      // below that. Widen the window for margin.
+      const from = (() => { const d = new Date(); d.setDate(d.getDate() - 130); return d.toISOString().slice(0, 10); })();
       const syms = [BENCH_SYM, ...SECTOR_ETFS.map(e => e.sym)];
       const res  = await fetch(`/api/history?symbols=${syms.map(encodeURIComponent).join(",")}&from=${from}`);
       const data = await res.json();
