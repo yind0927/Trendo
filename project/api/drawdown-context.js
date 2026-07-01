@@ -89,6 +89,56 @@ function analyze(dates, closes) {
   return result;
 }
 
+// Build a month-end close series (last close seen for each YYYY-MM), drop the
+// current in-progress month, then return month-over-month % changes tagged
+// with calendar month (1-12) so they can be bucketed for seasonality.
+function monthlyReturns(dates, closes) {
+  const monthEnds = [];
+  for (let i = 0; i < dates.length; i++) {
+    const key = dates[i].slice(0, 7);
+    if (monthEnds.length && monthEnds[monthEnds.length - 1].key === key) {
+      monthEnds[monthEnds.length - 1].close = closes[i];
+    } else {
+      monthEnds.push({ key, close: closes[i] });
+    }
+  }
+  const curMonth = new Date().toISOString().slice(0, 7);
+  if (monthEnds.length && monthEnds[monthEnds.length - 1].key === curMonth) monthEnds.pop();
+
+  const rets = [];
+  for (let i = 1; i < monthEnds.length; i++) {
+    rets.push({ month: +monthEnds[i].key.slice(5, 7), ret: pct(monthEnds[i].close, monthEnds[i - 1].close) });
+  }
+  return rets;
+}
+
+// Seasonality: bucket month-over-month returns by calendar month (Jan..Dec)
+// across all years of history, then aggregate median / win-rate / volatility.
+function analyzeMonthly(dates, closes) {
+  const buckets = {};
+  for (let m = 1; m <= 12; m++) buckets[m] = [];
+  monthlyReturns(dates, closes).forEach(r => buckets[r.month].push(r.ret));
+
+  const result = [];
+  for (let m = 1; m <= 12; m++) {
+    const arr = buckets[m].slice().sort((a, b) => a - b);
+    const n = arr.length;
+    if (!n) { result.push({ month: m, count: 0 }); continue; }
+    const avg = arr.reduce((a, b) => a + b, 0) / n;
+    const variance = arr.reduce((a, b) => a + (b - avg) * (b - avg), 0) / n;
+    result.push({
+      month: m, count: n,
+      avg:    +avg.toFixed(1),
+      median: +quantile(arr, 0.5).toFixed(1),
+      win:    Math.round(arr.filter(x => x > 0).length / n * 100),
+      std:    +Math.sqrt(variance).toFixed(1),
+      best:   +arr[n - 1].toFixed(1),
+      worst:  +arr[0].toFixed(1),
+    });
+  }
+  return result;
+}
+
 function matchTier(drop) {
   if (drop == null || drop > -2) return null;
   return TIERS.find(t => drop > t.lo && drop <= t.hi) || TIERS[TIERS.length - 1];
@@ -129,7 +179,7 @@ export default async function handler(req, res) {
   const wantAi       = req.query.gen === "1";
 
   const today    = new Date().toISOString().slice(0, 10);
-  const statsKey = `trendo:drawdown_stats_v2:${today}`;
+  const statsKey = `trendo:drawdown_stats_v3:${today}`; // v3: adds monthly seasonality
   const aiKey    = `trendo:drawdown_ai_v2:${today}`;
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
@@ -164,6 +214,11 @@ export default async function handler(req, res) {
       VOO: voo ? analyze(voo.dates, voo.closes) : null,
       QQQ: qqq ? analyze(qqq.dates, qqq.closes) : null,
     };
+    // Reuse the same fetched history (no extra Yahoo call) for calendar-month seasonality.
+    const monthly = {
+      VOO: voo ? analyzeMonthly(voo.dates, voo.closes) : null,
+      QQQ: qqq ? analyzeMonthly(qqq.dates, qqq.closes) : null,
+    };
     const todayDrop = {
       VOO: voo && voo.closes.length > 1 ? +pct(voo.closes.at(-1), voo.closes.at(-2)).toFixed(2) : null,
       QQQ: qqq && qqq.closes.length > 1 ? +pct(qqq.closes.at(-1), qqq.closes.at(-2)).toFixed(2) : null,
@@ -179,7 +234,7 @@ export default async function handler(req, res) {
       const bench = (todayDrop.VOO ?? 0) <= (todayDrop.QQQ ?? 0) ? "VOO" : "QQQ";
       matched = { tierId: wt.id, label: wt.label, bench, drop: todayDrop[bench] };
     }
-    payload = { asOf: today, todayDrop, matched, stats, updatedAt: new Date().toISOString() };
+    payload = { asOf: today, todayDrop, matched, stats, monthly, updatedAt: new Date().toISOString() };
     await kvSet(statsKey, payload);
   }
 

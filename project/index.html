@@ -2734,6 +2734,16 @@
   .dd-win { display: block; font-size: 9.5px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
   .dd-na { color: var(--fg-3); }
   .dd-foot { font-size: 9.5px; color: var(--fg-3); line-height: 1.5; margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--line); }
+  /* Monthly seasonality heatmap (within the drawdown card) */
+  .mo-scroll { overflow-x: auto; }
+  .mo-table { width: 100%; min-width: 560px; border-collapse: collapse; table-layout: fixed; }
+  .mo-table th { font-size: 9px; font-weight: 600; letter-spacing: 0.02em; color: var(--fg-3); text-align: center; padding: 0 2px 5px; border-bottom: 1px solid var(--line); }
+  .mo-table th:first-child, .mo-table td.mo-sym { width: 42px; }
+  .mo-table td { padding: 6px 2px; text-align: center; vertical-align: middle; }
+  .mo-table td.mo-sym { font-size: 10px; font-weight: 700; color: var(--fg-2); font-family: var(--f-mono); text-align: left; padding-left: 2px; }
+  .mo-table tr + tr td { border-top: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
+  .mo-table .dd-med { font-size: 11px; }
+  .mo-table .dd-win { font-size: 8.5px; }
   /* Module separator between brief and regime */
   .mkt-module-sep { height: 1px; background: linear-gradient(to right, var(--line), transparent); margin: 20px 0; }
   .mkt-refresh-btn { background: none; border: 1px solid var(--line); border-radius: 7px; color: var(--fg-2); font-size: 12px; padding: 5px 12px; cursor: pointer; margin-left: auto; display: block; margin-bottom: 12px; }
@@ -3974,8 +3984,8 @@
   </div>
 </div>
 
-<script src="data.js?v=222"></script>
-<script src="desk.js?v=222"></script>
+<script src="data.js?v=223"></script>
+<script src="desk.js?v=223"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

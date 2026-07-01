@@ -8038,8 +8038,36 @@
       ${evLine("crash", "崩跌")}${evLine("sharp", "急跌")}`;
   }
 
+  // Monthly seasonality: VOO/QQQ month-over-month returns bucketed by calendar
+  // month across all years of history (computed server-side from the same
+  // fetch as the drawdown tiers above — see api/drawdown-context.js monthly).
+  const MO_LABELS = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+
+  function _moCell(m) {
+    if (!m || !m.count) return `<td class="dd-na">—</td>`;
+    const clr = m.median >= 0 ? "var(--up)" : "var(--down)";
+    return `<td title="均值 ${m.avg >= 0 ? "+" : ""}${m.avg}% · 波动(σ) ${m.std}% · 最好 +${m.best}% · 最差 ${m.worst}% · ${m.count}个样本">
+      <span class="dd-med" style="color:${clr}">${m.median >= 0 ? "+" : ""}${m.median}%</span>
+      <span class="dd-win">${m.win}%</span>
+    </td>`;
+  }
+
+  function _mkMonthlyHTML(monthly) {
+    if (!monthly || (!monthly.VOO && !monthly.QQQ)) return "";
+    const row = (name, arr) => arr
+      ? `<tr><td class="mo-sym">${name}</td>${arr.map(_moCell).join("")}</tr>` : "";
+    return `<div class="dd-bench-label" style="margin-top:14px">月度季节性 · Monthly Seasonality</div>
+      <div class="mo-scroll">
+        <table class="mo-table">
+          <thead><tr><th></th>${MO_LABELS.map(l => `<th>${l}</th>`).join("")}</tr></thead>
+          <tbody>${row("VOO", monthly.VOO)}${row("QQQ", monthly.QQQ)}</tbody>
+        </table>
+      </div>
+      <div class="dd-foot">按日历月分组：月末收盘价相对上月末收盘价的涨跌幅，同一月份跨多年样本取<b>中位数</b>与上涨概率（胜率，方块下方数字）；本月未收盘不计入。悬停格子查看均值/波动率/极值。</div>`;
+  }
+
   function _renderDrawdown(el, data) {
-    const { todayDrop, matched, stats, summary, updatedAt } = data;
+    const { todayDrop, matched, stats, monthly, summary, updatedAt } = data;
     const timeStr = updatedAt
       ? new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—";
     const dropTag = `VOO ${todayDrop?.VOO != null ? (todayDrop.VOO >= 0 ? "+" : "") + todayDrop.VOO + "%" : "—"} · QQQ ${todayDrop?.QQQ != null ? (todayDrop.QQQ >= 0 ? "+" : "") + todayDrop.QQQ + "%" : "—"}`;
@@ -8067,6 +8095,7 @@
           ${_ddBenchTable("QQQ", stats?.QQQ, matched?.tierId, matched?.bench === "QQQ")}
         </div>
         <div class="dd-foot">数据：Yahoo Finance（VOO 自2010年、QQQ 自1999年全历史）。某天单日跌幅落入某档后，<b>以当天收盘价为基准</b>，统计 N 个交易日后收盘价的涨跌幅；表内为所有同档历史样本的<b>中位数</b>与上涨概率（胜率）。样本少的档位（急跌/崩跌）仅供参考。</div>
+        ${_mkMonthlyHTML(monthly)}
       </div>`;
     if (localStorage.getItem("trendo_drawdown_collapsed") === "1") el.classList.add("collapsed");
     el.querySelector(".brief-toggle")?.addEventListener("click", () => {
