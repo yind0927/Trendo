@@ -85,9 +85,9 @@ function buildMarketBlock(q) {
     lines.push(`三轴模型：${parts.join(" · ")}`);
   }
 
-  // Dealer GEX (SPX): regime:netBn:posFactor:distFlipPct:opexDays
+  // Dealer GEX (SPX): regime:netBn:posFactor:distFlipPct:opexDays:swingBn:pctile
   if (q.gex) {
-    const [regime, bn, factor, distFlip, opexDays] = q.gex.split(":");
+    const [regime, bn, factor, distFlip, opexDays, swing, pctile] = q.gex.split(":");
     const days = parseInt(opexDays);
     const regLabel = regime === "positive"
       ? `正Gamma（做市商净多，波动被压制、倾向均值回归，突破难持续）`
@@ -96,8 +96,11 @@ function buildMarketBlock(q) {
         : `临界Gamma（贴近Flip翻转位，波动性质随时切换，宜轻仓等方向）`;
     const flipNote   = distFlip && !isNaN(parseFloat(distFlip)) ? `，距Gamma Flip ${parseFloat(distFlip) > 0 ? "+" : ""}${distFlip}%` : "";
     const factorNote = factor && !isNaN(parseFloat(factor)) ? `，建议仓位修正 ×${factor}` : "";
+    const swingNote  = swing !== "" && swing != null && !isNaN(parseFloat(swing))
+      ? `，波段口径(剔0DTE) ${parseFloat(swing) > 0 ? "+" : ""}${swing}B${regime === "positive" && parseFloat(swing) < 0 ? "（隔夜缓冲转负，注意）" : ""}` : "";
+    const pctNote    = pctile !== "" && pctile != null && !isNaN(parseInt(pctile)) ? `，处近期${pctile}分位` : "";
     const opexNote   = !isNaN(days) ? `，距月度OpEx ${days} 天` : "";
-    lines.push(`做市商Gamma(SPX 0-30DTE)：${regLabel}，净 ${bn}B${flipNote}${factorNote}${opexNote}`);
+    lines.push(`做市商Gamma(SPX 0-30DTE)：${regLabel}，净 ${bn}B${swingNote}${pctNote}${flipNote}${factorNote}${opexNote}`);
   }
 
   // Regime (combined recommendation from the three-axis model)

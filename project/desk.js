@@ -7551,6 +7551,30 @@
     const dteHTML = (d.d0 != null || d.d1_7 != null || d.d8_30 != null)
       ? `<div class="gx-dte">${dteItem("0DTE", d.d0)}${dteItem("1-7D", d.d1_7)}${dteItem("8-30D", d.d8_30)}</div>` : "";
 
+    // Day-over-day change + history percentile (absolute GEX scales with spot²/OI,
+    // so the percentile is the stable "high or low" reading)
+    const chgParts = [];
+    if (gex.netChgBn != null) {
+      const up = gex.netChgBn >= 0;
+      chgParts.push(`<span style="color:${up ? "#22c55e" : "#ef4444"}">${up ? "▲" : "▼"} ${up ? "+" : ""}${gex.netChgBn}B 较昨日</span>`);
+    }
+    if (gex.pctile != null)
+      chgParts.push(`<span>近${gex.histDays}天分位 <b>${gex.pctile}%</b></span>`);
+    const chgRow = chgParts.length ? `<div class="gx-chgrow">${chgParts.join(`<span class="gx-dot">·</span>`)}</div>` : "";
+
+    // Swing reading (ex-0DTE): the structure that persists past today's close
+    const swing = gex.swingGexBn;
+    let swingHTML = "";
+    if (swing != null) {
+      const sColor = swing >= 0 ? "#22c55e" : "#ef4444";
+      let note = "";
+      if (net > 0 && swing < 0)
+        note = `<span class="gx-swing-note warn">⚠️ 剔除0DTE后转负——缓冲全靠当日期权，对隔夜持仓无保护</span>`;
+      else if (net > 0 && swing < net * 0.5)
+        note = `<span class="gx-swing-note">0DTE占比高，缓冲的隔日延续性偏弱</span>`;
+      swingHTML = `<div class="gx-swing"><span class="gx-swing-name">波段口径 · 剔0DTE</span><b style="color:${sColor}">${swing > 0 ? "+" : ""}${swing}B</b>${note}</div>`;
+    }
+
     return `
       <div class="mkt-card mkt-gex-card">
         <div class="mkt-card-label">做市商 Gamma · GEX <span class="mkt-gex-src">SPX 0-30DTE · CBOE</span></div>
@@ -7558,6 +7582,7 @@
           <span class="mkt-card-val" style="color:${st.color}">${sign}${net}<span class="mkt-gex-unit">B</span></span>
           <span class="mkt-gex-mode" style="color:${st.color}">${st.en} · ${st.mode}</span>
         </div>
+        ${chgRow}
         <div class="gx-badges">
           <div class="mkt-badge" style="color:${st.color};border-color:${st.color}40;background:${st.color}12">
             <span class="mkt-badge-dot" style="background:${st.color}"></span>${st.en}
@@ -7572,6 +7597,7 @@
           ${distPill("Call Wall", gex.distCallPct, callWall, "call")}
         </div>
         <div class="mkt-gex-interp">${st.interp}</div>
+        ${swingHTML}
         ${dteHTML}
         <div class="mkt-gex-metarow">
           <span>建议仓位 = 轴B上限 × <b style="color:${facColor}">${factor}</b></span>
@@ -7722,6 +7748,8 @@
       ? `；负Gamma（${gex.netGexBn ?? gex.gexBn}B，仓位×${gex.posFactor ?? "?"}），做市商对冲放大波动、下跌易加速，止损勿松、勿抄底。`
       : (gex && gex.regime === "neutral")
       ? `；Gamma临界（贴近Flip $${gex.flip ?? "?"}），波动随时切换，轻仓等方向。`
+      : (gex && gex.regime === "positive" && gex.swingGexBn != null && gex.swingGexBn < 0)
+      ? `；正Gamma但剔0DTE后转负（${gex.swingGexBn}B），缓冲仅限当日，隔夜持仓谨慎。`
       : "";
     if (!dir.eligible)
       return { headline: "❌ 禁止新多仓", color: "#ef4444",
@@ -7938,7 +7966,8 @@
         direction: axes.dir.label, posMax: axes.risk.posMax, sentiment: axes.sent.label,
         gex: gex ? { regime: gex.regime, netGexBn: gex.netGexBn, posFactor: gex.posFactor,
           flip: gex.flip, callWall: gex.callWall, putWall: gex.putWall,
-          distFlipPct: gex.distFlipPct, daysToOpEx: gex.daysToOpEx } : null,
+          distFlipPct: gex.distFlipPct, daysToOpEx: gex.daysToOpEx,
+          swingGexBn: gex.swingGexBn, pctile: gex.pctile } : null,
       };
       _lastMktCtx = mktCtx;
       initDrawdownCard();
@@ -8172,7 +8201,8 @@
           .join(","));
       if (mktCtx?.gex?.regime)
         params.set("gex", [mktCtx.gex.regime, mktCtx.gex.netGexBn, mktCtx.gex.posFactor,
-          mktCtx.gex.distFlipPct, mktCtx.gex.daysToOpEx].join(":"));
+          mktCtx.gex.distFlipPct, mktCtx.gex.daysToOpEx,
+          mktCtx.gex.swingGexBn ?? "", mktCtx.gex.pctile ?? ""].join(":"));
 
       const res = await fetch("/api/market-summary?" + params.toString(), { signal: AbortSignal.timeout(25000) });
       if (!res.ok) {

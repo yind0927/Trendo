@@ -2721,6 +2721,16 @@
   .gx-lvl.call .gx-lvl-val { color: #ef4444; }
   .gx-lvl.flip .gx-lvl-val { color: var(--warn); }
   .gx-lvl.spot .gx-lvl-val { color: var(--fg-0); }
+  /* day change + percentile row */
+  .gx-chgrow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12px; font-family: var(--f-mono); font-weight: 600; margin-top: -4px; color: var(--fg-2); }
+  .gx-chgrow b { color: var(--fg-0); }
+  .gx-dot { color: var(--fg-3); }
+  /* swing (ex-0DTE) reading */
+  .gx-swing { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 7px 10px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
+  .gx-swing-name { font-size: 10px; color: var(--fg-3); letter-spacing: 0.03em; }
+  .gx-swing b { font-family: var(--f-mono); font-size: 14px; }
+  .gx-swing-note { font-size: 10.5px; color: var(--fg-2); }
+  .gx-swing-note.warn { color: var(--warn); font-weight: 600; }
   /* DTE breakdown */
   .gx-dte { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 10px; background: var(--bg-2); border-radius: 8px; font-family: var(--f-mono); }
   .gx-dte-item { display: flex; align-items: baseline; gap: 5px; font-size: 12px; }
@@ -2829,6 +2839,10 @@
     .gx-lvl-dist { font-size: 9.5px; }
     .gx-dte { gap: 8px 12px; padding: 7px 9px; justify-content: space-between; }
     .gx-dte-item { font-size: 11px; }
+    .gx-chgrow { font-size: 11px; }
+    .gx-swing { padding: 6px 9px; }
+    .gx-swing b { font-size: 13px; }
+    .gx-swing-note { flex-basis: 100%; }
     .mkt-gex-interp { font-size: 12px; line-height: 1.5; }
     .mkt-gex-metarow { flex-direction: column; gap: 4px; }
   }
@@ -4055,8 +4069,8 @@
   </div>
 </div>
 
-<script src="data.js?v=230"></script>
-<script src="desk.js?v=230"></script>
+<script src="data.js?v=231"></script>
+<script src="desk.js?v=231"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

@@ -175,6 +175,9 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
   const payload = {
     source: "SPX", spot: +spot.toFixed(0),
     netGexBn: bn(netTotal), callGexBn: bn(callTotal), putGexBn: bn(-putTotal),
+    // Swing reading: 0DTE gamma vanishes at today's close — for multi-day holds
+    // only the 1-30D structure persists. Net minus the 0DTE bucket.
+    swingGexBn: bn(netTotal - dte.d0),
     regime, posFactor,
     flip: flip != null ? +flip.toFixed(0) : null,
     callWall, putWall,
@@ -184,6 +187,29 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
     // legacy fields kept so older cached clients don't break
     gexBn: bn(netTotal), isPositive: netTotal >= 0, zeroGamma: flip != null ? +flip.toFixed(0) : null,
   };
+
+  // ── Daily snapshot history → day-over-day change + percentile ──────────────
+  // GEX scales with spot² and OI growth, so absolute thresholds go stale; the
+  // percentile vs recent history is the stable way to read "high or low".
+  try {
+    const histKey  = "trendo:gex_hist_v1";
+    const hist     = (await kvGet(histKey)) || {};
+    const todayStr = now.toISOString().slice(0, 10);
+    hist[todayStr] = { net: payload.netGexBn, swing: payload.swingGexBn, flip: payload.flip, spot: payload.spot };
+    const dates = Object.keys(hist).sort();
+    while (dates.length > 120) delete hist[dates.shift()];
+    const prevDate = dates.filter(d => d < todayStr).pop();
+    if (prevDate) {
+      payload.prevNetGexBn = hist[prevDate].net;
+      payload.netChgBn = +(payload.netGexBn - hist[prevDate].net).toFixed(2);
+    }
+    const nets = dates.map(d => hist[d].net);
+    payload.histDays = nets.length;
+    if (nets.length >= 5)
+      payload.pctile = Math.round(nets.filter(v => v <= payload.netGexBn).length / nets.length * 100);
+    await kvSet(histKey, hist, 86400 * 200);
+  } catch (_) {}
+
   if (debugMode) return { _debug: true, diag, ...payload };
 
   await kvSet(cacheKey, payload);
