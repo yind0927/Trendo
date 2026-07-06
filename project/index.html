@@ -2693,15 +2693,23 @@
   .mkt-axis-gate.ok { color: #22c55e; }
   .mkt-axis-gate.block { color: #ef4444; }
   .mkt-axis-gate.dim { color: var(--fg-3); }
-  .mkt-gex-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-family: var(--f-mono); margin-top: 4px; flex-wrap: wrap; }
-  .mkt-gex-label { color: var(--fg-3); }
-  .mkt-gex-val { font-weight: 700; }
-  .mkt-gex-val.pos { color: var(--up); }
-  .mkt-gex-val.neg { color: var(--warn); }
-  .mkt-gex-val.neg-strong { color: var(--down); }
-  .mkt-gex-zero { color: var(--fg-3); }
-  .mkt-gex-opex { color: var(--fg-3); margin-left: auto; }
-  .mkt-gex-opex.warn { color: var(--warn); font-weight: 700; }
+  /* GEX big card */
+  .mkt-row-full { grid-template-columns: 1fr; }
+  .mkt-gex-card { gap: 9px; }
+  .mkt-gex-src { font-weight: 600; letter-spacing: 0.04em; color: var(--fg-3); margin-left: 6px; font-size: 9px; }
+  .mkt-gex-unit { font-size: 20px; font-weight: 700; margin-left: 2px; }
+  .mkt-gex-mode { font-size: 14px; font-weight: 700; }
+  .mkt-gex-bar { position: relative; height: 10px; margin-top: 2px; }
+  .mkt-gex-track { position: absolute; inset: 0; height: 6px; top: 2px; border-radius: 3px;
+    background: linear-gradient(90deg, #ef4444 0%, #f97316 37.5%, #3b82f6 37.5%, #22c55e 100%); opacity: 0.85; }
+  .mkt-gex-zeroline { position: absolute; top: -1px; width: 2px; height: 12px; background: var(--fg-1); transform: translateX(-50%); border-radius: 1px; }
+  .mkt-gex-ptr { position: absolute; top: -2px; width: 10px; height: 10px; border-radius: 50%; transform: translateX(-50%); border: 2px solid var(--bg-1); box-shadow: 0 0 0 1px currentColor; }
+  .mkt-gex-scale { display: flex; justify-content: space-between; font-size: 9.5px; font-family: var(--f-mono); color: var(--fg-3); letter-spacing: 0.02em; }
+  .mkt-gex-interp { font-size: 12.5px; line-height: 1.55; color: var(--fg-1); }
+  .mkt-gex-metarow { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 11px; font-family: var(--f-mono); color: var(--fg-3); padding-top: 2px; border-top: 1px solid color-mix(in oklch, var(--line) 60%, transparent); }
+  .mkt-gex-metarow b { color: var(--fg-1); font-weight: 700; }
+  .mkt-gex-metarow .warn { color: var(--warn); }
+  .mkt-gex-metarow .warn b { color: var(--warn); }
   .mkt-playbook-ref { margin-top: 16px; }
   .mkt-playbook-ref summary { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 8px 0; list-style: revert; }
   .mkt-playbook-ref summary:hover { color: var(--fg-2); }
@@ -4012,8 +4020,8 @@
   </div>
 </div>
 
-<script src="data.js?v=227"></script>
-<script src="desk.js?v=227"></script>
+<script src="data.js?v=228"></script>
+<script src="desk.js?v=228"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

@@ -7501,6 +7501,58 @@
       </div>`;
   }
 
+  // GEX state: sign drives the regime (positive = dealers suppress moves,
+  // negative = dealers amplify moves); magnitude picks the intensity label.
+  function gexState(v) {
+    if (v <= -1)  return { color: "#ef4444", tag: "强负 Gamma", mode: "波动放大",
+      interp: "做市商净空 Gamma，对冲方向与行情一致——涨追涨、跌杀跌，波动被放大。趋势行情、下跌容易加速。策略：顺势跟随，止损放宽或先减仓，别过早抄底。" };
+    if (v < 0)    return { color: "#f97316", tag: "负 Gamma", mode: "偏放大",
+      interp: "做市商轻度净空 Gamma，波动有放大倾向。方向一旦确立容易延续。策略：留意是否加速，减少逆势抄底。" };
+    if (v < 0.5)  return { color: "#eab308", tag: "临界区", mode: "方向待定",
+      interp: "接近零轴翻转区，波动性质随时切换。盯紧价格是否跌破下方零轴——跌破则转负 Gamma、波动骤升。策略：轻仓、等方向明朗。" };
+    if (v < 2)    return { color: "#3b82f6", tag: "正 Gamma", mode: "波动压制",
+      interp: "做市商净多 Gamma，对冲方向与行情相反——买跌卖涨，波动被压制。市场倾向震荡回归，大跌易反弹、突破难持续。策略：适合区间/回归，突破需谨慎。" };
+    return { color: "#22c55e", tag: "强正 Gamma", mode: "强压制",
+      interp: "做市商大幅净多 Gamma，强力压制波动。价格易被'钉'在密集行权价附近，区间震荡为主。策略：高抛低吸区间操作，不追突破。" };
+  }
+
+  function mkGexCardHTML(gex) {
+    if (!gex || gex.gexBn == null) return "";
+    const v    = gex.gexBn;
+    const st   = gexState(v);
+    const sign = v > 0 ? "+" : "";
+    // Bipolar bar spans −3B … +5B; zero-flip line sits at 37.5%.
+    const MIN = -3, MAX = 5;
+    const ptr  = Math.max(2, Math.min(98, (v - MIN) / (MAX - MIN) * 100));
+    const zeroPct = (0 - MIN) / (MAX - MIN) * 100;
+    const opexWarn = gex.daysToOpEx <= 3;
+    const zeroLine = gex.zeroGamma != null
+      ? `零轴翻转 <b>$${gex.zeroGamma}</b>${gex.spot != null ? ` · 现价 $${gex.spot}` : ""}`
+      : (gex.spot != null ? `现价 <b>$${gex.spot}</b>` : "");
+    return `
+      <div class="mkt-card mkt-gex-card">
+        <div class="mkt-card-label">做市商 Gamma · GEX <span class="mkt-gex-src">SPY近月 · CBOE</span></div>
+        <div class="mkt-card-row">
+          <span class="mkt-card-val" style="color:${st.color}">${sign}${v}<span class="mkt-gex-unit">B</span></span>
+          <span class="mkt-gex-mode" style="color:${st.color}">${st.mode}</span>
+        </div>
+        <div class="mkt-badge" style="color:${st.color};border-color:${st.color}40;background:${st.color}12">
+          <span class="mkt-badge-dot" style="background:${st.color}"></span>${st.tag}
+        </div>
+        <div class="mkt-gex-bar">
+          <div class="mkt-gex-track"></div>
+          <div class="mkt-gex-zeroline" style="left:${zeroPct}%"></div>
+          <div class="mkt-gex-ptr" style="left:${ptr}%;background:${st.color}"></div>
+        </div>
+        <div class="mkt-gex-scale"><span>− 放大波动</span><span>0</span><span>压制波动 +</span></div>
+        <div class="mkt-gex-interp">${st.interp}</div>
+        <div class="mkt-gex-metarow">
+          ${zeroLine ? `<span>${zeroLine}</span>` : ""}
+          <span class="${opexWarn ? "warn" : ""}">月度OpEx <b>${gex.daysToOpEx}天</b>${opexWarn ? " · Gamma将清零，方向性放大" : ""}</span>
+        </div>
+      </div>`;
+  }
+
   function mkIndicatorHTML(key, val, pctChg, absChg, extra = "") {
     const cfg = MKT_ZONES[key];
     const zone = getZone(cfg, val);
@@ -7671,14 +7723,7 @@
 
   function mkAxesHTML(axes) {
     if (!axes) return "";
-    const { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200, gex } = axes;
-    const gexRowHTML = gex?.gexBn != null ? (() => {
-      const valCls = gex.isPositive ? "pos" : (gex.gexBn < -1 ? "neg-strong" : "neg");
-      const sign   = gex.gexBn > 0 ? "+" : "";
-      const zeroTag = gex.zeroGamma != null ? `<span class="mkt-gex-zero">零轴 $${gex.zeroGamma}</span>` : "";
-      const opexCls = gex.daysToOpEx <= 3 ? " warn" : "";
-      return `<div class="mkt-gex-row"><span class="mkt-gex-label">做市商γ</span><span class="mkt-gex-val ${valCls}">${gex.isPositive ? "正" : "负"} ${sign}${gex.gexBn}B</span>${zeroTag}<span class="mkt-gex-opex${opexCls}">OpEx ${gex.daysToOpEx}天</span></div>`;
-    })() : "";
+    const { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 } = axes;
     const maNote = (ma50 != null && ma200 != null)
       ? `EMA50 ${ma50} · EMA200 ${ma200}`
       : (ma50 != null ? `EMA50 ${ma50}` : "数据不足");
@@ -7701,7 +7746,6 @@
             <div class="mkt-axis-meta">VIX ${vix} <span class="mkt-axis-dim">容量 ${risk.label}</span></div>
             <div class="mkt-axis-desc">仓位上限 ${risk.posMax}% · 止损 ${risk.stop}</div>
             <div class="mkt-axis-gate dim">决定"开多少"</div>
-            ${gexRowHTML}
           </div>
           <div class="mkt-axis-card" style="border-color:${sent.color}40">
             <div class="mkt-axis-top"><span class="mkt-axis-name">情绪 · FGI/RSI</span><span class="mkt-axis-val" style="color:${sent.color}">${sent.label}</span></div>
@@ -7744,6 +7788,7 @@
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
+      ${axes?.gex ? `<div class="mkt-row mkt-row-full">${mkGexCardHTML(axes.gex)}</div>` : ""}
       <div class="mkt-playbook-ref">
         <details>
           <summary>市场模型详情 · 点击展开</summary>
