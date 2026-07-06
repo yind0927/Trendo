@@ -1,121 +1,31 @@
 // Vercel serverless — CNN Fear & Greed Index proxy (avoids browser CORS).
-// Optional ?gex=1 also returns SPY Dealer Gamma Exposure from Yahoo Finance options.
-// ?gex=debug returns step-by-step diagnostic info to identify auth failures.
+// Optional ?gex=1 also returns SPY Dealer Gamma Exposure computed from Polygon's
+// options snapshot (per-contract gamma × open interest). ?gex=debug adds diag.
+//
+// GEX scope: near-term expirations (the 3 nearest, ≤~5 weeks out) within ±10% of
+// spot — this is where dealer gamma concentrates and drives daily hedging. Net
+// GEX>0 → dealers long gamma → suppresses volatility (mean-reverting); Net GEX<0
+// → dealers short gamma → amplifies moves (trending / spiky).
 
-const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
 
-// ── Yahoo crumb authentication ────────────────────────────────────────────────
-function extractCookieJar(res) {
-  // Prefer getSetCookie() (returns individual headers — avoids comma-join trap
-  // from Expires dates). Fall back to the joined header.
-  let list = [];
-  if (typeof res.headers.getSetCookie === "function") list = res.headers.getSetCookie();
-  else { const raw = res.headers.get("set-cookie"); if (raw) list = [raw]; }
-  // Take the name=value portion (before first ';') of each cookie.
-  const pairs = list.map(sc => sc.split(";")[0].trim()).filter(p => p.includes("="));
-  return pairs;
-}
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-async function fetchCookieJar() {
-  // finance.yahoo.com sets the fuller jar (A1/A3/GUC/GUCS); fc.yahoo.com only A3.
-  for (const src of ["https://finance.yahoo.com", "https://fc.yahoo.com"]) {
-    try {
-      const r = await fetch(src, {
-        headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9" },
-        redirect: "follow", signal: AbortSignal.timeout(6000),
-      });
-      const jar = extractCookieJar(r);
-      if (jar.length) return jar;
-    } catch (_) {}
-  }
-  return [];
-}
-
-async function getCrumb(cookieStr) {
-  // getcrumb is aggressively rate-limited (429) from datacenter IPs — retry once.
-  for (const host of ["query2", "query1"]) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const r = await fetch(`https://${host}.finance.yahoo.com/v1/test/getcrumb`, {
-          headers: { "User-Agent": UA, "Accept": "text/plain, */*", "Cookie": cookieStr, "Referer": "https://finance.yahoo.com/" },
-          signal: AbortSignal.timeout(5000),
-        });
-        const txt = (await r.text()).trim();
-        if (r.ok && txt && !txt.startsWith("<") && !txt.startsWith("{")) return { crumb: txt };
-        if (r.status === 429) { await sleep(1200); continue; }
-        break; // non-429 failure: try next host
-      } catch (_) { break; }
+// ── GEX helpers ───────────────────────────────────────────────────────────────
+function accumulate(contracts, spot, acc) {
+  for (const c of contracts) {
+    const g   = c.greeks?.gamma;
+    const oi  = c.open_interest;
+    const type = c.details?.contract_type;
+    const strike = c.details?.strike_price;
+    if (!g || !oi || !strike || (type !== "call" && type !== "put")) continue;
+    const mult = c.details?.shares_per_contract || 100;
+    const dollarGamma = g * oi * mult * spot;
+    if (type === "call") {
+      acc.callSum += dollarGamma; acc.callCount++;
+      acc.byStrike[strike] = (acc.byStrike[strike] || 0) + dollarGamma;
+    } else {
+      acc.putSum += dollarGamma; acc.putCount++;
+      acc.byStrike[strike] = (acc.byStrike[strike] || 0) - dollarGamma;
     }
-  }
-  return { crumb: null };
-}
-
-// Returns { hasCookie, cookieStr, crumb, cookieNames, crumbStatus }. Caches a
-// working {cookieStr,crumb} pair in Redis so getcrumb isn't hammered each call.
-async function getYahooAuth(kvGet, kvSet) {
-  const CACHE_KEY = "trendo:yahoo_auth_v1";
-  const cached = await kvGet(CACHE_KEY);
-  if (cached?.cookieStr && cached?.crumb)
-    return { hasCookie: true, cookieStr: cached.cookieStr, crumb: cached.crumb, cookieNames: cached._names || "cached", crumbStatus: "cache" };
-
-  const jar = await fetchCookieJar();
-  if (!jar.length) return { hasCookie: false, reason: "no_cookies" };
-  const cookieStr   = jar.join("; ");
-  const cookieNames = jar.map(p => p.split("=")[0]).join(",");
-
-  const { crumb } = await getCrumb(cookieStr);
-  if (crumb) await kvSet(CACHE_KEY, { cookieStr, crumb, _names: cookieNames }, 21600); // 6h
-
-  return { hasCookie: true, cookieStr, crumb, cookieNames, crumbStatus: crumb ? "ok" : "429/blocked" };
-}
-
-// ── Options chain fetch ───────────────────────────────────────────────────────
-// Try cookie-only paths too — the v7 options endpoint often accepts a valid
-// cookie without a crumb, letting us succeed even when getcrumb is 429'd.
-async function fetchChain(sym, dateTs, auth) {
-  const hasCrumb  = !!auth?.crumb;
-  const hasCookie = !!auth?.cookieStr;
-  const attempts = [
-    ...(hasCrumb  ? [{ host: "query1", crumb: true  }] : []),
-    ...(hasCookie ? [{ host: "query1", crumb: false }] : []),
-    ...(hasCookie ? [{ host: "query2", crumb: false }] : []),
-    ...(hasCrumb  ? [{ host: "query2", crumb: true  }] : []),
-    { host: "query2", crumb: false, noAuth: true },
-    { host: "query1", crumb: false, noAuth: true },
-  ];
-
-  for (const { host, crumb, noAuth } of attempts) {
-    const base = `https://${host}.finance.yahoo.com/v7/finance/options/${encodeURIComponent(sym)}`;
-    let url = dateTs ? `${base}?date=${dateTs}` : base;
-    if (crumb) url += (dateTs ? "&" : "?") + `crumb=${encodeURIComponent(auth.crumb)}`;
-    try {
-      const headers = { "User-Agent": UA, "Accept": "application/json", "Referer": "https://finance.yahoo.com/" };
-      if (!noAuth && auth?.cookieStr) headers["Cookie"] = auth.cookieStr;
-      const r = await fetch(url, { headers, signal: AbortSignal.timeout(6000) });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const result = d?.optionChain?.result?.[0];
-      if (result) return { result, attempt: `${host}${crumb ? "+crumb" : noAuth ? "-noauth" : "+cookie"}` };
-    } catch (_) {}
-  }
-  return null;
-}
-
-// ── GEX calculation ───────────────────────────────────────────────────────────
-function accumulate(opts, spot, acc) {
-  for (const c of (opts.calls || [])) {
-    if (!c.gamma || !c.openInterest) continue;
-    const g = c.gamma * c.openInterest * 100 * spot;
-    acc.callSum += g; acc.callCount++;
-    acc.byStrike[c.strike] = (acc.byStrike[c.strike] || 0) + g;
-  }
-  for (const p of (opts.puts || [])) {
-    if (!p.gamma || !p.openInterest) continue;
-    const g = p.gamma * p.openInterest * 100 * spot;
-    acc.putSum += g; acc.putCount++;
-    acc.byStrike[p.strike] = (acc.byStrike[p.strike] || 0) - g;
   }
 }
 
@@ -142,11 +52,48 @@ function nextMonthlyOpEx() {
   return new Date(Date.UTC(y, m, 15));
 }
 
-async function calcGex(kvUrl, kvToken, force, debugMode) {
+// SPY previous close as a cheap, robust anchor for the ±10% strike window.
+async function fetchSpyPrevClose(pgKey) {
+  try {
+    const r = await fetch(`https://api.polygon.io/v2/aggs/ticker/SPY/prev?adjusted=true&apiKey=${pgKey}`,
+      { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(6000) });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.results?.[0]?.c ?? null;
+  } catch (_) { return null; }
+}
+
+// Pull the options snapshot, bounded to strikes near `anchor` and the nearest
+// expirations from today. Paginates up to `maxPages` (rate-limit safe).
+async function fetchOptionsSnapshot(pgKey, anchor, diag, maxPages = 3) {
+  const today = new Date().toISOString().slice(0, 10);
+  const lo = Math.floor(anchor * 0.90), hi = Math.ceil(anchor * 1.10);
+  let url = `https://api.polygon.io/v3/snapshot/options/SPY` +
+    `?strike_price.gte=${lo}&strike_price.lte=${hi}` +
+    `&expiration_date.gte=${today}` +
+    `&order=asc&sort=expiration_date&limit=250&apiKey=${pgKey}`;
+
+  const all = [];
+  let httpNote = "";
+  for (let page = 0; page < maxPages && url; page++) {
+    let r;
+    try {
+      r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
+    } catch (e) { httpNote = `fetch_err:${e.message}`; break; }
+    if (!r.ok) { httpNote = `http_${r.status}`; break; }
+    const d = await r.json();
+    if (Array.isArray(d.results)) all.push(...d.results);
+    url = d.next_url ? `${d.next_url}&apiKey=${pgKey}` : null;
+  }
+  diag.push(`snapshot pages_pulled contracts=${all.length}${httpNote ? " " + httpNote : ""}`);
+  return all;
+}
+
+async function calcGex(pgKey, kvUrl, kvToken, force, debugMode) {
   const now      = new Date();
-  const cacheKey = `trendo:gex_v1:${now.toISOString().slice(0, 13)}`;
+  const cacheKey = `trendo:gex_v2:${now.toISOString().slice(0, 13)}`; // v2 = Polygon source
   const kvHdrs   = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
-  const diag     = [];  // diagnostic steps for debug mode
+  const diag     = [];
 
   const kvGet = async key => {
     if (!kvUrl || !kvToken) return null;
@@ -162,55 +109,51 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
     catch (_) {}
   };
 
+  if (!pgKey) { if (debugMode) return { _debug: true, error: "no_polygon_key" }; return null; }
+
   if (!force && !debugMode) {
     const cached = await kvGet(cacheKey);
     if (cached) return { ...cached, _src: "cache" };
   }
 
-  // Get cookie jar + crumb (crumb may be null if getcrumb is rate-limited —
-  // fetchChain will still try cookie-only paths).
-  diag.push("getting_auth");
-  const auth = await getYahooAuth(kvGet, kvSet);
-  diag.push(auth.hasCookie
-    ? `auth cookies=[${auth.cookieNames}] crumb=${auth.crumb ? String(auth.crumb).slice(0, 10) : "none"}(${auth.crumbStatus})`
-    : `auth_fail:${auth.reason}`);
-
-  // Fetch front-month chain
-  diag.push("fetching_front_chain");
-  const frontResult = await fetchChain("SPY", null, auth);
-  if (!frontResult) {
-    if (debugMode) return { _debug: true, diag, error: "all_chain_attempts_failed", authDetail: { hasCookie: auth.hasCookie, reason: auth.reason, crumbStatus: auth.crumbStatus, cookieNames: auth.cookieNames } };
+  // Anchor for strike window
+  diag.push("fetching_prev_close");
+  const anchor = await fetchSpyPrevClose(pgKey);
+  if (!anchor) {
+    if (debugMode) return { _debug: true, diag, error: "no_anchor_price" };
     return null;
   }
-  diag.push(`front_ok:${frontResult.attempt}`);
+  diag.push(`anchor=${anchor}`);
 
-  const front = frontResult.result;
-  const spot  = front.quote?.regularMarketPrice;
-  if (!spot || spot < 1) {
-    if (debugMode) return { _debug: true, diag, error: "no_spot_price" };
+  // Snapshot
+  const contracts = await fetchOptionsSnapshot(pgKey, anchor, diag);
+  if (!contracts.length) {
+    if (debugMode) return { _debug: true, diag, error: "no_contracts (check Polygon options entitlement)" };
     return null;
   }
 
-  // Fetch 2 additional expirations in parallel
-  const extraExps   = (front.expirationDates || []).slice(1, 3);
-  const extraChains = await Promise.all(extraExps.map(ts => fetchChain("SPY", ts, auth)));
-  diag.push(`extra_chains:${extraChains.filter(Boolean).length}/${extraExps.length}`);
+  // Keep only the 3 nearest expiration dates
+  const expDates = [...new Set(contracts.map(c => c.details?.expiration_date).filter(Boolean))].sort();
+  const keepExps = new Set(expDates.slice(0, 3));
+  const kept = contracts.filter(c => keepExps.has(c.details?.expiration_date));
+  diag.push(`exps=${[...keepExps].join(",")} kept=${kept.length}`);
+
+  // Live-ish spot from the snapshot's underlying asset, else the anchor
+  const spot = kept.find(c => c.underlying_asset?.price > 0)?.underlying_asset.price || anchor;
 
   const acc = { callSum: 0, putSum: 0, callCount: 0, putCount: 0, byStrike: {} };
-  if (front.options?.[0]) accumulate(front.options[0], spot, acc);
-  for (const ch of extraChains) if (ch?.result?.options?.[0]) accumulate(ch.result.options[0], spot, acc);
+  accumulate(kept, spot, acc);
+  diag.push(`calls_with_gamma=${acc.callCount} puts_with_gamma=${acc.putCount}`);
 
-  diag.push(`calls_with_gamma:${acc.callCount}  puts_with_gamma:${acc.putCount}`);
-
-  if (acc.callSum === 0 && acc.putSum === 0) {
-    if (debugMode) return { _debug: true, diag, error: "no_gamma_data", spot, callCount: acc.callCount, putCount: acc.putCount };
+  if (acc.callCount === 0 && acc.putCount === 0) {
+    if (debugMode) return { _debug: true, diag, error: "no_gamma_data (Polygon plan may not include options greeks)", spot };
     return null;
   }
 
-  const netGex    = acc.callSum - acc.putSum;
-  const gexBn     = +(netGex / 1e9).toFixed(2);
-  const zeroGamma = findZeroGamma(acc.byStrike, spot);
-  const opEx      = nextMonthlyOpEx();
+  const netGex     = acc.callSum - acc.putSum;
+  const gexBn      = +(netGex / 1e9).toFixed(2);
+  const zeroGamma  = findZeroGamma(acc.byStrike, spot);
+  const opEx       = nextMonthlyOpEx();
   const daysToOpEx = Math.max(0, Math.round((opEx.getTime() - now.getTime()) / 86400000));
 
   const payload = {
@@ -218,6 +161,7 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
     callGexBn: +(acc.callSum / 1e9).toFixed(2), putGexBn: +(acc.putSum / 1e9).toFixed(2),
     zeroGamma: zeroGamma != null ? +zeroGamma.toFixed(0) : null,
     daysToOpEx, nextOpEx: opEx.toISOString().slice(0, 10),
+    expsUsed: keepExps.size,
   };
   if (debugMode) return { _debug: true, diag, ...payload };
 
@@ -242,7 +186,7 @@ export default async function handler(req, res) {
       return r.json();
     })(),
     wantGex
-      ? calcGex(process.env.KV_REST_API_URL, process.env.KV_REST_API_TOKEN, force, debugGex)
+      ? calcGex(process.env.POLYGON_API_KEY, process.env.KV_REST_API_URL, process.env.KV_REST_API_TOKEN, force, debugGex)
       : Promise.resolve(null),
   ]);
 
@@ -256,7 +200,8 @@ export default async function handler(req, res) {
   const prevScore = fg.previous_close != null ? Math.round(fg.previous_close) : null;
   const response  = { score: Math.round(fg.score), rating: fg.rating, prevScore };
 
-  if (wantGex) response.gex = gexResult.status === "fulfilled" ? gexResult.value : null;
+  if (wantGex) response.gex = gexResult.status === "fulfilled" ? gexResult.value
+                            : (debugGex ? { _debug: true, error: "calc_threw", msg: gexResult.reason?.message } : null);
 
   res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
   res.json(response);
