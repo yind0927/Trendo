@@ -84,7 +84,7 @@ function gexRegime(distFlipPct) {
 
 async function calcGex(kvUrl, kvToken, force, debugMode) {
   const now      = new Date();
-  const cacheKey = `trendo:gex_v4:${now.toISOString().slice(0, 13)}`; // v4 = SPX 0-30DTE
+  const cacheKey = `trendo:gex_v5:${now.toISOString().slice(0, 13)}`; // v5 = adds swing/history (v4 payloads lack swingGexBn)
   const kvHdrs   = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
   const diag     = [];
 
