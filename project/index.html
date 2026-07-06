@@ -2740,6 +2740,12 @@
   .mkt-gex-metarow b { color: var(--fg-1); font-weight: 700; }
   .mkt-gex-metarow .warn { color: var(--warn); }
   .mkt-gex-metarow .warn b { color: var(--warn); }
+  /* collapsible GEX rulebook */
+  .gx-rules { margin-top: -2px; }
+  .gx-rules summary { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 6px 0 2px; list-style: revert; }
+  .gx-rules summary:hover { color: var(--fg-2); }
+  .gx-rules-body { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+  .gx-rules-note { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); line-height: 1.55; padding-top: 6px; border-top: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
   @media (max-width: 768px) { .gx-levels { grid-template-columns: repeat(2, 1fr); } }
   .mkt-playbook-ref { margin-top: 16px; }
   .mkt-playbook-ref summary { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 8px 0; list-style: revert; }
@@ -4069,8 +4075,8 @@
   </div>
 </div>
 
-<script src="data.js?v=231"></script>
-<script src="desk.js?v=231"></script>
+<script src="data.js?v=232"></script>
+<script src="desk.js?v=232"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

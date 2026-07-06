@@ -7511,6 +7511,48 @@
       interp: "做市商净多 Gamma，对冲与行情反向——买跌卖涨，波动被压制、倾向震荡回归。策略：区间高抛低吸；Call Wall 附近易受阻回落、突破难持续，不追突破。" };
   }
 
+  // Collapsible rulebook at the bottom of the GEX card (same pattern as 市场模型详情)
+  function gxRulesHTML() {
+    const mkTable = (title, head, rows) => `
+      <div class="pb3-section">
+        <div class="pb3-section-head">${title}</div>
+        <table class="mkt-pb-table">
+          <thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead>
+          <tbody>${rows.map(r => `<tr>
+            <td style="color:${r[3] || "var(--fg-1)"};font-weight:700;white-space:nowrap">${r[0]}</td>
+            <td style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${r[1]}</td>
+            <td style="font-size:12px">${r[2]}</td>
+          </tr>`).join("")}</tbody>
+        </table>
+      </div>`;
+    return `
+      <details class="gx-rules">
+        <summary>GEX 详细规则 · 点击展开</summary>
+        <div class="gx-rules-body">
+          ${mkTable("状态判定 · 现价 vs Gamma Flip", ["状态", "触发条件", "含义与仓位因子"], [
+            ["深度正 Gamma", "现价高于 Flip > 2%",   "波动强压制，区间可加码 · 仓位 ×1.15", "#22c55e"],
+            ["正 Gamma",     "Flip 上方 0.3%–2%",    "正常操作 · 仓位 ×1.0", "#22c55e"],
+            ["临界",         "Flip ±0.3% 内",        "随时翻转，轻仓等方向 · 仓位 ×0.75", "var(--warn)"],
+            ["负 Gamma",     "Flip 下方 0.3%–2%",    "波动放大，收仓+宽止损 · 仓位 ×0.6", "#f97316"],
+            ["深度负 Gamma", "现价低于 Flip > 2%",   "高危，大幅收仓、勿抄底 · 仓位 ×0.4", "#ef4444"],
+          ])}
+          ${mkTable("三个关键价位", ["价位", "是什么", "怎么用"], [
+            ["Gamma Flip", "累计净γ过零的价位",       "多空波动分界线：跌破→转负γ、波动骤升；站上→趋稳。最重要的预警线", "var(--warn)"],
+            ["Call Wall",  "上方 call γ 最大行权价",  "阻力 + 磁吸：正γ时价格到此易受阻回落，突破难持续，不追", "#ef4444"],
+            ["Put Wall",   "下方 put γ 最大行权价",   "支撑 + 缓冲：负γ环境下跌破会加速下行，可作防守参考位", "#22c55e"],
+          ])}
+          ${mkTable("读数规则", ["指标", "规则", "注意"], [
+            ["Net GEX",  "SPX 每波动1%的做市商对冲金额", "看符号、分位、Flip距离；绝对值随 spot² 和持仓量膨胀，别用固定阈值刻舟求剑"],
+            ["波段口径", "净值剔除 0DTE 后的部分",       "0DTE 收盘即清零；正转负 = 隔夜无缓冲，持仓过夜要谨慎"],
+            ["分位数",   "当前净值在近 N 天（至多120）的排位", "≥80% 缓冲垫厚 · ≤20% 偏薄；样本不足5天不显示"],
+            ["OpEx",     "每月第三个周五月度到期",       "到期后大量 γ 清零，随后一周方向性移动概率增大"],
+          ])}
+          <div class="pb3-tip">与三轴模型的配合：建议仓位 = 轴B（VIX）仓位上限 × GEX 仓位因子。方向轴逆风时照旧禁新仓，GEX 不改变闸门。</div>
+          <div class="gx-rules-note">数据：CBOE 延迟15分钟报价（SPX+SPXW 0DTE）· 范围 0-30DTE、行权价 ±15% · 公式 Σ γ×OI×100×spot²×1%（call 正 / put 负）· 1小时缓存 · 与外部 GEX 面板绝对值不同属正常（口径差异），以趋势和相对位置为准</div>
+        </div>
+      </details>`;
+  }
+
   function mkGexCardHTML(gex) {
     const net = gex?.netGexBn ?? gex?.gexBn;
     if (!gex || net == null) return "";
@@ -7603,6 +7645,7 @@
           <span>建议仓位 = 轴B上限 × <b style="color:${facColor}">${factor}</b></span>
           <span class="${opexWarn ? "warn" : ""}">月度OpEx <b>${gex.daysToOpEx}天</b>${opexWarn ? " · Gamma清零，方向性放大" : ""}</span>
         </div>
+        ${gxRulesHTML()}
       </div>`;
   }
 
