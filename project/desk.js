@@ -7402,11 +7402,10 @@
     try {
       // 400 calendar days ≈ 270 trading days — enough for VOO 200MA (direction axis).
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 400); return d.toISOString().slice(0, 10); })();
-      const [quoteRes, histRes, fgRes, gexRes] = await Promise.allSettled([
+      const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
-        fetch("/api/feargreed").then(r => r.json()),
-        fetch("/api/gex").then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch("/api/feargreed?gex=1").then(r => r.json()),
       ]);
 
       // VIX / VXN
@@ -7495,7 +7494,7 @@
       }
 
       let gex = null;
-      if (gexRes.status === "fulfilled" && gexRes.value?.gexBn != null) gex = gexRes.value;
+      if (fgRes.status === "fulfilled" && fgRes.value?.gex?.gexBn != null) gex = fgRes.value.gex;
 
       const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend, gex });
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes });
