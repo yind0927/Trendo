@@ -2660,6 +2660,15 @@
   .mkt-axis-gate.ok { color: #22c55e; }
   .mkt-axis-gate.block { color: #ef4444; }
   .mkt-axis-gate.dim { color: var(--fg-3); }
+  .mkt-gex-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-family: var(--f-mono); margin-top: 4px; flex-wrap: wrap; }
+  .mkt-gex-label { color: var(--fg-3); }
+  .mkt-gex-val { font-weight: 700; }
+  .mkt-gex-val.pos { color: var(--up); }
+  .mkt-gex-val.neg { color: var(--warn); }
+  .mkt-gex-val.neg-strong { color: var(--down); }
+  .mkt-gex-zero { color: var(--fg-3); }
+  .mkt-gex-opex { color: var(--fg-3); margin-left: auto; }
+  .mkt-gex-opex.warn { color: var(--warn); font-weight: 700; }
   .mkt-playbook-ref { margin-top: 16px; }
   .mkt-playbook-ref summary { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 8px 0; list-style: revert; }
   .mkt-playbook-ref summary:hover { color: var(--fg-2); }
@@ -3966,8 +3975,8 @@
   </div>
 </div>
 
-<script src="data.js?v=208"></script>
-<script src="desk.js?v=208"></script>
+<script src="data.js?v=227"></script>
+<script src="desk.js?v=227"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
