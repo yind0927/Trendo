@@ -5,28 +5,40 @@
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 // ── Yahoo crumb authentication ────────────────────────────────────────────────
+function extractCookieJar(res) {
+  // Prefer getSetCookie() (returns individual headers — avoids comma-join trap
+  // from Expires dates). Fall back to the joined header.
+  let list = [];
+  if (typeof res.headers.getSetCookie === "function") list = res.headers.getSetCookie();
+  else { const raw = res.headers.get("set-cookie"); if (raw) list = [raw]; }
+  // Take the name=value portion (before first ';') of each cookie.
+  const pairs = list.map(sc => sc.split(";")[0].trim()).filter(p => p.includes("="));
+  return pairs;
+}
+
 async function getYahooCrumb() {
   try {
+    // Step 1: collect the full cookie jar from fc.yahoo.com
     const cookieRes = await fetch("https://fc.yahoo.com", {
       headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
       redirect: "follow",
       signal: AbortSignal.timeout(6000),
     });
-    const rawCookie = cookieRes.headers.get("set-cookie") || "";
-    // Yahoo returns A3 (not A1) as the session cookie — match any A1/A2/A3
-    const cm = rawCookie.match(/\b(A[123])=([^;]+?)(?:;|$)/);
-    if (!cm) return { ok: false, reason: "no_a1_cookie", rawCookie: rawCookie.slice(0, 100) };
-    const cookieStr = `${cm[1]}=${cm[2].trim()}`;
+    const jar = extractCookieJar(cookieRes);
+    if (!jar.length) return { ok: false, reason: "no_cookies", raw: (cookieRes.headers.get("set-cookie") || "").slice(0, 120) };
+    const cookieStr = jar.join("; ");
+    const cookieNames = jar.map(p => p.split("=")[0]).join(",");
 
+    // Step 2: exchange the full jar for a crumb (query1)
     const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
       headers: { "User-Agent": UA, "Accept": "text/plain, */*", "Cookie": cookieStr, "Referer": "https://finance.yahoo.com/" },
       signal: AbortSignal.timeout(5000),
     });
     const crumbText = (await crumbRes.text()).trim();
     if (!crumbRes.ok || !crumbText || crumbText.startsWith("<") || crumbText.startsWith("{"))
-      return { ok: false, reason: "crumb_bad_response", status: crumbRes.status, crumbText: crumbText.slice(0, 80) };
+      return { ok: false, reason: "crumb_bad_response", status: crumbRes.status, crumbText: crumbText.slice(0, 80), cookieNames };
 
-    return { ok: true, cookieStr, crumb: crumbText };
+    return { ok: true, cookieStr, crumb: crumbText, cookieNames };
   } catch (e) { return { ok: false, reason: "exception", msg: e.message }; }
 }
 
@@ -129,13 +141,15 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
   // Get crumb auth
   diag.push("getting_crumb");
   const auth = await getYahooCrumb();
-  diag.push(auth.ok ? `crumb_ok` : `crumb_fail:${auth.reason}`);
+  diag.push(auth.ok
+    ? `crumb_ok cookies=[${auth.cookieNames}] crumb=${String(auth.crumb).slice(0, 12)}`
+    : `crumb_fail:${auth.reason}${auth.status ? "/" + auth.status : ""}`);
 
   // Fetch front-month chain
   diag.push("fetching_front_chain");
   const frontResult = await fetchChain("SPY", null, auth);
   if (!frontResult) {
-    if (debugMode) return { _debug: true, diag, error: "all_chain_attempts_failed", authDetail: auth };
+    if (debugMode) return { _debug: true, diag, error: "all_chain_attempts_failed", authDetail: { ok: auth.ok, reason: auth.reason, status: auth.status, cookieNames: auth.cookieNames } };
     return null;
   }
   diag.push(`front_ok:${frontResult.attempt}`);
