@@ -16,51 +16,80 @@ function extractCookieJar(res) {
   return pairs;
 }
 
-async function getYahooCrumb() {
-  try {
-    // Step 1: collect the full cookie jar from fc.yahoo.com
-    const cookieRes = await fetch("https://fc.yahoo.com", {
-      headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(6000),
-    });
-    const jar = extractCookieJar(cookieRes);
-    if (!jar.length) return { ok: false, reason: "no_cookies", raw: (cookieRes.headers.get("set-cookie") || "").slice(0, 120) };
-    const cookieStr = jar.join("; ");
-    const cookieNames = jar.map(p => p.split("=")[0]).join(",");
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-    // Step 2: exchange the full jar for a crumb (query1)
-    const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
-      headers: { "User-Agent": UA, "Accept": "text/plain, */*", "Cookie": cookieStr, "Referer": "https://finance.yahoo.com/" },
-      signal: AbortSignal.timeout(5000),
-    });
-    const crumbText = (await crumbRes.text()).trim();
-    if (!crumbRes.ok || !crumbText || crumbText.startsWith("<") || crumbText.startsWith("{"))
-      return { ok: false, reason: "crumb_bad_response", status: crumbRes.status, crumbText: crumbText.slice(0, 80), cookieNames };
-
-    return { ok: true, cookieStr, crumb: crumbText, cookieNames };
-  } catch (e) { return { ok: false, reason: "exception", msg: e.message }; }
+async function fetchCookieJar() {
+  // finance.yahoo.com sets the fuller jar (A1/A3/GUC/GUCS); fc.yahoo.com only A3.
+  for (const src of ["https://finance.yahoo.com", "https://fc.yahoo.com"]) {
+    try {
+      const r = await fetch(src, {
+        headers: { "User-Agent": UA, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.9" },
+        redirect: "follow", signal: AbortSignal.timeout(6000),
+      });
+      const jar = extractCookieJar(r);
+      if (jar.length) return jar;
+    } catch (_) {}
+  }
+  return [];
 }
 
-// ── Options chain fetch: try without crumb first, then with crumb ─────────────
+async function getCrumb(cookieStr) {
+  // getcrumb is aggressively rate-limited (429) from datacenter IPs — retry once.
+  for (const host of ["query2", "query1"]) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(`https://${host}.finance.yahoo.com/v1/test/getcrumb`, {
+          headers: { "User-Agent": UA, "Accept": "text/plain, */*", "Cookie": cookieStr, "Referer": "https://finance.yahoo.com/" },
+          signal: AbortSignal.timeout(5000),
+        });
+        const txt = (await r.text()).trim();
+        if (r.ok && txt && !txt.startsWith("<") && !txt.startsWith("{")) return { crumb: txt };
+        if (r.status === 429) { await sleep(1200); continue; }
+        break; // non-429 failure: try next host
+      } catch (_) { break; }
+    }
+  }
+  return { crumb: null };
+}
+
+// Returns { hasCookie, cookieStr, crumb, cookieNames, crumbStatus }. Caches a
+// working {cookieStr,crumb} pair in Redis so getcrumb isn't hammered each call.
+async function getYahooAuth(kvGet, kvSet) {
+  const CACHE_KEY = "trendo:yahoo_auth_v1";
+  const cached = await kvGet(CACHE_KEY);
+  if (cached?.cookieStr && cached?.crumb)
+    return { hasCookie: true, cookieStr: cached.cookieStr, crumb: cached.crumb, cookieNames: cached._names || "cached", crumbStatus: "cache" };
+
+  const jar = await fetchCookieJar();
+  if (!jar.length) return { hasCookie: false, reason: "no_cookies" };
+  const cookieStr   = jar.join("; ");
+  const cookieNames = jar.map(p => p.split("=")[0]).join(",");
+
+  const { crumb } = await getCrumb(cookieStr);
+  if (crumb) await kvSet(CACHE_KEY, { cookieStr, crumb, _names: cookieNames }, 21600); // 6h
+
+  return { hasCookie: true, cookieStr, crumb, cookieNames, crumbStatus: crumb ? "ok" : "429/blocked" };
+}
+
+// ── Options chain fetch ───────────────────────────────────────────────────────
+// Try cookie-only paths too — the v7 options endpoint often accepts a valid
+// cookie without a crumb, letting us succeed even when getcrumb is 429'd.
 async function fetchChain(sym, dateTs, auth) {
-  // Try multiple host/crumb combinations in order
+  const hasCrumb  = !!auth?.crumb;
+  const hasCookie = !!auth?.cookieStr;
   const attempts = [
-    // 1. Cookie + crumb, query1 (primary path)
-    ...(auth?.ok ? [{ host: "query1", useCrumb: true }] : []),
-    // 2. Cookie + crumb, query2
-    ...(auth?.ok ? [{ host: "query2", useCrumb: true }] : []),
-    // 3. Cookie only, no crumb (older fallback)
-    ...(auth?.ok ? [{ host: "query2", useCrumb: false }] : []),
-    // 4. No cookie, no crumb (last resort)
-    { host: "query2", useCrumb: false, noAuth: true },
-    { host: "query1", useCrumb: false, noAuth: true },
+    ...(hasCrumb  ? [{ host: "query1", crumb: true  }] : []),
+    ...(hasCookie ? [{ host: "query1", crumb: false }] : []),
+    ...(hasCookie ? [{ host: "query2", crumb: false }] : []),
+    ...(hasCrumb  ? [{ host: "query2", crumb: true  }] : []),
+    { host: "query2", crumb: false, noAuth: true },
+    { host: "query1", crumb: false, noAuth: true },
   ];
 
-  for (const { host, useCrumb, noAuth } of attempts) {
+  for (const { host, crumb, noAuth } of attempts) {
     const base = `https://${host}.finance.yahoo.com/v7/finance/options/${encodeURIComponent(sym)}`;
     let url = dateTs ? `${base}?date=${dateTs}` : base;
-    if (useCrumb) url += (dateTs ? "&" : "?") + `crumb=${encodeURIComponent(auth.crumb)}`;
+    if (crumb) url += (dateTs ? "&" : "?") + `crumb=${encodeURIComponent(auth.crumb)}`;
     try {
       const headers = { "User-Agent": UA, "Accept": "application/json", "Referer": "https://finance.yahoo.com/" };
       if (!noAuth && auth?.cookieStr) headers["Cookie"] = auth.cookieStr;
@@ -68,7 +97,7 @@ async function fetchChain(sym, dateTs, auth) {
       if (!r.ok) continue;
       const d = await r.json();
       const result = d?.optionChain?.result?.[0];
-      if (result) return { result, attempt: `${host}${useCrumb ? "+crumb" : ""}` };
+      if (result) return { result, attempt: `${host}${crumb ? "+crumb" : noAuth ? "-noauth" : "+cookie"}` };
     } catch (_) {}
   }
   return null;
@@ -138,18 +167,19 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
     if (cached) return { ...cached, _src: "cache" };
   }
 
-  // Get crumb auth
-  diag.push("getting_crumb");
-  const auth = await getYahooCrumb();
-  diag.push(auth.ok
-    ? `crumb_ok cookies=[${auth.cookieNames}] crumb=${String(auth.crumb).slice(0, 12)}`
-    : `crumb_fail:${auth.reason}${auth.status ? "/" + auth.status : ""}`);
+  // Get cookie jar + crumb (crumb may be null if getcrumb is rate-limited —
+  // fetchChain will still try cookie-only paths).
+  diag.push("getting_auth");
+  const auth = await getYahooAuth(kvGet, kvSet);
+  diag.push(auth.hasCookie
+    ? `auth cookies=[${auth.cookieNames}] crumb=${auth.crumb ? String(auth.crumb).slice(0, 10) : "none"}(${auth.crumbStatus})`
+    : `auth_fail:${auth.reason}`);
 
   // Fetch front-month chain
   diag.push("fetching_front_chain");
   const frontResult = await fetchChain("SPY", null, auth);
   if (!frontResult) {
-    if (debugMode) return { _debug: true, diag, error: "all_chain_attempts_failed", authDetail: { ok: auth.ok, reason: auth.reason, status: auth.status, cookieNames: auth.cookieNames } };
+    if (debugMode) return { _debug: true, diag, error: "all_chain_attempts_failed", authDetail: { hasCookie: auth.hasCookie, reason: auth.reason, crumbStatus: auth.crumbStatus, cookieNames: auth.cookieNames } };
     return null;
   }
   diag.push(`front_ok:${frontResult.attempt}`);
