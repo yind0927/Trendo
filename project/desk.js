@@ -511,6 +511,43 @@
       ${rsBreakdown}`;
   }
 
+  // Weekly rating-tracking history: entry grade (from h.bx.entry*) prepended as
+  // the baseline, then each recorded snapshot from h.bxHistory, newest first.
+  // Trend arrows compare against the previous chronological entry.
+  function bxHistoryBodyHTML(h) {
+    const hist = h.bxHistory || [];
+    const entryPoint = h.bx?.entryFinalGrade
+      ? { date: h.entry, finalGrade: h.bx.entryFinalGrade, rsResult: h.bx.entryRsResult, isEntry: true }
+      : null;
+    const full = entryPoint ? [entryPoint, ...hist] : hist;
+
+    const lastDate = full.length ? full[full.length - 1].date : null;
+    const daysSince = lastDate ? Math.floor((Date.now() - new Date(lastDate + "T00:00:00").getTime()) / 86400000) : null;
+    const sinceHTML = daysSince == null ? "" : `<div class="dsc-hist-since${daysSince >= 7 ? " due" : ""}">距上次记录 ${daysSince} 天${daysSince >= 7 ? "，建议更新" : ""}</div>`;
+
+    const rowsChrono = full.map((rec, i) => {
+      const meta = BX_GRADE_META[rec.finalGrade] || BX_GRADE_META["C"];
+      const prev = i > 0 ? full[i - 1] : null;
+      let trendCls = "flat", trendArr = "–";
+      if (prev) {
+        const d = GRADE_LADDER.indexOf(rec.finalGrade) - GRADE_LADDER.indexOf(prev.finalGrade);
+        trendCls = d > 0 ? "up" : d < 0 ? "down" : "flat";
+        trendArr = d > 0 ? "▲" : d < 0 ? "▼" : "–";
+      }
+      const rs = rec.rsResult ? `<span class="dsc-hist-rs">RS ${rec.rsResult.score}/${rec.rsResult.max}</span>` : `<span class="dsc-hist-rs dsc-na">—</span>`;
+      return `<div class="dsc-hist-row">
+        <span class="dsc-hist-date">${rec.date}${rec.isEntry ? ' <span class="dsc-hist-tag">入场</span>' : ""}</span>
+        <span class="dsc-hist-grade" style="color:${meta.color}">${rec.finalGrade}</span>
+        <span class="dsc-hist-trend ${trendCls}">${trendArr}</span>
+        ${rs}
+      </div>`;
+    });
+    const listHTML = rowsChrono.length
+      ? rowsChrono.slice().reverse().join("")
+      : `<div class="dsc-empty" style="padding:6px 0">暂无记录</div>`;
+    return `${sinceHTML}<div class="dsc-hist-list">${listHTML}</div>`;
+  }
+
   function bxSectionHTML(h) {
     const bx = h.bx;
 
@@ -632,6 +669,13 @@
               </div>
             </div>
             <div id="drawer-live-scorecard" class="esc-wrap" style="display:none"></div>
+            <div class="dsc-hist-section">
+              <div class="dsc-hist-hd">
+                <span class="dsc-hist-title">评级追踪 · Rating History</span>
+                <button type="button" id="drawer-hist-record" class="dsc-hist-record-btn">📌 记录本周评级</button>
+              </div>
+              <div id="drawer-hist-wrap">${bxHistoryBodyHTML(h)}</div>
+            </div>
           </div>
         </div>
 
@@ -744,6 +788,9 @@
   function wireBX(h) {
     const dr = $("#drawer");
     const liveEl = () => dr.querySelector("#drawer-live-scorecard");
+    // Last RS result computed in THIS drawer session (via 计算RS), attached to
+    // the next weekly snapshot if the user records one without recalculating.
+    let _lastLiveRs = null;
 
     // Read the currently-selected live BX value for a given period
     const liveBX = period => {
@@ -818,8 +865,10 @@
         try {
           const rsData   = await computeEntryRS(h.sym, sectorEtf);
           const rsResult = calcRSScore(rsData);
+          _lastLiveRs = rsResult;
           renderEntryScorecard(grade, rsResult, false, el);
         } catch (_) {
+          _lastLiveRs = null;
           renderEntryScorecard(grade, null, false, el);
         }
       });
@@ -827,6 +876,33 @@
         drawerEtfInp.addEventListener("input",   () => { drawerEtfInp.value = drawerEtfInp.value.toUpperCase(); });
         drawerEtfInp.addEventListener("keydown", e  => { if (e.key === "Enter") { e.preventDefault(); drawerRsCalc.click(); } });
       }
+    }
+
+    // ── Weekly rating snapshot (记录本周评级) ─────────────────────────────
+    // Freezes the currently-selected live BX + last-computed RS (if any) into
+    // h.bxHistory dated today, so trend vs entry can be studied over time.
+    // Re-clicking on the same day overwrites that day's entry instead of
+    // piling up duplicates.
+    const histRecordBtn = dr.querySelector("#drawer-hist-record");
+    if (histRecordBtn) {
+      histRecordBtn.addEventListener("click", () => {
+        const grade = calcBXGrade(liveBX("current"), liveBX("weekly"), liveBX("monthly"));
+        const finalGrade = _lastLiveRs ? rsAdjustGrade(grade, _lastLiveRs) : grade;
+        const today = new Date().toISOString().slice(0, 10);
+        const etf = dr.querySelector("#drawer-rs-etf")?.value.toUpperCase().trim() || null;
+        const rec = {
+          date: today, bxGrade: grade, finalGrade,
+          current: liveBX("current"), weekly: liveBX("weekly"), monthly: liveBX("monthly"),
+          rsResult: _lastLiveRs, sectorEtf: etf,
+        };
+        if (!h.bxHistory) h.bxHistory = [];
+        const idx = h.bxHistory.findIndex(r => r.date === today);
+        if (idx !== -1) h.bxHistory[idx] = rec; else h.bxHistory.push(rec);
+        h.bxHistory.sort((a, b) => a.date.localeCompare(b.date));
+        saveToStorage();
+        const wrap = dr.querySelector("#drawer-hist-wrap");
+        if (wrap) wrap.innerHTML = bxHistoryBodyHTML(h);
+      });
     }
   }
 
