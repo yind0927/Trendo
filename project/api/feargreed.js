@@ -13,9 +13,10 @@ async function getYahooCrumb() {
       signal: AbortSignal.timeout(6000),
     });
     const rawCookie = cookieRes.headers.get("set-cookie") || "";
-    const a1 = rawCookie.match(/\bA1=([^;,\s]+)/)?.[1];
-    if (!a1) return { ok: false, reason: "no_a1_cookie", rawCookie: rawCookie.slice(0, 100) };
-    const cookieStr = `A1=${a1}`;
+    // Yahoo returns A3 (not A1) as the session cookie — match any A1/A2/A3
+    const cm = rawCookie.match(/\b(A[123])=([^;]+?)(?:;|$)/);
+    if (!cm) return { ok: false, reason: "no_a1_cookie", rawCookie: rawCookie.slice(0, 100) };
+    const cookieStr = `${cm[1]}=${cm[2].trim()}`;
 
     const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
       headers: { "User-Agent": UA, "Accept": "text/plain, */*", "Cookie": cookieStr, "Referer": "https://finance.yahoo.com/" },
@@ -33,23 +34,24 @@ async function getYahooCrumb() {
 async function fetchChain(sym, dateTs, auth) {
   // Try multiple host/crumb combinations in order
   const attempts = [
-    // 1. No crumb, query2 (sometimes still works)
-    { host: "query2", useCrumb: false },
-    // 2. No crumb, query1
-    { host: "query1", useCrumb: false },
-    // 3. With crumb, query1
+    // 1. Cookie + crumb, query1 (primary path)
     ...(auth?.ok ? [{ host: "query1", useCrumb: true }] : []),
-    // 4. With crumb, query2
+    // 2. Cookie + crumb, query2
     ...(auth?.ok ? [{ host: "query2", useCrumb: true }] : []),
+    // 3. Cookie only, no crumb (older fallback)
+    ...(auth?.ok ? [{ host: "query2", useCrumb: false }] : []),
+    // 4. No cookie, no crumb (last resort)
+    { host: "query2", useCrumb: false, noAuth: true },
+    { host: "query1", useCrumb: false, noAuth: true },
   ];
 
-  for (const { host, useCrumb } of attempts) {
+  for (const { host, useCrumb, noAuth } of attempts) {
     const base = `https://${host}.finance.yahoo.com/v7/finance/options/${encodeURIComponent(sym)}`;
     let url = dateTs ? `${base}?date=${dateTs}` : base;
     if (useCrumb) url += (dateTs ? "&" : "?") + `crumb=${encodeURIComponent(auth.crumb)}`;
     try {
       const headers = { "User-Agent": UA, "Accept": "application/json", "Referer": "https://finance.yahoo.com/" };
-      if (useCrumb) headers["Cookie"] = auth.cookieStr;
+      if (!noAuth && auth?.cookieStr) headers["Cookie"] = auth.cookieStr;
       const r = await fetch(url, { headers, signal: AbortSignal.timeout(6000) });
       if (!r.ok) continue;
       const d = await r.json();
