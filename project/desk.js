@@ -227,6 +227,21 @@
     "oklch(0.72 0.16 40)",  "oklch(0.78 0.13 90)",  "oklch(0.75 0.14 140)",
     "oklch(0.74 0.15 170)", "oklch(0.72 0.16 60)",  "oklch(0.35 0.01 250)",
   ];
+  // /api/quote's crypto leg (Polygon snapshot) doesn't return an asset name at
+  // all, unlike the stocks leg (Finnhub/Yahoo) — so there's nothing to fetch
+  // for the new-position modal's auto-name-fill when kind=crypto. Fall back to
+  // a small static map of common tickers instead of a network call that can
+  // never succeed.
+  const CRYPTO_NAMES = {
+    BTC: "Bitcoin", ETH: "Ethereum", SOL: "Solana", XRP: "XRP", ADA: "Cardano",
+    DOGE: "Dogecoin", AVAX: "Avalanche", LINK: "Chainlink", DOT: "Polkadot",
+    MATIC: "Polygon", POL: "Polygon", LTC: "Litecoin", BCH: "Bitcoin Cash",
+    UNI: "Uniswap", ATOM: "Cosmos", SHIB: "Shiba Inu", TRX: "TRON", TON: "Toncoin",
+    NEAR: "NEAR Protocol", ICP: "Internet Computer", APT: "Aptos", ARB: "Arbitrum",
+    OP: "Optimism", SUI: "Sui", PEPE: "Pepe", BNB: "BNB", XLM: "Stellar",
+    FIL: "Filecoin", ETC: "Ethereum Classic", HBAR: "Hedera", XMR: "Monero",
+  };
+
   const slopeNumClass   = v => { const n = parseFloat(v); return n > 0 ? "up" : n < 0 ? "down" : "flat"; };
   const slopeNumDisplay = v => { const n = parseFloat(v) || 0; return n > 0 ? `+${n}` : `${n}`; };
 
@@ -2545,11 +2560,20 @@
       el.setSelectionRange(pos, pos);
     });
 
-    // Auto-fetch company name when ticker is entered
-    $("#form-ticker").addEventListener("blur", async () => {
+    // Auto-fetch name when ticker is entered — equity/ETF via /api/quote?stocks=
+    // (Finnhub/Yahoo, returns a name); crypto via a static map, since /api/quote's
+    // crypto leg (Polygon snapshot) never returns a name field to fetch.
+    const autoFillName = async () => {
       const sym = $("#form-ticker").value.toUpperCase().trim();
       const nameEl = $("#form-name");
       if (!sym || !nameEl || nameEl.value.trim()) return;
+      const kind = $("#form-kind-seg .active")?.dataset.kind || "equity";
+      if (kind === "crypto") {
+        const nm = CRYPTO_NAMES[sym];
+        if (nm) { nameEl.value = nm; nameEl.placeholder = nm; }
+        else nameEl.placeholder = "名称（可留空）";
+        return;
+      }
       nameEl.placeholder = "获取中…";
       try {
         const res = await fetch(`/api/quote?stocks=${encodeURIComponent(sym)}`);
@@ -2558,7 +2582,8 @@
         if (fetched) { nameEl.value = fetched; nameEl.placeholder = fetched; }
         else nameEl.placeholder = "公司名称（可留空）";
       } catch (_) { nameEl.placeholder = "公司名称（可留空）"; }
-    });
+    };
+    $("#form-ticker").addEventListener("blur", autoFillName);
 
     const readFormBX = () => {
       const body = $("#form-bx-body");
@@ -2643,6 +2668,10 @@
         if (!btn) return;
         $$("button", kindSeg).forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
+        // Re-resolve the name if the ticker was typed before the kind was set
+        // (e.g. a crypto ticker typed while "美股" was still the default) —
+        // autoFillName() no-ops if a name is already filled in.
+        autoFillName();
       });
     }
 
