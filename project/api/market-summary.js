@@ -85,18 +85,19 @@ function buildMarketBlock(q) {
     lines.push(`三轴模型：${parts.join(" · ")}`);
   }
 
-  // Dealer GEX
+  // Dealer GEX (SPX): regime:netBn:posFactor:distFlipPct:opexDays
   if (q.gex) {
-    const [sign, bn, opexDays] = q.gex.split(":");
-    const bnNum = parseFloat(bn);
-    const days  = parseInt(opexDays);
-    const label = sign === "pos"
-      ? `正 +${bn}B（做市商净多Gamma，波动被压制，价格倾向均值回归）`
-      : Math.abs(bnNum) > 1
-        ? `负 ${bn}B（做市商净空Gamma较强，下跌可能被放大）`
-        : `负 ${bn}B（做市商轻度净空Gamma，波动略有放大倾向）`;
-    const opexNote = !isNaN(days) ? `，距月度OpEx ${days} 天` : "";
-    lines.push(`做市商Gamma：${label}${opexNote}`);
+    const [regime, bn, factor, distFlip, opexDays] = q.gex.split(":");
+    const days = parseInt(opexDays);
+    const regLabel = regime === "positive"
+      ? `正Gamma（做市商净多，波动被压制、倾向均值回归，突破难持续）`
+      : regime === "negative"
+        ? `负Gamma（做市商净空，波动被放大、下跌易加速，勿追空勿抄底）`
+        : `临界Gamma（贴近Flip翻转位，波动性质随时切换，宜轻仓等方向）`;
+    const flipNote   = distFlip && !isNaN(parseFloat(distFlip)) ? `，距Gamma Flip ${parseFloat(distFlip) > 0 ? "+" : ""}${distFlip}%` : "";
+    const factorNote = factor && !isNaN(parseFloat(factor)) ? `，建议仓位修正 ×${factor}` : "";
+    const opexNote   = !isNaN(days) ? `，距月度OpEx ${days} 天` : "";
+    lines.push(`做市商Gamma(SPX 0-30DTE)：${regLabel}，净 ${bn}B${flipNote}${factorNote}${opexNote}`);
   }
 
   // Regime (combined recommendation from the three-axis model)
