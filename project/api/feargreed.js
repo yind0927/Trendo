@@ -107,11 +107,18 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
     if (cached) return { ...cached, _src: "cache" };
   }
 
+  // If a fresh calc fails (CBOE hiccup), serve the last good payload instead of
+  // nothing — otherwise the whole card vanishes for the hour.
+  const staleFallback = async () => {
+    const last = await kvGet("trendo:gex_last_v1");
+    return last ? { ...last, _src: "stale" } : null;
+  };
+
   diag.push("fetching_cboe_spx");
   const chain = await fetchCboeChain(diag);
   if (!chain) {
     if (debugMode) return { _debug: true, diag, error: "cboe_unavailable" };
-    return null;
+    return staleFallback();
   }
   const spot = chain.spot;
   diag.push(`spot=${spot} raw_options=${chain.options.length}`);
@@ -151,7 +158,7 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
 
   if (!contribCount) {
     if (debugMode) return { _debug: true, diag, error: "no_gamma_data", spot, sample: chain.options[0]?.option };
-    return null;
+    return staleFallback();
   }
 
   const argmax = obj => {
@@ -213,6 +220,7 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
   if (debugMode) return { _debug: true, diag, ...payload };
 
   await kvSet(cacheKey, payload);
+  await kvSet("trendo:gex_last_v1", { ...payload, asOf: now.toISOString() }, 86400 * 14);
   return { ...payload, _src: "fresh" };
 }
 
