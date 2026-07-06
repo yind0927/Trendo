@@ -1,32 +1,41 @@
 // Vercel serverless — CNN Fear & Greed Index proxy (avoids browser CORS).
-// Optional ?gex=1 also returns SPY Dealer Gamma Exposure computed from Polygon's
-// options snapshot (per-contract gamma × open interest). ?gex=debug adds diag.
+// Optional ?gex=1 also returns SPY Dealer Gamma Exposure computed from CBOE's
+// free delayed options quotes (per-contract gamma × open interest). ?gex=debug adds diag.
 //
-// GEX scope: near-term expirations (the 3 nearest, ≤~5 weeks out) within ±10% of
-// spot — this is where dealer gamma concentrates and drives daily hedging. Net
-// GEX>0 → dealers long gamma → suppresses volatility (mean-reverting); Net GEX<0
-// → dealers short gamma → amplifies moves (trending / spiky).
+// GEX scope: near-term expirations (the 3 nearest) within ±10% of spot — where
+// dealer gamma concentrates and drives daily hedging. Net GEX>0 → dealers long
+// gamma → suppresses volatility (mean-reverting); Net GEX<0 → dealers short
+// gamma → amplifies moves (trending / spiky).
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";
 
 // ── GEX helpers ───────────────────────────────────────────────────────────────
-function accumulate(contracts, spot, acc) {
-  for (const c of contracts) {
-    const g   = c.greeks?.gamma;
-    const oi  = c.open_interest;
-    const type = c.details?.contract_type;
-    const strike = c.details?.strike_price;
-    if (!g || !oi || !strike || (type !== "call" && type !== "put")) continue;
-    const mult = c.details?.shares_per_contract || 100;
-    const dollarGamma = g * oi * mult * spot;
-    if (type === "call") {
-      acc.callSum += dollarGamma; acc.callCount++;
-      acc.byStrike[strike] = (acc.byStrike[strike] || 0) + dollarGamma;
-    } else {
-      acc.putSum += dollarGamma; acc.putCount++;
-      acc.byStrike[strike] = (acc.byStrike[strike] || 0) - dollarGamma;
-    }
+// CBOE OCC symbol: ROOT + YYMMDD + [C|P] + strike×1000 (8 digits).
+function parseOcc(sym) {
+  const m = /^([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/.exec(sym || "");
+  if (!m) return null;
+  const [, , yy, mm, dd, cp, strike8] = m;
+  return { exp: `20${yy}-${mm}-${dd}`, type: cp === "C" ? "call" : "put", strike: parseInt(strike8, 10) / 1000 };
+}
+
+// Fetch SPY option chain (with greeks + OI) from CBOE's public delayed-quote CDN.
+async function fetchCboeChain(diag) {
+  const urls = [
+    "https://cdn.cboe.com/api/global/delayed_quotes/options/SPY.json",
+    "https://www.cboe.com/api/global/delayed_quotes/options/SPY.json",
+  ];
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/json" }, signal: AbortSignal.timeout(9000) });
+      if (!r.ok) { diag.push(`cboe http_${r.status}`); continue; }
+      const d = await r.json();
+      const spot = d?.data?.current_price ?? d?.data?.close ?? d?.data?.prev_day_close;
+      const options = d?.data?.options;
+      if (spot > 0 && Array.isArray(options) && options.length) return { spot, options };
+      diag.push("cboe empty_body");
+    } catch (e) { diag.push(`cboe err:${e.message}`); }
   }
+  return null;
 }
 
 function findZeroGamma(byStrike, spot) {
@@ -52,46 +61,9 @@ function nextMonthlyOpEx() {
   return new Date(Date.UTC(y, m, 15));
 }
 
-// SPY previous close as a cheap, robust anchor for the ±10% strike window.
-async function fetchSpyPrevClose(pgKey) {
-  try {
-    const r = await fetch(`https://api.polygon.io/v2/aggs/ticker/SPY/prev?adjusted=true&apiKey=${pgKey}`,
-      { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return null;
-    const d = await r.json();
-    return d?.results?.[0]?.c ?? null;
-  } catch (_) { return null; }
-}
-
-// Pull the options snapshot, bounded to strikes near `anchor` and the nearest
-// expirations from today. Paginates up to `maxPages` (rate-limit safe).
-async function fetchOptionsSnapshot(pgKey, anchor, diag, maxPages = 3) {
-  const today = new Date().toISOString().slice(0, 10);
-  const lo = Math.floor(anchor * 0.90), hi = Math.ceil(anchor * 1.10);
-  let url = `https://api.polygon.io/v3/snapshot/options/SPY` +
-    `?strike_price.gte=${lo}&strike_price.lte=${hi}` +
-    `&expiration_date.gte=${today}` +
-    `&order=asc&sort=expiration_date&limit=250&apiKey=${pgKey}`;
-
-  const all = [];
-  let httpNote = "";
-  for (let page = 0; page < maxPages && url; page++) {
-    let r;
-    try {
-      r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000) });
-    } catch (e) { httpNote = `fetch_err:${e.message}`; break; }
-    if (!r.ok) { httpNote = `http_${r.status}`; break; }
-    const d = await r.json();
-    if (Array.isArray(d.results)) all.push(...d.results);
-    url = d.next_url ? `${d.next_url}&apiKey=${pgKey}` : null;
-  }
-  diag.push(`snapshot pages_pulled contracts=${all.length}${httpNote ? " " + httpNote : ""}`);
-  return all;
-}
-
-async function calcGex(pgKey, kvUrl, kvToken, force, debugMode) {
+async function calcGex(kvUrl, kvToken, force, debugMode) {
   const now      = new Date();
-  const cacheKey = `trendo:gex_v2:${now.toISOString().slice(0, 13)}`; // v2 = Polygon source
+  const cacheKey = `trendo:gex_v3:${now.toISOString().slice(0, 13)}`; // v3 = CBOE source
   const kvHdrs   = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
   const diag     = [];
 
@@ -109,44 +81,56 @@ async function calcGex(pgKey, kvUrl, kvToken, force, debugMode) {
     catch (_) {}
   };
 
-  if (!pgKey) { if (debugMode) return { _debug: true, error: "no_polygon_key" }; return null; }
-
   if (!force && !debugMode) {
     const cached = await kvGet(cacheKey);
     if (cached) return { ...cached, _src: "cache" };
   }
 
-  // Anchor for strike window
-  diag.push("fetching_prev_close");
-  const anchor = await fetchSpyPrevClose(pgKey);
-  if (!anchor) {
-    if (debugMode) return { _debug: true, diag, error: "no_anchor_price" };
+  // Fetch full SPY chain from CBOE
+  diag.push("fetching_cboe");
+  const chain = await fetchCboeChain(diag);
+  if (!chain) {
+    if (debugMode) return { _debug: true, diag, error: "cboe_unavailable" };
     return null;
   }
-  diag.push(`anchor=${anchor}`);
+  const spot = chain.spot;
+  diag.push(`spot=${spot} raw_options=${chain.options.length}`);
 
-  // Snapshot
-  const contracts = await fetchOptionsSnapshot(pgKey, anchor, diag);
-  if (!contracts.length) {
-    if (debugMode) return { _debug: true, diag, error: "no_contracts (check Polygon options entitlement)" };
+  // Parse OCC symbols, keep strikes within ±10% of spot
+  const lo = spot * 0.90, hi = spot * 1.10;
+  const parsed = [];
+  for (const o of chain.options) {
+    const p = parseOcc(o.option);
+    if (!p || p.strike < lo || p.strike > hi) continue;
+    parsed.push({ ...p, gamma: o.gamma, oi: o.open_interest });
+  }
+  if (!parsed.length) {
+    if (debugMode) return { _debug: true, diag, error: "no_parsable_contracts", sample: chain.options[0]?.option };
     return null;
   }
 
   // Keep only the 3 nearest expiration dates
-  const expDates = [...new Set(contracts.map(c => c.details?.expiration_date).filter(Boolean))].sort();
+  const expDates = [...new Set(parsed.map(p => p.exp))].sort();
   const keepExps = new Set(expDates.slice(0, 3));
-  const kept = contracts.filter(c => keepExps.has(c.details?.expiration_date));
+  const kept = parsed.filter(p => keepExps.has(p.exp));
   diag.push(`exps=${[...keepExps].join(",")} kept=${kept.length}`);
 
-  // Live-ish spot from the snapshot's underlying asset, else the anchor
-  const spot = kept.find(c => c.underlying_asset?.price > 0)?.underlying_asset.price || anchor;
-
   const acc = { callSum: 0, putSum: 0, callCount: 0, putCount: 0, byStrike: {} };
-  accumulate(kept, spot, acc);
+  for (const c of kept) {
+    if (!c.gamma || !c.oi) continue;
+    const dollarGamma = c.gamma * c.oi * 100 * spot;
+    if (c.type === "call") {
+      acc.callSum += dollarGamma; acc.callCount++;
+      acc.byStrike[c.strike] = (acc.byStrike[c.strike] || 0) + dollarGamma;
+    } else {
+      acc.putSum += dollarGamma; acc.putCount++;
+      acc.byStrike[c.strike] = (acc.byStrike[c.strike] || 0) - dollarGamma;
+    }
+  }
   diag.push(`calls_with_gamma=${acc.callCount} puts_with_gamma=${acc.putCount}`);
 
   if (acc.callCount === 0 && acc.putCount === 0) {
-    if (debugMode) return { _debug: true, diag, error: "no_gamma_data (Polygon plan may not include options greeks)", spot };
+    if (debugMode) return { _debug: true, diag, error: "no_gamma_data", spot };
     return null;
   }
 
@@ -186,7 +170,7 @@ export default async function handler(req, res) {
       return r.json();
     })(),
     wantGex
-      ? calcGex(process.env.POLYGON_API_KEY, process.env.KV_REST_API_URL, process.env.KV_REST_API_TOKEN, force, debugGex)
+      ? calcGex(process.env.KV_REST_API_URL, process.env.KV_REST_API_TOKEN, force, debugGex)
       : Promise.resolve(null),
   ]);
 
