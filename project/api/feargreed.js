@@ -1,17 +1,61 @@
 // Vercel serverless — CNN Fear & Greed Index proxy (avoids browser CORS).
 // Optional ?gex=1 also returns SPY Dealer Gamma Exposure from Yahoo Finance options.
+// Yahoo Finance options require crumb auth (added ~2024): fetch cookie → exchange for
+// crumb token → include crumb in options requests.
 
-// ── GEX helpers ──────────────────────────────────────────────────────────────
-const YH_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-  "Accept": "application/json",
-};
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-async function fetchChain(sym, dateTs) {
-  const base = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(sym)}`;
-  const url  = dateTs ? `${base}?date=${dateTs}` : base;
+// ── Yahoo crumb authentication ────────────────────────────────────────────────
+// Yahoo requires: (1) A1 cookie from fc.yahoo.com, (2) crumb from getcrumb endpoint.
+// The crumb must be appended to options API calls as ?crumb=XXX with matching Cookie header.
+async function getYahooCrumb() {
   try {
-    const r = await fetch(url, { headers: YH_HEADERS, signal: AbortSignal.timeout(7000) });
+    // Step 1: get A1 session cookie
+    const cookieRes = await fetch("https://fc.yahoo.com", {
+      headers: {
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(6000),
+    });
+    const rawCookie = cookieRes.headers.get("set-cookie") || "";
+    const a1 = rawCookie.match(/\bA1=([^;,\s]+)/)?.[1];
+    if (!a1) return null;
+    const cookieStr = `A1=${a1}`;
+
+    // Step 2: exchange cookie for crumb
+    const crumbRes = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
+      headers: {
+        "User-Agent": UA,
+        "Accept": "text/plain, */*",
+        "Cookie": cookieStr,
+        "Referer": "https://finance.yahoo.com/",
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!crumbRes.ok) return null;
+    const crumb = (await crumbRes.text()).trim();
+    if (!crumb || crumb.length < 3 || crumb.startsWith("<") || crumb.startsWith("{")) return null;
+
+    return { cookieStr, crumb };
+  } catch (_) { return null; }
+}
+
+// ── GEX helpers ───────────────────────────────────────────────────────────────
+async function fetchChain(sym, dateTs, auth) {
+  const base = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(sym)}`;
+  let url = dateTs ? `${base}?date=${dateTs}` : base;
+  if (auth?.crumb) url += (dateTs ? "&" : "?") + `crumb=${encodeURIComponent(auth.crumb)}`;
+  try {
+    const headers = {
+      "User-Agent": UA,
+      "Accept": "application/json",
+      "Referer": "https://finance.yahoo.com/",
+    };
+    if (auth?.cookieStr) headers["Cookie"] = auth.cookieStr;
+    const r = await fetch(url, { headers, signal: AbortSignal.timeout(7000) });
     if (!r.ok) return null;
     const d = await r.json();
     return d?.optionChain?.result?.[0] || null;
@@ -91,17 +135,23 @@ async function calcGex(kvUrl, kvToken, force) {
     if (cached) return cached;
   }
 
-  const front = await fetchChain("SPY");
+  // Get Yahoo crumb auth before fetching options
+  const auth = await getYahooCrumb();
+
+  const front = await fetchChain("SPY", null, auth);
   if (!front) return null;
   const spot = front.quote?.regularMarketPrice;
   if (!spot || spot < 1) return null;
 
   const extraExps   = (front.expirationDates || []).slice(1, 3);
-  const extraChains = await Promise.all(extraExps.map(ts => fetchChain("SPY", ts)));
+  const extraChains = await Promise.all(extraExps.map(ts => fetchChain("SPY", ts, auth)));
 
   const acc = { callSum: 0, putSum: 0, byStrike: {} };
   if (front.options?.[0]) accumulate(front.options[0], spot, acc);
   for (const ch of extraChains) if (ch?.options?.[0]) accumulate(ch.options[0], spot, acc);
+
+  // If no gamma data returned, don't cache a zero result
+  if (acc.callSum === 0 && acc.putSum === 0) return null;
 
   const netGex    = acc.callSum - acc.putSum;
   const gexBn     = +(netGex / 1e9).toFixed(2);
@@ -124,19 +174,18 @@ async function calcGex(kvUrl, kvToken, force) {
   return payload;
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
+// ── Main handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   const wantGex = req.query.gex === "1";
   const force   = req.query.force === "1";
 
-  // F&G and optional GEX in parallel
   const [fgResult, gexResult] = await Promise.allSettled([
     (async () => {
       const r = await fetch(
         "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
         {
           headers: {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "User-Agent": UA,
             "Referer": "https://www.cnn.com/markets/fear-and-greed",
             "Accept": "application/json",
           },
