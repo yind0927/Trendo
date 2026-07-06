@@ -312,9 +312,14 @@
     return grade;
   }
 
-  async function computeEntryRS(sym, sectorEtf) {
+  async function computeEntryRS(sym, sectorEtf, kind) {
+    // /api/history proxies Yahoo Finance directly, which only recognizes crypto
+    // under the "-USD" ticker (e.g. BTC-USD) — a bare "BTC" returns no history,
+    // silently nulling out every RS field. Same suffix convention already used
+    // elsewhere for crypto history lookups (equity curve, sparkline, etc.).
+    const ySym = kind === "crypto" ? `${sym}-USD` : sym;
     // Fetch 60 calendar days to guarantee ≥22 trading bars after holidays
-    const syms = sectorEtf ? `${sym},${sectorEtf},VOO` : `${sym},VOO`;
+    const syms = sectorEtf ? `${ySym},${sectorEtf},VOO` : `${ySym},VOO`;
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - 60);
     const fromStr = fromDate.toISOString().slice(0, 10);
@@ -339,10 +344,10 @@
       const end   = prices[prices.length - 1];
       return start ? (end - start) / start * 100 : null;
     };
-    const stockPrices  = getPrices(sym);
+    const stockPrices  = getPrices(ySym);
     const vooPrices    = getPrices("VOO");
     const sectPrices   = sectorEtf ? getPrices(sectorEtf) : null;
-    const stockVolumes = getVolumes(sym);
+    const stockVolumes = getVolumes(ySym);
     const volRatio     = calcVolUpDownRatio(stockPrices, stockVolumes, 20);
     return {
       stockRet: get20dReturn(stockPrices),
@@ -863,7 +868,7 @@
         const el        = liveEl();
         renderEntryScorecard(grade, null, true, el);
         try {
-          const rsData   = await computeEntryRS(h.sym, sectorEtf);
+          const rsData   = await computeEntryRS(h.sym, sectorEtf, h.kind);
           const rsResult = calcRSScore(rsData);
           _lastLiveRs = rsResult;
           renderEntryScorecard(grade, rsResult, false, el);
@@ -2764,6 +2769,7 @@
         const sym      = $("#form-ticker")?.value.toUpperCase().trim();
         if (!sym) return;
         const sectorEtf = etfInput?.value.toUpperCase().trim() || null;
+        const kind = $("#form-kind-seg .active")?.dataset.kind || "equity";
         const body = $("#form-bx-body");
         const cur  = parseFloat(body?.querySelector("[data-fbx='current'].active")?.dataset.val) || 0;
         const wk   = parseFloat(body?.querySelector("[data-fbx='weekly'].active")?.dataset.val)  || 0;
@@ -2771,7 +2777,7 @@
         const grade = calcBXGrade(cur, wk, mo);
         renderEntryScorecard(grade, null, true);
         try {
-          const rsData   = await computeEntryRS(sym, sectorEtf);
+          const rsData   = await computeEntryRS(sym, sectorEtf, kind);
           const rsResult = calcRSScore(rsData);
           _pendingRsResult = rsResult;
           _pendingRsEtf    = sectorEtf;
@@ -5776,7 +5782,7 @@
         btn.textContent = "计算中…";
         btn.disabled = true;
         try {
-          const rsData   = await computeEntryRS(item.sym, etf);
+          const rsData   = await computeEntryRS(item.sym, etf, item.kind);
           const rsResult = calcRSScore(rsData);
           item._entryRsResult = rsResult;
           const bxg = item._entryBxGrade ||
