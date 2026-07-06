@@ -85,6 +85,20 @@ function buildMarketBlock(q) {
     lines.push(`三轴模型：${parts.join(" · ")}`);
   }
 
+  // Dealer GEX
+  if (q.gex) {
+    const [sign, bn, opexDays] = q.gex.split(":");
+    const bnNum = parseFloat(bn);
+    const days  = parseInt(opexDays);
+    const label = sign === "pos"
+      ? `正 +${bn}B（做市商净多Gamma，波动被压制，价格倾向均值回归）`
+      : Math.abs(bnNum) > 1
+        ? `负 ${bn}B（做市商净空Gamma较强，下跌可能被放大）`
+        : `负 ${bn}B（做市商轻度净空Gamma，波动略有放大倾向）`;
+    const opexNote = !isNaN(days) ? `，距月度OpEx ${days} 天` : "";
+    lines.push(`做市商Gamma：${label}${opexNote}`);
+  }
+
   // Regime (combined recommendation from the three-axis model)
   if (q.regime) lines.push(`综合操作建议：${q.regime}`);
 

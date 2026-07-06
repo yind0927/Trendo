@@ -7638,37 +7638,47 @@
   }
 
   // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
-  function combineAxes(dir, risk, sent) {
+  function combineAxes(dir, risk, sent, gex) {
+    const gexWarn = (gex && !gex.isPositive && gex.gexBn != null && gex.gexBn < -0.5)
+      ? `；负Gamma（${gex.gexBn}B），做市商对冲将放大波动，止损勿松。`
+      : "";
     if (!dir.eligible)
       return { headline: "❌ 禁止新多仓", color: "#ef4444",
-        detail: `方向轴逆风（${dir.desc}）。无论 VIX 多低都不新开多仓，优先保护现有仓位、严格执行止损。` };
+        detail: `方向轴逆风（${dir.desc}）。无论 VIX 多低都不新开多仓，优先保护现有仓位、严格执行止损。${gexWarn}` };
     if (sent.tilt === "trim")
       return { headline: "⚠️ 止盈 / 禁新仓", color: "#f97316",
-        detail: `情绪极端过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。` };
+        detail: `情绪极端过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。${gexWarn}` };
     if (sent.tilt === "accumulate")
       return { headline: "🔄 分批建仓", color: "#22c55e",
-        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。` };
+        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。${gexWarn}` };
     if (sent.tilt === "scale")
       return { headline: "⏫ 小幅加仓", color: "#3b82f6",
-        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
+        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
     if (sent.tilt === "hold")
       return { headline: "⏸️ 持仓观望", color: "#eab308",
-        detail: `情绪偏热，持有现有仓位不加码。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
+        detail: `情绪偏热，持有现有仓位不加码。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
     return { headline: "✅ 正常进攻", color: "#22c55e",
-      detail: `三轴健康，可正常布局。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。` };
+      detail: `三轴健康，可正常布局。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
   }
 
-  function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend }) {
+  function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend, gex }) {
     const dir  = getDirectionAxis(price, ma50, ma200);
     const risk = getRiskAxis(vix);
     const sent = getSentimentAxis(fg, rsi, vixTrend);
-    const combined = combineAxes(dir, risk, sent);
-    return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 };
+    const combined = combineAxes(dir, risk, sent, gex);
+    return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200, gex };
   }
 
   function mkAxesHTML(axes) {
     if (!axes) return "";
-    const { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 } = axes;
+    const { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200, gex } = axes;
+    const gexRowHTML = gex?.gexBn != null ? (() => {
+      const valCls = gex.isPositive ? "pos" : (gex.gexBn < -1 ? "neg-strong" : "neg");
+      const sign   = gex.gexBn > 0 ? "+" : "";
+      const zeroTag = gex.zeroGamma != null ? `<span class="mkt-gex-zero">零轴 $${gex.zeroGamma}</span>` : "";
+      const opexCls = gex.daysToOpEx <= 3 ? " warn" : "";
+      return `<div class="mkt-gex-row"><span class="mkt-gex-label">做市商γ</span><span class="mkt-gex-val ${valCls}">${gex.isPositive ? "正" : "负"} ${sign}${gex.gexBn}B</span>${zeroTag}<span class="mkt-gex-opex${opexCls}">OpEx ${gex.daysToOpEx}天</span></div>`;
+    })() : "";
     const maNote = (ma50 != null && ma200 != null)
       ? `EMA50 ${ma50} · EMA200 ${ma200}`
       : (ma50 != null ? `EMA50 ${ma50}` : "数据不足");
@@ -7691,6 +7701,7 @@
             <div class="mkt-axis-meta">VIX ${vix} <span class="mkt-axis-dim">容量 ${risk.label}</span></div>
             <div class="mkt-axis-desc">仓位上限 ${risk.posMax}% · 止损 ${risk.stop}</div>
             <div class="mkt-axis-gate dim">决定"开多少"</div>
+            ${gexRowHTML}
           </div>
           <div class="mkt-axis-card" style="border-color:${sent.color}40">
             <div class="mkt-axis-top"><span class="mkt-axis-name">情绪 · FGI/RSI</span><span class="mkt-axis-val" style="color:${sent.color}">${sent.label}</span></div>
@@ -7754,7 +7765,7 @@
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
-        fetch("/api/feargreed").then(r => r.json()),
+        fetch("/api/feargreed?gex=1").then(r => r.json()),
       ]);
 
       // VIX / VXN
@@ -7842,12 +7853,16 @@
         }
       }
 
-      const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend });
+      let gex = null;
+      if (fgRes.status === "fulfilled" && fgRes.value?.gex?.gexBn != null) gex = fgRes.value.gex;
+
+      const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend, gex });
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: axes.combined.headline, vixTrend, indices,
         direction: axes.dir.label, posMax: axes.risk.posMax, sentiment: axes.sent.label,
+        gex: gex ? { isPositive: gex.isPositive, gexBn: gex.gexBn, daysToOpEx: gex.daysToOpEx } : null,
       };
       _lastMktCtx = mktCtx;
       initDrawdownCard();
@@ -8079,6 +8094,8 @@
           .sort((a, b) => b.score - a.score)
           .map(s => `${s.sym}|${s.zh}:${s.score}:${s.dailyChg ?? ""}`)
           .join(","));
+      if (mktCtx?.gex?.gexBn != null)
+        params.set("gex", `${mktCtx.gex.isPositive ? "pos" : "neg"}:${mktCtx.gex.gexBn}:${mktCtx.gex.daysToOpEx}`);
 
       const res = await fetch("/api/market-summary?" + params.toString(), { signal: AbortSignal.timeout(25000) });
       if (!res.ok) {
