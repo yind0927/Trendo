@@ -1509,7 +1509,8 @@
       if (activeTab === "closed") {
         const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
         if (closedFilter === "profit" && pnl <= 0) return false;
-        if (closedFilter === "loss"   && pnl >  0) return false;
+        if (closedFilter === "loss"   && pnl >= 0) return false;
+        if (closedFilter === "even"   && pnl !== 0) return false;
       } else {
         if (filter === "equity" && h.kind !== "equity") return false;
         if (filter === "etf"    && h.kind !== "etf") return false;
@@ -1628,14 +1629,15 @@
     $("#c-open").textContent   = HOLDINGS.length;
     $("#c-closed").textContent = CLOSED_POSITIONS.length;
     if (activeTab === "closed") {
-      const safe = el => { const e = $(el); if (e) e.textContent = v; };
       const cp = CLOSED_POSITIONS;
       const profit = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
-      const loss   = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length;
+      const loss   = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length;
+      const even   = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length;
       const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
       set("#c-cl-all",    cp.length);
       set("#c-cl-profit", profit);
       set("#c-cl-loss",   loss);
+      set("#c-cl-even",   even);
     } else {
       $("#c-all").textContent  = data.length;
       $("#c-eq").textContent   = data.filter(h => h.kind === "equity").length;
@@ -1669,8 +1671,8 @@
       progColor = bs.color;
     }
 
-    const statusLabel = isClosed ? (pnl > 0 ? "盈利" : "亏损") : bs.label.split(" · ")[0];
-    const statusCls   = isClosed ? (pnl > 0 ? "ok" : "danger") : bs.cls;
+    const statusLabel = isClosed ? (pnl > 0 ? "盈利" : pnl < 0 ? "亏损" : "持平") : bs.label.split(" · ")[0];
+    const statusCls   = isClosed ? (pnl > 0 ? "ok" : pnl < 0 ? "danger" : "neu") : bs.cls;
 
     const flagBtn = opts.sim && !isClosed
       ? `<button class="hc-action sim-flag-btn ${h.flagged ? 'flagged' : ''}" data-sym="${h.sym}" title="候选标记"><svg width="11" height="11" viewBox="0 0 24 24" fill="${h.flagged ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>`
@@ -2435,33 +2437,37 @@
       all:   "All Time"
     };
 
-    // BX bars breakdown
-    const buckets = { "0-5": [], "5-15": [], "15+": [] };
-    data.forEach(h => { const b = h.bx?.dailyBars || "15+"; if (buckets[b]) buckets[b].push(h); });
-    const maxCount = Math.max(1, ...Object.values(buckets).map(b => b.length));
+    // Grade breakdown
+    const gradeBuckets = {};
+    GRADE_LADDER.forEach(g => { gradeBuckets[g] = []; });
+    data.forEach(h => {
+      const g = h.bx?.entryFinalGrade;
+      if (g && gradeBuckets[g]) gradeBuckets[g].push(h);
+      else if (g) gradeBuckets[g] = [h];
+    });
+    const noGrade = data.filter(h => !h.bx?.entryFinalGrade);
+    const gradeMaxCnt = Math.max(1, ...Object.values(gradeBuckets).map(b => b.length), noGrade.length);
 
-    function bxReviewRow(bucket, positions) {
+    function gradeReviewRow(grade, positions) {
       const cnt = positions.length;
-      const w   = positions.filter(p => (p.pnlFinal ?? p.pnlDollar ?? 0) > 0).length;
-      const avgDollar = cnt > 0 ? Math.round(positions.reduce((s, p) => s + (p.pnlFinal ?? p.pnlDollar ?? 0), 0) / cnt) : 0;
-      const barW   = Math.round(cnt / maxCount * 100);
+      if (cnt === 0) return "";
+      const w = positions.filter(p => (p.pnlFinal ?? p.pnlDollar ?? 0) > 0).length;
+      const avgDollar = Math.round(positions.reduce((s, p) => s + (p.pnlFinal ?? p.pnlDollar ?? 0), 0) / cnt);
+      const barW = Math.round(cnt / gradeMaxCnt * 100);
       const dColor = avgDollar >= 0 ? "var(--up)" : "var(--down)";
-      const cls = bucket === "0-5" ? "bxbar-early" : bucket === "5-15" ? "bxbar-mid" : "bxbar-late";
-      const lbl = bucket === "0-5" ? "开始" : bucket === "5-15" ? "中间" : "延续";
+      const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
       return `
         <div class="bx-review-row">
           <div class="bx-review-chip">
-            <span class="bx-bar-chip ${cls}">${bucket}<span class="bx-bar-sub">${lbl}</span></span>
+            <span style="display:inline-block;min-width:28px;text-align:center;font-family:var(--f-mono);font-size:11px;font-weight:700;color:${meta.color}">${grade}</span>
           </div>
           <div class="bx-review-body">
             <div class="bx-review-track">
-              <div class="bx-review-fill" style="width:${barW}%;background:${cnt > 0 ? dColor : "var(--bg-3)"}"></div>
+              <div class="bx-review-fill" style="width:${barW}%;background:${dColor}"></div>
             </div>
             <div class="bx-review-meta">
-              ${cnt > 0
-                ? `<span class="mono" style="font-size:10px;color:var(--fg-2)">${cnt} 笔 · ${Math.round(w / cnt * 100)}% 胜</span>
-                   <span class="mono" style="font-size:10px;color:${dColor}">${fmt.signed(avgDollar)}</span>`
-                : `<span style="font-size:10.5px;color:var(--fg-3)">—</span>`}
+              <span class="mono" style="font-size:10px;color:var(--fg-2)">${cnt} 笔 · ${Math.round(w / cnt * 100)}% 胜</span>
+              <span class="mono" style="font-size:10px;color:${dColor}">${fmt.signed(avgDollar)}</span>
             </div>
           </div>
         </div>`;
@@ -2520,12 +2526,13 @@
         </div>
       </div>
       <div class="panel-head" style="border-top:1px solid var(--line); border-bottom:0">
-        <div class="panel-title" style="font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-2);font-weight:500">BX Bars 分布</div>
+        <div class="panel-title" style="font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-2);font-weight:500">开仓评级分布</div>
       </div>
       <div style="padding:10px 16px 14px">
         ${total === 0
-          ? `<div style="color:var(--fg-3);font-size:12px;padding:14px 0;text-align:center">暂无已平仓数据<br><span style="font-size:10.5px;margin-top:4px;display:block">平仓后将在此显示 BX Bars 分布统计</span></div>`
-          : Object.entries(buckets).map(([b, pos]) => bxReviewRow(b, pos)).join("")}
+          ? `<div style="color:var(--fg-3);font-size:12px;padding:14px 0;text-align:center">暂无已平仓数据<br><span style="font-size:10.5px;margin-top:4px;display:block">平仓后将在此显示评级分布统计</span></div>`
+          : [...GRADE_LADDER].reverse().map(g => gradeReviewRow(g, gradeBuckets[g] || [])).join("")
+            + (noGrade.length > 0 ? gradeReviewRow("—", noGrade) : "")}
       </div>
       <div class="panel-head" style="border-top:1px solid var(--line); border-bottom:0">
         <div class="panel-title" style="font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-2);font-weight:500">最近平仓</div>
@@ -4588,7 +4595,8 @@
       if (simActiveTab === "closed") {
         const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
         if (simClosedFilter === "profit" && pnl <= 0) return false;
-        if (simClosedFilter === "loss"   && pnl >  0) return false;
+        if (simClosedFilter === "loss"   && pnl >= 0) return false;
+        if (simClosedFilter === "even"   && pnl !== 0) return false;
       } else {
         if (simFilter === "equity" && h.kind !== "equity") return false;
         if (simFilter === "etf"    && h.kind !== "etf") return false;
@@ -4630,7 +4638,8 @@
     if (simActiveTab === "closed") {
       setCount("sim-c-cl-all",    SIM_CLOSED.length);
       setCount("sim-c-cl-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
-      setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) <= 0).length);
+      setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length);
+      setCount("sim-c-cl-even",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length);
     } else {
       setCount("sim-c-all",   SIM_HOLDINGS.length);
       setCount("sim-c-eq",    SIM_HOLDINGS.filter(h => h.kind === "equity").length);
@@ -5233,9 +5242,19 @@
     const totalPnlDisplay = totalPnlDollar + realizedPnlTotal;
     const curveData = generatePortfolioCurve(equityPeriod);
 
-    // BX buckets
-    const bxBuckets = { "0-5": [], "5-15": [], "15+": [] };
-    closed.forEach(h => { const b = h.bx?.dailyBars || "15+"; if (bxBuckets[b]) bxBuckets[b].push(h); });
+    // Grade buckets
+    const aGradeBuckets = {};
+    GRADE_LADDER.forEach(g => { aGradeBuckets[g] = []; });
+    closed.forEach(h => {
+      const g = h.bx?.entryFinalGrade;
+      if (g && aGradeBuckets[g]) aGradeBuckets[g].push(h);
+      else if (g) aGradeBuckets[g] = [h];
+    });
+    const aNoGrade = closed.filter(h => !h.bx?.entryFinalGrade);
+    const aGradeEntries = [...GRADE_LADDER].reverse()
+      .map(g => ({ grade: g, pos: aGradeBuckets[g] || [] }))
+      .filter(e => e.pos.length > 0);
+    if (aNoGrade.length > 0) aGradeEntries.push({ grade: "—", pos: aNoGrade });
 
     // Open portfolio sorted by size
     const openSorted = [...open].sort((a, b) => b.size - a.size);
@@ -5318,27 +5337,40 @@
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
-          <div class="analytics-card-title">BX Bars 效能</div>
-          <div class="analytics-card-sub">胜率 · 总盈亏 · 平均每笔</div>
-          <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
-            ${Object.entries(bxBuckets).map(([b, pos]) => {
-              const cnt  = pos.length;
-              const wn   = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
-              const total = cnt > 0 ? Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0)) : 0;
-              const avg  = cnt > 0 ? Math.round(total / cnt) : 0;
-              const cls  = b === "0-5" ? "bxbar-early" : b === "5-15" ? "bxbar-mid" : "bxbar-late";
-              const lbl  = b === "0-5" ? "开始" : b === "5-15" ? "中间" : "延续";
-              const dc   = total >= 0 ? "var(--up)" : "var(--down)";
-              return `<div style="display:flex;align-items:center;gap:10px">
-                <span class="bx-bar-chip ${cls}" style="flex-shrink:0">${b}<span class="bx-bar-sub">${lbl}</span></span>
-                <div style="flex:1">
-                  <div class="muted" style="font-size:10px;margin-bottom:3px">${cnt > 0 ? `${cnt}笔 · ${Math.round(wn/cnt*100)}% 胜` : "暂无数据"}</div>
-                  <div class="mono" style="font-size:13px;font-weight:700;color:${dc}">${cnt > 0 ? fmt.signed(total) : "—"}</div>
-                  ${cnt > 1 ? `<div class="muted" style="font-size:10px;margin-top:1px">均 ${fmt.signed(avg)} / 笔</div>` : ""}
-                </div>
-              </div>`;
-            }).join("")}
-          </div>
+          <div class="analytics-card-title">评级绩效 · Grade Performance</div>
+          <div class="analytics-card-sub">按开仓评级统计胜率 · 盈亏 · 平均R</div>
+          ${aGradeEntries.length === 0
+            ? `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`
+            : `<div style="margin-top:14px">
+              <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+                <thead><tr style="color:var(--fg-2)">
+                  <th style="text-align:left;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">评级</th>
+                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">笔数</th>
+                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">胜率</th>
+                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">均R</th>
+                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">总盈亏</th>
+                </tr></thead>
+                <tbody>
+                  ${aGradeEntries.map(({ grade, pos }) => {
+                    const cnt = pos.length;
+                    const wn = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
+                    const wr = Math.round(wn / cnt * 100);
+                    const totalPnlG = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
+                    const avgRG = (pos.reduce((s, p) => s + (p.rMult || 0), 0) / cnt).toFixed(1);
+                    const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
+                    const pnlCls = totalPnlG >= 0 ? "up" : "down";
+                    const rCls = parseFloat(avgRG) >= 0 ? "up" : "down";
+                    return `<tr style="border-bottom:1px solid color-mix(in oklch,var(--line) 45%,transparent)">
+                      <td style="padding:5px 0"><span class="mono" style="font-weight:700;color:${meta.color}">${grade}</span></td>
+                      <td style="text-align:right;color:var(--fg-2);font-family:var(--f-mono);font-size:11px">${cnt}</td>
+                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${wr >= 50 ? 'up' : 'down'}">${wr}%</td>
+                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${rCls}">${parseFloat(avgRG) >= 0 ? "+" : ""}${avgRG}R</td>
+                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${pnlCls}">${fmt.signed(totalPnlG)}</td>
+                    </tr>`;
+                  }).join("")}
+                </tbody>
+              </table>
+            </div>`}
         </div>
 
         <div class="analytics-card" style="flex:1">
@@ -5400,6 +5432,33 @@
           </div>
         </div>
       </div>
+
+      ${aGradeEntries.length > 0 ? `<div class="analytics-card" style="margin-bottom:14px">
+        <div class="analytics-card-title">评级盈亏分布 · Grade P&L</div>
+        <div class="analytics-card-sub">各评级平均R倍数对比</div>
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+          ${aGradeEntries.map(({ grade, pos }) => {
+            const cnt = pos.length;
+            const avgRG = pos.reduce((s, p) => s + (p.rMult || 0), 0) / cnt;
+            const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
+            const maxAbsR = Math.max(0.1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.rMult || 0), 0) / e.pos.length)));
+            const barPct = Math.round(Math.abs(avgRG) / maxAbsR * 100);
+            const isPos = avgRG >= 0;
+            const barColor = isPos ? "var(--up)" : "var(--down)";
+            const totalG = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
+            return `<div style="display:flex;align-items:center;gap:8px">
+              <span style="flex-shrink:0;width:28px;text-align:center;font-family:var(--f-mono);font-size:12px;font-weight:700;color:${meta.color}">${grade}</span>
+              <div style="flex:1;display:flex;align-items:center;gap:6px">
+                <div style="flex:1;height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden">
+                  <div style="height:100%;border-radius:4px;background:${barColor};width:${barPct}%;min-width:${cnt>0?3:0}px;transition:width .4s"></div>
+                </div>
+                <span class="mono ${isPos ? 'up' : 'down'}" style="flex-shrink:0;width:50px;text-align:right;font-size:11px;font-weight:600">${isPos?"+":""}${avgRG.toFixed(1)}R</span>
+                <span class="mono" style="flex-shrink:0;width:65px;text-align:right;font-size:10px;color:var(--fg-2)">${fmt.signed(totalG)}</span>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>` : ""}
 
       <div class="analytics-card" style="margin-bottom:14px">
         <div class="analytics-card-title">出场质量分析 · Exit Quality</div>
