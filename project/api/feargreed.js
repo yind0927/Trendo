@@ -209,11 +209,16 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
     if (prevDate) {
       payload.prevNetGexBn = hist[prevDate].net;
       payload.netChgBn = +(payload.netGexBn - hist[prevDate].net).toFixed(2);
+      if (hist[prevDate].swing != null)
+        payload.swingChgBn = +(payload.swingGexBn - hist[prevDate].swing).toFixed(2);
     }
     const nets = dates.map(d => hist[d].net);
     payload.histDays = nets.length;
     if (nets.length >= 5)
       payload.pctile = Math.round(nets.filter(v => v <= payload.netGexBn).length / nets.length * 100);
+    const swings = dates.map(d => hist[d].swing).filter(v => v != null);
+    if (swings.length >= 5)
+      payload.swingPctile = Math.round(swings.filter(v => v <= payload.swingGexBn).length / swings.length * 100);
     await kvSet(histKey, hist, 86400 * 200);
   } catch (_) {}
 

@@ -7676,8 +7676,12 @@
     const net = gex?.netGexBn ?? gex?.gexBn;
     if (!gex || net == null) return "";
     const st   = gexState(gex.regime || (net >= 0 ? "positive" : "negative"));
-    const sign = net > 0 ? "+" : "";
-    const valColor = net > 0 ? "#22c55e" : net < 0 ? "#ef4444" : "var(--fg-1)";
+    const swing = gex.swingGexBn;
+    const hero = swing != null ? swing : net;
+    const heroSign = hero > 0 ? "+" : "";
+    const heroColor = hero > 0 ? "#22c55e" : hero < 0 ? "#ef4444" : "var(--fg-1)";
+    const netSign = net > 0 ? "+" : "";
+    const netColor = net > 0 ? "#22c55e" : net < 0 ? "#ef4444" : "var(--fg-1)";
     const factor = gex.posFactor ?? 1;
     const facColor = factor >= 1 ? "#22c55e" : factor >= 0.7 ? "#eab308" : "#ef4444";
     const opexWarn = gex.daysToOpEx <= 3;
@@ -7713,38 +7717,36 @@
     const dteHTML = (d.d0 != null || d.d1_7 != null || d.d8_30 != null)
       ? `<div class="gx-dte">${dteItem("0DTE", d.d0)}${dteItem("1-7D", d.d1_7)}${dteItem("8-30D", d.d8_30)}</div>` : "";
 
-    // Day-over-day change + history percentile (absolute GEX scales with spot²/OI,
-    // so the percentile is the stable "high or low" reading)
+    // Day-over-day change + percentile — prefer swing metrics, fallback to net
     const chgParts = [];
-    if (gex.netChgBn != null) {
-      const up = gex.netChgBn >= 0;
-      chgParts.push(`<span style="color:${up ? "#22c55e" : "#ef4444"}">${up ? "▲" : "▼"} ${up ? "+" : ""}${gex.netChgBn}B 较昨日</span>`);
+    const chgVal = gex.swingChgBn ?? gex.netChgBn;
+    if (chgVal != null) {
+      const up = chgVal >= 0;
+      chgParts.push(`<span style="color:${up ? "#22c55e" : "#ef4444"}">${up ? "▲" : "▼"} ${up ? "+" : ""}${chgVal}B 较昨日</span>`);
     }
-    if (gex.pctile != null)
-      chgParts.push(`<span>近${gex.histDays}天分位 <b>${gex.pctile}%</b></span>`);
+    const pctVal = gex.swingPctile ?? gex.pctile;
+    if (pctVal != null)
+      chgParts.push(`<span>近${gex.histDays}天分位 <b>${pctVal}%</b></span>`);
     const chgRow = chgParts.length ? `<div class="gx-chgrow">${chgParts.join(`<span class="gx-dot">·</span>`)}</div>` : "";
 
-    // Swing reading (ex-0DTE): the structure that persists past today's close
-    const swing = gex.swingGexBn;
-    let swingHTML = "";
-    if (swing != null) {
-      const sColor = swing >= 0 ? "#22c55e" : "#ef4444";
-      let note = "";
-      if (net > 0 && swing < 0)
-        note = `<span class="gx-swing-note warn">⚠️ 剔除0DTE后转负——缓冲全靠当日期权，对隔夜持仓无保护</span>`;
-      else if (net > 0 && swing < net * 0.5)
-        note = `<span class="gx-swing-note">0DTE占比高，缓冲的隔日延续性偏弱</span>`;
-      swingHTML = `<div class="gx-swing"><span class="gx-swing-name">波段口径 · 剔0DTE</span><b style="color:${sColor}">${swing > 0 ? "+" : ""}${swing}B</b>${note}</div>`;
-    }
+    // Swing divergence warning
+    let swingNote = "";
+    if (swing != null && net > 0 && swing < 0)
+      swingNote = `<div class="gx-swing-warn">Net GEX 为正但剔0DTE后转负——缓冲全靠当日期权，隔夜持仓无保护</div>`;
+    else if (swing != null && net > 0 && swing < net * 0.5)
+      swingNote = `<div class="gx-swing-warn mild">0DTE占比高，缓冲的隔日延续性偏弱</div>`;
 
     return `
       <div class="mkt-card mkt-gex-card">
         <div class="mkt-card-label">做市商 Gamma · GEX <span class="mkt-gex-src">SPX 0-30DTE · CBOE</span></div>
         <div class="mkt-card-row">
-          <span class="mkt-card-val" style="color:${valColor}">${sign}${net}<span class="mkt-gex-unit">B</span></span>
+          <span class="mkt-card-val" style="color:${heroColor}">${heroSign}${hero}<span class="mkt-gex-unit">B</span></span>
           <span class="mkt-gex-mode" style="color:${st.color}">${st.en} · ${st.mode}</span>
         </div>
+        <div class="gx-hero-sub">波段口径 · 剔0DTE</div>
+        ${swingNote}
         ${chgRow}
+        <div class="gx-net-ref">Net GEX<span class="gx-net-ref-tag">含0DTE</span> <b style="color:${netColor}">${netSign}${net}B</b></div>
         <div class="gx-badges">
           <div class="mkt-badge" style="color:${st.color};border-color:${st.color}40;background:${st.color}12">
             <span class="mkt-badge-dot" style="background:${st.color}"></span>${st.en}
@@ -7759,7 +7761,6 @@
           ${distPill("Call Wall", gex.distCallPct, callWall, "call")}
         </div>
         <div class="mkt-gex-interp">${st.interp}</div>
-        ${swingHTML}
         ${dteHTML}
         <div class="mkt-gex-metarow">
           <span>建议仓位 = 轴B上限 × <b style="color:${facColor}">${factor}</b></span>
