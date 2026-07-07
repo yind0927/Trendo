@@ -1271,6 +1271,20 @@
   .esc-rs-abs { width: 52px; font-family: var(--f-mono); font-weight: 600; font-size: 11px; flex-shrink: 0; }
   .esc-rs-abs2 { flex: 1; font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); }
   .esc-rs-pts { font-family: var(--f-mono); font-size: 10.5px; min-width: 32px; text-align: right; flex-shrink: 0; }
+  .esc-badges-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+  .esc-st-tag { display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; font-family: var(--f-mono); padding: 2px 7px; border-radius: 4px; }
+  .esc-st-tag.up   { background: var(--up-dim);   color: var(--up);   border: 1px solid oklch(0.78 0.17 145 / .3); }
+  .esc-st-tag.down { background: var(--down-dim); color: var(--down); border: 1px solid oklch(0.70 0.19 25 / .3); }
+  /* SuperTrend chips in form-bx-body */
+  .bx-st-seg { display: flex; gap: 6px; }
+  .bx-st-btn { all: unset; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 14px; border-radius: 6px; background: var(--bg-2); border: 1px solid transparent; font-family: var(--f-mono); font-weight: 700; font-size: 13px; cursor: pointer; transition: all .12s; text-align: center; color: var(--fg-2); }
+  .bx-st-btn .bx-sub { font-size: 8.5px; font-family: var(--f-sans); font-weight: 400; color: var(--fg-3); }
+  .bx-st-btn.bx-up   { color: var(--up); }
+  .bx-st-btn.bx-down { color: var(--down); }
+  .bx-st-btn.bx-neu  { color: var(--fg-2); }
+  .bx-st-btn.active  { box-shadow: inset 0 0 0 1.5px currentColor, 0 0 10px -4px currentColor; }
+  /* Drawer ST row */
+  .dsc-st-row { font-size: 11.5px; color: var(--fg-2); padding: 5px 0; display: flex; align-items: center; gap: 8px; }
 
   /* ── Drawer scorecard (DSC) ── */
   .dsc-wrap { background: var(--bg-1); border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin-bottom: 14px; }
@@ -3912,6 +3926,14 @@
             <button type="button" class="bx-score-btn bx-up"     data-fbx="monthly" data-val="2"><span class="bx-val">+2</span><span class="bx-sub">Bullish</span></button>
           </div>
         </div>
+        <div class="bx-row" style="margin-top:4px">
+          <div class="bx-row-label">SuperTrend <span style="color:var(--accent);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">(日线)</span></div>
+          <div class="bx-st-seg">
+            <button type="button" class="bx-st-btn bx-neu active" data-fbx-st="null"><span class="bx-val">—</span><span class="bx-sub">未填</span></button>
+            <button type="button" class="bx-st-btn bx-up" data-fbx-st="true"><span class="bx-val">▲</span><span class="bx-sub">做多</span></button>
+            <button type="button" class="bx-st-btn bx-down" data-fbx-st="false"><span class="bx-val">▼</span><span class="bx-sub">做空</span></button>
+          </div>
+        </div>
         <div class="bx-row" style="margin-top:2px">
           <div class="bx-row-label">板块</div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -4087,8 +4109,8 @@
   </div>
 </div>
 
-<script src="data.js?v=239"></script>
-<script src="desk.js?v=239"></script>
+<script src="data.js?v=240"></script>
+<script src="desk.js?v=240"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

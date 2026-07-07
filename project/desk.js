@@ -307,7 +307,15 @@
 
   const GRADE_LADDER = ["Exit","C","C+","B-","B","B+","A-","A","A+"];
 
-  function rsAdjustGrade(grade, rsResult) {
+  function stAdjustGrade(grade, stBull) {
+  if (stBull == null || grade === "Hold" || grade === "Exit") return grade;
+  const idx = GRADE_LADDER.indexOf(grade);
+  if (idx < 0) return grade;
+  if (stBull) return GRADE_LADDER[Math.min(idx + 1, GRADE_LADDER.length - 1)];
+  return GRADE_LADDER[Math.max(idx - 1, 0)];
+}
+
+function rsAdjustGrade(grade, rsResult) {
     if (!rsResult || grade === "Hold" || grade === "Exit") return grade;
     const idx = GRADE_LADDER.indexOf(grade);
     if (idx < 0) return grade;
@@ -439,7 +447,7 @@
     return parseFloat((upVol / total * 100).toFixed(1));
   }
 
-  function renderEntryScorecard(bxGrade, rsResult, loading = false, targetEl = null) {
+  function renderEntryScorecard(bxGrade, rsResult, loading = false, targetEl = null, stBull = null) {
     const el = targetEl || $("#entry-scorecard");
     if (!el) return;
     el.style.display = "";
@@ -447,18 +455,44 @@
       el.innerHTML = `<div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">RS: 计算中…</div></div><div class="esc-empty">正在获取相对强度数据…</div>`;
       return;
     }
-    const hasRS      = rsResult != null;
-    const finalGrade = hasRS ? rsAdjustGrade(bxGrade, rsResult) : bxGrade;
+    const hasRS    = rsResult != null;
+    const hasST    = stBull != null;
+    const afterRS  = hasRS ? rsAdjustGrade(bxGrade, rsResult) : bxGrade;
+    const finalGrade = hasST ? stAdjustGrade(afterRS, stBull) : afterRS;
     const meta       = BX_GRADE_META[finalGrade] || BX_GRADE_META["C"];
     const bxMeta     = BX_GRADE_META[bxGrade]    || BX_GRADE_META["C"];
-    const gradeChanged = hasRS && finalGrade !== bxGrade;
+    const rsMeta     = BX_GRADE_META[afterRS]     || BX_GRADE_META["C"];
+    const rsChanged  = afterRS !== bxGrade;
+    const stChanged  = finalGrade !== afterRS;
+    const anyChanged = rsChanged || stChanged;
 
     const rsTag = hasRS
       ? `RS: <strong style="color:var(--fg-0)">${rsResult.score}/${rsResult.max}</strong>`
       : "RS: —";
+    const stTag = hasST
+      ? `<span class="esc-st-tag ${stBull ? "up" : "down"}">${stBull ? "▲ 做多" : "▼ 做空"}</span>`
+      : "";
 
     let gradeHTML;
-    if (gradeChanged) {
+    if (!anyChanged) {
+      gradeHTML = `<div class="esc-grade-box"><div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div><div class="esc-grade-lbl">评级</div></div>`;
+    } else if (rsChanged && stChanged) {
+      gradeHTML = `
+        <div class="esc-grade-box">
+          <div class="esc-grade-val" style="font-size:12px;opacity:.45;color:${bxMeta.color}">${bxGrade}</div>
+          <div class="esc-grade-lbl">BX</div>
+        </div>
+        <div class="esc-arrow">→</div>
+        <div class="esc-grade-box">
+          <div class="esc-grade-val" style="font-size:14px;opacity:.65;color:${rsMeta.color}">${afterRS}</div>
+          <div class="esc-grade-lbl">+RS</div>
+        </div>
+        <div class="esc-arrow">→</div>
+        <div class="esc-grade-box">
+          <div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div>
+          <div class="esc-grade-lbl">Final</div>
+        </div>`;
+    } else {
       gradeHTML = `
         <div class="esc-grade-box">
           <div class="esc-grade-val" style="font-size:14px;opacity:.5;color:${bxMeta.color}">${bxGrade}</div>
@@ -469,8 +503,6 @@
           <div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div>
           <div class="esc-grade-lbl">Final</div>
         </div>`;
-    } else {
-      gradeHTML = `<div class="esc-grade-box"><div class="esc-grade-val" style="color:${meta.color}">${finalGrade}</div><div class="esc-grade-lbl">评级</div></div>`;
     }
 
     // RS breakdown table — shows absolute returns so user can verify on chart
@@ -519,7 +551,7 @@
     }
 
     el.innerHTML = `
-      <div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-rs-badge">${rsTag}</div></div>
+      <div class="esc-top"><div class="esc-title">开仓评分</div><div class="esc-badges-row"><div class="esc-rs-badge">${rsTag}</div>${stTag}</div></div>
       <div class="esc-body">
         ${gradeHTML}
         <div class="esc-info">
@@ -622,6 +654,10 @@
             </div>` : ''}
           </div>`;
       }
+      const stEntry = bx.entryST;
+      const stEntryHTML = stEntry != null
+        ? `<div class="dsc-st-row">SuperTrend 日线 <span style="color:${stEntry ? "var(--up)" : "var(--down)"};font-weight:700">${stEntry ? "▲ 做多" : "▼ 做空"}</span></div>`
+        : "";
       entryScorecardHTML = `
         <div class="dsc-entry">
           <div class="dsc-grade-row">
@@ -632,6 +668,7 @@
               <div style="font-size:11px;color:var(--fg-2)">建议仓位 <strong style="color:var(--fg-0)">${meta.pos}</strong></div>
             </div>
           </div>
+          ${stEntryHTML}
           ${rsRowsHTML}
         </div>`;
     }
@@ -679,6 +716,14 @@
             ${periodRow("Current BX", "current", ' <span style="color:var(--accent);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">(日线)</span>')}
             ${periodRow("Weekly BX", "weekly")}
             ${periodRow("Monthly BX", "monthly")}
+            <div class="bx-row">
+              <div class="bx-row-label">SuperTrend <span style="color:var(--accent);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">日线</span></div>
+              <div class="bx-st-seg">${[
+                { val: "true",  cls: "bx-up",   label: "▲", sub: "做多" },
+                { val: "null",  cls: "bx-neu",  label: "—",  sub: "未填" },
+                { val: "false", cls: "bx-down", label: "▼", sub: "做空" },
+              ].map(o => `<button type="button" class="bx-st-btn ${o.cls} ${String(bx.entryST ?? null) === o.val ? "active" : ""}" data-drawer-st="${o.val}"><span class="bx-val">${o.label}</span><span class="bx-sub">${o.sub}</span></button>`).join("")}</div>
+            </div>
             <div class="bx-row" style="margin-bottom:4px">
               <div class="bx-row-label">行业ETF <span style="color:var(--fg-3);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">相对强度 RS</span></div>
               <div class="bx-etf-row">
@@ -808,21 +853,22 @@
   function wireBX(h) {
     const dr = $("#drawer");
     const liveEl = () => dr.querySelector("#drawer-live-scorecard");
-    // Last RS result computed in THIS drawer session (via 计算RS), attached to
-    // the next weekly snapshot if the user records one without recalculating.
+    // Last RS/ST computed in THIS drawer session (via 计算RS or ST chip), used
+    // for scorecard refresh and weekly snapshot recording.
     let _lastLiveRs = null;
+    let _lastLiveST = null;
 
     // Read the currently-selected live BX value for a given period
     const liveBX = period => {
       const v = dr.querySelector(`[data-drawer-bx="${period}"].active`)?.dataset.bxVal;
       return parseFloat(v) || 0;
     };
-    // Re-render the live scorecard grade (BX only, no RS) — mirrors the modal
+    // Re-render the live scorecard — persists RS + ST across chip changes
     const refreshLiveGrade = () => {
       const el = liveEl();
       if (!el) return;
       const grade = calcBXGrade(liveBX("current"), liveBX("weekly"), liveBX("monthly"));
-      renderEntryScorecard(grade, null, false, el);
+      renderEntryScorecard(grade, _lastLiveRs, false, el, _lastLiveST);
     };
 
     // ── DSC tab switching ─────────────────────────────────────────────────
@@ -848,6 +894,17 @@
         saveToStorage();
         // Show / refresh the live grade on any period change — same as the modal
         if (period !== "dailyBars") refreshLiveGrade();
+      });
+    });
+
+    // ── Live SuperTrend chips ─────────────────────────────────────────────
+    $$("[data-drawer-st]", dr).forEach(btn => {
+      btn.addEventListener("click", () => {
+        $$("[data-drawer-st]", dr).forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const val = btn.dataset.drawerSt;
+        _lastLiveST = val === "true" ? true : val === "false" ? false : null;
+        refreshLiveGrade();
       });
     });
 
@@ -886,10 +943,10 @@
           const rsData   = await computeEntryRS(h.sym, sectorEtf, h.kind);
           const rsResult = calcRSScore(rsData);
           _lastLiveRs = rsResult;
-          renderEntryScorecard(grade, rsResult, false, el);
+          renderEntryScorecard(grade, rsResult, false, el, _lastLiveST);
         } catch (_) {
           _lastLiveRs = null;
-          renderEntryScorecard(grade, null, false, el);
+          renderEntryScorecard(grade, null, false, el, _lastLiveST);
         }
       });
       if (drawerEtfInp) {
@@ -907,13 +964,14 @@
     if (histRecordBtn) {
       histRecordBtn.addEventListener("click", () => {
         const grade = calcBXGrade(liveBX("current"), liveBX("weekly"), liveBX("monthly"));
-        const finalGrade = _lastLiveRs ? rsAdjustGrade(grade, _lastLiveRs) : grade;
+        const afterRs    = _lastLiveRs ? rsAdjustGrade(grade, _lastLiveRs) : grade;
+        const finalGrade = stAdjustGrade(afterRs, _lastLiveST);
         const today = new Date().toISOString().slice(0, 10);
         const etf = dr.querySelector("#drawer-rs-etf")?.value.toUpperCase().trim() || null;
         const rec = {
           date: today, bxGrade: grade, finalGrade,
           current: liveBX("current"), weekly: liveBX("weekly"), monthly: liveBX("monthly"),
-          rsResult: _lastLiveRs, sectorEtf: etf,
+          rsResult: _lastLiveRs, sectorEtf: etf, st: _lastLiveST,
         };
         if (!h.bxHistory) h.bxHistory = [];
         const idx = h.bxHistory.findIndex(r => r.date === today);
@@ -2641,6 +2699,7 @@
       $$(".bx-color-opt", body).forEach(b => b.classList.toggle("active", b.dataset.colorVal === "oklch(0.35 0.01 250)"));
       const etfInput = $("#fbx-sector-etf");
       if (etfInput) etfInput.value = "";
+      $$("[data-fbx-st]", body).forEach(b => b.classList.toggle("active", b.dataset.fbxSt === "null"));
       const esc = $("#entry-scorecard");
       if (esc) esc.style.display = "none";
     };
@@ -2800,24 +2859,33 @@
         if (snameEl) snameEl.style.background = c;
       });
 
-      // Entry scorecard: update on any BX button click
+      // Entry scorecard: refresh on BX or ST chip change
       const _refreshScorecard = () => {
         const cur = parseFloat(formBxBody.querySelector("[data-fbx='current'].active")?.dataset.val) || 0;
         const wk  = parseFloat(formBxBody.querySelector("[data-fbx='weekly'].active")?.dataset.val)  || 0;
         const mo  = parseFloat(formBxBody.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
         const grade = calcBXGrade(cur, wk, mo);
-        renderEntryScorecard(grade, null);
+        renderEntryScorecard(grade, _pendingRsResult, false, null, _pendingST);
       };
       formBxBody.addEventListener("click", e => {
         if (e.target.closest("[data-fbx='current'],[data-fbx='weekly'],[data-fbx='monthly']")) {
           setTimeout(_refreshScorecard, 10);
         }
+        const stBtn = e.target.closest("[data-fbx-st]");
+        if (stBtn) {
+          $$("[data-fbx-st]", formBxBody).forEach(b => b.classList.remove("active"));
+          stBtn.classList.add("active");
+          const v = stBtn.dataset.fbxSt;
+          _pendingST = v === "true" ? true : v === "false" ? false : null;
+          setTimeout(_refreshScorecard, 10);
+        }
       });
     }
 
-    // RS calc button
-    let _pendingRsResult = null;   // captured when user clicks 计算RS, read at submit
+    // RS / ST state captured at form interaction time, read at submit
+    let _pendingRsResult = null;
     let _pendingRsEtf    = null;
+    let _pendingST       = null;
     const rsCalcBtn   = $("#fbx-rs-calc");
     const etfInput    = $("#fbx-sector-etf");
     if (rsCalcBtn) {
@@ -2831,15 +2899,15 @@
         const wk   = parseFloat(body?.querySelector("[data-fbx='weekly'].active")?.dataset.val)  || 0;
         const mo   = parseFloat(body?.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
         const grade = calcBXGrade(cur, wk, mo);
-        renderEntryScorecard(grade, null, true);
+        renderEntryScorecard(grade, null, true, null, _pendingST);
         try {
           const rsData   = await computeEntryRS(sym, sectorEtf, kind);
           const rsResult = calcRSScore(rsData);
           _pendingRsResult = rsResult;
           _pendingRsEtf    = sectorEtf;
-          renderEntryScorecard(grade, rsResult);
+          renderEntryScorecard(grade, rsResult, false, null, _pendingST);
         } catch (_) {
-          renderEntryScorecard(grade, null);
+          renderEntryScorecard(grade, null, false, null, _pendingST);
         }
       });
     }
@@ -2890,8 +2958,10 @@
           bx: (() => {
             const bxData = readFormBX();
             const ebxg = calcBXGrade(bxData.current, bxData.weekly, bxData.monthly);
-            const efg  = _pendingRsResult ? rsAdjustGrade(ebxg, _pendingRsResult) : ebxg;
+            const afterRs = _pendingRsResult ? rsAdjustGrade(ebxg, _pendingRsResult) : ebxg;
+            const efg     = stAdjustGrade(afterRs, _pendingST);
             bxData.entryBxGrade    = ebxg;
+            bxData.entryST         = _pendingST;
             bxData.entryFinalGrade = efg;
             bxData.entryRsResult   = _pendingRsResult;
             bxData.entrySectorEtf  = _pendingRsEtf;
@@ -2902,6 +2972,7 @@
         form.reset();
         _pendingRsResult = null;
         _pendingRsEtf    = null;
+        _pendingST       = null;
         resetFormBX();
         closeModal("new-position-modal");
         renderSimPending();
@@ -2940,8 +3011,10 @@
         bx: (() => {
           const bxData = readFormBX();
           const ebxg = calcBXGrade(bxData.current, bxData.weekly, bxData.monthly);
-          const efg  = _pendingRsResult ? rsAdjustGrade(ebxg, _pendingRsResult) : ebxg;
+          const afterRs = _pendingRsResult ? rsAdjustGrade(ebxg, _pendingRsResult) : ebxg;
+          const efg     = stAdjustGrade(afterRs, _pendingST);
           bxData.entryBxGrade    = ebxg;
+          bxData.entryST         = _pendingST;
           bxData.entryFinalGrade = efg;
           bxData.entryRsResult   = _pendingRsResult;
           bxData.entrySectorEtf  = _pendingRsEtf;
@@ -2954,6 +3027,7 @@
       form.reset();
       _pendingRsResult = null;
       _pendingRsEtf    = null;
+      _pendingST       = null;
       resetFormBX();
       closeModal("new-position-modal");
       if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); }
@@ -5351,6 +5425,7 @@
                   <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">笔数</th>
                   <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">胜率</th>
                   <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">均盈亏%</th>
+                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">ST做多%</th>
                   <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">总盈亏</th>
                 </tr></thead>
                 <tbody>
@@ -5363,11 +5438,15 @@
                     const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
                     const pnlCls = totalPnlG >= 0 ? "up" : "down";
                     const pctCls = parseFloat(avgPctG) >= 0 ? "up" : "down";
+                    const stPos = pos.filter(p => p.bx?.entryST === true).length;
+                    const stPct = Math.round(stPos / cnt * 100);
+                    const stStr = pos.some(p => p.bx?.entryST != null) ? stPct + "%" : "—";
                     return `<tr style="border-bottom:1px solid color-mix(in oklch,var(--line) 45%,transparent)">
                       <td style="padding:5px 0"><span class="mono" style="font-weight:700;color:${meta.color}">${grade}</span></td>
                       <td style="text-align:right;color:var(--fg-2);font-family:var(--f-mono);font-size:11px">${cnt}</td>
                       <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${wr >= 50 ? 'up' : 'down'}">${wr}%</td>
                       <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</td>
+                      <td style="text-align:right;color:var(--fg-2);font-family:var(--f-mono);font-size:11px">${stStr}</td>
                       <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${pnlCls}">${fmt.signed(totalPnlG)}</td>
                     </tr>`;
                   }).join("")}
