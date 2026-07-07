@@ -5415,44 +5415,41 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
           <div class="analytics-card-title">评级绩效 · Grade Performance</div>
-          <div class="analytics-card-sub">按开仓评级统计胜率 · 盈亏</div>
-          ${aGradeEntries.length === 0
-            ? `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`
-            : `<div style="margin-top:14px">
-              <table style="width:100%;border-collapse:collapse;font-size:11.5px">
-                <thead><tr style="color:var(--fg-2)">
-                  <th style="text-align:left;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">评级</th>
-                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">笔数</th>
-                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">胜率</th>
-                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">均盈亏%</th>
-                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">ST做多%</th>
-                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">总盈亏</th>
-                </tr></thead>
-                <tbody>
-                  ${aGradeEntries.map(({ grade, pos }) => {
-                    const cnt = pos.length;
-                    const wn = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
-                    const wr = Math.round(wn / cnt * 100);
-                    const totalPnlG = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
-                    const avgPctG = (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1);
-                    const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
-                    const pnlCls = totalPnlG >= 0 ? "up" : "down";
-                    const pctCls = parseFloat(avgPctG) >= 0 ? "up" : "down";
-                    const stPos = pos.filter(p => p.bx?.entryST === true).length;
-                    const stPct = Math.round(stPos / cnt * 100);
-                    const stStr = pos.some(p => p.bx?.entryST != null) ? stPct + "%" : "—";
-                    return `<tr style="border-bottom:1px solid color-mix(in oklch,var(--line) 45%,transparent)">
-                      <td style="padding:5px 0"><span class="mono" style="font-weight:700;color:${meta.color}">${grade}</span></td>
-                      <td style="text-align:right;color:var(--fg-2);font-family:var(--f-mono);font-size:11px">${cnt}</td>
-                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${wr >= 50 ? 'up' : 'down'}">${wr}%</td>
-                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</td>
-                      <td style="text-align:right;color:var(--fg-2);font-family:var(--f-mono);font-size:11px">${stStr}</td>
-                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${pnlCls}">${fmt.signed(totalPnlG)}</td>
-                    </tr>`;
-                  }).join("")}
-                </tbody>
-              </table>
-            </div>`}
+          <div class="analytics-card-sub">胜率 · 盈亏分布 · 按开仓评级</div>
+          ${(() => {
+            if (aGradeEntries.length === 0) return `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`;
+            const _maxAbs = Math.max(1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
+            const rows = aGradeEntries.map(({ grade, pos }) => {
+              const cnt       = pos.length;
+              const wn        = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
+              const wr        = Math.round(wn / cnt * 100);
+              const totalG    = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
+              const avgPctG   = (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1);
+              const meta      = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
+              const pnlCls    = totalG >= 0 ? "up" : "down";
+              const pctCls    = parseFloat(avgPctG) >= 0 ? "up" : "down";
+              const stPos     = pos.filter(p => p.bx?.entryST === true).length;
+              const stHasData = pos.some(p => p.bx?.entryST != null);
+              const stStr     = stHasData ? Math.round(stPos / cnt * 100) + "%" : "—";
+              const barPct    = Math.round(Math.abs(totalG) / _maxAbs * 100);
+              const barColor  = totalG >= 0 ? "var(--up)" : "var(--down)";
+              return `<div class="gp-row">
+                <span class="gp-grade" style="color:${meta.color}">${grade}</span>
+                <span class="gp-cnt">${cnt}</span>
+                <span class="gp-wr ${wr >= 50 ? "up" : "down"}">${wr}%</span>
+                <span class="gp-avg ${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</span>
+                <span class="gp-st">${stStr}</span>
+                <div class="gp-bar-wrap"><div class="gp-bar" style="background:${barColor};width:${barPct}%"></div></div>
+                <span class="gp-pnl ${pnlCls}">${fmt.signed(totalG)}</span>
+              </div>`;
+            }).join("");
+            return `<div class="gp-header">
+              <span class="gp-grade"></span><span class="gp-cnt">笔</span>
+              <span class="gp-wr">胜率</span><span class="gp-avg">均%</span>
+              <span class="gp-st">ST▲</span><span class="gp-bar-wrap"></span>
+              <span class="gp-pnl">总盈亏</span>
+            </div>${rows}`;
+          })()}
         </div>
 
         <div class="analytics-card" style="flex:1">
@@ -5515,34 +5512,7 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
       </div>
 
-      ${aGradeEntries.length > 0 ? (() => {
-        const _maxAbsPnl = Math.max(1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
-        return `<div class="analytics-card" style="margin-bottom:14px">
-        <div class="analytics-card-title">评级盈亏分布 · Grade P&L</div>
-        <div class="analytics-card-sub">各评级总盈亏金额 · 平均盈亏百分比</div>
-        <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
-          ${aGradeEntries.map(({ grade, pos }) => {
-            const cnt = pos.length;
-            const totalG = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
-            const avgPctG = cnt > 0 ? (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1) : "0.0";
-            const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
-            const barPct = Math.round(Math.abs(totalG) / _maxAbsPnl * 100);
-            const isPos = totalG >= 0;
-            const barColor = isPos ? "var(--up)" : "var(--down)";
-            return `<div style="display:flex;align-items:center;gap:8px">
-              <span style="flex-shrink:0;width:28px;text-align:center;font-family:var(--f-mono);font-size:12px;font-weight:700;color:${meta.color}">${grade}</span>
-              <div style="flex:1;display:flex;align-items:center;gap:6px">
-                <div style="flex:1;height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden">
-                  <div style="height:100%;border-radius:4px;background:${barColor};width:${barPct}%;min-width:${cnt>0?3:0}px;transition:width .4s"></div>
-                </div>
-                <span class="mono ${isPos ? 'up' : 'down'}" style="flex-shrink:0;width:70px;text-align:right;font-size:11px;font-weight:600">${fmt.signed(totalG)}</span>
-                <span class="mono" style="flex-shrink:0;width:50px;text-align:right;font-size:10px;color:var(--fg-2)">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</span>
-              </div>
-            </div>`;
-          }).join("")}
-        </div>
-      </div>`;
-      })() : ""}
+
 
       <div class="analytics-card" style="margin-bottom:14px">
         <div class="analytics-card-title">出场质量分析 · Exit Quality</div>
@@ -5928,14 +5898,42 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
   }
 
-  // ============ WATCHLIST ============
+  function wlGradeSummaryHTML() {
+    const graded = WATCHLIST.filter(w => w._entryFinalGrade);
+    if (graded.length === 0) return "";
+    const buckets = {};
+    GRADE_LADDER.forEach(g => { buckets[g] = []; });
+    graded.forEach(w => {
+      if (buckets[w._entryFinalGrade]) buckets[w._entryFinalGrade].push(w.sym);
+      else buckets[w._entryFinalGrade] = [w.sym];
+    });
+    const rows = [...GRADE_LADDER].reverse()
+      .map(g => ({ g, syms: buckets[g] || [] }))
+      .filter(r => r.syms.length > 0);
+    const chips = rows.map(({ g, syms }) => {
+      const meta  = BX_GRADE_META[g] || { color: "var(--fg-3)" };
+      const title = syms.join(", ");
+      return `<div class="wl-gs-chip" title="${title}" style="border-color:${meta.color};color:${meta.color};background:color-mix(in oklch,${meta.color} 10%,transparent)">
+        <span class="wl-gs-grade">${g}</span>
+        <span class="wl-gs-cnt">${syms.length}</span>
+      </div>`;
+    }).join("");
+    return `<div class="wl-grade-summary">
+      <div class="wl-gs-label">评级分布</div>
+      <div class="wl-gs-chips">${chips}</div>
+      <div class="wl-gs-total">${graded.length} / ${WATCHLIST.length} 已评级</div>
+    </div>`;
+  }
+
+    // ============ WATCHLIST ============
   function renderWatchlist() {
     const content = $("#watchlist-content");
     if (!content) return;
 
+    const _wlGS = wlGradeSummaryHTML();
     content.innerHTML = WATCHLIST.length === 0
       ? `<div style="text-align:center;padding:48px;color:var(--fg-3);font-size:13px">暂无列表记录</div>`
-      : WATCHLIST.map((item, idx) => watchlistCardHTML(item, idx, _readLocalAnalysis(item.sym))).join("");
+      : _wlGS + WATCHLIST.map((item, idx) => watchlistCardHTML(item, idx, _readLocalAnalysis(item.sym))).join("");
 
     $$(".wl-delete", content).forEach(btn => {
       btn.addEventListener("click", e => {
