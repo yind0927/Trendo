@@ -1567,7 +1567,8 @@
                <button class="close-pos-btn" data-sym="${h.sym}" title="平仓 (归档)"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
                <button class="delete-btn" data-sym="${h.sym}" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
              </div></td>`
-          : `<td style="width:40px;padding:6px 4px"><div class="row-actions">
+          : `<td style="width:60px;padding:6px 4px"><div class="row-actions">
+               <button class="restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
                <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
              </div></td>`;
         return `<tr class="${isSel}" data-sym="${h.sym}" data-idx="${i}">${cells}${actions}</tr>`;
@@ -1596,7 +1597,7 @@
 
       $$("#tbody tr").forEach(tr => {
         tr.addEventListener("click", e => {
-          if (e.target.closest(".close-pos-btn, .delete-btn")) return;
+          if (e.target.closest(".close-pos-btn, .delete-btn, .restore-btn")) return;
           openDrawer(rows[parseInt(tr.dataset.idx)]);
         });
       });
@@ -1612,6 +1613,12 @@
         btn.addEventListener("click", e => {
           e.stopPropagation();
           openDeleteModal(btn.dataset.sym, btn.dataset.from || "open");
+        });
+      });
+      $$(".restore-btn").forEach(btn => {
+        btn.addEventListener("click", e => {
+          e.stopPropagation();
+          restoreClosedPosition(btn.dataset.sym);
         });
       });
     }
@@ -1672,7 +1679,8 @@
     const actions = !isClosed
       ? `${flagBtn}<button class="hc-action close-pos-btn" data-sym="${h.sym}" title="平仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
          <button class="hc-action delete-btn" data-sym="${h.sym}" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`
-      : `<button class="hc-action delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+      : `<button class="hc-action ${opts.sim ? 'sim-restore-btn' : 'restore-btn'}" data-sym="${h.sym}" title="撤回至持仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+         <button class="hc-action delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
 
         const selectedCls = opts.selected ? " selected" : "";
     const flaggedCls  = opts.sim && h.flagged ? " sim-flagged" : "";
@@ -1749,6 +1757,8 @@
       btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); }));
     el.querySelectorAll(".delete-btn").forEach(btn =>
       btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); }));
+    el.querySelectorAll(".restore-btn").forEach(btn =>
+      btn.addEventListener("click", e => { e.stopPropagation(); restoreClosedPosition(btn.dataset.sym); }));
   }
 
   function renderSimHoldingsCards(rows) {
@@ -1790,6 +1800,8 @@
       btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); }));
     el.querySelectorAll(".delete-btn").forEach(btn =>
       btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); }));
+    el.querySelectorAll(".sim-restore-btn").forEach(btn =>
+      btn.addEventListener("click", e => { e.stopPropagation(); simRestoreClosedPosition(btn.dataset.sym); }));
   }
 
   function renderCell(h, id) {
@@ -1977,6 +1989,7 @@
       wireCCRecords(h, false);
     } else {
       wireClosedDrawerEdits(h, false);
+      wireDrawerRestoreButton(h, false);
     }
     wireExecRecordDeletes(h, false);
     wireDrawerSwipe(false);
@@ -2175,7 +2188,12 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             平仓出场
           </button>
-        </div>` : ""}
+        </div>` : `<div class="drawer-actions">
+          <button class="btn btn-restore-pos" id="drawer-restore-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            撤回平仓
+          </button>
+        </div>`}
       </div>
 
       <div class="drawer-body">
@@ -3227,6 +3245,53 @@
     saveToStorage();
     if (selectedSym === sym) closeDrawer();
     renderTable();
+  }
+
+  function restoreClosedPosition(sym) {
+    const records = CLOSED_POSITIONS.filter(h => h.sym === sym);
+    if (!records.length) return;
+    if (HOLDINGS.find(x => x.sym === sym)) { alert("持仓中已有该股票"); return; }
+    const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
+    const base = records[0];
+    const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = base;
+    restored.qty = totalQty;
+    restored.last = restored.cost;
+    recomputeHolding(restored, totalNotional);
+    HOLDINGS.push(restored);
+    for (let i = CLOSED_POSITIONS.length - 1; i >= 0; i--) {
+      if (CLOSED_POSITIONS[i].sym === sym) CLOSED_POSITIONS.splice(i, 1);
+    }
+    saveToStorage();
+    if (selectedSym === sym) closeDrawer();
+    renderTable(); renderOverview();
+  }
+
+  function simRestoreClosedPosition(sym) {
+    const records = SIM_CLOSED.filter(h => h.sym === sym);
+    if (!records.length) return;
+    if (SIM_HOLDINGS.find(x => x.sym === sym)) { alert("模拟仓中已有该持仓"); return; }
+    const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
+    const base = records[0];
+    const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = base;
+    restored.qty = totalQty;
+    restored.last = restored.cost;
+    recomputeHolding(restored, simNotional);
+    SIM_HOLDINGS.push(restored);
+    for (let i = SIM_CLOSED.length - 1; i >= 0; i--) {
+      if (SIM_CLOSED[i].sym === sym) SIM_CLOSED.splice(i, 1);
+    }
+    saveToStorage();
+    if (simSelectedSym === sym) closeSimDrawer();
+    renderSimOverview(); renderSimTable(); renderSimAnalytics();
+  }
+
+  function wireDrawerRestoreButton(h, isSim) {
+    const btn = $("#drawer-restore-btn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      if (isSim) simRestoreClosedPosition(h.sym);
+      else restoreClosedPosition(h.sym);
+    });
   }
 
   // ============ SEARCH / FILTERS / KEYBOARD ============
@@ -4660,18 +4725,7 @@
     $$(".sim-restore-btn", tbody).forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        const sym = btn.dataset.sym;
-        const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
-        if (idx === -1) return;
-        const h = SIM_CLOSED[idx];
-        if (SIM_HOLDINGS.find(x => x.sym === sym)) { alert("模拟仓中已有该持仓"); return; }
-        const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = h;
-        restored.last = restored.cost;
-        recomputeHolding(restored, simNotional);
-        SIM_HOLDINGS.push(restored);
-        SIM_CLOSED.splice(idx, 1);
-        saveToStorage();
-        renderSimOverview(); renderSimTable(); renderSimAnalytics();
+        simRestoreClosedPosition(btn.dataset.sym);
       });
     });
 
@@ -4773,6 +4827,7 @@
       wireCCRecords(h, true);
     } else {
       wireClosedDrawerEdits(h, true);
+      wireDrawerRestoreButton(h, true);
     }
     wireExecRecordDeletes(h, true);
     wireDrawerSwipe(true);
