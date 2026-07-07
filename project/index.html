@@ -2708,11 +2708,10 @@
   .mkt-gex-src { font-weight: 600; letter-spacing: 0.04em; color: var(--fg-3); margin-left: 6px; font-size: 9px; }
   .mkt-gex-unit { font-size: 20px; font-weight: 700; margin-left: 2px; }
   .mkt-gex-mode { font-size: 13px; font-weight: 700; }
-  .gx-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .gx-factor { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; border: 1px solid; font-size: 11px; font-weight: 700; letter-spacing: 0.03em; }
+  .gx-factor-tag { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 4px; border: 1px solid; font-size: 11px; font-weight: 700; font-family: var(--f-mono); letter-spacing: 0.02em; margin-left: 6px; }
   /* price-structure bar */
   .gx-bar { position: relative; height: 22px; margin: 8px 0 4px; }
-  .gx-bar-track { position: absolute; left: 0; right: 0; top: 7px; height: 8px; border-radius: 4px; }
+  .gx-bar-track { position: absolute; left: 0; right: 0; top: 7px; height: 8px; border-radius: 4px; opacity: 0.6; }
   .gx-tick { position: absolute; top: 1px; width: 0; transform: translateX(-50%); }
   .gx-tick::before { content: ""; display: block; width: 2px; height: 20px; margin: 0 auto; border-radius: 1px; }
   .gx-tick.put::before  { background: #22c55e; }
@@ -2722,14 +2721,14 @@
   .gx-spot { position: absolute; top: 4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-50%); background: var(--bg-0); border: 3px solid; box-shadow: 0 1px 4px rgba(0,0,0,.4); z-index: 2; }
   /* level pills */
   .gx-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .gx-lvl { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); }
+  .gx-lvl { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); border-left: 3px solid var(--line); }
   .gx-lvl-name { font-size: 9.5px; color: var(--fg-3); letter-spacing: 0.02em; }
-  .gx-lvl-val { font-size: 14px; font-weight: 700; font-family: var(--f-mono); }
+  .gx-lvl-val { font-size: 14px; font-weight: 700; font-family: var(--f-mono); color: var(--fg-0); }
   .gx-lvl-dist { font-size: 10px; font-family: var(--f-mono); color: var(--fg-2); }
-  .gx-lvl.put .gx-lvl-val  { color: #22c55e; }
-  .gx-lvl.call .gx-lvl-val { color: #ef4444; }
-  .gx-lvl.flip .gx-lvl-val { color: var(--warn); }
-  .gx-lvl.spot .gx-lvl-val { color: var(--fg-0); }
+  .gx-lvl.put  { border-left-color: #22c55e; }
+  .gx-lvl.flip { border-left-color: var(--warn); }
+  .gx-lvl.spot { border-left-color: var(--accent); }
+  .gx-lvl.call { border-left-color: #ef4444; }
   /* day change + percentile row */
   .gx-chgrow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12px; font-family: var(--f-mono); font-weight: 600; margin-top: -4px; color: var(--fg-2); }
   .gx-chgrow b { color: var(--fg-0); }
@@ -2850,7 +2849,8 @@
     .mkt-gex-card .mkt-card-row { flex-wrap: wrap; align-items: baseline; }
     .mkt-gex-card .mkt-card-val { font-size: 27px; }
     .mkt-gex-unit { font-size: 15px; }
-    .mkt-gex-mode { flex-basis: 100%; font-size: 12px; margin-top: 1px; }
+    .mkt-gex-mode { font-size: 12px; margin-top: 1px; }
+    .gx-factor-tag { font-size: 10px; padding: 1px 5px; margin-left: 4px; }
     .gx-lvl { padding: 5px 7px; }
     .gx-lvl-name { font-size: 9px; }
     .gx-lvl-val { font-size: 13px; }
@@ -4087,8 +4087,8 @@
   </div>
 </div>
 
-<script src="data.js?v=238"></script>
-<script src="desk.js?v=238"></script>
+<script src="data.js?v=239"></script>
+<script src="desk.js?v=239"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

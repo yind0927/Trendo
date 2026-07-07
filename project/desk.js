@@ -7620,14 +7620,26 @@
       </div>`;
   }
 
-  // GEX regime → color + plain-language interpretation. Driven by spot-vs-Flip.
-  function gexState(regime) {
-    if (regime === "negative") return { color: "#ef4444", en: "Negative Gamma", mode: "波动放大",
-      interp: "做市商净空 Gamma，对冲与行情同向——涨追涨、跌杀跌，波动被放大、下跌容易加速。策略：顺势跟随，止损放宽或先减仓，别过早抄底；跌破 Put Wall 会加速下行。" };
-    if (regime === "neutral")  return { color: "#eab308", en: "Neutral · At Flip", mode: "临界翻转",
-      interp: "价格贴近 Gamma Flip，波动性质随时切换。跌破 Flip 转负 Gamma（波动骤升），站上则转正（趋稳）。策略：轻仓、等方向确认，把 Flip 当多空分界线。" };
-    return { color: "#22c55e", en: "Positive Gamma", mode: "波动压制",
-      interp: "做市商净多 Gamma，对冲与行情反向——买跌卖涨，波动被压制、倾向震荡回归。策略：区间高抛低吸；Call Wall 附近易受阻回落、突破难持续，不追突破。" };
+  // GEX state → 5 levels matching the rules table, driven by distFlipPct.
+  function gexState(distFlipPct, regime) {
+    if (distFlipPct != null) {
+      if (distFlipPct > 2)     return { color: "#22c55e", label: "深度正 Gamma", mode: "波动压制",
+        interp: "做市商深度净多 Gamma，波动被强力压制，倾向区间震荡。策略：区间操作可加码；Call Wall 附近受阻概率高，不追突破。" };
+      if (distFlipPct > 0.3)   return { color: "#22c55e", label: "正 Gamma", mode: "波动压制",
+        interp: "做市商净多 Gamma，对冲与行情反向——买跌卖涨，波动被压制。策略：区间高抛低吸；Call Wall 附近易受阻回落，不追突破。" };
+      if (distFlipPct >= -0.3) return { color: "#eab308", label: "临界", mode: "临界翻转",
+        interp: "价格贴近 Gamma Flip，波动性质随时切换。跌破 Flip 转负 Gamma（波动骤升），站上则转正（趋稳）。策略：轻仓、等方向确认，把 Flip 当多空分界线。" };
+      if (distFlipPct >= -2)   return { color: "#f97316", label: "负 Gamma", mode: "波动放大",
+        interp: "做市商净空 Gamma，对冲与行情同向——涨追涨、跌杀跌，波动被放大。策略：顺势跟随，收紧或减仓；跌破 Put Wall 会加速下行。" };
+      return { color: "#ef4444", label: "深度负 Gamma", mode: "波动放大",
+        interp: "做市商深度净空 Gamma，波动剧烈放大、下跌容易加速。策略：大幅收仓、严格止损、勿抄底；跌破 Put Wall 进一步加速。" };
+    }
+    if (regime === "negative") return { color: "#ef4444", label: "负 Gamma", mode: "波动放大",
+      interp: "做市商净空 Gamma，对冲与行情同向，波动被放大。策略：顺势跟随，收紧或减仓。" };
+    if (regime === "neutral")  return { color: "#eab308", label: "临界", mode: "临界翻转",
+      interp: "价格贴近 Gamma Flip，波动性质随时切换。策略：轻仓、等方向确认。" };
+    return { color: "#22c55e", label: "正 Gamma", mode: "波动压制",
+      interp: "做市商净多 Gamma，波动被压制。策略：区间高抛低吸；Call Wall 附近不追突破。" };
   }
 
   // Collapsible rulebook at the bottom of the GEX card (same pattern as 市场模型详情)
@@ -7675,7 +7687,7 @@
   function mkGexCardHTML(gex) {
     const net = gex?.netGexBn ?? gex?.gexBn;
     if (!gex || net == null) return "";
-    const st   = gexState(gex.regime || (net >= 0 ? "positive" : "negative"));
+    const st   = gexState(gex.distFlipPct, gex.regime);
     const swing = gex.swingGexBn;
     const hero = swing != null ? swing : net;
     const heroSign = hero > 0 ? "+" : "";
@@ -7741,18 +7753,13 @@
         <div class="mkt-card-label">做市商 Gamma <span class="mkt-gex-src">SPX 1-30 · CBOE</span></div>
         <div class="mkt-card-row">
           <span class="mkt-card-val" style="color:${heroColor}">${heroSign}${hero}<span class="mkt-gex-unit">B</span></span>
-          <span class="mkt-gex-mode" style="color:${st.color}">${st.en} · ${st.mode}</span>
+          <span class="mkt-gex-mode" style="color:${st.color}">${st.label} · ${st.mode}</span>
+          <span class="gx-factor-tag" style="color:${facColor};border-color:${facColor}40;background:${facColor}12">×${factor}</span>
         </div>
         <div class="gx-hero-sub">波段口径 1-30</div>
         ${swingNote}
         ${chgRow}
         <div class="gx-net-ref">Net GEX<span class="gx-net-ref-tag">0-30</span> <b style="color:${netColor}">${netSign}${net}B</b></div>
-        <div class="gx-badges">
-          <div class="mkt-badge" style="color:${st.color};border-color:${st.color}40;background:${st.color}12">
-            <span class="mkt-badge-dot" style="background:${st.color}"></span>${st.en}
-          </div>
-          <div class="gx-factor" style="color:${facColor};border-color:${facColor}40;background:${facColor}12">仓位修正 ×${factor}</div>
-        </div>
         ${barHTML}
         <div class="gx-levels">
           ${distPill("Put Wall", gex.distPutPct, putWall, "put")}
