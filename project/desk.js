@@ -7677,6 +7677,7 @@
     if (!gex || net == null) return "";
     const st   = gexState(gex.regime || (net >= 0 ? "positive" : "negative"));
     const sign = net > 0 ? "+" : "";
+    const valColor = net > 0 ? "#22c55e" : net < 0 ? "#ef4444" : "var(--fg-1)";
     const factor = gex.posFactor ?? 1;
     const facColor = factor >= 1 ? "#22c55e" : factor >= 0.7 ? "#eab308" : "#ef4444";
     const opexWarn = gex.daysToOpEx <= 3;
@@ -7740,7 +7741,7 @@
       <div class="mkt-card mkt-gex-card">
         <div class="mkt-card-label">做市商 Gamma · GEX <span class="mkt-gex-src">SPX 0-30DTE · CBOE</span></div>
         <div class="mkt-card-row">
-          <span class="mkt-card-val" style="color:${st.color}">${sign}${net}<span class="mkt-gex-unit">B</span></span>
+          <span class="mkt-card-val" style="color:${valColor}">${sign}${net}<span class="mkt-gex-unit">B</span></span>
           <span class="mkt-gex-mode" style="color:${st.color}">${st.en} · ${st.mode}</span>
         </div>
         ${chgRow}

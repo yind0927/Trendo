@@ -161,13 +161,13 @@ async function calcGex(kvUrl, kvToken, force, debugMode) {
     return staleFallback();
   }
 
-  const argmax = obj => {
-    const ks = Object.keys(obj);
+  const argmax = (obj, filter) => {
+    const ks = Object.keys(obj).filter(filter || (() => true));
     if (!ks.length) return null;
     return +ks.reduce((b, k) => obj[k] > obj[b] ? k : b, ks[0]);
   };
-  const callWall = argmax(callByStrike);
-  const putWall  = argmax(putByStrike);
+  const callWall = argmax(callByStrike, k => +k >= spot);
+  const putWall  = argmax(putByStrike,  k => +k <= spot);
   const flip     = findGammaFlip(netByStrike, spot);
 
   const distFlipPct = flip     != null ? +((spot - flip)     / spot * 100).toFixed(2) : null;
