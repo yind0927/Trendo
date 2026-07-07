@@ -1506,6 +1506,15 @@
   }
   .btn-add-pos:hover { background: color-mix(in oklch, var(--up) 10%, transparent); border-color: var(--up); transform: translateY(-1px); }
   .btn-add-pos:active { transform: translateY(0); }
+  .btn-restore-pos {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    font-weight: 600; font-size: 13px; letter-spacing: 0.02em;
+    background: transparent; width: 100%;
+    color: var(--warn); border-color: var(--warn);
+    padding: 10px 0; transition: background .15s, border-color .15s, transform .1s;
+  }
+  .btn-restore-pos:hover { background: color-mix(in oklch, var(--warn) 12%, transparent); transform: translateY(-1px); }
+  .btn-restore-pos:active { transform: translateY(0); }
 
   /* Section 03 — Trading Plan */
   .plan-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
@@ -3975,8 +3984,8 @@
   </div>
 </div>
 
-<script src="data.js?v=227"></script>
-<script src="desk.js?v=227"></script>
+<script src="data.js?v=233"></script>
+<script src="desk.js?v=233"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
