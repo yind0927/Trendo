@@ -7738,15 +7738,15 @@
 
     return `
       <div class="mkt-card mkt-gex-card">
-        <div class="mkt-card-label">做市商 Gamma · GEX <span class="mkt-gex-src">SPX 0-30DTE · CBOE</span></div>
+        <div class="mkt-card-label">做市商 Gamma <span class="mkt-gex-src">SPX 1-30 · CBOE</span></div>
         <div class="mkt-card-row">
           <span class="mkt-card-val" style="color:${heroColor}">${heroSign}${hero}<span class="mkt-gex-unit">B</span></span>
           <span class="mkt-gex-mode" style="color:${st.color}">${st.en} · ${st.mode}</span>
         </div>
-        <div class="gx-hero-sub">波段口径 · 剔0DTE</div>
+        <div class="gx-hero-sub">波段口径 1-30</div>
         ${swingNote}
         ${chgRow}
-        <div class="gx-net-ref">Net GEX<span class="gx-net-ref-tag">含0DTE</span> <b style="color:${netColor}">${netSign}${net}B</b></div>
+        <div class="gx-net-ref">Net GEX<span class="gx-net-ref-tag">0-30</span> <b style="color:${netColor}">${netSign}${net}B</b></div>
         <div class="gx-badges">
           <div class="mkt-badge" style="color:${st.color};border-color:${st.color}40;background:${st.color}12">
             <span class="mkt-badge-dot" style="background:${st.color}"></span>${st.en}
