@@ -2415,7 +2415,8 @@
     const data = groupTrades(getReviewData());
     const total = data.length;
     const wins  = data.filter(h => (h.pnlFinal ?? 0) > 0).length;
-    const losses = total - wins;
+    const losses = data.filter(h => (h.pnlFinal ?? 0) < 0).length;
+    const evens = total - wins - losses;
     const winRatePct = total > 0 ? (wins / total * 100).toFixed(1) : null;
     const avgR   = total > 0 ? (data.reduce((s,h) => s + (h.rMult || 0), 0) / total).toFixed(2) : null;
     const avgDays = total > 0 ? (data.reduce((s,h) => s + (h.days || 1), 0) / total).toFixed(1) : null;
@@ -2452,9 +2453,10 @@
       const cnt = positions.length;
       if (cnt === 0) return "";
       const w = positions.filter(p => (p.pnlFinal ?? p.pnlDollar ?? 0) > 0).length;
-      const avgDollar = Math.round(positions.reduce((s, p) => s + (p.pnlFinal ?? p.pnlDollar ?? 0), 0) / cnt);
+      const totalDollar = Math.round(positions.reduce((s, p) => s + (p.pnlFinal ?? p.pnlDollar ?? 0), 0));
+      const avgPct = (positions.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1);
       const barW = Math.round(cnt / gradeMaxCnt * 100);
-      const dColor = avgDollar >= 0 ? "var(--up)" : "var(--down)";
+      const dColor = totalDollar >= 0 ? "var(--up)" : "var(--down)";
       const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
       return `
         <div class="bx-review-row">
@@ -2467,7 +2469,7 @@
             </div>
             <div class="bx-review-meta">
               <span class="mono" style="font-size:10px;color:var(--fg-2)">${cnt} 笔 · ${Math.round(w / cnt * 100)}% 胜</span>
-              <span class="mono" style="font-size:10px;color:${dColor}">${fmt.signed(avgDollar)}</span>
+              <span class="mono" style="font-size:10px;color:${dColor}">${fmt.signed(totalDollar)} · ${parseFloat(avgPct) >= 0 ? "+" : ""}${avgPct}%</span>
             </div>
           </div>
         </div>`;
@@ -2512,7 +2514,7 @@
         <div class="metric">
           <div class="label">胜率</div>
           <div class="v ${winRatePct !== null && parseFloat(winRatePct) >= 50 ? "up" : (winRatePct !== null ? "down" : "")}">${winRatePct !== null ? winRatePct : "—"}<span class="u">${winRatePct !== null ? "%" : ""}</span></div>
-          <div class="sub label" style="text-transform:none;letter-spacing:0">${total > 0 ? `${wins} 胜 / ${losses} 负 / ${total} 笔` : "暂无数据"}</div>
+          <div class="sub label" style="text-transform:none;letter-spacing:0">${total > 0 ? `${wins}胜 / ${losses}负${evens > 0 ? ` / ${evens}平` : ""} / ${total}笔` : "暂无数据"}</div>
         </div>
         <div class="metric">
           <div class="label">平均盈亏比</div>
@@ -5220,7 +5222,8 @@
     const open   = HOLDINGS;
     const total  = closed.length;
     const wins   = closed.filter(t => t.pnlFinal > 0);
-    const losses = closed.filter(t => t.pnlFinal <= 0);
+    const losses = closed.filter(t => t.pnlFinal < 0);
+    const evens  = closed.filter(t => t.pnlFinal === 0);
     const totalPnl  = closed.reduce((s, t) => s + t.pnlFinal, 0);
     const grossWin  = wins.reduce((s, t) => s + t.pnlFinal, 0);
     const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnlFinal, 0));
@@ -5305,9 +5308,9 @@
 
       <div class="analytics-metrics">
         ${ametric("已实现盈亏",  total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl), total ? `${total} 笔交易` : "暂无数据")}
-        ${ametric("胜率",        winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", winRate !== null ? `${wins.length}胜/${losses.length}负` : "")}
+        ${ametric("胜率",        winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", winRate !== null ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "")}
         ${ametric("盈亏因子",    pfStr || "—", parseFloat(pfStr) >= 1.5 ? "up" : "down", "总盈 ÷ 总亏")}
-        ${ametric("平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `+${avgWinPct}% · ${wins.length} 笔赢` : "")}
+        ${ametric("平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `+${avgWinPct}% · ${wins.length} 笔盈` : "")}
         ${ametric("平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `−${avgLossPct}% · ${losses.length} 笔亏` : "")}
         ${ametric("平均持仓",
           holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
@@ -5338,7 +5341,7 @@
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
           <div class="analytics-card-title">评级绩效 · Grade Performance</div>
-          <div class="analytics-card-sub">按开仓评级统计胜率 · 盈亏 · 平均R</div>
+          <div class="analytics-card-sub">按开仓评级统计胜率 · 盈亏</div>
           ${aGradeEntries.length === 0
             ? `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`
             : `<div style="margin-top:14px">
@@ -5347,7 +5350,7 @@
                   <th style="text-align:left;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">评级</th>
                   <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">笔数</th>
                   <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">胜率</th>
-                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">均R</th>
+                  <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">均盈亏%</th>
                   <th style="text-align:right;padding:3px 0 6px;font-weight:500;border-bottom:1px solid var(--line)">总盈亏</th>
                 </tr></thead>
                 <tbody>
@@ -5356,15 +5359,15 @@
                     const wn = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
                     const wr = Math.round(wn / cnt * 100);
                     const totalPnlG = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
-                    const avgRG = (pos.reduce((s, p) => s + (p.rMult || 0), 0) / cnt).toFixed(1);
+                    const avgPctG = (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1);
                     const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
                     const pnlCls = totalPnlG >= 0 ? "up" : "down";
-                    const rCls = parseFloat(avgRG) >= 0 ? "up" : "down";
+                    const pctCls = parseFloat(avgPctG) >= 0 ? "up" : "down";
                     return `<tr style="border-bottom:1px solid color-mix(in oklch,var(--line) 45%,transparent)">
                       <td style="padding:5px 0"><span class="mono" style="font-weight:700;color:${meta.color}">${grade}</span></td>
                       <td style="text-align:right;color:var(--fg-2);font-family:var(--f-mono);font-size:11px">${cnt}</td>
                       <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${wr >= 50 ? 'up' : 'down'}">${wr}%</td>
-                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${rCls}">${parseFloat(avgRG) >= 0 ? "+" : ""}${avgRG}R</td>
+                      <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</td>
                       <td style="text-align:right;font-family:var(--f-mono);font-size:11px" class="${pnlCls}">${fmt.signed(totalPnlG)}</td>
                     </tr>`;
                   }).join("")}
@@ -5433,32 +5436,34 @@
         </div>
       </div>
 
-      ${aGradeEntries.length > 0 ? `<div class="analytics-card" style="margin-bottom:14px">
+      ${aGradeEntries.length > 0 ? (() => {
+        const _maxAbsPnl = Math.max(1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
+        return `<div class="analytics-card" style="margin-bottom:14px">
         <div class="analytics-card-title">评级盈亏分布 · Grade P&L</div>
-        <div class="analytics-card-sub">各评级平均R倍数对比</div>
+        <div class="analytics-card-sub">各评级总盈亏金额 · 平均盈亏百分比</div>
         <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
           ${aGradeEntries.map(({ grade, pos }) => {
             const cnt = pos.length;
-            const avgRG = pos.reduce((s, p) => s + (p.rMult || 0), 0) / cnt;
-            const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
-            const maxAbsR = Math.max(0.1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.rMult || 0), 0) / e.pos.length)));
-            const barPct = Math.round(Math.abs(avgRG) / maxAbsR * 100);
-            const isPos = avgRG >= 0;
-            const barColor = isPos ? "var(--up)" : "var(--down)";
             const totalG = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
+            const avgPctG = cnt > 0 ? (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1) : "0.0";
+            const meta = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
+            const barPct = Math.round(Math.abs(totalG) / _maxAbsPnl * 100);
+            const isPos = totalG >= 0;
+            const barColor = isPos ? "var(--up)" : "var(--down)";
             return `<div style="display:flex;align-items:center;gap:8px">
               <span style="flex-shrink:0;width:28px;text-align:center;font-family:var(--f-mono);font-size:12px;font-weight:700;color:${meta.color}">${grade}</span>
               <div style="flex:1;display:flex;align-items:center;gap:6px">
                 <div style="flex:1;height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden">
                   <div style="height:100%;border-radius:4px;background:${barColor};width:${barPct}%;min-width:${cnt>0?3:0}px;transition:width .4s"></div>
                 </div>
-                <span class="mono ${isPos ? 'up' : 'down'}" style="flex-shrink:0;width:50px;text-align:right;font-size:11px;font-weight:600">${isPos?"+":""}${avgRG.toFixed(1)}R</span>
-                <span class="mono" style="flex-shrink:0;width:65px;text-align:right;font-size:10px;color:var(--fg-2)">${fmt.signed(totalG)}</span>
+                <span class="mono ${isPos ? 'up' : 'down'}" style="flex-shrink:0;width:70px;text-align:right;font-size:11px;font-weight:600">${fmt.signed(totalG)}</span>
+                <span class="mono" style="flex-shrink:0;width:50px;text-align:right;font-size:10px;color:var(--fg-2)">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</span>
               </div>
             </div>`;
           }).join("")}
         </div>
-      </div>` : ""}
+      </div>`;
+      })() : ""}
 
       <div class="analytics-card" style="margin-bottom:14px">
         <div class="analytics-card-title">出场质量分析 · Exit Quality</div>
