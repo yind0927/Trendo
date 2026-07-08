@@ -1758,7 +1758,19 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>
         <div class="hc-head-right">
-          <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
+          <div class="hc-head-badges">
+            ${!isClosed ? (() => {
+              const grade = h.bx?.entryFinalGrade;
+              if (grade) {
+                const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
+                const rs = h.bx?.entryRsResult;
+                const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
+                return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:color-mix(in oklch,${meta.color} 12%,transparent)">${grade}</span>${rsLabel}`;
+              }
+              return "";
+            })() : ""}
+            <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
+          </div>
           <div class="hc-actions">${actions}</div>
         </div>
       </div>
@@ -1768,16 +1780,6 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="hc-pct ${pnlSign}">${fmt.pct(pct)}</span>
           <span class="hc-sep muted">·</span>
           <span class="hc-days muted">${h.days ?? 0}天</span>
-          ${!isClosed ? (() => {
-            const grade = h.bx?.entryFinalGrade;
-            if (grade) {
-              const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
-              const rs = h.bx?.entryRsResult;
-              const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
-              return `<span class="hc-sep muted">·</span><span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:color-mix(in oklch,${meta.color} 12%,transparent)">${grade}</span>${rsLabel}`;
-            }
-            return `<span class="hc-sep muted">·</span><span class="hc-grade-chip hc-grade-empty">—</span>`;
-          })() : ""}
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>

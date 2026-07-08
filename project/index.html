@@ -1329,10 +1329,9 @@
   .bxg-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; }
   .bxg-val { font-family: var(--f-mono); font-weight: 800; font-size: 13px; line-height: 1; }
   .bxg-rs { font-family: var(--f-mono); font-size: 9px; color: var(--fg-3); }
-  /* Card mode grade chip (inline in pnl row) */
-  .hc-grade-chip { font-family: var(--f-mono); font-weight: 800; font-size: 11px; line-height: 1; padding: 2px 6px; border-radius: 5px; border: 1.5px solid; letter-spacing: 0.02em; }
-  .hc-grade-empty { color: var(--fg-3); border-color: var(--line); background: transparent; }
-  .hc-grade-rs { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-3); }
+  /* Card mode grade chip — top-right corner, always aligned */
+  .hc-grade-chip { font-family: var(--f-mono); font-weight: 800; font-size: 10.5px; line-height: 1; padding: 2px 6px; border-radius: 5px; border: 1.5px solid; letter-spacing: 0.02em; white-space: nowrap; }
+  .hc-grade-rs { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-3); white-space: nowrap; }
 
   /* TABS */
   .panel-head .tab {
@@ -2299,6 +2298,7 @@
     margin-bottom: 10px;
   }
   .hc-head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+  .hc-head-badges { display: flex; align-items: center; gap: 5px; }
   .hc-actions { display: flex; gap: 4px; }
   .hc-action {
     all: unset; cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -4132,8 +4132,8 @@
   </div>
 </div>
 
-<script src="data.js?v=242"></script>
-<script src="desk.js?v=242"></script>
+<script src="data.js?v=243"></script>
+<script src="desk.js?v=243"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
