@@ -1014,9 +1014,10 @@ function rsAdjustGrade(grade, rsResult) {
   let pendingDeleteSym = null, pendingDeleteFrom = null;
   let currentPage = "desk";
   let journalFilter = "all";
-  let equityPeriod = "week";
-  let calYear  = new Date().getFullYear();
-  let calMonth = new Date().getMonth();
+  let equityPeriod  = "week";
+  let calYear       = new Date().getFullYear();
+  let calMonth      = new Date().getMonth();
+  let _wlGradeFilter = null;
   let dailyPnlLog = {}; // { "YYYY-MM-DD": dailyChangeDollars }
   let histCache   = {}; // { yahooSym: { "YYYY-MM-DD": closePrice } } — in-memory, not persisted
   let histPnlLog  = {}; // { "YYYY-MM-DD": computedDelta } — built from histCache
@@ -5412,11 +5413,10 @@ function rsAdjustGrade(grade, rsResult) {
         <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136, "ec-main")}</div>
       </div>
 
-      <div class="analytics-chart-row">
-        <div class="analytics-card" style="flex:1">
-          <div class="analytics-card-title">评级绩效 · Grade Performance</div>
-          <div class="analytics-card-sub">胜率 · 盈亏分布 · 按开仓评级</div>
-          ${(() => {
+      <div class="analytics-card" style="margin-bottom:14px">
+        <div class="analytics-card-title">评级绩效 · Grade Performance</div>
+        <div class="analytics-card-sub">胜率 · 盈亏分布 · 按开仓评级</div>
+        ${(() => {
             if (aGradeEntries.length === 0) return `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`;
             const _maxAbs = Math.max(1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
             const rows = aGradeEntries.map(({ grade, pos }) => {
@@ -5450,8 +5450,9 @@ function rsAdjustGrade(grade, rsResult) {
               <span class="gp-pnl">总盈亏</span>
             </div>${rows}`;
           })()}
-        </div>
+      </div>
 
+      <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
           <div class="analytics-card-title">R 倍数分布 · R-Multiple</div>
           <div class="analytics-card-sub">出场质量 · 按区间统计</div>
@@ -5474,6 +5475,7 @@ function rsAdjustGrade(grade, rsResult) {
                </div>`}
         </div>
       </div>
+
       ${pnlCalendarHTML(calYear, calMonth)}
 
       <div class="analytics-chart-row">
@@ -5899,30 +5901,56 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function wlGradeSummaryHTML() {
-    const graded = WATCHLIST.filter(w => w._entryFinalGrade);
+    const graded = WATCHLIST.filter(w => _wlEffectiveGrade(w));
     if (graded.length === 0) return "";
     const buckets = {};
     GRADE_LADDER.forEach(g => { buckets[g] = []; });
     graded.forEach(w => {
-      if (buckets[w._entryFinalGrade]) buckets[w._entryFinalGrade].push(w.sym);
-      else buckets[w._entryFinalGrade] = [w.sym];
+      const g = _wlEffectiveGrade(w);
+      if (g) { if (buckets[g]) buckets[g].push(w.sym); else buckets[g] = [w.sym]; }
     });
     const rows = [...GRADE_LADDER].reverse()
       .map(g => ({ g, syms: buckets[g] || [] }))
       .filter(r => r.syms.length > 0);
+    const allBtn = _wlGradeFilter
+      ? `<button class="wl-gs-all" data-wl-grade-all>全部</button>`
+      : "";
     const chips = rows.map(({ g, syms }) => {
-      const meta  = BX_GRADE_META[g] || { color: "var(--fg-3)" };
-      const title = syms.join(", ");
-      return `<div class="wl-gs-chip" title="${title}" style="border-color:${meta.color};color:${meta.color};background:color-mix(in oklch,${meta.color} 10%,transparent)">
+      const meta    = BX_GRADE_META[g] || { color: "var(--fg-3)" };
+      const isActive = _wlGradeFilter === g;
+      const dimmed  = _wlGradeFilter && !isActive;
+      return `<button class="wl-gs-chip${isActive ? " active" : ""}" data-wl-grade="${g}"
+        title="${syms.join(", ")}"
+        style="border-color:${meta.color};color:${meta.color};background:color-mix(in oklch,${meta.color} ${isActive ? 18 : 10}%,transparent);opacity:${dimmed ? 0.4 : 1}">
         <span class="wl-gs-grade">${g}</span>
         <span class="wl-gs-cnt">${syms.length}</span>
-      </div>`;
+      </button>`;
     }).join("");
-    return `<div class="wl-grade-summary">
-      <div class="wl-gs-label">评级分布</div>
+    return `<div class="wl-grade-summary" id="wl-gs-bar">
+      <div class="wl-gs-label">评级筛选</div>
       <div class="wl-gs-chips">${chips}</div>
-      <div class="wl-gs-total">${graded.length} / ${WATCHLIST.length} 已评级</div>
+      ${allBtn}
+      <div class="wl-gs-total">${graded.length}<span class="wl-gs-total-sep">/</span>${WATCHLIST.length} 已评级</div>
     </div>`;
+  }
+
+  function _refreshWlSummary(content) {
+    const bar = $("#wl-gs-bar", content);
+    if (bar) bar.outerHTML = wlGradeSummaryHTML();
+    _wireWlSummary(content);
+  }
+
+  function _wireWlSummary(content) {
+    $$("[data-wl-grade]", content).forEach(chip => {
+      chip.addEventListener("click", () => {
+        const g = chip.dataset.wlGrade;
+        _wlGradeFilter = (_wlGradeFilter === g) ? null : g;
+        renderWatchlist();
+      });
+    });
+    $$("[data-wl-grade-all]", content).forEach(btn => {
+      btn.addEventListener("click", () => { _wlGradeFilter = null; renderWatchlist(); });
+    });
   }
 
     // ============ WATCHLIST ============
@@ -5931,9 +5959,13 @@ function rsAdjustGrade(grade, rsResult) {
     if (!content) return;
 
     const _wlGS = wlGradeSummaryHTML();
+    const _wlVisible = WATCHLIST.map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => !_wlGradeFilter || _wlEffectiveGrade(item) === _wlGradeFilter);
     content.innerHTML = WATCHLIST.length === 0
       ? `<div style="text-align:center;padding:48px;color:var(--fg-3);font-size:13px">暂无列表记录</div>`
-      : _wlGS + WATCHLIST.map((item, idx) => watchlistCardHTML(item, idx, _readLocalAnalysis(item.sym))).join("");
+      : _wlGS + (_wlVisible.length === 0
+          ? `<div style="text-align:center;padding:32px;color:var(--fg-3);font-size:12px">无 ${_wlGradeFilter} 评级股票</div>`
+          : _wlVisible.map(({ item, idx }) => watchlistCardHTML(item, idx, _readLocalAnalysis(item.sym))).join(""));
 
     $$(".wl-delete", content).forEach(btn => {
       btn.addEventListener("click", e => {
@@ -5974,13 +6006,38 @@ function rsAdjustGrade(grade, rsResult) {
         if (!item._bx) item._bx = { daily: 0, weekly: 0, monthly: 0 };
         item._bx[period] = val;
         const bxg = calcBXGrade(item._bx.daily ?? 0, item._bx.weekly ?? 0, item._bx.monthly ?? 0);
-        item._entryBxGrade   = bxg;
-        item._entryFinalGrade = item._entryRsResult ? rsAdjustGrade(bxg, item._entryRsResult) : bxg;
+        item._entryBxGrade    = bxg;
+        const afterRsB = item._entryRsResult ? rsAdjustGrade(bxg, item._entryRsResult) : bxg;
+        item._entryFinalGrade = stAdjustGrade(afterRsB, item._wlST ?? null);
         saveToStorage();
-        // update active state on this row's buttons
         $$(`[data-wl-idx="${idx}"][data-period="${period}"]`, content).forEach(b =>
           b.classList.toggle("active", parseInt(b.dataset.val) === val));
         _updateWlEntryGrade(content, idx, item);
+        _refreshWlSummary(content);
+      });
+    });
+
+    // Grade summary chip filter
+    _wireWlSummary(content);
+
+    // ST buttons on watchlist cards
+    $$(".wl-st-btn", content).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx  = parseInt(btn.dataset.wlIdx);
+        const item = WATCHLIST[idx];
+        if (!item) return;
+        const val = btn.dataset.wlSt;
+        const newST = val === "true" ? true : val === "false" ? false : null;
+        item._wlST = (item._wlST === newST) ? null : newST;
+        $$(`.wl-st-btn[data-wl-idx="${idx}"]`, content).forEach(b =>
+          b.classList.toggle("active", String(item._wlST) === b.dataset.wlSt));
+        const bxg = item._entryBxGrade ||
+          calcBXGrade(item._bx?.daily ?? 0, item._bx?.weekly ?? 0, item._bx?.monthly ?? 0);
+        const afterRs = item._entryRsResult ? rsAdjustGrade(bxg, item._entryRsResult) : bxg;
+        item._entryFinalGrade = stAdjustGrade(afterRs, item._wlST ?? null);
+        saveToStorage();
+        _updateWlEntryGrade(content, idx, item);
+        _refreshWlSummary(content);
       });
     });
 
@@ -6013,7 +6070,8 @@ function rsAdjustGrade(grade, rsResult) {
           const bxg = item._entryBxGrade ||
             calcBXGrade(item._bx?.daily ?? 0, item._bx?.weekly ?? 0, item._bx?.monthly ?? 0);
           item._entryBxGrade    = bxg;
-          item._entryFinalGrade = rsAdjustGrade(bxg, rsResult);
+          const afterRsR = rsAdjustGrade(bxg, rsResult);
+          item._entryFinalGrade = stAdjustGrade(afterRsR, item._wlST ?? null);
           saveToStorage();
           _updateWlEntryGrade(content, idx, item);
         } catch (_) {
@@ -6029,19 +6087,32 @@ function rsAdjustGrade(grade, rsResult) {
     fetchWatchlistPrices();
   }
 
+  function _wlEffectiveGrade(item) {
+    const bx = item._bx;
+    if (!bx && !item._entryBxGrade) return null;
+    const bxg = item._entryBxGrade ||
+      (bx ? calcBXGrade(bx.daily ?? 0, bx.weekly ?? 0, bx.monthly ?? 0) : null);
+    if (!bxg) return null;
+    const afterRs = item._entryRsResult ? rsAdjustGrade(bxg, item._entryRsResult) : bxg;
+    return stAdjustGrade(afterRs, item._wlST ?? null);
+  }
+
   function _wlEntryGradeHTML(item) {
     const bx  = item._bx;
     const bxg = item._entryBxGrade ||
       (bx ? calcBXGrade(bx.daily ?? 0, bx.weekly ?? 0, bx.monthly ?? 0) : null);
     if (!bxg) return `<div class="dsc-empty">选择BX评分后显示评级</div>`;
-    const rs    = item._entryRsResult;
-    const fg    = item._entryFinalGrade || (rs ? rsAdjustGrade(bxg, rs) : bxg);
-    const meta  = BX_GRADE_META[fg]  || BX_GRADE_META["C"];
-    const bxMeta = BX_GRADE_META[bxg] || BX_GRADE_META["C"];
-    const changed = rs && fg !== bxg;
+    const rs      = item._entryRsResult;
+    const afterRs = rs ? rsAdjustGrade(bxg, rs) : bxg;
+    const fg      = stAdjustGrade(afterRs, item._wlST ?? null);
+    const meta    = BX_GRADE_META[fg]  || BX_GRADE_META["C"];
+    const bxMeta  = BX_GRADE_META[bxg] || BX_GRADE_META["C"];
+    const changed = fg !== bxg;
+    const stTag   = item._wlST != null
+      ? `<span class="esc-st-tag ${item._wlST ? "up" : "down"}" style="margin-left:4px">${item._wlST ? "▲ 做多" : "▼ 做空"}</span>` : "";
     const gradeChip = changed
-      ? `<span class="dsc-grade-orig" style="color:${bxMeta.color}">${bxg}</span><span class="dsc-arrow">→</span><span class="dsc-grade-val" style="color:${meta.color}">${fg}</span>`
-      : `<span class="dsc-grade-val" style="color:${meta.color}">${fg}</span>`;
+      ? `<span class="dsc-grade-orig" style="color:${bxMeta.color}">${bxg}</span><span class="dsc-arrow">→</span><span class="dsc-grade-val" style="color:${meta.color}">${fg}</span>${stTag}`
+      : `<span class="dsc-grade-val" style="color:${meta.color}">${fg}</span>${stTag}`;
     let rsRowsHTML = "";
     if (rs) {
       const fmt = v => v == null ? "N/A" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -6170,6 +6241,12 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     };
     const sectorEtf = bx.sectorEtf || "";
+    const wlST = item._wlST;
+    const stBtns = [
+      { val: "null",  cls: "bx-neu",  label: "—",  sub: "未填" },
+      { val: "true",  cls: "bx-up",   label: "▲",  sub: "做多" },
+      { val: "false", cls: "bx-down", label: "▼",  sub: "做空" },
+    ].map(o => `<button type="button" class="bx-st-btn wl-st-btn ${o.cls} ${String(wlST ?? null) === o.val ? "active" : ""}" data-wl-idx="${idx}" data-wl-st="${o.val}"><span class="bx-val">${o.label}</span><span class="bx-sub">${o.sub}</span></button>`).join("");
     const entrySection = `
       <div class="wl-section">
         <div class="wl-section-hd"><span class="wl-section-lbl">入场分析</span></div>
@@ -6179,6 +6256,10 @@ function rsAdjustGrade(grade, rsResult) {
             ${periodRow("Current BX", "daily")}
             ${periodRow("Weekly BX", "weekly")}
             ${periodRow("Monthly BX", "monthly")}
+            <div class="bx-row" style="margin-top:4px">
+              <div class="bx-row-label">SuperTrend <span style="color:var(--accent);font-size:9px;text-transform:none;letter-spacing:0;font-weight:400">(日线)</span></div>
+              <div class="bx-st-seg">${stBtns}</div>
+            </div>
           </div>
           <div class="wl-module" style="display:flex;flex-direction:column;gap:8px">
             <div class="wl-module-hd" style="margin-bottom:2px">相对强度 RS</div>

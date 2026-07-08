@@ -1845,24 +1845,29 @@
   }
   .analytics-card-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-1); }
   .analytics-card-sub { font-size: 10.5px; color: var(--fg-3); margin-top: 2px; font-family: var(--f-mono); }
-  /* Grade Performance combined rows */
-  .gp-header, .gp-row { display: grid; grid-template-columns: 28px 22px 36px 44px 28px 1fr 64px; align-items: center; gap: 6px; padding: 4px 0; }
-  .gp-header { margin-top: 12px; border-bottom: 1px solid var(--line); padding-bottom: 5px; font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); font-family: var(--f-mono); font-weight: 500; }
+  /* Grade Performance combined rows — full width */
+  .gp-header, .gp-row { display: grid; grid-template-columns: 36px 32px 46px 60px 40px 1fr 84px; align-items: center; gap: 10px; padding: 5px 0; }
+  .gp-header { margin-top: 12px; border-bottom: 1px solid var(--line); padding-bottom: 6px; font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); font-family: var(--f-mono); font-weight: 500; }
   .gp-row { border-bottom: 1px solid color-mix(in oklch,var(--line) 40%,transparent); }
-  .gp-grade { font-family: var(--f-mono); font-weight: 700; font-size: 12px; }
-  .gp-cnt, .gp-st { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); text-align: right; }
-  .gp-wr, .gp-avg { font-family: var(--f-mono); font-size: 11px; text-align: right; }
-  .gp-bar-wrap { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+  .gp-grade { font-family: var(--f-mono); font-weight: 700; font-size: 13px; }
+  .gp-cnt, .gp-st { font-family: var(--f-mono); font-size: 11px; color: var(--fg-3); text-align: right; }
+  .gp-wr, .gp-avg { font-family: var(--f-mono); font-size: 11.5px; text-align: right; }
+  .gp-bar-wrap { height: 7px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
   .gp-bar { height: 100%; border-radius: 3px; transition: width .4s; min-width: 0; }
-  .gp-pnl { font-family: var(--f-mono); font-size: 11px; text-align: right; font-weight: 600; }
-  /* Watchlist grade summary */
-  .wl-grade-summary { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 14px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; flex-wrap: wrap; }
+  .gp-pnl { font-family: var(--f-mono); font-size: 11.5px; text-align: right; font-weight: 600; }
+  /* Watchlist grade summary + filter */
+  .wl-grade-summary { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 9px 13px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; flex-wrap: wrap; }
   .wl-gs-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); flex-shrink: 0; }
-  .wl-gs-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
-  .wl-gs-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 20px; border: 1px solid; cursor: default; }
+  .wl-gs-chips { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; }
+  .wl-gs-chip { all: unset; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; border: 1px solid; cursor: pointer; transition: opacity .12s, transform .1s; }
+  .wl-gs-chip:hover { transform: scale(1.04); }
+  .wl-gs-chip.active { box-shadow: 0 0 0 2px currentColor; }
   .wl-gs-grade { font-family: var(--f-mono); font-weight: 700; font-size: 12px; }
   .wl-gs-cnt { font-family: var(--f-mono); font-size: 10px; opacity: .75; }
+  .wl-gs-all { all: unset; font-size: 10.5px; color: var(--fg-3); border: 1px solid var(--line); border-radius: 12px; padding: 3px 9px; cursor: pointer; flex-shrink: 0; transition: background .1s; }
+  .wl-gs-all:hover { background: var(--bg-3); }
   .wl-gs-total { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); flex-shrink: 0; }
+  .wl-gs-total-sep { margin: 0 2px; }
   /* Exit Quality Analysis */
   .eq-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
   .eq-summary-card { background: var(--bg-2); border-radius: 10px; padding: 12px 14px; }
@@ -4127,8 +4132,8 @@
   </div>
 </div>
 
-<script src="data.js?v=241"></script>
-<script src="desk.js?v=241"></script>
+<script src="data.js?v=242"></script>
+<script src="desk.js?v=242"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
