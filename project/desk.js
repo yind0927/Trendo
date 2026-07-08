@@ -1758,15 +1758,17 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>
         <div class="hc-head-right">
-          <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
-          ${!isClosed ? (() => {
-            const grade = h.bx?.entryFinalGrade;
-            if (!grade) return "";
-            const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
-            const rs = h.bx?.entryRsResult;
-            const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
-            return `<div class="hc-grade-row"><span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:color-mix(in oklch,${meta.color} 12%,transparent)">${grade}</span>${rsLabel}</div>`;
-          })() : ""}
+          <div class="hc-head-top">
+            ${!isClosed ? (() => {
+              const grade = h.bx?.entryFinalGrade;
+              if (!grade) return "";
+              const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
+              const rs = h.bx?.entryRsResult;
+              const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
+              return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:color-mix(in oklch,${meta.color} 12%,transparent)">${grade}</span>${rsLabel}`;
+            })() : ""}
+            <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
+          </div>
           <div class="hc-actions">${actions}</div>
         </div>
       </div>
