@@ -326,8 +326,8 @@
     // 管理：持仓管理、出场与风险
     { id: "mgmt_patient", label: "耐心持有",    color: "var(--up)",     group: "管理" },
     { id: "mgmt_exit_ok", label: "出场及时",    color: "var(--up)",     group: "管理" },
-    { id: "mgmt_exit_e",  label: "过早平仓",    color: "var(--warn)",   group: "管理" },
     { id: "mgmt_exit_late", label: "出场过晚",  color: "var(--warn)",   group: "管理" },
+    { id: "mgmt_exit_e",  label: "过早平仓",    color: "var(--warn)",   group: "管理" },
     { id: "mgmt_trail",   label: "移动止损失误", color: "var(--down)",   group: "管理" },
     { id: "mgmt_stop",    label: "止损过宽",    color: "var(--warn)",   group: "管理" },
     { id: "risk_earn",    label: "财报风险",    color: "var(--warn)",   group: "管理" },
@@ -4157,7 +4157,7 @@ function rsAdjustGrade(grade, rsResult) {
     const taggedClosed = closedItems.filter(x => x.h.journalTags?.length);
     if (taggedClosed.length < 2) return "";
     const wins   = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) > 0);
-    const losses  = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) <= 0);
+    const losses  = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) < 0);
     const countTags = items => {
       const cnt = {};
       items.forEach(x => (x.h.journalTags || []).forEach(id => { cnt[id] = (cnt[id] || 0) + 1; }));
@@ -4324,6 +4324,10 @@ function rsAdjustGrade(grade, rsResult) {
         if (tags.has(tagId)) tags.delete(tagId); else tags.add(tagId);
         const newTags = [...tags];
         _journalSaveField(arr, sym, entry, cost, x => { x.journalTags = newTags; });
+        // Update in-memory closedItems/openItems so summary refresh sees fresh tags
+        const _itemsToSearch = from === "closed" ? closedItems : openItems;
+        const _itm = _itemsToSearch.find(x => x.h.sym === sym && x.h.entry === entry && Math.abs(x.h.cost - parseFloat(cost)) < 0.001);
+        if (_itm) _itm.h.journalTags = newTags;
         // Update chip appearance in place
         const tagDef = JOURNAL_TAGS.find(t => t.id === tagId);
         const active = tags.has(tagId);
@@ -5569,6 +5573,51 @@ function rsAdjustGrade(grade, rsResult) {
             </div>${rows}`;
           })()}
       </div>
+
+      ${(() => {
+        const bxDayDefs = [
+          { key: "0-5",  label: "初期", sub: "0–5d",  color: "var(--orange)" },
+          { key: "5-15", label: "中期", sub: "5–15d", color: "var(--warn)" },
+          { key: "15+",  label: "延续", sub: "15+d",  color: "var(--accent)" },
+        ];
+        const bxEntries = [
+          ...bxDayDefs.map(d => ({ ...d, pos: closed.filter(h => h.bx?.dailyBars === d.key) })).filter(e => e.pos.length > 0),
+        ];
+        const bxNoDay = closed.filter(h => !h.bx?.dailyBars);
+        if (bxNoDay.length > 0) bxEntries.push({ key: "—", label: "—", sub: "未记录", color: "var(--fg-3)", pos: bxNoDay });
+        if (bxEntries.every(e => e.key === "—")) return "";
+        const _bxMax = Math.max(1, ...bxEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
+        const bxRows = bxEntries.map(({ label, sub, color, pos }) => {
+          const cnt = pos.length;
+          const wn  = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
+          const wr  = Math.round(wn / cnt * 100);
+          const totalG  = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
+          const avgPctG = (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1);
+          const pnlCls  = totalG >= 0 ? "up" : "down";
+          const pctCls  = parseFloat(avgPctG) >= 0 ? "up" : "down";
+          const barPct  = Math.round(Math.abs(totalG) / _bxMax * 100);
+          const barColor = totalG >= 0 ? "var(--up)" : "var(--down)";
+          return `<div class="gp-row">
+            <span class="gp-grade" style="color:${color};font-size:10px;line-height:1.3;display:flex;flex-direction:column;align-items:flex-end">${label}<span style="color:var(--fg-3);font-size:8.5px;font-weight:400">${sub}</span></span>
+            <span class="gp-cnt">${cnt}</span>
+            <span class="gp-wr ${wr >= 50 ? "up" : "down"}">${wr}%</span>
+            <span class="gp-avg ${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</span>
+            <span class="gp-st"></span>
+            <div class="gp-bar-wrap"><div class="gp-bar" style="background:${barColor};width:${barPct}%"></div></div>
+            <span class="gp-pnl ${pnlCls}">${fmt.signed(totalG)}</span>
+          </div>`;
+        }).join("");
+        return `<div class="analytics-card" style="margin-bottom:14px">
+          <div class="analytics-card-title">入场时机绩效 · Entry Timing</div>
+          <div class="analytics-card-sub">按开仓时 BX 天数分段</div>
+          <div class="gp-header" style="margin-top:10px">
+            <span class="gp-grade"></span><span class="gp-cnt">笔</span>
+            <span class="gp-wr">胜率</span><span class="gp-avg">均%</span>
+            <span class="gp-st"></span><span class="gp-bar-wrap"></span>
+            <span class="gp-pnl">总盈亏</span>
+          </div>${bxRows}
+        </div>`;
+      })()}
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
