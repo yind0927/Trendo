@@ -1711,8 +1711,31 @@
   .opts-calc b.down { color: var(--down); }
   .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
   #sim-options-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  /* Assignment equity tracking */
+  .opts-assigned-live { border-left: 3px solid var(--warn) !important; background: color-mix(in oklch, var(--warn) 5%, var(--bg-1)) !important; }
+  .opts-equity-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-2); }
+  .opts-equity-row { display: flex; align-items: center; gap: 8px; }
+  .opts-equity-row b { font-weight: 700; }
+  .opts-equity-row.opts-equity-total { border-top: 1px solid var(--bg-3); padding-top: 3px; margin-top: 2px; }
+  /* Wheel stats */
+  .opts-wheel-stats { padding: 0 0 14px; border-top: 1px solid var(--line); margin-top: 6px; }
+  .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); margin-top: 4px; }
+  .opts-ws-cell { background: var(--bg-1); padding: 11px 14px; }
+  .opts-ws-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
+  .opts-ws-val { font-size: 16px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
+  .opts-ws-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
+  /* Monthly table */
+  .opts-month-wrap { overflow-x: auto; margin: 10px 14px 0; }
+  .opts-month-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--f-mono); }
+  .opts-month-table th { text-align: left; color: var(--fg-3); font-weight: 600; letter-spacing: .05em; padding: 5px 8px; border-bottom: 1px solid var(--line); font-size: 9.5px; text-transform: uppercase; }
+  .opts-month-table td { padding: 6px 8px; border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent); color: var(--fg-1); }
+  .opts-month-table td.opts-mt-month { font-weight: 700; color: var(--fg-0); }
+  .opts-month-table td.opts-mt-pnl.up { color: var(--up); }
+  .opts-month-table td.opts-mt-pnl.down { color: var(--down); }
+  .opts-month-table td.opts-mt-wr { color: var(--fg-2); }
   @media (max-width: 640px) {
     .opts-stats { grid-template-columns: repeat(2, 1fr); }
+    .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
     .opts-pos-card { flex-direction: column; align-items: stretch; gap: 6px; }
     .opts-pos-right { display: flex; align-items: center; justify-content: space-between; text-align: left; }
     .opts-pos-actions, .opts-actions-col { margin-top: 0; flex-direction: row; }
@@ -4242,7 +4265,7 @@
   <div class="modal" style="max-width:380px">
     <div class="modal-header">
       <h2 class="opts-modal-title">卖出期权</h2>
-      <button class="modal-close" id="opts-cancel-btn">✕</button>
+      <button class="modal-close" onclick="document.getElementById('opts-entry-modal').style.display='none'">✕</button>
     </div>
     <div id="opts-modal-meta" style="font-size:11.5px;color:var(--fg-3);margin-bottom:14px"></div>
     <div class="form-row" id="opts-row-sym">
@@ -4273,20 +4296,24 @@
       <label>手数（合约）</label>
       <input type="number" id="opts-qty" class="form-input" min="1" step="1" value="1"/>
     </div>
-    <div class="form-row">
+    <div class="form-row" id="opts-row-premium">
       <label>权利金 ($/share)</label>
       <input type="number" id="opts-premium" class="form-input" step="0.01" min="0" placeholder="券商成交价"/>
     </div>
+    <div class="form-row" id="opts-row-exit" style="display:none">
+      <label>出仓价 ($/share)</label>
+      <input type="number" id="opts-exit-price" class="form-input" step="0.01" min="0" placeholder="实际卖出价"/>
+    </div>
     <div id="opts-calc" class="opts-calc"></div>
     <div class="form-actions">
-      <button type="button" class="btn" onclick="document.getElementById('opts-entry-modal').style.display='none'">取消</button>
+      <button type="button" class="btn" id="opts-cancel-btn">取消</button>
       <button type="button" id="opts-confirm-btn" class="btn primary">确认</button>
     </div>
   </div>
 </div>
 
-<script src="data.js?v=256"></script>
-<script src="desk.js?v=256"></script>
+<script src="data.js?v=257"></script>
+<script src="desk.js?v=257"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
