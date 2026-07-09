@@ -4543,7 +4543,7 @@ function rsAdjustGrade(grade, rsResult) {
     const key = sym + ":" + (expiry || "0");
     const now = Date.now();
     if (_optChainCache[key] && now - _optChainCache[key].ts < 300000) return _optChainCache[key].data;
-    const url = `/api/options?sym=${sym}${expiry ? "&expiry=" + expiry : ""}`;
+    const url = `/api/history?opts=1&sym=${sym}${expiry ? "&expiry=" + expiry : ""}`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error("options API " + resp.status);
     const data = await resp.json();
