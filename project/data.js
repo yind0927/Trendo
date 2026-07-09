@@ -69,6 +69,8 @@ window.SIM_HOLDINGS    = [];
 window.SIM_CLOSED      = [];
 window.SIM_PENDING     = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }
 window.SIM_CLOSE_PENDING = []; // { id, sym, qty, orderType:"market"|"limit", limitPrice, createdAt }
-// Options simulation positions
-// { id, sym, type:"call"|"put", strike, expiry:"YYYY-MM-DD", expiryTs, qty, premium, iv, underlyingAtEntry, entryDate, name }
+// Options wheel-strategy positions (sell-side: CSP cash-secured put / CC covered call)
+// { id, sym, type:"put"|"call", strat:"csp"|"cc", strike, expiry:"YYYY-MM-DD", expiryTs,
+//   qty(contracts>0), premium(received $/share), iv, underlyingAtEntry, entryDate,
+//   status:"open"|"closed"|"expired"|"assigned", closePremium?, settleSpot?, realized?, closedAt? }
 window.SIM_OPTIONS = [];

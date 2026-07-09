@@ -143,7 +143,9 @@ export default async function handler(req, res) {
         `?interval=1d&period1=${fromTs}&period2=${toTs}`;
       const r = await fetch(url, {
         headers: {
-          "User-Agent": UA,
+          // Keep the exact original short UA — Yahoo's edge throttles fuller
+          // Chrome UAs from datacenter IPs (VOO/VIX went missing on v253's UA change)
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
           "Accept": "application/json",
         }
       });

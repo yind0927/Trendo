@@ -54,22 +54,6 @@
     return { price: Math.max(0, priceV), delta: deltaV, theta: thetaV };
   }
 
-  // Revalue an options position given current spot price
-  function calcOptionCurrent(pos, spot) {
-    const expMs = new Date(pos.expiry + "T21:00:00Z").getTime();
-    const T = Math.max(0, (expMs - Date.now()) / (365.25 * 24 * 3600 * 1000));
-    const r = 0.043; // ~4.3% risk-free rate
-    const bs = bsCalc(spot, pos.strike, T, r, pos.iv, pos.type);
-    const sign = pos.qty > 0 ? 1 : -1;
-    const absQty = Math.abs(pos.qty);
-    return {
-      currentPrice: bs.price,
-      pnl:   sign * (bs.price - pos.premium) * absQty * 100,
-      delta: bs.delta * pos.qty * 100,   // net delta (shares)
-      theta: bs.theta * pos.qty * 100,   // net theta ($/day)
-      T,
-    };
-  }
   // ─────────────────────────────────────────────────────────────────────────
 
   // ============ OVERVIEW CARDS ============
@@ -1109,12 +1093,14 @@ function rsAdjustGrade(grade, rsResult) {
   let simHoldingsViewMode = localStorage.getItem("trendo_sim_holdings_view") || "list";
   let simSelectedSym = null;
   let simNotional = 100000;
-  // Options module state
+  // Options module state — wheel strategy (CSP / Covered Call)
   let simOptionsVisible = false;
   let simOptionsSym  = "QQQ";
-  let simOptionsType = "call";
-  let simOptionsExpiry = null; // selected expiry Unix timestamp (string)
-  let _optChainCache = {};     // { [sym+expiry]: { data, ts } }
+  let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
+  let simOptionsExpiry = null;  // selected expiry Unix timestamp (string)
+  let _optChainCache = {};      // { [sym+":"+expiryTs]: { data, ts } }
+  let _optFailedAt = {};        // { [key]: ts } — back off failed fetches 60s
+  let _optsFetching = false;
   let newPositionContext = "desk"; // "desk" | "sim"
   let pendingCloseCtx = "desk";
   let pendingDeleteCtx = "desk";
@@ -4538,124 +4524,215 @@ function rsAdjustGrade(grade, rsResult) {
     renderSimDailySources();
   }
 
-  // ── Options module ────────────────────────────────────────────────────────
+  // ── Options module — 滚动策略模拟（CSP 卖Put / CC 备兑Call）───────────────
+  // Marks come from the CBOE delayed chain (~15min) when available; BS with the
+  // entry IV is only a fallback when the contract can't be found on the chain.
+
   async function fetchOptionsChain(sym, expiry) {
     const key = sym + ":" + (expiry || "0");
     const now = Date.now();
-    if (_optChainCache[key] && now - _optChainCache[key].ts < 300000) return _optChainCache[key].data;
+    const hit = _optChainCache[key];
+    if (hit && now - hit.ts < 300000) return hit.data;
     const url = `/api/history?opts=1&sym=${sym}${expiry ? "&expiry=" + expiry : ""}`;
     const resp = await fetch(url);
-    if (!resp.ok) throw new Error("options API " + resp.status);
-    const data = await resp.json();
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok) throw new Error(data?.error || ("HTTP " + resp.status));
     _optChainCache[key] = { data, ts: now };
+    // Index by the resolved expiry too, so position-mark lookups hit this entry
+    if (data?.selectedExp) _optChainCache[sym + ":" + data.selectedExp] = { data, ts: now };
     return data;
   }
 
-  function _optExpiryLabel(ts) {
-    const d = new Date(ts * 1000);
-    return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "2-digit" });
+  const _optExpiryLabel = ts => new Date(ts * 1000).toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+  const _optTs2Date = ts => new Date(ts * 1000).toISOString().slice(0, 10);
+  const _optDTE = expiryDate => Math.max(0, Math.ceil((new Date(expiryDate + "T21:00:00Z").getTime() - Date.now()) / 86400000));
+
+  // One-time migration of v253-era entries (long buys) into the wheel model
+  function _optMigrate() {
+    SIM_OPTIONS.forEach(p => {
+      if (!p.strat) {
+        p.strat = p.type === "put" ? "csp" : "cc";
+        p.qty = Math.abs(p.qty || 1);
+        if (!p.status) p.status = "open";
+      }
+    });
   }
 
-  function _optionsChainHTML(chain, spot) {
-    const rows = (simOptionsType === "call" ? chain.calls : chain.puts);
-    if (!rows || !rows.length) return `<div class="opts-empty">暂无期权数据</div>`;
-    // Show ATM ±8 strikes
-    const atmStrike = rows.reduce((best, r) => Math.abs(r.strike - spot) < Math.abs(best.strike - spot) ? r : best, rows[0]);
-    const atmIdx = rows.indexOf(atmStrike);
-    const visible = rows.slice(Math.max(0, atmIdx - 8), atmIdx + 9);
+  // Live mark for a position: chain mid(bid,ask) → last → BS fallback (entry IV)
+  function optPositionMark(pos) {
+    const chainHit = _optChainCache[pos.sym + ":" + pos.expiryTs];
+    if (chainHit?.data) {
+      const rows = pos.type === "call" ? chainHit.data.calls : chainHit.data.puts;
+      const row = rows?.find(r => Math.abs(r.strike - pos.strike) < 0.001);
+      if (row) {
+        const mark = (row.bid > 0 && row.ask > 0) ? (row.bid + row.ask) / 2 : (row.last || null);
+        if (mark != null) return { mark, delta: row.delta, theta: row.theta, spot: chainHit.data.spot, live: true };
+      }
+    }
+    const spot = chainHit?.data?.spot
+      || Object.values(_optChainCache).find(c => c?.data?.sym === pos.sym)?.data?.spot
+      || pos.underlyingAtEntry;
+    const T = Math.max(0, (new Date(pos.expiry + "T21:00:00Z").getTime() - Date.now()) / (365.25 * 864e5));
+    const bs = bsCalc(spot, pos.strike, T, 0.043, pos.iv || 0.25, pos.type);
+    return { mark: bs.price, delta: bs.delta, theta: bs.theta, spot, live: false };
+  }
+
+  // Auto-settle open positions past expiry: OTM → expire worthless (keep premium);
+  // ITM → assigned (realize premium − intrinsic, approximated with current spot)
+  function settleExpiredOptions() {
+    let changed = false;
+    const today = new Date().toISOString().slice(0, 10);
+    for (const pos of SIM_OPTIONS) {
+      if (pos.status !== "open") continue;
+      if (pos.expiry >= today) continue;
+      const m = optPositionMark(pos);
+      const spot = m.spot || pos.underlyingAtEntry;
+      const intrinsic = pos.type === "put" ? Math.max(0, pos.strike - spot) : Math.max(0, spot - pos.strike);
+      pos.status = intrinsic > 0.005 ? "assigned" : "expired";
+      pos.settleSpot = spot;
+      pos.realized = (pos.premium - intrinsic) * 100 * pos.qty;
+      pos.closedAt = pos.expiry;
+      changed = true;
+    }
+    if (changed) saveToStorage();
+  }
+
+  // ── Chain table (sell-side view) ──────────────────────────────────────────
+  function _optChainHTML(chain) {
+    const spot = chain.spot;
+    const isCSP = simOptionsStrat === "csp";
+    const rows = isCSP ? chain.puts : chain.calls;
+    if (!rows?.length) return `<div class="opts-empty">该到期日暂无${isCSP ? "Put" : "Call"}合约</div>`;
+    const expDate = _optTs2Date(chain.selectedExp);
+    const dte = _optDTE(expDate);
+    const sorted = [...rows].sort((a, b) => a.strike - b.strike);
+    // Sell-side view: CSP shows OTM puts below spot; CC shows OTM calls above
+    let visible;
+    if (isCSP) {
+      visible = [...sorted.filter(r => r.strike <= spot).slice(-10), ...sorted.filter(r => r.strike > spot).slice(0, 2)];
+    } else {
+      visible = [...sorted.filter(r => r.strike < spot).slice(-2), ...sorted.filter(r => r.strike >= spot).slice(0, 10)];
+    }
+    const body = visible.map(r => {
+      const dist = (r.strike - spot) / spot * 100;          // signed distance to spot
+      const otm = isCSP ? dist < 0 : dist > 0;
+      const prem = r.bid > 0 ? r.bid : r.last;
+      const base = isCSP ? r.strike : spot;
+      const annual = prem > 0 && base > 0 ? prem / base / Math.max(dte, 1) * 365 * 100 : 0;
+      const distCls = otm ? "muted" : "opts-itm-warn";
+      const dSign = dist >= 0 ? "+" : "−";
+      return `<tr class="${r.itm ? "itm" : ""}">
+        <td style="text-align:left;font-weight:600">${r.strike}</td>
+        <td class="${distCls}">${dSign}${Math.abs(dist).toFixed(1)}%</td>
+        <td>${prem > 0 ? "$" + prem.toFixed(2) : "—"}</td>
+        <td class="opts-annual">${annual > 0 ? annual.toFixed(1) + "%" : "—"}</td>
+        <td class="muted">${r.delta != null ? r.delta.toFixed(2) : "—"}</td>
+        <td class="muted">${r.oi > 0 ? r.oi.toLocaleString() : "—"}</td>
+        <td>${prem > 0 ? `<button class="opts-act-btn" data-optsell="1"
+          data-sym="${chain.sym}" data-type="${isCSP ? "put" : "call"}"
+          data-strike="${r.strike}" data-expiry="${expDate}" data-expiry-ts="${chain.selectedExp}"
+          data-iv="${r.iv}" data-bid="${prem}" data-spot="${spot}" data-dte="${dte}">卖出</button>` : ""}</td>
+      </tr>`;
+    }).join("");
     return `<div class="opts-chain-wrap">
       <table class="opts-chain">
         <thead><tr>
-          <th style="text-align:left">行权价</th>
-          <th>Bid</th><th>Ask</th><th>IV</th><th>成交量</th><th>OI</th><th></th>
+          <th style="text-align:left">行权价</th><th>距现价</th><th>权利金</th><th>年化</th><th>Δ</th><th>OI</th><th></th>
         </tr></thead>
-        <tbody>
-          ${visible.map(r => {
-            const isATM = r.strike === atmStrike.strike;
-            const itmCls = r.itm ? " itm" : "";
-            const mid = ((r.bid + r.ask) / 2).toFixed(2);
-            return `<tr class="${isATM ? "atm" : ""}${itmCls}">
-              <td style="text-align:left;font-weight:${isATM ? 700 : 400};color:${isATM ? "var(--fg-0)" : "var(--fg-1)"}">${r.strike}</td>
-              <td>${r.bid > 0 ? r.bid.toFixed(2) : "—"}</td>
-              <td>${r.ask > 0 ? r.ask.toFixed(2) : "—"}</td>
-              <td class="muted">${r.iv > 0 ? (r.iv * 100).toFixed(1) + "%" : "—"}</td>
-              <td class="muted">${r.volume > 0 ? r.volume.toLocaleString() : "—"}</td>
-              <td class="muted">${r.oi > 0 ? r.oi.toLocaleString() : "—"}</td>
-              <td>
-                ${r.ask > 0 ? `<button class="opts-act-btn" data-optbuy="1"
-                  data-sym="${simOptionsSym}" data-type="${simOptionsType}"
-                  data-strike="${r.strike}" data-expiry="${_optExpiryTs2Date(chain.selectedExp || r.expiry)}"
-                  data-expiry-ts="${chain.selectedExp || r.expiry}"
-                  data-iv="${r.iv}" data-ask="${r.ask}" data-spot="${spot}">买入</button>` : ""}
-              </td>
-            </tr>`;
-          }).join("")}
-        </tbody>
+        <tbody>${body}</tbody>
       </table>
     </div>`;
   }
 
-  function _optExpiryTs2Date(ts) {
-    const d = new Date(ts * 1000);
-    return d.toISOString().slice(0, 10);
+  // ── Positions & summary ───────────────────────────────────────────────────
+  function _optOpenPosCard(pos) {
+    const m = optPositionMark(pos);
+    const pnl = (pos.premium - m.mark) * 100 * pos.qty;
+    const capturedPct = pos.premium > 0 ? (pos.premium - m.mark) / pos.premium * 100 : 0;
+    const capClamped = Math.max(0, Math.min(100, capturedPct));
+    const pnlCls = pnl > 0 ? "up" : pnl < 0 ? "down" : "";
+    const dte = _optDTE(pos.expiry);
+    const isCSP = pos.strat === "csp";
+    const spot = m.spot || pos.underlyingAtEntry;
+    const cushion = (isCSP ? (spot - pos.strike) : (pos.strike - spot)) / spot * 100;
+    const cushionTxt = cushion >= 0
+      ? `<span class="muted">安全垫 ${cushion.toFixed(1)}%</span>`
+      : `<span class="opts-itm-warn">入价内 ${Math.abs(cushion).toFixed(1)}%</span>`;
+    // Seller-side greeks: short position → flip sign
+    const sDelta = m.delta != null ? -m.delta * 100 * pos.qty : null;
+    const sTheta = m.theta != null ? -m.theta * 100 * pos.qty : null;
+    const typeL = pos.type === "call" ? "C" : "P";
+    return `<div class="opts-pos-card">
+      <div class="opts-pos-main">
+        <div class="opts-pos-title">
+          <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
+          <span class="opts-pos-name">${pos.sym} ${pos.strike}${typeL} · ${pos.expiry.slice(5)}</span>
+          <span class="opts-pos-dte">${dte}d</span>
+        </div>
+        <div class="opts-pos-meta">
+          权利金 $${pos.premium.toFixed(2)} ×${pos.qty}手 · 现价 $${m.mark.toFixed(2)}${m.live ? "" : `<span class="opts-est" title="链上无此合约，BS估算">估</span>`}
+          · ${cushionTxt}
+          ${isCSP ? `· <span class="muted">占用 ${fmt.usd(pos.strike * 100 * pos.qty)}</span>` : ""}
+        </div>
+        <div class="opts-prog-wrap"><div class="opts-prog-fill ${pnl >= 0 ? "" : "neg"}" style="width:${pnl >= 0 ? capClamped : Math.min(100, Math.abs(capturedPct))}%"></div></div>
+        <div class="opts-pos-greeks">
+          ${sDelta != null ? `<span>Δ ${sDelta >= 0 ? "+" : ""}${sDelta.toFixed(1)}</span>` : ""}
+          ${sTheta != null ? `<span>θ ${sTheta >= 0 ? "+" : ""}$${sTheta.toFixed(2)}/d</span>` : ""}
+        </div>
+      </div>
+      <div class="opts-pos-right">
+        <div class="opts-pos-amt ${pnlCls}">${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(0)}</div>
+        <div class="opts-pos-cap muted">${capturedPct >= 0 ? capturedPct.toFixed(0) + "% 已实现" : "—"}</div>
+        <div class="opts-pos-actions">
+          <button class="opts-mini-btn" data-opt-close="${pos.id}">平仓</button>
+          <button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button>
+        </div>
+      </div>
+    </div>`;
   }
 
-  function _optPositionsHTML(spot) {
-    if (!SIM_OPTIONS.length) return "";
-    const rows = SIM_OPTIONS.map(pos => {
-      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
-      const pnlCls = cur.pnl > 0 ? "up" : cur.pnl < 0 ? "down" : "";
-      const direction = pos.qty > 0 ? "买入" : "卖出";
-      const typeLabel = pos.type === "call" ? "Call" : "Put";
-      const daysLeft = Math.max(0, Math.round(cur.T * 365));
-      return `<div class="opts-pos-card">
-        <div class="opts-pos-label">
-          <div class="opts-pos-name">${pos.sym} ${pos.strike}${typeLabel[0]} ${pos.expiry.slice(5)}</div>
-          <div class="opts-pos-meta">${direction} ${Math.abs(pos.qty)}手 · 入 $${pos.premium.toFixed(2)} · ${daysLeft}天到期</div>
+  function _optDonePosCard(pos) {
+    const stMap = { expired: ["到期作废", "var(--up)"], assigned: ["被指派", "var(--warn)"], closed: ["已平仓", "var(--fg-3)"] };
+    const [stTxt, stColor] = stMap[pos.status] || ["—", "var(--fg-3)"];
+    const r = pos.realized ?? 0;
+    const rCls = r > 0 ? "up" : r < 0 ? "down" : "";
+    const typeL = pos.type === "call" ? "C" : "P";
+    return `<div class="opts-pos-card opts-done">
+      <div class="opts-pos-main">
+        <div class="opts-pos-title">
+          <span class="opts-badge ${pos.strat === "csp" ? "opts-badge-csp" : "opts-badge-cc"}">${pos.strat === "csp" ? "CSP" : "CC"}</span>
+          <span class="opts-pos-name">${pos.sym} ${pos.strike}${typeL} · ${pos.expiry.slice(5)}</span>
+          <span class="opts-st-tag" style="color:${stColor};border-color:${stColor}">${stTxt}</span>
         </div>
-        <div class="opts-pos-greeks-col">
-          <div class="opts-pos-greek">Δ ${cur.delta >= 0 ? "+" : ""}${cur.delta.toFixed(1)}</div>
-          <div class="opts-pos-greek">θ ${cur.theta >= 0 ? "+" : ""}$${cur.theta.toFixed(2)}/d</div>
-        </div>
-        <div class="opts-pos-pnl">
-          <div class="opts-pos-amt ${pnlCls}">${cur.pnl >= 0 ? "+" : "−"}$${Math.abs(cur.pnl).toFixed(0)}</div>
-          <div class="opts-pos-cur muted">现 $${cur.currentPrice.toFixed(2)}</div>
-        </div>
-        <button class="opts-close-btn" data-opt-id="${pos.id}" title="平仓">✕</button>
-      </div>`;
-    }).join("");
+        <div class="opts-pos-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}手${pos.closePremium != null ? ` · 买回 $${pos.closePremium.toFixed(2)}` : ""}${pos.settleSpot ? ` · 结算价 $${pos.settleSpot.toFixed(2)}` : ""} · ${pos.closedAt || ""}</div>
+      </div>
+      <div class="opts-pos-right">
+        <div class="opts-pos-amt ${rCls}">${r >= 0 ? "+" : "−"}$${Math.abs(r).toFixed(0)}</div>
+        <div class="opts-pos-actions"><button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button></div>
+      </div>
+    </div>`;
+  }
 
-    // Summary totals
-    const totDelta = SIM_OPTIONS.reduce((s, pos) => {
-      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
-      return s + cur.delta;
-    }, 0);
-    const totTheta = SIM_OPTIONS.reduce((s, pos) => {
-      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
-      return s + cur.theta;
-    }, 0);
-    const totPnl = SIM_OPTIONS.reduce((s, pos) => {
-      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
-      return s + cur.pnl;
-    }, 0);
-    const pnlCls = totPnl > 0 ? "up" : totPnl < 0 ? "down" : "";
-
-    return `${rows}
-    <div class="opts-summary">
-      <div class="opts-summary-item">
-        <div class="opts-summary-label">总Delta</div>
-        <div class="opts-summary-val">${totDelta >= 0 ? "+" : ""}${totDelta.toFixed(1)}</div>
-      </div>
-      <div class="opts-summary-sep"></div>
-      <div class="opts-summary-item">
-        <div class="opts-summary-label">日Theta</div>
-        <div class="opts-summary-val ${totTheta >= 0 ? "up" : "down"}">${totTheta >= 0 ? "+" : ""}$${Math.abs(totTheta).toFixed(2)}</div>
-      </div>
-      <div class="opts-summary-sep"></div>
-      <div class="opts-summary-item">
-        <div class="opts-summary-label">总盈亏</div>
-        <div class="opts-summary-val ${pnlCls}">${totPnl >= 0 ? "+" : "−"}$${Math.abs(totPnl).toFixed(0)}</div>
-      </div>
+  function _optSummaryHTML(open, done) {
+    let prem = 0, secured = 0, float_ = 0, thetaDay = 0;
+    for (const pos of open) {
+      const m = optPositionMark(pos);
+      prem += pos.premium * 100 * pos.qty;
+      if (pos.strat === "csp") secured += pos.strike * 100 * pos.qty;
+      float_ += (pos.premium - m.mark) * 100 * pos.qty;
+      if (m.theta != null) thetaDay += -m.theta * 100 * pos.qty;
+    }
+    const realized = done.reduce((s, p) => s + (p.realized ?? 0), 0);
+    const cell = (label, val, cls = "", sub = "") => `<div class="opts-stat">
+      <div class="opts-stat-label">${label}</div>
+      <div class="opts-stat-val ${cls}">${val}</div>
+      ${sub ? `<div class="opts-stat-sub">${sub}</div>` : ""}
+    </div>`;
+    return `<div class="opts-stats">
+      ${cell("未平仓权利金", fmt.usd(prem), "", open.length + " 笔")}
+      ${cell("CSP 现金占用", fmt.usd(secured))}
+      ${cell("浮动盈亏", (float_ >= 0 ? "+" : "−") + "$" + Math.abs(float_).toFixed(0), float_ > 0 ? "up" : float_ < 0 ? "down" : "", thetaDay ? `日θ ${thetaDay >= 0 ? "+" : ""}$${thetaDay.toFixed(2)}` : "")}
+      ${cell("累计已实现", (realized >= 0 ? "+" : "−") + "$" + Math.abs(realized).toFixed(0), realized > 0 ? "up" : realized < 0 ? "down" : "", done.length ? done.length + " 笔已了结" : "")}
     </div>`;
   }
 
@@ -4664,171 +4741,215 @@ function rsAdjustGrade(grade, rsResult) {
     if (!section) return;
     section.style.display = simOptionsVisible ? "" : "none";
     if (!simOptionsVisible) return;
-
     const inner = $("#sim-opts-inner");
     if (!inner) return;
+    _optMigrate();
+    settleExpiredOptions();
 
-    // Get current spot for positions (use cached chain data if available)
-    const cacheKey = simOptionsSym + ":" + (simOptionsExpiry || "0");
-    const cachedSpot = _optChainCache[cacheKey]?.data?.spot;
+    const viewKey = simOptionsSym + ":" + (simOptionsExpiry || "0");
+    const chain = _optChainCache[viewKey]?.data || null;
+    const failed = _optFailedAt[viewKey] && Date.now() - _optFailedAt[viewKey].ts < 60000 ? _optFailedAt[viewKey] : null;
 
-    // Controls: sym chips + call/put toggle
-    const syms = ["QQQ", "SMH", "DRAM"];
-    const symChips = syms.map(s =>
-      `<button class="opts-sym-chip${s === simOptionsSym ? " active" : ""}" data-optsym="${s}">${s}</button>`
-    ).join("");
-    const typeToggle = `<div class="opts-type-toggle">
-      <button class="opts-type-btn${simOptionsType === "call" ? " active" : ""}" data-opttype="call">Call</button>
-      <button class="opts-type-btn${simOptionsType === "put" ? " active" : ""}" data-opttype="put">Put</button>
+    const symChips = ["QQQ", "SMH", "DRAM"].map(s =>
+      `<button class="opts-sym-chip${s === simOptionsSym ? " active" : ""}" data-optsym="${s}">${s}</button>`).join("");
+    const stratToggle = `<div class="opts-type-toggle">
+      <button class="opts-type-btn${simOptionsStrat === "csp" ? " active" : ""}" data-optstrat="csp">卖Put · CSP</button>
+      <button class="opts-type-btn${simOptionsStrat === "cc" ? " active" : ""}" data-optstrat="cc">备兑Call · CC</button>
     </div>`;
 
-    // Build chain HTML (show loading or cached)
-    const chainData = _optChainCache[cacheKey]?.data;
-    let chainHTML = "";
-    let expirySelHTML = "";
-
-    if (chainData) {
-      // Expiry selector
-      const exps = chainData.expirations || [];
-      expirySelHTML = exps.length > 1
-        ? `<div class="opts-expiry-row">
-            <select class="opts-expiry-sel" id="opts-expiry-sel">
-              ${exps.map(ts => `<option value="${ts}" ${String(ts) === String(simOptionsExpiry || chainData.selectedExp) ? "selected" : ""}>${_optExpiryLabel(ts)}</option>`).join("")}
-            </select>
-            <button class="opts-refresh-btn" id="opts-refresh-btn" title="刷新期权链">↻</button>
-           </div>`
-        : "";
-      chainHTML = _optionsChainHTML(chainData, chainData.spot);
-    } else {
-      chainHTML = `<div class="opts-loading" id="opts-chain-loading">
-        <span class="muted" style="font-size:12px">正在加载期权链…</span>
+    let headRow = "", chainHTML;
+    if (chain) {
+      const exps = chain.expirations || [];
+      const dte = _optDTE(_optTs2Date(chain.selectedExp));
+      headRow = `<div class="opts-expiry-row">
+        <span class="opts-spot">现价 <b>$${chain.spot.toFixed(2)}</b></span>
+        ${exps.length ? `<select class="opts-expiry-sel" id="opts-expiry-sel">
+          ${exps.map(ts => `<option value="${ts}" ${String(ts) === String(simOptionsExpiry || chain.selectedExp) ? "selected" : ""}>${_optExpiryLabel(ts)} · ${_optDTE(_optTs2Date(ts))}d</option>`).join("")}
+        </select>` : ""}
+        <span class="opts-dte-tag">${dte} DTE</span>
+        <span class="opts-delay-tag">CBOE 延迟15min</span>
+        <button class="opts-refresh-btn" id="opts-refresh-btn" title="刷新期权链">↻</button>
       </div>`;
+      chainHTML = _optChainHTML(chain);
+    } else if (failed) {
+      chainHTML = `<div class="opts-empty" style="color:var(--down)">加载失败: ${failed.msg}<button class="opts-mini-btn" id="opts-retry-btn" style="margin-left:8px">重试</button></div>`;
+    } else {
+      chainHTML = `<div class="opts-loading"><span class="muted" style="font-size:12px">正在加载期权链…</span></div>`;
     }
 
-    // Positions section
-    const posHTML = _optPositionsHTML(cachedSpot);
+    const open = SIM_OPTIONS.filter(p => p.status === "open");
+    const done = SIM_OPTIONS.filter(p => p.status && p.status !== "open");
+    const posBlock = (open.length || done.length) ? `
+      ${_optSummaryHTML(open, done)}
+      ${open.length ? `<div class="opts-sub-label">持仓中 · ${open.length}</div>${open.map(_optOpenPosCard).join("")}` : ""}
+      ${done.length ? `<div class="opts-sub-label">已了结 · ${done.length}</div>${done.map(_optDonePosCard).join("")}` : ""}` : "";
 
     inner.innerHTML = `
       <div class="opts-controls">
         <div class="opts-sym-chips">${symChips}</div>
-        ${typeToggle}
+        ${stratToggle}
       </div>
-      ${expirySelHTML}
+      ${headRow}
       <div id="opts-chain-container">${chainHTML}</div>
-      ${SIM_OPTIONS.length ? `<div class="sim-section-label" style="margin-top:14px">
-        <span class="ssl-zh">期权持仓</span>
-        <span class="ssl-en">Positions · ${SIM_OPTIONS.length}手</span>
-        <span class="ssl-rule"></span>
-      </div>
-      <div class="opts-positions">${posHTML}</div>` : ""}
-    `;
-
-    // If no chain data yet, fetch it
-    if (!chainData) {
-      fetchOptionsChain(simOptionsSym, simOptionsExpiry || "").then(data => {
-        if (!simOptionsExpiry && data.selectedExp) simOptionsExpiry = String(data.selectedExp);
-        renderSimOptions();
-      }).catch(err => {
-        const el = $("#opts-chain-loading");
-        if (el) el.innerHTML = `<div class="muted" style="font-size:12px;color:var(--down)">加载失败: ${err.message}</div>`;
-      });
-    }
+      ${posBlock}`;
 
     wireSimOptions();
+    _ensureOptChains();
+  }
+
+  // Fetch any chains the view or open positions need, then re-render once
+  function _ensureOptChains() {
+    const needs = new Set();
+    const viewKey = simOptionsSym + ":" + (simOptionsExpiry || "0");
+    needs.add(viewKey);
+    SIM_OPTIONS.filter(p => p.status === "open").forEach(p => needs.add(p.sym + ":" + p.expiryTs));
+    const now = Date.now();
+    const missing = [...needs].filter(k => {
+      const hit = _optChainCache[k];
+      if (hit && now - hit.ts < 300000) return false;
+      const failed = _optFailedAt[k];
+      if (failed && now - failed.ts < 60000) return false;
+      return true;
+    });
+    if (!missing.length || _optsFetching) return;
+    _optsFetching = true;
+    Promise.allSettled(missing.map(k => {
+      const [sym, exp] = k.split(":");
+      return fetchOptionsChain(sym, exp === "0" ? "" : exp)
+        .then(() => { delete _optFailedAt[k]; })
+        .catch(e => { _optFailedAt[k] = { ts: Date.now(), msg: e.message }; });
+    })).then(() => {
+      _optsFetching = false;
+      renderSimOptions();
+    });
   }
 
   function wireSimOptions() {
-    // Sym chips
-    $$(".opts-sym-chip", $("#sim-opts-inner")).forEach(btn => {
-      btn.addEventListener("click", () => {
-        simOptionsSym = btn.dataset.optsym;
-        simOptionsExpiry = null;
-        renderSimOptions();
-      });
-    });
-
-    // Call/Put toggle
-    $$(".opts-type-btn", $("#sim-opts-inner")).forEach(btn => {
-      btn.addEventListener("click", () => {
-        simOptionsType = btn.dataset.opttype;
-        renderSimOptions();
-      });
-    });
-
-    // Expiry selector
+    const root = $("#sim-opts-inner");
+    if (!root) return;
+    $$(".opts-sym-chip", root).forEach(btn => btn.addEventListener("click", () => {
+      simOptionsSym = btn.dataset.optsym; simOptionsExpiry = null; renderSimOptions();
+    }));
+    $$(".opts-type-btn", root).forEach(btn => btn.addEventListener("click", () => {
+      simOptionsStrat = btn.dataset.optstrat; renderSimOptions();
+    }));
     const expSel = $("#opts-expiry-sel");
-    if (expSel) {
-      expSel.addEventListener("change", () => {
-        simOptionsExpiry = expSel.value;
-        _optChainCache[simOptionsSym + ":" + simOptionsExpiry] = null; // invalidate for new expiry
-        renderSimOptions();
-        fetchOptionsChain(simOptionsSym, simOptionsExpiry).then(() => renderSimOptions()).catch(() => {});
-      });
-    }
-
-    // Refresh button
+    if (expSel) expSel.addEventListener("change", () => {
+      simOptionsExpiry = expSel.value; renderSimOptions();
+    });
     const refBtn = $("#opts-refresh-btn");
-    if (refBtn) {
-      refBtn.addEventListener("click", () => {
-        const key = simOptionsSym + ":" + (simOptionsExpiry || "0");
-        delete _optChainCache[key];
-        renderSimOptions();
-      });
-    }
-
-    // Buy buttons → open entry modal
-    $$("[data-optbuy]", $("#sim-opts-inner")).forEach(btn => {
-      btn.addEventListener("click", () => {
-        const { sym, type, strike, expiry, expiryTs, iv, ask, spot } = btn.dataset;
-        openOptionsEntryModal({ sym, type, strike: +strike, expiry, expiryTs: +expiryTs, iv: +iv, ask: +ask, spot: +spot });
-      });
+    if (refBtn) refBtn.addEventListener("click", () => {
+      const key = simOptionsSym + ":" + (simOptionsExpiry || "0");
+      delete _optChainCache[key]; delete _optFailedAt[key];
+      renderSimOptions();
     });
-
-    // Close position buttons
-    $$(".opts-close-btn", $("#sim-opts-inner")).forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.optId;
-        const idx = SIM_OPTIONS.findIndex(p => p.id === id);
-        if (idx !== -1) {
-          SIM_OPTIONS.splice(idx, 1);
-          saveToStorage();
-          renderSimOptions();
-        }
-      });
+    const retryBtn = $("#opts-retry-btn");
+    if (retryBtn) retryBtn.addEventListener("click", () => {
+      const key = simOptionsSym + ":" + (simOptionsExpiry || "0");
+      delete _optFailedAt[key];
+      renderSimOptions();
     });
+    $$("[data-optsell]", root).forEach(btn => btn.addEventListener("click", () => {
+      const d = btn.dataset;
+      openOptionsSellModal({ sym: d.sym, type: d.type, strike: +d.strike, expiry: d.expiry,
+        expiryTs: +d.expiryTs, iv: +d.iv, bid: +d.bid, spot: +d.spot, dte: +d.dte });
+    }));
+    $$("[data-opt-close]", root).forEach(btn => btn.addEventListener("click", () => {
+      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optClose);
+      if (pos) openOptionsCloseModal(pos);
+    }));
+    $$("[data-opt-del]", root).forEach(btn => btn.addEventListener("click", () => {
+      const idx = SIM_OPTIONS.findIndex(p => p.id === btn.dataset.optDel);
+      if (idx !== -1) { SIM_OPTIONS.splice(idx, 1); saveToStorage(); renderSimOptions(); }
+    }));
   }
 
-  function openOptionsEntryModal({ sym, type, strike, expiry, expiryTs, iv, ask, spot }) {
+  // ── Sell-to-open modal ────────────────────────────────────────────────────
+  function openOptionsSellModal({ sym, type, strike, expiry, expiryTs, iv, bid, spot, dte }) {
     const modal = $("#opts-entry-modal");
     if (!modal) return;
-    modal.querySelector(".opts-modal-title").textContent = `${sym} ${strike} ${type === "call" ? "Call" : "Put"} · ${expiry}`;
-    modal.querySelector("#opts-ask-display").textContent = `Ask $${ask.toFixed(2)} · 参考IV ${(iv * 100).toFixed(1)}%`;
-    modal.querySelector("#opts-qty").value = "1";
-    modal.querySelector("#opts-premium").value = ask.toFixed(2);
-    modal.querySelector("#opts-direction").value = "long";
+    const isCSP = simOptionsStrat === "csp";
+    modal.querySelector(".opts-modal-title").textContent =
+      `${isCSP ? "卖出 Put (CSP)" : "卖出 Call (备兑)"} · ${sym} ${strike}${type === "call" ? "C" : "P"}`;
+    modal.querySelector("#opts-modal-meta").textContent =
+      `到期 ${expiry} · ${dte}天 · 现价 $${spot.toFixed(2)} · Bid $${bid.toFixed(2)} · IV ${(iv * 100).toFixed(1)}%`;
+    const qtyEl = modal.querySelector("#opts-qty");
+    const premEl = modal.querySelector("#opts-premium");
+    qtyEl.value = "1"; premEl.value = bid.toFixed(2);
+    const calcEl = modal.querySelector("#opts-calc");
+    const recalc = () => {
+      const qty = Math.max(1, parseInt(qtyEl.value) || 1);
+      const prem = parseFloat(premEl.value) || bid;
+      const income = prem * 100 * qty;
+      const lines = [`<div><span>权利金收入</span><b class="up">+${fmt.usd(income)}</b></div>`];
+      if (isCSP) {
+        const secured = strike * 100 * qty;
+        const annual = prem / strike / Math.max(dte, 1) * 365 * 100;
+        lines.push(`<div><span>占用现金</span><b>${fmt.usd(secured)}</b></div>`);
+        lines.push(`<div><span>盈亏平衡</span><b>$${(strike - prem).toFixed(2)}</b></div>`);
+        lines.push(`<div><span>年化收益</span><b class="up">${annual.toFixed(1)}%</b></div>`);
+      } else {
+        const annual = prem / spot / Math.max(dte, 1) * 365 * 100;
+        lines.push(`<div><span>需持有正股</span><b>${qty * 100} 股</b></div>`);
+        lines.push(`<div><span>若被行权总收入</span><b>${fmt.usd((strike + prem) * 100 * qty)}</b></div>`);
+        lines.push(`<div><span>年化收益(对现价)</span><b class="up">${annual.toFixed(1)}%</b></div>`);
+      }
+      calcEl.innerHTML = lines.join("");
+    };
+    qtyEl.oninput = recalc; premEl.oninput = recalc;
+    recalc();
     modal.style.display = "flex";
-
-    const onConfirm = () => {
-      const qty    = parseInt(modal.querySelector("#opts-qty").value) || 1;
-      const premium = parseFloat(modal.querySelector("#opts-premium").value) || ask;
-      const direction = modal.querySelector("#opts-direction").value; // "long" | "short"
-      const finalQty = direction === "short" ? -qty : qty;
-      const typeLabel = type === "call" ? "Call" : "Put";
+    modal.querySelector("#opts-confirm-btn").onclick = () => {
+      const qty = Math.max(1, parseInt(qtyEl.value) || 1);
+      const prem = parseFloat(premEl.value) || bid;
       SIM_OPTIONS.push({
-        id:                Date.now().toString(36),
-        sym, type, strike, expiry, expiryTs, iv,
-        qty:               finalQty,
-        premium,
-        underlyingAtEntry: spot,
-        entryDate:         new Date().toISOString().slice(0, 10),
-        name:              `${sym} ${strike}${typeLabel[0]} ${expiry.slice(5)}`,
+        id: Date.now().toString(36),
+        sym, type, strat: isCSP ? "csp" : "cc", strike, expiry, expiryTs, iv,
+        qty, premium: prem, underlyingAtEntry: spot,
+        entryDate: new Date().toISOString().slice(0, 10), status: "open",
       });
       saveToStorage();
       modal.style.display = "none";
       renderSimOptions();
     };
-    modal.querySelector("#opts-confirm-btn").onclick = onConfirm;
     modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
+  }
+
+  // ── Buy-to-close modal (reuses the entry modal shell) ─────────────────────
+  function openOptionsCloseModal(pos) {
+    const modal = $("#opts-entry-modal");
+    if (!modal) return;
+    const m = optPositionMark(pos);
+    modal.querySelector(".opts-modal-title").textContent =
+      `平仓买回 · ${pos.sym} ${pos.strike}${pos.type === "call" ? "C" : "P"}`;
+    modal.querySelector("#opts-modal-meta").textContent =
+      `卖出价 $${pos.premium.toFixed(2)} ×${pos.qty}手 · 当前市价 $${m.mark.toFixed(2)}${m.live ? "" : "(估算)"}`;
+    const qtyEl = modal.querySelector("#opts-qty");
+    const premEl = modal.querySelector("#opts-premium");
+    qtyEl.value = String(pos.qty); qtyEl.disabled = true;
+    premEl.value = m.mark.toFixed(2);
+    const calcEl = modal.querySelector("#opts-calc");
+    const recalc = () => {
+      const prem = parseFloat(premEl.value) ?? m.mark;
+      const pnl = (pos.premium - prem) * 100 * pos.qty;
+      calcEl.innerHTML = `<div><span>实现盈亏</span><b class="${pnl >= 0 ? "up" : "down"}">${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(0)}</b></div>`;
+    };
+    premEl.oninput = recalc;
+    recalc();
+    modal.style.display = "flex";
+    modal.querySelector("#opts-confirm-btn").onclick = () => {
+      const prem = parseFloat(premEl.value);
+      if (isNaN(prem) || prem < 0) return;
+      pos.status = "closed";
+      pos.closePremium = prem;
+      pos.realized = (pos.premium - prem) * 100 * pos.qty;
+      pos.closedAt = new Date().toISOString().slice(0, 10);
+      qtyEl.disabled = false;
+      saveToStorage();
+      modal.style.display = "none";
+      renderSimOptions();
+    };
+    modal.querySelector("#opts-cancel-btn").onclick = () => { qtyEl.disabled = false; modal.style.display = "none"; };
   }
   // ─────────────────────────────────────────────────────────────────────────
 
