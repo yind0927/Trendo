@@ -307,6 +307,26 @@
 
   const GRADE_LADDER = ["Exit","C","C+","B-","B","B+","A-","A","A+"];
 
+  // Journal tagging system
+  const JOURNAL_TAGS = [
+    { id: "trend_bull",   label: "趋势顺风",    color: "var(--up)",     group: "趋势" },
+    { id: "trend_bear",   label: "趋势逆风",    color: "var(--down)",   group: "趋势" },
+    { id: "sector_pos",   label: "板块配合",    color: "var(--accent)", group: "趋势" },
+    { id: "sector_neg",   label: "板块拖累",    color: "var(--down)",   group: "趋势" },
+    { id: "entry_good",   label: "入场精准",    color: "var(--up)",     group: "入场" },
+    { id: "entry_early",  label: "入场偏早",    color: "var(--warn)",   group: "入场" },
+    { id: "entry_chase",  label: "追高入场",    color: "var(--down)",   group: "入场" },
+    { id: "entry_pb",     label: "回调买入",    color: "var(--accent)", group: "入场" },
+    { id: "mgmt_patient", label: "耐心持有",    color: "var(--up)",     group: "管理" },
+    { id: "mgmt_exit_ok", label: "出场及时",    color: "var(--up)",     group: "管理" },
+    { id: "mgmt_exit_e",  label: "过早平仓",    color: "var(--warn)",   group: "管理" },
+    { id: "mgmt_trail",   label: "移动止损失误", color: "var(--down)",   group: "管理" },
+    { id: "mgmt_stop",    label: "止损过宽",    color: "var(--warn)",   group: "管理" },
+    { id: "risk_earn",    label: "财报风险",    color: "var(--warn)",   group: "风险" },
+    { id: "risk_emotion", label: "情绪交易",    color: "var(--down)",   group: "风险" },
+    { id: "risk_size",    label: "仓位过重",    color: "var(--warn)",   group: "风险" },
+  ];
+
   function stAdjustGrade(grade, stBull) {
   if (stBull == null || grade === "Hold" || grade === "Exit") return grade;
   const idx = GRADE_LADDER.indexOf(grade);
@@ -4114,6 +4134,57 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // ============ JOURNAL ============
+  function _journalSaveField(arr, sym, entry, cost, fn) {
+    // Update all matching records (handles grouped/partial trades sharing same sym+entry+cost)
+    let saved = false;
+    arr.forEach(x => {
+      if (x.sym === sym && x.entry === entry && Math.abs(x.cost - parseFloat(cost)) < 0.001) {
+        fn(x); saved = true;
+      }
+    });
+    if (saved) saveToStorage();
+  }
+
+  function journalSummaryHTML(closedItems) {
+    const taggedClosed = closedItems.filter(x => x.h.journalTags?.length);
+    if (taggedClosed.length < 2) return "";
+    const wins   = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) > 0);
+    const losses  = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) <= 0);
+    const countTags = items => {
+      const cnt = {};
+      items.forEach(x => (x.h.journalTags || []).forEach(id => { cnt[id] = (cnt[id] || 0) + 1; }));
+      return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    };
+    const topWin  = countTags(wins);
+    const topLoss = countTags(losses);
+    if (!topWin.length && !topLoss.length) return "";
+    const tagLabel = id => JOURNAL_TAGS.find(t => t.id === id)?.label || id;
+    const tagColor = id => JOURNAL_TAGS.find(t => t.id === id)?.color || "var(--fg-3)";
+    const mkRows = rows => rows.length
+      ? rows.map(([id, n]) => `<div class="jts-row">
+          <span class="jts-tag" style="color:${tagColor(id)}">${tagLabel(id)}</span>
+          <span class="jts-count">×${n}</span>
+        </div>`).join("")
+      : `<div class="jts-empty">暂无标注</div>`;
+    return `<div class="jt-summary">
+      <div class="jts-header">
+        <span class="jts-title">归因摘要</span>
+        <span class="jts-sub">Insight · ${taggedClosed.length} 笔已标注</span>
+      </div>
+      <div class="jts-cols">
+        <div class="jts-col">
+          <div class="jts-col-head" style="color:var(--up)">盈利主因</div>
+          ${mkRows(topWin)}
+        </div>
+        <div class="jts-divider"></div>
+        <div class="jts-col">
+          <div class="jts-col-head" style="color:var(--down)">亏损主因</div>
+          ${mkRows(topLoss)}
+        </div>
+      </div>
+    </div>`;
+  }
+
   function renderJournal() {
     const feed = $("#journal-feed");
     if (!feed) return;
@@ -4128,15 +4199,13 @@ function rsAdjustGrade(grade, rsResult) {
     }).sort((a, b) => b.h.entry.localeCompare(a.h.entry));
 
     // Build closed grouped trades — skip positions that still have an open holding.
-    // Use groupTrades() for correct rMult (totalPnl / riskPerShare / totalQty),
-    // then attach the raw sorted records for the exit mini-list display.
     const openKeys = new Set(HOLDINGS.map(h => `${h.sym}|${h.entry}|${h.cost}`));
     const rawRecordsMap = new Map();
     CLOSED_POSITIONS.forEach(c => {
       const key = `${c.sym}|${c.entry}|${c.cost}`;
       (rawRecordsMap.get(key) || rawRecordsMap.set(key, []).get(key)).push(c);
     });
-    const grouped = groupTrades(CLOSED_POSITIONS); // canonical rMult + pnlFinal
+    const grouped = groupTrades(CLOSED_POSITIONS);
     const closedItems = grouped
       .filter(t => !openKeys.has(`${t.sym}|${t.entry}|${t.cost}`))
       .map(t => ({
@@ -4151,7 +4220,7 @@ function rsAdjustGrade(grade, rsResult) {
     const filteredOpen   = journalFilter === "closed" ? [] : openItems;
     const filteredClosed = journalFilter === "open"   ? [] : closedItems;
 
-    // Top stats bar
+    // Stats bar
     const allClosedTrades = groupTrades(CLOSED_POSITIONS);
     const wins = allClosedTrades.filter(t => t.pnlFinal > 0);
     const totalPnl = allClosedTrades.reduce((s, t) => s + t.pnlFinal, 0);
@@ -4178,6 +4247,9 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="j-statsbar-value">${HOLDINGS.length} 笔</span>
         </div>
       </div>` : "";
+
+    // Attribution summary (closed trades with tags)
+    const summaryHTML = journalSummaryHTML(closedItems);
 
     // Group into year-month buckets
     const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
@@ -4225,27 +4297,54 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).join("");
 
-    feed.innerHTML = statsBar + groupsHTML;
+    feed.innerHTML = statsBar + summaryHTML + groupsHTML;
 
     $$("[data-journal-filter]").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.journalFilter === journalFilter);
       btn.addEventListener("click", () => { journalFilter = btn.dataset.journalFilter; renderJournal(); });
     });
-    $$(".jc-note-toggle", feed).forEach(toggle => {
-      toggle.addEventListener("click", () => {
-        toggle.classList.toggle("open");
-        const body = toggle.nextElementSibling;
-        body.classList.toggle("open");
-        if (body.classList.contains("open")) { const ta = body.querySelector("textarea"); if (ta) autoResizeTA(ta); }
+
+    // Tag chip wiring — toggle without full re-render
+    $$(".jc-tag-chip", feed).forEach(chip => {
+      chip.addEventListener("click", () => {
+        const { tagId, sym, entry, cost, from } = chip.dataset;
+        const arr = from === "closed" ? CLOSED_POSITIONS : HOLDINGS;
+        // Read current tags from first matching record (all records in group share same tags)
+        const first = arr.find(x => x.sym === sym && x.entry === entry && Math.abs(x.cost - parseFloat(cost)) < 0.001);
+        if (!first) return;
+        const tags = new Set(first.journalTags || []);
+        if (tags.has(tagId)) tags.delete(tagId); else tags.add(tagId);
+        const newTags = [...tags];
+        _journalSaveField(arr, sym, entry, cost, x => { x.journalTags = newTags; });
+        // Update chip appearance in place
+        const tagDef = JOURNAL_TAGS.find(t => t.id === tagId);
+        const active = tags.has(tagId);
+        chip.classList.toggle("active", active);
+        if (tagDef) {
+          chip.style.color       = active ? tagDef.color : "";
+          chip.style.borderColor = active ? tagDef.color : "";
+          chip.style.background  = active ? `color-mix(in oklch,${tagDef.color} 14%,transparent)` : "";
+        }
+        // Refresh attribution summary
+        const sumEl = feed.querySelector(".jt-summary");
+        const newSum = journalSummaryHTML(closedItems);
+        if (sumEl) { if (newSum) sumEl.outerHTML = newSum; else sumEl.remove(); }
+        else if (newSum) {
+          const sb = feed.querySelector(".j-statsbar");
+          if (sb) sb.insertAdjacentHTML("afterend", newSum);
+          else feed.insertAdjacentHTML("afterbegin", newSum);
+        }
       });
     });
+
+    // Note area wiring
     $$(".journal-note-area", feed).forEach(ta => {
       autoResizeTA(ta);
       ta.addEventListener("input", () => autoResizeTA(ta));
       ta.addEventListener("blur", () => {
-        const arr = ta.dataset.from === "closed" ? CLOSED_POSITIONS : HOLDINGS;
-        const pos = arr.find(x => x.sym === ta.dataset.sym);
-        if (pos) { pos.journalNote = ta.value; saveToStorage(); }
+        const { sym, entry, cost, from } = ta.dataset;
+        const arr = from === "closed" ? CLOSED_POSITIONS : HOLDINGS;
+        _journalSaveField(arr, sym, entry, cost, x => { x.journalNote = ta.value; });
       });
     });
   }
@@ -4258,7 +4357,6 @@ function rsAdjustGrade(grade, rsResult) {
     const multiExit = records.length > 1;
     const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
     const pnlSign = pnlAmt != null ? fmt.sign(pnlAmt) : "neu";
-    const bx = h.bx || {};
 
     // Status badge
     let badgeColor, badgeTxt;
@@ -4271,7 +4369,7 @@ function rsAdjustGrade(grade, rsResult) {
       const closedQty = partials.reduce((s, c) => s + (c.qty || 0), 0);
       const origQty = closedQty + (h.qty || 0);
       const trimPct = origQty > 0 ? Math.round(closedQty / origQty * 100) : 0;
-      badgeColor = "var(--warn)"; badgeTxt = `持仓中 · 已减仓${trimPct}%`;
+      badgeColor = "var(--warn)"; badgeTxt = `持仓 · 减仓${trimPct}%`;
     } else {
       const bs = BUCKET_STATUS[progressBucket(h)];
       badgeColor = bs.color; badgeTxt = bs.label.split("·")[0].trim();
@@ -4280,20 +4378,35 @@ function rsAdjustGrade(grade, rsResult) {
     const dateStr = isClosed
       ? `${fmt.date(h.entry)} → ${fmt.date(h.closedAt)} · ${h.days ?? "—"}d`
       : `${fmt.date(h.entry)} · ${h.days}d`;
-    const hasNote = !!(h.journalNote?.trim());
-    const barsCls = bx.dailyBars === "0-5" ? "bxbar-early" : bx.dailyBars === "5-15" ? "bxbar-mid" : "bxbar-late";
-    const barsLbl = bx.dailyBars === "0-5" ? "开始" : bx.dailyBars === "5-15" ? "中间" : "延续";
 
-    // Exit records mini-list (partial closes on open, all exits on closed multi-exit)
-    const exitRows = isClosed && multiExit ? records : hasPartials ? partials : [];
-    const exitsHTML = exitRows.length ? `
+    // Tags section
+    const selectedTags = new Set(h.journalTags || []);
+    const groupOrder = ["趋势", "入场", "管理", "风险"];
+    const tagsByGroup = groupOrder.map(g => ({
+      group: g,
+      tags: JOURNAL_TAGS.filter(t => t.group === g),
+    }));
+    const tagsHTML = tagsByGroup.map(({ group, tags }) => `
+      <div class="jc-tag-group">
+        <span class="jc-tag-group-label">${group}</span>
+        ${tags.map(t => {
+          const active = selectedTags.has(t.id);
+          const style = active
+            ? `color:${t.color};border-color:${t.color};background:color-mix(in oklch,${t.color} 14%,transparent)`
+            : "";
+          return `<button class="jc-tag-chip${active ? " active" : ""}"
+            data-tag-id="${t.id}" data-sym="${h.sym}" data-entry="${h.entry}" data-cost="${h.cost}" data-from="${from}"
+            style="${style}">${t.label}</button>`;
+        }).join("")}
+      </div>`).join("");
+
+    // Exit records mini-list (only for multi-exit closed trades)
+    const exitsHTML = isClosed && multiExit ? `
       <div class="jc-exits">
-        ${exitRows.map(c => {
+        ${records.map(c => {
           const isFull = c.exitReason !== "partial";
-          const typeCls = isFull ? "jc-exit-full" : "jc-exit-partial";
-          const typeLabel = isFull ? "平仓" : "减仓";
           return `<div class="jc-exit-item">
-            <span class="jc-exit-type ${typeCls}">${typeLabel}</span>
+            <span class="jc-exit-type ${isFull ? "jc-exit-full" : "jc-exit-partial"}">${isFull ? "平仓" : "减仓"}</span>
             <span class="jc-exit-date">${fmt.date(c.closedAt)}</span>
             <span class="jc-exit-price">@$${price(c.closePrice ?? c.last ?? c.cost)}</span>
             <span class="jc-exit-qty">${c.qty}股</span>
@@ -4316,30 +4429,18 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         <div class="jc-right">
           <span class="statlight" style="color:${badgeColor};background:color-mix(in oklch,${badgeColor} 14%,transparent)"><span class="dot" style="background:${badgeColor}"></span>${badgeTxt}</span>
-          <span class="jc-date">${dateStr}</span>
           ${pnlAmt != null ? `<span class="jc-pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>` : ""}
           ${isClosed && h.rMult != null ? `<span class="jc-rmult ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</span>` : ""}
+          <span class="jc-date">${dateStr}</span>
         </div>
       </div>
 
       ${exitsHTML}
 
-      <div class="jc-bx">
-        <span class="bx-bar-chip ${barsCls}">${bx.dailyBars ?? "—"}<span class="bx-bar-sub">${barsLbl}</span></span>
-        ${bx.weekly  != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">W ${bx.weekly  >= 0 ? "+" : ""}${bx.weekly}</span>` : ""}
-        ${bx.monthly != null ? `<span class="bx-chip-score" style="font-size:11px;padding:2px 8px">M ${bx.monthly >= 0 ? "+" : ""}${bx.monthly}</span>` : ""}
-        ${bx.sector?.name ? `<span class="muted" style="font-size:10.5px;display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;border-radius:50%;background:${bx.sector.color};flex-shrink:0;display:inline-block"></span>${bx.sector.name}</span>` : ""}
-      </div>
+      <div class="jc-tags-section">${tagsHTML}</div>
 
-      ${h.thesis ? `<div class="jc-thesis">${h.thesis}</div>` : ""}
-
-      <div class="jc-note-toggle" data-sym="${h.sym}" data-from="${from}">
-        <span class="nt-chevron"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></span>
-        笔记${hasNote ? " · 已有内容" : " · 点击展开"}
-      </div>
-      <div class="jc-note-body">
-        <textarea class="journal-note-area" data-sym="${h.sym}" data-from="${from}" placeholder="记录入场思路、心态、执行情况…" rows="3">${h.journalNote || ""}</textarea>
-      </div>
+      <textarea class="journal-note-area" data-sym="${h.sym}" data-entry="${h.entry}" data-cost="${h.cost}" data-from="${from}"
+        placeholder="记录回顾思路、经验总结…" rows="2">${h.journalNote || ""}</textarea>
     </div>`;
   }
 

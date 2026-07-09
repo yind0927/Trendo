@@ -1720,15 +1720,28 @@
 
   /* JOURNAL VIEW */
   #journal-view { padding: 24px 20px 60px; }
-  .journal-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 16px; flex-wrap: wrap; } /* legacy, use .page-topbar */
+  .journal-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 16px; flex-wrap: wrap; }
   .journal-filters-row { display: flex; gap: 6px; }
 
   /* Stats bar */
-  .j-statsbar { display: flex; align-items: center; gap: 0; margin-bottom: 20px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .j-statsbar { display: flex; align-items: center; gap: 0; margin-bottom: 14px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .j-statsbar-item { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; flex: 1; }
   .j-statsbar-label { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); font-family: var(--f-mono); font-weight: 500; }
   .j-statsbar-value { font-size: 14px; font-weight: 700; font-family: var(--f-mono); color: var(--fg-0); }
   .j-statsbar-sep { width: 1px; background: var(--line); align-self: stretch; flex-shrink: 0; }
+
+  /* Attribution summary panel */
+  .jt-summary { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; }
+  .jts-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .jts-title { font-family: var(--f-mono); font-weight: 700; font-size: 11px; color: var(--fg-0); text-transform: uppercase; letter-spacing: .06em; }
+  .jts-sub { font-size: 10px; color: var(--fg-3); }
+  .jts-cols { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0 14px; }
+  .jts-divider { background: var(--line); align-self: stretch; }
+  .jts-col-head { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 7px; }
+  .jts-row { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; }
+  .jts-tag { font-size: 11.5px; font-weight: 500; }
+  .jts-count { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); }
+  .jts-empty { font-size: 11px; color: var(--fg-3); font-style: italic; }
 
   /* Month group */
   .journal-feed { display: flex; flex-direction: column; gap: 0; }
@@ -1758,16 +1771,19 @@
   .jc-date { font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); white-space: nowrap; }
   .jc-pnl { font-family: var(--f-mono); font-weight: 700; font-size: 13px; white-space: nowrap; }
   .jc-rmult { font-family: var(--f-mono); font-size: 10.5px; padding: 1px 7px; border-radius: 5px; background: var(--bg-3); white-space: nowrap; }
-  .jc-bx { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-  .jc-thesis { font-size: 12.5px; line-height: 1.7; color: var(--fg-1); background: var(--bg-2); border-radius: 8px; padding: 9px 12px; border-left: 3px solid var(--accent-line); }
 
-  /* Collapsible note */
-  .jc-note-toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--fg-3); font-size: 10px; font-family: var(--f-mono); text-transform: uppercase; letter-spacing: .08em; user-select: none; width: fit-content; transition: color .12s; padding: 1px 0; }
-  .jc-note-toggle:hover { color: var(--fg-1); }
+  /* Tag chips */
+  .jc-tags-section { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--bg-0); border-radius: 8px; border: 1px solid var(--line); }
+  .jc-tag-group { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .jc-tag-group-label { font-size: 9px; font-family: var(--f-mono); color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; min-width: 30px; flex-shrink: 0; }
+  .jc-tag-chip { all: unset; cursor: pointer; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 20px; border: 1px solid var(--line); color: var(--fg-3); background: transparent; white-space: nowrap; transition: opacity .12s, transform .08s; user-select: none; }
+  .jc-tag-chip:hover { opacity: .8; transform: scale(1.03); }
+  .jc-tag-chip.active { font-weight: 600; }
+
   /* Section separator within month group */
   .jc-section-sep { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .08em; padding: 8px 0 4px; border-top: 1px solid var(--line); margin-top: 4px; }
   /* Exit records mini-list */
-  .jc-exits { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 2px; }
+  .jc-exits { display: flex; flex-direction: column; gap: 3px; }
   .jc-exit-item { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 5px 8px; background: var(--bg-2); border-radius: 5px; }
   .jc-exit-type { font-size: 9.5px; padding: 1px 5px; border-radius: 3px; font-weight: 600; flex-shrink: 0; }
   .jc-exit-partial { background: color-mix(in oklch, var(--warn) 15%, transparent); color: var(--warn); }
@@ -1777,10 +1793,6 @@
   .jc-exit-qty   { color: var(--fg-3); font-size: 10.5px; }
   .jc-exit-pnl   { margin-left: auto; font-weight: 500; font-size: 11px; }
   .jc-exit-r     { color: var(--fg-3); font-size: 10px; font-family: var(--f-mono); }
-  .jc-note-toggle .nt-chevron { transition: transform .15s; display: inline-flex; }
-  .jc-note-toggle.open .nt-chevron { transform: rotate(90deg); }
-  .jc-note-body { display: none; }
-  .jc-note-body.open { display: block; }
   textarea.journal-note-area { width: 100%; box-sizing: border-box; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--fg-0); font-family: var(--f-sans); font-size: 12.5px; line-height: 1.65; resize: none; overflow: hidden; outline: none; transition: border-color .15s; }
   textarea.journal-note-area:focus { border-color: var(--accent-line); }
   textarea.journal-note-area::placeholder { color: var(--fg-3); }
@@ -2634,7 +2646,9 @@
     .j-statsbar-item { padding: 8px 12px; }
     .journal-card { padding: 11px 13px; gap: 9px; }
     .jc-right { gap: 6px; }
-    .jc-bx { gap: 5px; }
+    .jts-cols { grid-template-columns: 1fr 1px 1fr; gap: 0 10px; }
+    .jc-tags-section { padding: 7px 8px; gap: 5px; }
+    .jc-tag-chip { font-size: 10.5px; padding: 2px 7px; }
 
     /* ---- Analytics ---- */
     #analytics-view { padding: 12px 12px 86px; }
@@ -4134,8 +4148,8 @@
   </div>
 </div>
 
-<script src="data.js?v=245"></script>
-<script src="desk.js?v=245"></script>
+<script src="data.js?v=246"></script>
+<script src="desk.js?v=246"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
