@@ -1,8 +1,4 @@
 // api/options.js — options chain proxy (Yahoo Finance v7, 5min Redis cache)
-import { Redis } from "@upstash/redis";
-
-const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
-
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -11,12 +7,24 @@ export default async function handler(req, res) {
   const expiry = req.query.expiry || ""; // optional Unix timestamp string
   if (!sym) return res.status(400).json({ error: "sym required" });
 
+  const kvUrl   = process.env.KV_REST_API_URL;
+  const kvToken = process.env.KV_REST_API_TOKEN;
+  const kvHdr   = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
   const cacheKey = `trendo:opts:${sym}:${expiry || "0"}`;
-  try {
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json({ ...cached, cached: true });
-  } catch (_) {}
 
+  // ── Redis cache (5 min) ───────────────────────────────────────────────────
+  if (kvUrl && kvToken) {
+    try {
+      const r = await fetch(`${kvUrl}/pipeline`, {
+        method: "POST", headers: kvHdr,
+        body: JSON.stringify([["GET", cacheKey]]),
+      });
+      const [{ result }] = await r.json();
+      if (result) return res.json({ ...JSON.parse(result), cached: true });
+    } catch (_) {}
+  }
+
+  // ── Fetch Yahoo Finance v7 options chain ──────────────────────────────────
   try {
     const url = expiry
       ? `https://query2.finance.yahoo.com/v7/finance/options/${sym}?date=${expiry}`
@@ -32,15 +40,15 @@ export default async function handler(req, res) {
     if (!chain) return res.status(404).json({ error: "No options data" });
 
     const mapOpt = o => ({
-      strike:      o.strike,
-      bid:         o.bid ?? 0,
-      ask:         o.ask ?? 0,
-      last:        o.lastPrice ?? 0,
-      iv:          o.impliedVolatility ?? 0,
-      volume:      o.volume ?? 0,
-      oi:          o.openInterest ?? 0,
-      expiry:      o.expiration,    // Unix timestamp
-      itm:         o.inTheMoney ?? false,
+      strike: o.strike,
+      bid:    o.bid       ?? 0,
+      ask:    o.ask       ?? 0,
+      last:   o.lastPrice ?? 0,
+      iv:     o.impliedVolatility ?? 0,
+      volume: o.volume    ?? 0,
+      oi:     o.openInterest ?? 0,
+      expiry: o.expiration,
+      itm:    o.inTheMoney ?? false,
     });
 
     const result = {
@@ -52,7 +60,14 @@ export default async function handler(req, res) {
       selectedExp: chain.options?.[0]?.expirationDate ?? null,
     };
 
-    await redis.set(cacheKey, result, { ex: 300 }).catch(() => {});
+    // ── Write cache ─────────────────────────────────────────────────────────
+    if (kvUrl && kvToken) {
+      fetch(`${kvUrl}/pipeline`, {
+        method: "POST", headers: kvHdr,
+        body: JSON.stringify([["SET", cacheKey, JSON.stringify(result)], ["EXPIRE", cacheKey, 300]]),
+      }).catch(() => {});
+    }
+
     return res.json(result);
   } catch (err) {
     return res.status(500).json({ error: err.message });
