@@ -21,6 +21,57 @@
 
   const price = v => v >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 2 }) : v.toFixed(2);
 
+  // ── Black-Scholes option pricing ──────────────────────────────────────────
+  function _erfApprox(x) {
+    const t = 1 / (1 + 0.3275911 * Math.abs(x));
+    const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+    return x < 0 ? -y : y;
+  }
+  function _normCDF(x) { return 0.5 * (1 + _erfApprox(x / Math.SQRT2)); }
+
+  // Returns { price, delta, theta($/day) } for one option contract share (multiply ×100 for contract)
+  function bsCalc(S, K, T, r, sigma, type) {
+    if (T <= 0) {
+      const intrinsic = type === "call" ? Math.max(0, S - K) : Math.max(0, K - S);
+      return { price: intrinsic, delta: type === "call" ? (S >= K ? 1 : 0) : (S <= K ? -1 : 0), theta: 0 };
+    }
+    if (sigma <= 0 || S <= 0 || K <= 0) return { price: 0, delta: 0, theta: 0 };
+    const sqT = Math.sqrt(T);
+    const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * T) / (sigma * sqT);
+    const d2 = d1 - sigma * sqT;
+    const nd1 = Math.exp(-d1 * d1 / 2) / Math.sqrt(2 * Math.PI);
+    const eKT = K * Math.exp(-r * T);
+    let priceV, deltaV, thetaV;
+    if (type === "call") {
+      priceV = S * _normCDF(d1) - eKT * _normCDF(d2);
+      deltaV = _normCDF(d1);
+      thetaV = (-(S * nd1 * sigma) / (2 * sqT) - r * eKT * _normCDF(d2)) / 365;
+    } else {
+      priceV = eKT * _normCDF(-d2) - S * _normCDF(-d1);
+      deltaV = _normCDF(d1) - 1;
+      thetaV = (-(S * nd1 * sigma) / (2 * sqT) + r * eKT * _normCDF(-d2)) / 365;
+    }
+    return { price: Math.max(0, priceV), delta: deltaV, theta: thetaV };
+  }
+
+  // Revalue an options position given current spot price
+  function calcOptionCurrent(pos, spot) {
+    const expMs = new Date(pos.expiry + "T21:00:00Z").getTime();
+    const T = Math.max(0, (expMs - Date.now()) / (365.25 * 24 * 3600 * 1000));
+    const r = 0.043; // ~4.3% risk-free rate
+    const bs = bsCalc(spot, pos.strike, T, r, pos.iv, pos.type);
+    const sign = pos.qty > 0 ? 1 : -1;
+    const absQty = Math.abs(pos.qty);
+    return {
+      currentPrice: bs.price,
+      pnl:   sign * (bs.price - pos.premium) * absQty * 100,
+      delta: bs.delta * pos.qty * 100,   // net delta (shares)
+      theta: bs.theta * pos.qty * 100,   // net theta ($/day)
+      T,
+    };
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // ============ OVERVIEW CARDS ============
   function renderOverview() {
     const totalPnlDollar = HOLDINGS.reduce((sum, h) => sum + (h.pnlDollar || 0), 0);
@@ -1058,6 +1109,12 @@ function rsAdjustGrade(grade, rsResult) {
   let simHoldingsViewMode = localStorage.getItem("trendo_sim_holdings_view") || "list";
   let simSelectedSym = null;
   let simNotional = 100000;
+  // Options module state
+  let simOptionsVisible = false;
+  let simOptionsSym  = "QQQ";
+  let simOptionsType = "call";
+  let simOptionsExpiry = null; // selected expiry Unix timestamp (string)
+  let _optChainCache = {};     // { [sym+expiry]: { data, ts } }
   let newPositionContext = "desk"; // "desk" | "sim"
   let pendingCloseCtx = "desk";
   let pendingDeleteCtx = "desk";
@@ -1344,6 +1401,7 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
       localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
+      localStorage.setItem("trendo_v4_sim_options",        JSON.stringify(SIM_OPTIONS));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_analysis_hist", JSON.stringify(analysisHistory));
       // Skip timestamp update for price-only ticks so they don't make local appear "newer"
@@ -1380,6 +1438,8 @@ function rsAdjustGrade(grade, rsResult) {
       if (sp)  { const parsed = JSON.parse(sp);  SIM_PENDING.splice(0, SIM_PENDING.length, ...parsed); }
       const scp = localStorage.getItem("trendo_v4_sim_close_pending");
       if (scp) { const parsed = JSON.parse(scp); SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...parsed); }
+      const so = localStorage.getItem("trendo_v4_sim_options");
+      if (so) { const parsed = JSON.parse(so); SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...parsed); }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
@@ -4472,10 +4532,305 @@ function rsAdjustGrade(grade, rsResult) {
   function renderSim() {
     renderSimOverview();
     renderSimPending();
+    renderSimOptions();
     renderSimTable();
     renderSimAnalytics();
     renderSimDailySources();
   }
+
+  // ── Options module ────────────────────────────────────────────────────────
+  async function fetchOptionsChain(sym, expiry) {
+    const key = sym + ":" + (expiry || "0");
+    const now = Date.now();
+    if (_optChainCache[key] && now - _optChainCache[key].ts < 300000) return _optChainCache[key].data;
+    const url = `/api/options?sym=${sym}${expiry ? "&expiry=" + expiry : ""}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("options API " + resp.status);
+    const data = await resp.json();
+    _optChainCache[key] = { data, ts: now };
+    return data;
+  }
+
+  function _optExpiryLabel(ts) {
+    const d = new Date(ts * 1000);
+    return d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "2-digit" });
+  }
+
+  function _optionsChainHTML(chain, spot) {
+    const rows = (simOptionsType === "call" ? chain.calls : chain.puts);
+    if (!rows || !rows.length) return `<div class="opts-empty">暂无期权数据</div>`;
+    // Show ATM ±8 strikes
+    const atmStrike = rows.reduce((best, r) => Math.abs(r.strike - spot) < Math.abs(best.strike - spot) ? r : best, rows[0]);
+    const atmIdx = rows.indexOf(atmStrike);
+    const visible = rows.slice(Math.max(0, atmIdx - 8), atmIdx + 9);
+    return `<div class="opts-chain-wrap">
+      <table class="opts-chain">
+        <thead><tr>
+          <th style="text-align:left">行权价</th>
+          <th>Bid</th><th>Ask</th><th>IV</th><th>成交量</th><th>OI</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${visible.map(r => {
+            const isATM = r.strike === atmStrike.strike;
+            const itmCls = r.itm ? " itm" : "";
+            const mid = ((r.bid + r.ask) / 2).toFixed(2);
+            return `<tr class="${isATM ? "atm" : ""}${itmCls}">
+              <td style="text-align:left;font-weight:${isATM ? 700 : 400};color:${isATM ? "var(--fg-0)" : "var(--fg-1)"}">${r.strike}</td>
+              <td>${r.bid > 0 ? r.bid.toFixed(2) : "—"}</td>
+              <td>${r.ask > 0 ? r.ask.toFixed(2) : "—"}</td>
+              <td class="muted">${r.iv > 0 ? (r.iv * 100).toFixed(1) + "%" : "—"}</td>
+              <td class="muted">${r.volume > 0 ? r.volume.toLocaleString() : "—"}</td>
+              <td class="muted">${r.oi > 0 ? r.oi.toLocaleString() : "—"}</td>
+              <td>
+                ${r.ask > 0 ? `<button class="opts-act-btn" data-optbuy="1"
+                  data-sym="${simOptionsSym}" data-type="${simOptionsType}"
+                  data-strike="${r.strike}" data-expiry="${_optExpiryTs2Date(chain.selectedExp || r.expiry)}"
+                  data-expiry-ts="${chain.selectedExp || r.expiry}"
+                  data-iv="${r.iv}" data-ask="${r.ask}" data-spot="${spot}">买入</button>` : ""}
+              </td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  function _optExpiryTs2Date(ts) {
+    const d = new Date(ts * 1000);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function _optPositionsHTML(spot) {
+    if (!SIM_OPTIONS.length) return "";
+    const rows = SIM_OPTIONS.map(pos => {
+      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
+      const pnlCls = cur.pnl > 0 ? "up" : cur.pnl < 0 ? "down" : "";
+      const direction = pos.qty > 0 ? "买入" : "卖出";
+      const typeLabel = pos.type === "call" ? "Call" : "Put";
+      const daysLeft = Math.max(0, Math.round(cur.T * 365));
+      return `<div class="opts-pos-card">
+        <div class="opts-pos-label">
+          <div class="opts-pos-name">${pos.sym} ${pos.strike}${typeLabel[0]} ${pos.expiry.slice(5)}</div>
+          <div class="opts-pos-meta">${direction} ${Math.abs(pos.qty)}手 · 入 $${pos.premium.toFixed(2)} · ${daysLeft}天到期</div>
+        </div>
+        <div class="opts-pos-greeks-col">
+          <div class="opts-pos-greek">Δ ${cur.delta >= 0 ? "+" : ""}${cur.delta.toFixed(1)}</div>
+          <div class="opts-pos-greek">θ ${cur.theta >= 0 ? "+" : ""}$${cur.theta.toFixed(2)}/d</div>
+        </div>
+        <div class="opts-pos-pnl">
+          <div class="opts-pos-amt ${pnlCls}">${cur.pnl >= 0 ? "+" : "−"}$${Math.abs(cur.pnl).toFixed(0)}</div>
+          <div class="opts-pos-cur muted">现 $${cur.currentPrice.toFixed(2)}</div>
+        </div>
+        <button class="opts-close-btn" data-opt-id="${pos.id}" title="平仓">✕</button>
+      </div>`;
+    }).join("");
+
+    // Summary totals
+    const totDelta = SIM_OPTIONS.reduce((s, pos) => {
+      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
+      return s + cur.delta;
+    }, 0);
+    const totTheta = SIM_OPTIONS.reduce((s, pos) => {
+      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
+      return s + cur.theta;
+    }, 0);
+    const totPnl = SIM_OPTIONS.reduce((s, pos) => {
+      const cur = calcOptionCurrent(pos, spot || pos.underlyingAtEntry);
+      return s + cur.pnl;
+    }, 0);
+    const pnlCls = totPnl > 0 ? "up" : totPnl < 0 ? "down" : "";
+
+    return `${rows}
+    <div class="opts-summary">
+      <div class="opts-summary-item">
+        <div class="opts-summary-label">总Delta</div>
+        <div class="opts-summary-val">${totDelta >= 0 ? "+" : ""}${totDelta.toFixed(1)}</div>
+      </div>
+      <div class="opts-summary-sep"></div>
+      <div class="opts-summary-item">
+        <div class="opts-summary-label">日Theta</div>
+        <div class="opts-summary-val ${totTheta >= 0 ? "up" : "down"}">${totTheta >= 0 ? "+" : ""}$${Math.abs(totTheta).toFixed(2)}</div>
+      </div>
+      <div class="opts-summary-sep"></div>
+      <div class="opts-summary-item">
+        <div class="opts-summary-label">总盈亏</div>
+        <div class="opts-summary-val ${pnlCls}">${totPnl >= 0 ? "+" : "−"}$${Math.abs(totPnl).toFixed(0)}</div>
+      </div>
+    </div>`;
+  }
+
+  function renderSimOptions() {
+    const section = $("#sim-options-section");
+    if (!section) return;
+    section.style.display = simOptionsVisible ? "" : "none";
+    if (!simOptionsVisible) return;
+
+    const inner = $("#sim-opts-inner");
+    if (!inner) return;
+
+    // Get current spot for positions (use cached chain data if available)
+    const cacheKey = simOptionsSym + ":" + (simOptionsExpiry || "0");
+    const cachedSpot = _optChainCache[cacheKey]?.data?.spot;
+
+    // Controls: sym chips + call/put toggle
+    const syms = ["QQQ", "SMH", "DRAM"];
+    const symChips = syms.map(s =>
+      `<button class="opts-sym-chip${s === simOptionsSym ? " active" : ""}" data-optsym="${s}">${s}</button>`
+    ).join("");
+    const typeToggle = `<div class="opts-type-toggle">
+      <button class="opts-type-btn${simOptionsType === "call" ? " active" : ""}" data-opttype="call">Call</button>
+      <button class="opts-type-btn${simOptionsType === "put" ? " active" : ""}" data-opttype="put">Put</button>
+    </div>`;
+
+    // Build chain HTML (show loading or cached)
+    const chainData = _optChainCache[cacheKey]?.data;
+    let chainHTML = "";
+    let expirySelHTML = "";
+
+    if (chainData) {
+      // Expiry selector
+      const exps = chainData.expirations || [];
+      expirySelHTML = exps.length > 1
+        ? `<div class="opts-expiry-row">
+            <select class="opts-expiry-sel" id="opts-expiry-sel">
+              ${exps.map(ts => `<option value="${ts}" ${String(ts) === String(simOptionsExpiry || chainData.selectedExp) ? "selected" : ""}>${_optExpiryLabel(ts)}</option>`).join("")}
+            </select>
+            <button class="opts-refresh-btn" id="opts-refresh-btn" title="刷新期权链">↻</button>
+           </div>`
+        : "";
+      chainHTML = _optionsChainHTML(chainData, chainData.spot);
+    } else {
+      chainHTML = `<div class="opts-loading" id="opts-chain-loading">
+        <span class="muted" style="font-size:12px">正在加载期权链…</span>
+      </div>`;
+    }
+
+    // Positions section
+    const posHTML = _optPositionsHTML(cachedSpot);
+
+    inner.innerHTML = `
+      <div class="opts-controls">
+        <div class="opts-sym-chips">${symChips}</div>
+        ${typeToggle}
+      </div>
+      ${expirySelHTML}
+      <div id="opts-chain-container">${chainHTML}</div>
+      ${SIM_OPTIONS.length ? `<div class="sim-section-label" style="margin-top:14px">
+        <span class="ssl-zh">期权持仓</span>
+        <span class="ssl-en">Positions · ${SIM_OPTIONS.length}手</span>
+        <span class="ssl-rule"></span>
+      </div>
+      <div class="opts-positions">${posHTML}</div>` : ""}
+    `;
+
+    // If no chain data yet, fetch it
+    if (!chainData) {
+      fetchOptionsChain(simOptionsSym, simOptionsExpiry || "").then(data => {
+        if (!simOptionsExpiry && data.selectedExp) simOptionsExpiry = String(data.selectedExp);
+        renderSimOptions();
+      }).catch(err => {
+        const el = $("#opts-chain-loading");
+        if (el) el.innerHTML = `<div class="muted" style="font-size:12px;color:var(--down)">加载失败: ${err.message}</div>`;
+      });
+    }
+
+    wireSimOptions();
+  }
+
+  function wireSimOptions() {
+    // Sym chips
+    $$(".opts-sym-chip", $("#sim-opts-inner")).forEach(btn => {
+      btn.addEventListener("click", () => {
+        simOptionsSym = btn.dataset.optsym;
+        simOptionsExpiry = null;
+        renderSimOptions();
+      });
+    });
+
+    // Call/Put toggle
+    $$(".opts-type-btn", $("#sim-opts-inner")).forEach(btn => {
+      btn.addEventListener("click", () => {
+        simOptionsType = btn.dataset.opttype;
+        renderSimOptions();
+      });
+    });
+
+    // Expiry selector
+    const expSel = $("#opts-expiry-sel");
+    if (expSel) {
+      expSel.addEventListener("change", () => {
+        simOptionsExpiry = expSel.value;
+        _optChainCache[simOptionsSym + ":" + simOptionsExpiry] = null; // invalidate for new expiry
+        renderSimOptions();
+        fetchOptionsChain(simOptionsSym, simOptionsExpiry).then(() => renderSimOptions()).catch(() => {});
+      });
+    }
+
+    // Refresh button
+    const refBtn = $("#opts-refresh-btn");
+    if (refBtn) {
+      refBtn.addEventListener("click", () => {
+        const key = simOptionsSym + ":" + (simOptionsExpiry || "0");
+        delete _optChainCache[key];
+        renderSimOptions();
+      });
+    }
+
+    // Buy buttons → open entry modal
+    $$("[data-optbuy]", $("#sim-opts-inner")).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const { sym, type, strike, expiry, expiryTs, iv, ask, spot } = btn.dataset;
+        openOptionsEntryModal({ sym, type, strike: +strike, expiry, expiryTs: +expiryTs, iv: +iv, ask: +ask, spot: +spot });
+      });
+    });
+
+    // Close position buttons
+    $$(".opts-close-btn", $("#sim-opts-inner")).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.optId;
+        const idx = SIM_OPTIONS.findIndex(p => p.id === id);
+        if (idx !== -1) {
+          SIM_OPTIONS.splice(idx, 1);
+          saveToStorage();
+          renderSimOptions();
+        }
+      });
+    });
+  }
+
+  function openOptionsEntryModal({ sym, type, strike, expiry, expiryTs, iv, ask, spot }) {
+    const modal = $("#opts-entry-modal");
+    if (!modal) return;
+    modal.querySelector(".opts-modal-title").textContent = `${sym} ${strike} ${type === "call" ? "Call" : "Put"} · ${expiry}`;
+    modal.querySelector("#opts-ask-display").textContent = `Ask $${ask.toFixed(2)} · 参考IV ${(iv * 100).toFixed(1)}%`;
+    modal.querySelector("#opts-qty").value = "1";
+    modal.querySelector("#opts-premium").value = ask.toFixed(2);
+    modal.querySelector("#opts-direction").value = "long";
+    modal.style.display = "flex";
+
+    const onConfirm = () => {
+      const qty    = parseInt(modal.querySelector("#opts-qty").value) || 1;
+      const premium = parseFloat(modal.querySelector("#opts-premium").value) || ask;
+      const direction = modal.querySelector("#opts-direction").value; // "long" | "short"
+      const finalQty = direction === "short" ? -qty : qty;
+      const typeLabel = type === "call" ? "Call" : "Put";
+      SIM_OPTIONS.push({
+        id:                Date.now().toString(36),
+        sym, type, strike, expiry, expiryTs, iv,
+        qty:               finalQty,
+        premium,
+        underlyingAtEntry: spot,
+        entryDate:         new Date().toISOString().slice(0, 10),
+        name:              `${sym} ${strike}${typeLabel[0]} ${expiry.slice(5)}`,
+      });
+      saveToStorage();
+      modal.style.display = "none";
+      renderSimOptions();
+    };
+    modal.querySelector("#opts-confirm-btn").onclick = onConfirm;
+    modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   function renderSimPending() {
     const section = $("#sim-pending-section");
@@ -5151,6 +5506,15 @@ function rsAdjustGrade(grade, rsResult) {
       const ei = $("#form-entry"); if (ei) ei.required = true;
       openModal("new-position-modal");
     });
+
+    const simOptsToggle = $("#sim-options-btn");
+    if (simOptsToggle) {
+      simOptsToggle.addEventListener("click", () => {
+        simOptionsVisible = !simOptionsVisible;
+        simOptsToggle.classList.toggle("active", simOptionsVisible);
+        renderSimOptions();
+      });
+    }
 
     const tabOpen   = $("#sim-tab-open");
     const tabClosed = $("#sim-tab-closed");

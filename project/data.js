@@ -69,3 +69,6 @@ window.SIM_HOLDINGS    = [];
 window.SIM_CLOSED      = [];
 window.SIM_PENDING     = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }
 window.SIM_CLOSE_PENDING = []; // { id, sym, qty, orderType:"market"|"limit", limitPrice, createdAt }
+// Options simulation positions
+// { id, sym, type:"call"|"put", strike, expiry:"YYYY-MM-DD", expiryTs, qty, premium, iv, underlyingAtEntry, entryDate, name }
+window.SIM_OPTIONS = [];

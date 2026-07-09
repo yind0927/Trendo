@@ -1650,6 +1650,51 @@
   .sim-section-label.is-major { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
   .sim-section-label.is-major .ssl-zh { font-size: 12px; letter-spacing: 0.12em; }
   .sim-section-label.is-major .ssl-rule { background: linear-gradient(90deg, var(--fg-3), transparent); opacity: .5; }
+
+  /* ── Options module ──────────────────────────────────────── */
+  #sim-options-section { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  #sim-options-section .sim-section-label { margin: 14px 14px 10px; }
+  .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; margin-bottom: 10px; }
+  .opts-sym-chips { display: flex; gap: 6px; }
+  .opts-sym-chip { font-size: 11px; font-weight: 600; padding: 3px 11px; border-radius: 20px; border: 1px solid var(--line); color: var(--fg-2); background: transparent; cursor: pointer; transition: .15s; }
+  .opts-sym-chip.active { background: var(--accent); border-color: var(--accent); color: oklch(0.14 0.012 250); }
+  .opts-type-toggle { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .opts-type-btn { font-size: 11px; font-weight: 600; padding: 3px 13px; background: transparent; color: var(--fg-2); border: none; cursor: pointer; transition: .15s; }
+  .opts-type-btn.active { background: var(--accent); color: oklch(0.14 0.012 250); }
+  .opts-expiry-row { display: flex; align-items: center; gap: 8px; padding: 0 14px; margin-bottom: 10px; }
+  .opts-expiry-sel { font-size: 11.5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-1); color: var(--fg-1); cursor: pointer; }
+  .opts-refresh-btn { font-size: 13px; color: var(--fg-3); background: none; border: none; cursor: pointer; padding: 2px 4px; }
+  .opts-refresh-btn:hover { color: var(--accent); }
+  .opts-chain-wrap { overflow-x: auto; padding: 0 14px 4px; }
+  .opts-chain { width: 100%; border-collapse: collapse; font-size: 11.5px; font-family: var(--f-mono); }
+  .opts-chain th { font-size: 10px; color: var(--fg-3); font-weight: 500; padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  .opts-chain th:first-child { text-align: left; }
+  .opts-chain td { padding: 5px 6px; border-bottom: 1px solid var(--bg-3); text-align: right; color: var(--fg-1); }
+  .opts-chain td:first-child { text-align: left; }
+  .opts-chain tr.itm { background: color-mix(in oklch, var(--accent) 6%, transparent); }
+  .opts-chain tr.atm td:first-child { color: var(--accent); font-weight: 700; }
+  .opts-act-btn { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer; white-space: nowrap; }
+  .opts-act-btn:hover { background: var(--accent); color: oklch(0.14 0.012 250); }
+  .opts-pos-card { padding: 10px 14px; border-top: 1px solid var(--bg-3); display: flex; align-items: center; gap: 10px; }
+  .opts-pos-label { flex: 1; min-width: 0; }
+  .opts-pos-name { font-size: 12px; font-weight: 600; color: var(--fg-0); font-family: var(--f-mono); }
+  .opts-pos-meta { font-size: 10.5px; color: var(--fg-3); margin-top: 1px; }
+  .opts-pos-greeks-col { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .opts-pos-greek { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; }
+  .opts-pos-pnl { text-align: right; min-width: 60px; }
+  .opts-pos-amt { font-size: 13px; font-weight: 700; font-family: var(--f-mono); }
+  .opts-pos-cur { font-size: 10px; margin-top: 1px; font-family: var(--f-mono); }
+  .opts-close-btn { background: none; border: none; color: var(--fg-3); cursor: pointer; font-size: 12px; padding: 2px 4px; border-radius: 4px; }
+  .opts-close-btn:hover { color: var(--down); background: var(--danger-dim); }
+  .opts-summary { display: flex; border-top: 1px solid var(--line); padding: 12px 14px; gap: 0; }
+  .opts-summary-item { flex: 1; text-align: center; }
+  .opts-summary-label { font-size: 10px; color: var(--fg-3); margin-bottom: 3px; }
+  .opts-summary-val { font-size: 15px; font-weight: 700; font-family: var(--f-mono); }
+  .opts-summary-sep { width: 1px; background: var(--line); margin: 4px 0; }
+  .opts-empty, .opts-loading { padding: 16px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
+  #sim-options-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  /* ────────────────────────────────────────────────────────── */
+
   .sim-a-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
   .sim-astat { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
   .sim-astat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); font-weight: 500; }
@@ -3667,16 +3712,32 @@
       </div>
       <span class="sim-sub" id="sim-subtitle" style="color:var(--fg-3);font-size:12px;margin-left:4px">— 笔持仓</span>
     </div>
-    <button class="btn primary" id="sim-new-pos-btn">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
-      New Sim Position
-    </button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn secondary" id="sim-options-btn" style="font-size:11.5px;padding:5px 12px">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        期权 Options
+      </button>
+      <button class="btn primary" id="sim-new-pos-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        New Sim Position
+      </button>
+    </div>
   </div>
 
   <!-- 挂单队列 -->
   <div id="sim-pending-section" style="display:none;margin:0 0 12px">
     <div id="sim-pending-header" style="display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--fg-3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;padding:0 2px">挂单队列 · Pending Orders</div>
     <div id="sim-pending-list"></div>
+  </div>
+
+  <!-- § 期权模拟 Options -->
+  <div id="sim-options-section" style="display:none;margin:0 0 16px">
+    <div class="sim-section-label">
+      <span class="ssl-zh">期权模拟</span>
+      <span class="ssl-en">Options Simulation</span>
+      <span class="ssl-rule"></span>
+    </div>
+    <div id="sim-opts-inner"></div>
   </div>
 
   <!-- § 概览 Overview -->
@@ -4149,8 +4210,38 @@
   </div>
 </div>
 
-<script src="data.js?v=252"></script>
-<script src="desk.js?v=252"></script>
+<!-- Options entry modal -->
+<div id="opts-entry-modal" class="modal-backdrop" style="display:none">
+  <div class="modal" style="max-width:340px">
+    <div class="modal-header">
+      <h2 class="opts-modal-title">期权开仓</h2>
+      <button class="modal-close" id="opts-cancel-btn">✕</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--fg-3);margin-bottom:14px" id="opts-ask-display"></div>
+    <div class="form-row">
+      <label>方向</label>
+      <select id="opts-direction" class="form-input">
+        <option value="long">买入 Long</option>
+        <option value="short">卖出 Short</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>手数（合约）</label>
+      <input type="number" id="opts-qty" class="form-input" min="1" step="1" value="1"/>
+    </div>
+    <div class="form-row">
+      <label>成交权利金 ($/share)</label>
+      <input type="number" id="opts-premium" class="form-input" step="0.01" min="0.01"/>
+    </div>
+    <div class="form-actions">
+      <button type="button" id="opts-cancel-btn2" class="btn" onclick="document.getElementById('opts-entry-modal').style.display='none'">取消</button>
+      <button type="button" id="opts-confirm-btn" class="btn primary">确认开仓</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js?v=253"></script>
+<script src="desk.js?v=253"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
