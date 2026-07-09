@@ -313,7 +313,7 @@
     { id: "trend_bull",   label: "趋势顺风",    color: "var(--up)",     group: "市场" },
     { id: "trend_bear",   label: "趋势逆风",    color: "var(--down)",   group: "市场" },
     { id: "sector_pos",   label: "板块配合",    color: "var(--accent)", group: "市场" },
-    { id: "sector_mid",   label: "板块一般",    color: "var(--fg-2)",   group: "市场" },
+    { id: "sector_mid",   label: "板块一般",    color: "var(--warn)",   group: "市场" },
     { id: "sector_neg",   label: "板块拖累",    color: "var(--down)",   group: "市场" },
     // 入场：开仓决策与准备质量
     { id: "entry_good",   label: "入场精准",    color: "var(--up)",     group: "入场" },
