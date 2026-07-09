@@ -2,6 +2,42 @@
 // History: ?symbols=AAPL,BTC-USD&from=2024-01-01
 // Options: ?opts=1&sym=QQQ[&expiry=<unix_ts>]
 
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
+// Yahoo Finance requires crumb + cookie for authenticated endpoints.
+// Step 1: hit finance.yahoo.com to obtain session cookies.
+// Step 2: exchange cookies for a crumb token via getcrumb endpoint.
+// Step 3: call options API with crumb param + cookies.
+async function yahooOptionsWithCrumb(sym, expiry) {
+  // 1. Session cookies
+  const pageResp = await fetch("https://finance.yahoo.com/", {
+    headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
+    redirect: "follow",
+  });
+  const rawCookies = typeof pageResp.headers.getSetCookie === "function"
+    ? pageResp.headers.getSetCookie()
+    : (pageResp.headers.get("set-cookie") || "").split(/,(?=[^;]+=[^;]+;)/).filter(Boolean);
+  const cookieStr = rawCookies.map(c => c.split(";")[0].trim()).join("; ");
+
+  // 2. Crumb
+  const crumbResp = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
+    headers: { "User-Agent": UA, "Cookie": cookieStr, "Accept": "*/*",
+               "Referer": "https://finance.yahoo.com/" },
+  });
+  if (!crumbResp.ok) throw new Error(`crumb ${crumbResp.status}`);
+  const crumb = (await crumbResp.text()).trim();
+  if (!crumb || crumb.startsWith("<")) throw new Error("invalid crumb");
+
+  // 3. Options chain
+  let url = `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(sym)}?crumb=${encodeURIComponent(crumb)}`;
+  if (expiry) url += `&date=${expiry}`;
+  const resp = await fetch(url, {
+    headers: { "User-Agent": UA, "Cookie": cookieStr, "Accept": "application/json",
+               "Referer": `https://finance.yahoo.com/quote/${sym}/options/` },
+  });
+  return resp;
+}
+
 export default async function handler(req, res) {
   // ── Options chain mode (?opts=1) ─────────────────────────────────────────
   if (req.query.opts === "1") {
@@ -26,13 +62,8 @@ export default async function handler(req, res) {
     }
 
     try {
-      const url = expiry
-        ? `https://query2.finance.yahoo.com/v7/finance/options/${sym}?date=${expiry}`
-        : `https://query2.finance.yahoo.com/v7/finance/options/${sym}`;
-      const resp = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
-      });
-      if (!resp.ok) return res.status(resp.status).json({ error: `Yahoo returned ${resp.status}` });
+      const resp = await yahooOptionsWithCrumb(sym, expiry);
+      if (!resp.ok) return res.status(resp.status).json({ error: `Yahoo ${resp.status}` });
       const data = await resp.json();
       const chain = data?.optionChain?.result?.[0];
       if (!chain) return res.status(404).json({ error: "No options data" });
