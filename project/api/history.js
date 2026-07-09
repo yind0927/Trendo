@@ -1,55 +1,80 @@
 // Vercel serverless function — historical daily closes + options chain
 // History: ?symbols=AAPL,BTC-USD&from=2024-01-01
-// Options: ?opts=1&sym=QQQ[&expiry=<unix_ts>]
+// Options: ?opts=1&sym=QQQ[&expiry=<unix_ts>]   ← Nasdaq.com free API, no auth
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
-// Yahoo Finance requires crumb + cookie for authenticated endpoints.
-// Step 1: hit finance.yahoo.com to obtain session cookies.
-// Step 2: exchange cookies for a crumb token via getcrumb endpoint.
-// Step 3: call options API with crumb param + cookies.
-async function yahooOptionsWithCrumb(sym, expiry) {
-  // 1. Session cookies
-  const pageResp = await fetch("https://finance.yahoo.com/", {
-    headers: { "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" },
-    redirect: "follow",
-  });
-  const rawCookies = typeof pageResp.headers.getSetCookie === "function"
-    ? pageResp.headers.getSetCookie()
-    : (pageResp.headers.get("set-cookie") || "").split(/,(?=[^;]+=[^;]+;)/).filter(Boolean);
-  const cookieStr = rawCookies.map(c => c.split(";")[0].trim()).join("; ");
+// Parse Nasdaq number strings: "3.45", "1,234", "18.50%", "--" → number
+function _nNum(s) {
+  if (!s || s === "--" || s === "N/A") return 0;
+  return parseFloat(String(s).replace(/[%$,]/g, "")) || 0;
+}
 
-  // 2. Crumb
-  const crumbResp = await fetch("https://query1.finance.yahoo.com/v1/test/getcrumb", {
-    headers: { "User-Agent": UA, "Cookie": cookieStr, "Accept": "*/*",
-               "Referer": "https://finance.yahoo.com/" },
-  });
-  if (!crumbResp.ok) throw new Error(`crumb ${crumbResp.status}`);
-  const crumb = (await crumbResp.text()).trim();
-  if (!crumb || crumb.startsWith("<")) throw new Error("invalid crumb");
-
-  // 3. Options chain
-  let url = `https://query2.finance.yahoo.com/v7/finance/options/${encodeURIComponent(sym)}?crumb=${encodeURIComponent(crumb)}`;
-  if (expiry) url += `&date=${expiry}`;
+// Nasdaq.com options API — no auth required.
+// expiryDate: ISO date string "YYYY-MM-DD", or null for nearest expiry.
+async function fetchNasdaqOptions(sym, expiryDate) {
+  const expParam = expiryDate || "undefined";
+  const url = `https://api.nasdaq.com/api/quote/${sym}/option-chain` +
+    `?assetclass=etf&limit=600&offset=0&fromdate=undefined&todate=undefined` +
+    `&expiryDate=${expParam}&type=all`;
   const resp = await fetch(url, {
-    headers: { "User-Agent": UA, "Cookie": cookieStr, "Accept": "application/json",
-               "Referer": `https://finance.yahoo.com/quote/${sym}/options/` },
+    headers: {
+      "User-Agent": UA,
+      "Accept": "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Referer": `https://www.nasdaq.com/market-activity/funds-and-etfs/${sym.toLowerCase()}/option-chain`,
+    },
   });
-  return resp;
+  if (!resp.ok) throw new Error(`Nasdaq ${resp.status}`);
+  const data = await resp.json();
+
+  const rows  = data?.data?.table?.rows;
+  const dates = data?.data?.expiryDates?.dates ?? []; // ["2025-07-18", ...]
+  if (!rows?.length) throw new Error("No option rows");
+
+  const calls = [], puts = [];
+  let curExpiry = null;
+  for (const row of rows) {
+    // expirygroup is set on the first row of each new expiry ("Jul 18, 2025"), empty on subsequent rows
+    if (row.expirygroup?.trim()) {
+      try { curExpiry = new Date(row.expirygroup + " UTC").toISOString().slice(0, 10); } catch (_) {}
+    }
+    if (!curExpiry) continue;
+    const strike = _nNum(row.strike);
+    if (!strike) continue;
+    const expTs = Math.floor(new Date(curExpiry + "T21:00:00Z").getTime() / 1000);
+
+    calls.push({ strike, expiry: expTs, bid: _nNum(row.c_Bid), ask: _nNum(row.c_Ask),
+      last: _nNum(row.c_Last), iv: _nNum(row.c_IV) / 100,
+      volume: Math.round(_nNum(row.c_Volume)), oi: Math.round(_nNum(row.c_OI)), itm: false });
+    puts.push({ strike, expiry: expTs, bid: _nNum(row.p_Bid), ask: _nNum(row.p_Ask),
+      last: _nNum(row.p_Last), iv: _nNum(row.p_IV) / 100,
+      volume: Math.round(_nNum(row.p_Volume)), oi: Math.round(_nNum(row.p_OI)), itm: false });
+  }
+
+  const expirations = dates.map(d => Math.floor(new Date(d + "T21:00:00Z").getTime() / 1000));
+  const selectedExp = calls[0]?.expiry ?? (expirations[0] ?? null);
+  return { calls, puts, expirations, selectedExp };
 }
 
 export default async function handler(req, res) {
   // ── Options chain mode (?opts=1) ─────────────────────────────────────────
   if (req.query.opts === "1") {
-    const sym    = (req.query.sym || "").toUpperCase();
-    const expiry = req.query.expiry || "";
+    const sym     = (req.query.sym || "").toUpperCase();
+    const expiryTs = req.query.expiry || ""; // Unix timestamp string from client
     if (!sym) return res.status(400).json({ error: "sym required" });
+
+    // Convert Unix ts → ISO date for Nasdaq API
+    const expiryDate = expiryTs
+      ? new Date(parseInt(expiryTs, 10) * 1000).toISOString().slice(0, 10)
+      : null;
 
     const kvUrl   = process.env.KV_REST_API_URL;
     const kvToken = process.env.KV_REST_API_TOKEN;
     const kvHdr   = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
-    const cacheKey = `trendo:opts:${sym}:${expiry || "0"}`;
+    const cacheKey = `trendo:opts2:${sym}:${expiryDate || "0"}`;
 
+    // Redis cache (5 min)
     if (kvUrl && kvToken) {
       try {
         const r = await fetch(`${kvUrl}/pipeline`, {
@@ -62,24 +87,22 @@ export default async function handler(req, res) {
     }
 
     try {
-      const resp = await yahooOptionsWithCrumb(sym, expiry);
-      if (!resp.ok) return res.status(resp.status).json({ error: `Yahoo ${resp.status}` });
-      const data = await resp.json();
-      const chain = data?.optionChain?.result?.[0];
-      if (!chain) return res.status(404).json({ error: "No options data" });
+      // Fetch options chain + spot price in parallel
+      const [chainData, spotResp] = await Promise.all([
+        fetchNasdaqOptions(sym, expiryDate),
+        fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`,
+          { headers: { "User-Agent": UA } }),
+      ]);
 
-      const mapOpt = o => ({
-        strike: o.strike, bid: o.bid ?? 0, ask: o.ask ?? 0, last: o.lastPrice ?? 0,
-        iv: o.impliedVolatility ?? 0, volume: o.volume ?? 0, oi: o.openInterest ?? 0,
-        expiry: o.expiration, itm: o.inTheMoney ?? false,
-      });
-      const result = {
-        sym, spot: chain.quote?.regularMarketPrice ?? 0,
-        expirations: chain.expirationDates ?? [],
-        calls: (chain.options?.[0]?.calls ?? []).map(mapOpt),
-        puts:  (chain.options?.[0]?.puts  ?? []).map(mapOpt),
-        selectedExp: chain.options?.[0]?.expirationDate ?? null,
-      };
+      let spot = 0;
+      try { spot = (await spotResp.json())?.chart?.result?.[0]?.meta?.regularMarketPrice ?? 0; } catch (_) {}
+
+      // Mark ITM
+      const calls = chainData.calls.map(c => ({ ...c, itm: spot > 0 && c.strike < spot }));
+      const puts  = chainData.puts.map(p  => ({ ...p, itm: spot > 0 && p.strike > spot }));
+
+      const result = { sym, spot, expirations: chainData.expirations, calls, puts,
+                       selectedExp: chainData.selectedExp };
 
       if (kvUrl && kvToken) {
         fetch(`${kvUrl}/pipeline`, {
@@ -111,7 +134,7 @@ export default async function handler(req, res) {
         `?interval=1d&period1=${fromTs}&period2=${toTs}`;
       const r = await fetch(url, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+          "User-Agent": UA,
           "Accept": "application/json",
         }
       });
