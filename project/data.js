@@ -69,8 +69,11 @@ window.SIM_HOLDINGS    = [];
 window.SIM_CLOSED      = [];
 window.SIM_PENDING     = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }
 window.SIM_CLOSE_PENDING = []; // { id, sym, qty, orderType:"market"|"limit", limitPrice, createdAt }
-// Options wheel-strategy positions (sell-side: CSP cash-secured put / CC covered call)
-// { id, sym, type:"put"|"call", strat:"csp"|"cc", strike, expiry:"YYYY-MM-DD", expiryTs,
-//   qty(contracts>0), premium(received $/share), iv, underlyingAtEntry, entryDate,
-//   status:"open"|"closed"|"expired"|"assigned", closePremium?, settleSpot?, realized?, closedAt? }
+// Options wheel-strategy positions (sell-side: CSP cash-secured put / CC covered call).
+// Manual-entry model: only the underlying ETF spot is live; all option numbers are typed in.
+// { id, sym, type:"put"|"call", strat:"csp"|"cc", strike, expiry:"YYYY-MM-DD",
+//   qty(contracts>0), premium(received $/share), underlyingAtEntry, entryDate,
+//   status:"open"|"closed"|"expired"|"assigned",
+//   manualMark?, manualMarkAt?,          — 手动记录的当前权利金（浮盈展示）
+//   closePremium?, settleSpot?, realized?, closedAt? }
 window.SIM_OPTIONS = [];

@@ -77,6 +77,7 @@ window.CLOSED_POSITIONS  // 真实已平仓 []
 window.SIM_HOLDINGS      // 模拟现持仓 []
 window.SIM_CLOSED        // 模拟已平仓 []
 window.SIM_PENDING       // 模拟挂单队列 []
+window.SIM_OPTIONS       // 期权滚动策略仓位 []（CSP/CC 卖方，手动记录模型，v256）
 window.WATCHLIST         // 自选股 []
 window.ERROR_TAGS        // 错误标签（Analytics）
 window.EVENTS            // 事件记录（Analytics）
@@ -147,6 +148,7 @@ trendo_v4_sim_closed         → SIM_CLOSED[]
 trendo_v4_sim_notional       → simNotional (默认100000)
 trendo_v4_sim_pending        → SIM_PENDING[]
 trendo_v4_sim_close_pending  → SIM_CLOSE_PENDING[]
+trendo_v4_sim_options        → SIM_OPTIONS[]（期权滚动策略）
 trendo_v4_daily_pnl          → dailyPnlLog {}
 trendo_v4_savedAt            → ISO时间戳（防止旧云数据覆盖本地）
 trendo_sync_key              → 云同步密钥
@@ -706,6 +708,8 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v208 | **涨跌量比（20日量比）加入 RS 评分第4维度**：`/api/history.js` 新增 `volumeResults`（Yahoo 日线成交量）；`calcVolUpDownRatio(closes,volumes,20)` 计算涨日量占比；`calcRSScore` 增量比得分（0-5分，>65%=5/>55%=4/≥45%=3/≥35%=1/<35%=0）；新满分 max=20（有ETF）/10（无ETF），无量比数据时回退 15/5；评分卡（弹窗+抽屉入场评级）均展示"涨跌量比"明细行。 |
 | v209 | **派发成交量降级机制**：`rsAdjustGrade` 新增三条派发规则（`volScore===0` 时）：①强RS（norm≥7）时禁止升级，维持原级；②一般RS（norm 4–6）时触发降1级；③弱RS（norm<4）时复合双降（原本只降1级）。`volScore===null`（无量数据）不受影响保持向后兼容。 |
 | v227-v231 | **SPX 做市商 Gamma（GEX）大卡片**（Market页，VIX卡下方整行）：数据源历经 Yahoo期权(crumb认证被429限流)→Polygon期权(403无权限)→**CBOE免费延迟期权链**(cdn.cboe.com `_SPX.json`，唯一可行免费源)。指标：Net GEX(0-30DTE ±15%行权价，每1%波动对冲美元量)、**波段口径swing=剔0DTE**(0DTE收盘清零，对隔夜持仓无延续性；正Gamma但swing<0时卡片和综合建议均警示)、Gamma Flip、Call/Put Wall、DTE三桶、距离%、**仓位修正因子×0.4~×1.15**(乘轴B仓位上限)。卡片：价格结构条(Put Wall—Flip—现价—Call Wall，Flip左红右绿)、4个level pill、较昨日Δ+近N天分位(Redis `gex_hist_v1` 每日快照120天)、DTE分解、状态解读文案。`combineAxes` 负Gamma/临界/正但swing负时追加警示；AI市场简报gex参数7字段。注意：GEX绝对值随spot²和OI增长，固定阈值会过时，读数看分位和Flip距离；当前SPX~7450下正常正Gamma区间约+30B~+80B。手机端 `.mkt-row.mkt-row-full` 双class防被2列规则覆盖。 |
+| v245-v252 | Journal页重设计（标签系统3类21个/归因摘要/BX天数chip）；持平(pnlFinal===0)三处统一badge设计（列表/卡片/Journal）+入场时机绩效模块（Analytics，按BX天数分段）。 |
+| v253-v256 | **期权滚动策略模块**（Sim页，`SIM_OPTIONS`）：期权链数据源尝试 Yahoo(401 crumb被挡)→Nasdaq(500 Akamai挡Vercel IP)→CBOE延迟链(可用但15min延迟数值仍对不上券商)，最终 v256 定为**手动记录模型**：只有标的ETF现价实时（fetchPrices→`_optSpot`，`_optWatchSyms()`并入quote拉取），行权价/权利金/到期日/手数全部手动输入。CSP卖Put/CC备兑Call双策略；卖出弹窗实时算权利金收入/占用现金/盈亏平衡/年化；持仓卡：安全垫距离、到期预估(按现价OTM作废/ITM指派)、时间损耗进度条、手动记Mark算浮盈；到期自动结算(需live spot)；平仓buy-to-close手动填买回价；滚仓=平旧+预填开新；汇总条4格；已了结列表。云同步4处已补`simOptions`。`api/history.js`恢复原版(期权branch已删，**Yahoo UA必须保持短版**——v253换完整Chrome UA触发风控致VOO/VIX拉取失败)。Vercel Hobby限12个serverless函数(新增API前先数)。模态复用：sell/close/mark三模式(`_optModalMode`隐藏字段行)。 |
 
 ---
 

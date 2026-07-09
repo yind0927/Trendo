@@ -1661,25 +1661,12 @@
   .opts-type-toggle { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .opts-type-btn { font-size: 11px; font-weight: 600; padding: 4px 14px; background: transparent; color: var(--fg-2); border: none; cursor: pointer; transition: .15s; }
   .opts-type-btn.active { background: var(--accent); color: oklch(0.14 0.012 250); }
-  .opts-expiry-row { display: flex; align-items: center; gap: 10px; padding: 0 14px; margin-bottom: 10px; flex-wrap: wrap; }
-  .opts-spot { font-size: 12px; color: var(--fg-2); font-family: var(--f-mono); }
-  .opts-spot b { color: var(--fg-0); font-size: 13px; }
-  .opts-expiry-sel { font-size: 11.5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-2); color: var(--fg-1); cursor: pointer; font-family: var(--f-mono); }
+  .opts-spots { display: flex; gap: 8px; flex-wrap: wrap; }
+  .opts-spot-pill { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); border: 1px solid var(--line); border-radius: 14px; padding: 3px 11px; background: var(--bg-2); }
+  .opts-spot-pill b { color: var(--fg-0); margin-right: 4px; }
   .opts-dte-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--accent-dim); color: var(--accent); font-weight: 700; font-family: var(--f-mono); }
-  .opts-delay-tag { font-size: 9.5px; color: var(--fg-3); border: 1px solid var(--line); padding: 1px 7px; border-radius: 10px; }
-  .opts-refresh-btn { font-size: 13px; color: var(--fg-3); background: none; border: none; cursor: pointer; padding: 2px 4px; margin-left: auto; }
-  .opts-refresh-btn:hover { color: var(--accent); }
-  .opts-chain-wrap { overflow-x: auto; padding: 0 14px 6px; }
-  .opts-chain { width: 100%; border-collapse: collapse; font-size: 11.5px; font-family: var(--f-mono); }
-  .opts-chain th { font-size: 10px; color: var(--fg-3); font-weight: 500; padding: 5px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-  .opts-chain th:first-child { text-align: left; }
-  .opts-chain td { padding: 6px 7px; border-bottom: 1px solid var(--bg-3); text-align: right; color: var(--fg-1); white-space: nowrap; }
-  .opts-chain td:first-child { text-align: left; }
-  .opts-chain tr.itm td:first-child { color: var(--warn); }
-  .opts-annual { color: var(--up); font-weight: 600; }
+  .opts-spot-inline { font-size: 10.5px; color: var(--fg-2); font-family: var(--f-mono); }
   .opts-itm-warn { color: var(--warn); }
-  .opts-act-btn { font-size: 10px; padding: 2.5px 10px; border-radius: 5px; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer; white-space: nowrap; transition: .12s; }
-  .opts-act-btn:hover { background: var(--accent); color: oklch(0.14 0.012 250); }
   /* stat strip */
   .opts-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); margin-top: 4px; }
   .opts-stat { background: var(--bg-1); padding: 11px 14px; }
@@ -1703,7 +1690,13 @@
   .opts-prog-wrap { height: 4px; background: var(--bg-3); border-radius: 2px; margin: 7px 0 5px; overflow: hidden; max-width: 340px; }
   .opts-prog-fill { height: 100%; background: var(--up); border-radius: 2px; transition: width .3s; }
   .opts-prog-fill.neg { background: var(--down); }
-  .opts-pos-greeks { display: flex; gap: 12px; font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
+  .opts-pos-rows { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--fg-2); font-family: var(--f-mono); }
+  .opts-est-line b { font-weight: 700; }
+  .opts-mark-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .opts-mark-tag { font-size: 10px; padding: 1.5px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--fg-2); cursor: pointer; transition: .12s; }
+  .opts-mark-tag:hover { border-color: var(--accent); color: var(--accent); }
+  .opts-mark-tag.opts-mark-empty { border-style: dashed; color: var(--fg-3); }
+  .opts-actions-col { flex-direction: column; }
   .opts-pos-right { text-align: right; flex-shrink: 0; }
   .opts-pos-amt { font-size: 15px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
   .opts-pos-cap { font-size: 9.5px; font-family: var(--f-mono); margin-top: 1px; }
@@ -1722,7 +1715,9 @@
     .opts-stats { grid-template-columns: repeat(2, 1fr); }
     .opts-pos-card { flex-direction: column; align-items: stretch; gap: 6px; }
     .opts-pos-right { display: flex; align-items: center; justify-content: space-between; text-align: left; }
-    .opts-pos-actions { margin-top: 0; }
+    .opts-pos-actions, .opts-actions-col { margin-top: 0; flex-direction: row; }
+    .opts-controls { flex-direction: column; align-items: stretch; }
+    .opts-controls .btn { width: 100%; justify-content: center; }
   }
   /* ────────────────────────────────────────────────────────── */
 
@@ -3767,7 +3762,7 @@
       <span class="ssl-zh">期权滚动策略</span>
       <span class="ssl-en">Wheel · CSP / Covered Call</span>
       <span class="ssl-rule"></span>
-      <span class="ssl-meta">模拟卖方收权利金</span>
+      <span class="ssl-meta">手动记录 · ETF现价实时</span>
     </div>
     <div id="sim-opts-inner"></div>
   </div>
@@ -4242,21 +4237,45 @@
   </div>
 </div>
 
-<!-- Options sell/close modal (wheel strategy) -->
+<!-- Options wheel modal — sell (full manual fields) / close / mark -->
 <div id="opts-entry-modal" class="modal-backdrop" style="display:none">
-  <div class="modal" style="max-width:360px">
+  <div class="modal" style="max-width:380px">
     <div class="modal-header">
       <h2 class="opts-modal-title">卖出期权</h2>
       <button class="modal-close" id="opts-cancel-btn">✕</button>
     </div>
-    <div id="opts-modal-meta" style="font-size:11.5px;color:var(--fg-3);margin-bottom:14px;font-family:var(--f-mono)"></div>
-    <div class="form-row">
+    <div id="opts-modal-meta" style="font-size:11.5px;color:var(--fg-3);margin-bottom:14px"></div>
+    <div class="form-row" id="opts-row-sym">
+      <label>标的 ETF</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button type="button" class="opts-sym-chip" data-optsym="QQQ">QQQ</button>
+        <button type="button" class="opts-sym-chip" data-optsym="SMH">SMH</button>
+        <button type="button" class="opts-sym-chip" data-optsym="DRAM">DRAM</button>
+        <input type="text" id="opts-sym-input" class="form-input" style="flex:1;text-transform:uppercase" placeholder="自定义"/>
+      </div>
+    </div>
+    <div class="form-row" id="opts-row-strat">
+      <label>策略</label>
+      <div class="opts-type-toggle" style="width:fit-content">
+        <button type="button" class="opts-type-btn" data-optstrat="csp">卖Put · CSP</button>
+        <button type="button" class="opts-type-btn" data-optstrat="cc">备兑Call · CC</button>
+      </div>
+    </div>
+    <div class="form-row" id="opts-row-strike">
+      <label>行权价 ($)</label>
+      <input type="number" id="opts-strike" class="form-input" step="0.5" min="0" placeholder="如 480"/>
+    </div>
+    <div class="form-row" id="opts-row-expiry">
+      <label>到期日</label>
+      <input type="date" id="opts-expiry-date" class="form-input"/>
+    </div>
+    <div class="form-row" id="opts-row-qty">
       <label>手数（合约）</label>
       <input type="number" id="opts-qty" class="form-input" min="1" step="1" value="1"/>
     </div>
     <div class="form-row">
-      <label>成交权利金 ($/share)</label>
-      <input type="number" id="opts-premium" class="form-input" step="0.01" min="0"/>
+      <label>权利金 ($/share)</label>
+      <input type="number" id="opts-premium" class="form-input" step="0.01" min="0" placeholder="券商成交价"/>
     </div>
     <div id="opts-calc" class="opts-calc"></div>
     <div class="form-actions">
@@ -4266,8 +4285,8 @@
   </div>
 </div>
 
-<script src="data.js?v=255"></script>
-<script src="desk.js?v=255"></script>
+<script src="data.js?v=256"></script>
+<script src="desk.js?v=256"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
