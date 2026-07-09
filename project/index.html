@@ -1182,6 +1182,7 @@
     margin-bottom: 20px;
   }
   .modal-header h2 { margin: 0; font-size: 18px; }
+  .modal-note { margin: -10px 0 18px; font-size: 12px; color: var(--fg-3); line-height: 1.55; }
   .modal-close {
     all: unset; cursor: pointer; color: var(--fg-2); font-size: 24px;
     width: 28px; height: 28px; display: grid; place-items: center;
@@ -1656,11 +1657,9 @@
   #sim-options-section .sim-section-label { margin: 14px 14px 12px; }
   .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
   .opts-sym-chips { display: flex; gap: 6px; }
-  .opts-sym-chip { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; border: 1px solid var(--line); color: var(--fg-2); background: transparent; cursor: pointer; transition: .15s; font-family: var(--f-mono); }
-  .opts-sym-chip.active { background: var(--accent); border-color: var(--accent); color: oklch(0.14 0.012 250); }
-  .opts-type-toggle { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .opts-type-btn { font-size: 11px; font-weight: 600; padding: 4px 14px; background: transparent; color: var(--fg-2); border: none; cursor: pointer; transition: .15s; }
-  .opts-type-btn.active { background: var(--accent); color: oklch(0.14 0.012 250); }
+  /* opts-sym-chip and opts-type-btn reuse .seg button styles — custom overrides only */
+  .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
+  .opts-sym-chip.active, .opts-type-btn.active { background: var(--accent) !important; color: oklch(0.14 0.012 250) !important; box-shadow: none !important; }
   .opts-spots { display: flex; gap: 8px; flex-wrap: wrap; }
   .opts-spot-pill { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); border: 1px solid var(--line); border-radius: 14px; padding: 3px 11px; background: var(--bg-2); }
   .opts-spot-pill b { color: var(--fg-0); margin-right: 4px; }
@@ -1704,9 +1703,10 @@
   .opts-mini-btn { font-size: 10px; padding: 2px 9px; border-radius: 5px; border: 1px solid var(--line); color: var(--fg-2); background: transparent; cursor: pointer; transition: .12s; }
   .opts-mini-btn:hover { border-color: var(--accent); color: var(--accent); }
   .opts-mini-btn.opts-del:hover { border-color: var(--down); color: var(--down); }
-  .opts-calc { display: flex; flex-direction: column; gap: 6px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 4px 0 12px; }
-  .opts-calc div { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--fg-2); }
-  .opts-calc b { font-family: var(--f-mono); color: var(--fg-0); font-weight: 600; }
+  .opts-calc { display: flex; flex-direction: column; gap: 7px; border-top: 1px solid var(--line); padding: 12px 0 2px; margin: 8px 0 0; }
+  .opts-calc div { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--fg-2); }
+  .opts-calc span { color: var(--fg-3); font-size: 11.5px; }
+  .opts-calc b { font-family: var(--f-mono); color: var(--fg-0); font-weight: 600; font-size: 13px; }
   .opts-calc b.up { color: var(--up); }
   .opts-calc b.down { color: var(--down); }
   .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
@@ -3764,7 +3764,7 @@
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn secondary" id="sim-options-btn" style="font-size:11.5px;padding:5px 12px">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-        期权 Options
+        期权滚动策略
       </button>
       <button class="btn primary" id="sim-new-pos-btn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
@@ -4267,19 +4267,21 @@
       <h2 class="opts-modal-title">卖出期权</h2>
       <button class="modal-close" onclick="document.getElementById('opts-entry-modal').style.display='none'">✕</button>
     </div>
-    <div id="opts-modal-meta" style="font-size:11.5px;color:var(--fg-3);margin-bottom:14px"></div>
+    <p id="opts-modal-meta" class="modal-note"></p>
     <div class="form-row" id="opts-row-sym">
       <label>标的 ETF</label>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button type="button" class="opts-sym-chip" data-optsym="QQQ">QQQ</button>
-        <button type="button" class="opts-sym-chip" data-optsym="SMH">SMH</button>
-        <button type="button" class="opts-sym-chip" data-optsym="DRAM">DRAM</button>
-        <input type="text" id="opts-sym-input" class="form-input" style="flex:1;text-transform:uppercase" placeholder="自定义"/>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="seg" style="width:fit-content;flex-shrink:0">
+          <button type="button" class="opts-sym-chip" data-optsym="QQQ">QQQ</button>
+          <button type="button" class="opts-sym-chip" data-optsym="SMH">SMH</button>
+          <button type="button" class="opts-sym-chip" data-optsym="DRAM">DRAM</button>
+        </div>
+        <input type="text" id="opts-sym-input" class="form-input" style="flex:1;min-width:0;text-transform:uppercase;font-family:var(--f-mono)" placeholder="自定义"/>
       </div>
     </div>
     <div class="form-row" id="opts-row-strat">
       <label>策略</label>
-      <div class="opts-type-toggle" style="width:fit-content">
+      <div class="seg" style="width:100%">
         <button type="button" class="opts-type-btn" data-optstrat="csp">卖Put · CSP</button>
         <button type="button" class="opts-type-btn" data-optstrat="cc">备兑Call · CC</button>
       </div>
@@ -4312,8 +4314,8 @@
   </div>
 </div>
 
-<script src="data.js?v=257"></script>
-<script src="desk.js?v=257"></script>
+<script src="data.js?v=258"></script>
+<script src="desk.js?v=258"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
