@@ -307,25 +307,31 @@
 
   const GRADE_LADDER = ["Exit","C","C+","B-","B","B+","A-","A","A+"];
 
-  // Journal tagging system
+  // Journal tagging system — 3 types: 市场 / 入场 / 管理
   const JOURNAL_TAGS = [
-    { id: "trend_bull",   label: "趋势顺风",    color: "var(--up)",     group: "趋势" },
-    { id: "trend_bear",   label: "趋势逆风",    color: "var(--down)",   group: "趋势" },
-    { id: "sector_pos",   label: "板块配合",    color: "var(--accent)", group: "趋势" },
-    { id: "sector_neg",   label: "板块拖累",    color: "var(--down)",   group: "趋势" },
+    // 市场：大盘与板块环境
+    { id: "trend_bull",   label: "趋势顺风",    color: "var(--up)",     group: "市场" },
+    { id: "trend_bear",   label: "趋势逆风",    color: "var(--down)",   group: "市场" },
+    { id: "sector_pos",   label: "板块配合",    color: "var(--accent)", group: "市场" },
+    { id: "sector_mid",   label: "板块一般",    color: "var(--fg-2)",   group: "市场" },
+    { id: "sector_neg",   label: "板块拖累",    color: "var(--down)",   group: "市场" },
+    // 入场：开仓决策与准备质量
     { id: "entry_good",   label: "入场精准",    color: "var(--up)",     group: "入场" },
+    { id: "entry_pb",     label: "回调买入",    color: "var(--accent)", group: "入场" },
     { id: "entry_early",  label: "入场偏早",    color: "var(--warn)",   group: "入场" },
     { id: "entry_late",   label: "入场过晚",    color: "var(--warn)",   group: "入场" },
     { id: "entry_chase",  label: "追高入场",    color: "var(--down)",   group: "入场" },
-    { id: "entry_pb",     label: "回调买入",    color: "var(--accent)", group: "入场" },
+    { id: "entry_nobt",   label: "缺少回测信息", color: "var(--warn)",  group: "入场" },
+    { id: "entry_weakbt", label: "回测一般",    color: "var(--fg-2)",   group: "入场" },
+    // 管理：持仓管理、出场与风险
     { id: "mgmt_patient", label: "耐心持有",    color: "var(--up)",     group: "管理" },
     { id: "mgmt_exit_ok", label: "出场及时",    color: "var(--up)",     group: "管理" },
     { id: "mgmt_exit_e",  label: "过早平仓",    color: "var(--warn)",   group: "管理" },
     { id: "mgmt_trail",   label: "移动止损失误", color: "var(--down)",   group: "管理" },
     { id: "mgmt_stop",    label: "止损过宽",    color: "var(--warn)",   group: "管理" },
-    { id: "risk_earn",    label: "财报风险",    color: "var(--warn)",   group: "风险" },
-    { id: "risk_emotion", label: "情绪交易",    color: "var(--down)",   group: "风险" },
-    { id: "risk_size",    label: "仓位过重",    color: "var(--warn)",   group: "风险" },
+    { id: "risk_earn",    label: "财报风险",    color: "var(--warn)",   group: "管理" },
+    { id: "risk_emotion", label: "情绪交易",    color: "var(--down)",   group: "管理" },
+    { id: "risk_size",    label: "仓位过重",    color: "var(--warn)",   group: "管理" },
   ];
 
   function stAdjustGrade(grade, stBull) {
@@ -4390,7 +4396,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     // Tags section
     const selectedTags = new Set(h.journalTags || []);
-    const groupOrder = ["趋势", "入场", "管理", "风险"];
+    const groupOrder = ["市场", "入场", "管理"];
     const tagsByGroup = groupOrder.map(g => ({
       group: g,
       tags: JOURNAL_TAGS.filter(t => t.group === g),
