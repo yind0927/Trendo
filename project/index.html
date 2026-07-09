@@ -1738,9 +1738,9 @@
   .jts-cols { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 0 14px; }
   .jts-divider { background: var(--line); align-self: stretch; }
   .jts-col-head { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 7px; }
-  .jts-row { display: flex; align-items: center; justify-content: space-between; padding: 3px 0; }
+  .jts-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; padding: 3px 0; }
   .jts-tag { font-size: 11.5px; font-weight: 500; }
-  .jts-count { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); }
+  .jts-count { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); text-align: right; font-variant-numeric: tabular-nums; }
   .jts-empty { font-size: 11px; color: var(--fg-3); font-style: italic; }
 
   /* Month group */
@@ -4148,8 +4148,8 @@
   </div>
 </div>
 
-<script src="data.js?v=249"></script>
-<script src="desk.js?v=249"></script>
+<script src="data.js?v=250"></script>
+<script src="desk.js?v=250"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

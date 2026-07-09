@@ -322,11 +322,12 @@
     { id: "entry_late",   label: "入场过晚",    color: "var(--warn)",   group: "入场" },
     { id: "entry_chase",  label: "追高入场",    color: "var(--down)",   group: "入场" },
     { id: "entry_nobt",   label: "缺少回测信息", color: "var(--warn)",  group: "入场" },
-    { id: "entry_weakbt", label: "回测一般",    color: "var(--fg-2)",   group: "入场" },
+    { id: "entry_weakbt", label: "回测一般",    color: "var(--warn)",   group: "入场" },
     // 管理：持仓管理、出场与风险
     { id: "mgmt_patient", label: "耐心持有",    color: "var(--up)",     group: "管理" },
     { id: "mgmt_exit_ok", label: "出场及时",    color: "var(--up)",     group: "管理" },
     { id: "mgmt_exit_e",  label: "过早平仓",    color: "var(--warn)",   group: "管理" },
+    { id: "mgmt_exit_late", label: "出场过晚",  color: "var(--warn)",   group: "管理" },
     { id: "mgmt_trail",   label: "移动止损失误", color: "var(--down)",   group: "管理" },
     { id: "mgmt_stop",    label: "止损过宽",    color: "var(--warn)",   group: "管理" },
     { id: "risk_earn",    label: "财报风险",    color: "var(--warn)",   group: "管理" },
