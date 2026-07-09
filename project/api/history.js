@@ -1,80 +1,90 @@
 // Vercel serverless function — historical daily closes + options chain
 // History: ?symbols=AAPL,BTC-USD&from=2024-01-01
-// Options: ?opts=1&sym=QQQ[&expiry=<unix_ts>]   ← Nasdaq.com free API, no auth
+// Options: ?opts=1&sym=QQQ[&expiry=<unix_ts>]
+//   Source: CBOE free delayed-quote CDN — the only free options source reachable
+//   from Vercel egress IPs (Yahoo crumb → 429/500, Nasdaq/Polygon → 403; same
+//   conclusion as the GEX module in api/feargreed.js). One fetch returns ALL
+//   expirations; we prune to ≤120 DTE and strikes within ±25% of spot, cache the
+//   pruned chain per symbol in Redis (5 min), and filter to the requested expiry.
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
-// Parse Nasdaq number strings: "3.45", "1,234", "18.50%", "--" → number
-function _nNum(s) {
-  if (!s || s === "--" || s === "N/A") return 0;
-  return parseFloat(String(s).replace(/[%$,]/g, "")) || 0;
+// OCC symbol: ROOT + YYMMDD + [C|P] + strike×1000 (8 digits), e.g. QQQ260918C00480000
+function parseOccOpt(sym) {
+  const m = /^([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/.exec(sym || "");
+  if (!m) return null;
+  const [, , yy, mm, dd, cp, strike8] = m;
+  return { exp: `20${yy}-${mm}-${dd}`, type: cp === "C" ? "call" : "put", strike: parseInt(strike8, 10) / 1000 };
 }
 
-// Nasdaq.com options API — no auth required.
-// expiryDate: ISO date string "YYYY-MM-DD", or null for nearest expiry.
-async function fetchNasdaqOptions(sym, expiryDate) {
-  const expParam = expiryDate || "undefined";
-  const url = `https://api.nasdaq.com/api/quote/${sym}/option-chain` +
-    `?assetclass=etf&limit=600&offset=0&fromdate=undefined&todate=undefined` +
-    `&expiryDate=${expParam}&type=all`;
-  const resp = await fetch(url, {
-    headers: {
-      "User-Agent": UA,
-      "Accept": "application/json, text/plain, */*",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Referer": `https://www.nasdaq.com/market-activity/funds-and-etfs/${sym.toLowerCase()}/option-chain`,
-    },
-  });
-  if (!resp.ok) throw new Error(`Nasdaq ${resp.status}`);
-  const data = await resp.json();
+// Fetch + prune the full CBOE chain for one underlying.
+async function fetchCboeOptions(sym) {
+  const urls = [
+    `https://cdn.cboe.com/api/global/delayed_quotes/options/${sym}.json`,
+    `https://www.cboe.com/api/global/delayed_quotes/options/${sym}.json`,
+  ];
+  let lastErr = "unreachable";
+  for (const url of urls) {
+    try {
+      const r = await fetch(url, { headers: { "User-Agent": UA, "Accept": "application/json" }, signal: AbortSignal.timeout(9000) });
+      if (!r.ok) { lastErr = `cboe_${r.status}`; continue; }
+      const d = await r.json();
+      const spot = d?.data?.current_price ?? d?.data?.close ?? d?.data?.prev_day_close ?? 0;
+      const raw  = d?.data?.options;
+      if (!(spot > 0) || !Array.isArray(raw) || !raw.length) { lastErr = "empty_chain"; continue; }
 
-  const rows  = data?.data?.table?.rows;
-  const dates = data?.data?.expiryDates?.dates ?? []; // ["2025-07-18", ...]
-  if (!rows?.length) throw new Error("No option rows");
+      const todayMs = Date.now();
+      const lo = spot * 0.75, hi = spot * 1.25;
+      const byExp = {}; // { "YYYY-MM-DD": { calls: [], puts: [] } }
 
-  const calls = [], puts = [];
-  let curExpiry = null;
-  for (const row of rows) {
-    // expirygroup is set on the first row of each new expiry ("Jul 18, 2025"), empty on subsequent rows
-    if (row.expirygroup?.trim()) {
-      try { curExpiry = new Date(row.expirygroup + " UTC").toISOString().slice(0, 10); } catch (_) {}
-    }
-    if (!curExpiry) continue;
-    const strike = _nNum(row.strike);
-    if (!strike) continue;
-    const expTs = Math.floor(new Date(curExpiry + "T21:00:00Z").getTime() / 1000);
+      for (const o of raw) {
+        const p = parseOccOpt(o.option);
+        if (!p || p.strike < lo || p.strike > hi) continue;
+        const expMs = new Date(p.exp + "T21:00:00Z").getTime();
+        const dte = (expMs - todayMs) / 86400000;
+        if (dte < -0.5 || dte > 120) continue;
 
-    calls.push({ strike, expiry: expTs, bid: _nNum(row.c_Bid), ask: _nNum(row.c_Ask),
-      last: _nNum(row.c_Last), iv: _nNum(row.c_IV) / 100,
-      volume: Math.round(_nNum(row.c_Volume)), oi: Math.round(_nNum(row.c_OI)), itm: false });
-    puts.push({ strike, expiry: expTs, bid: _nNum(row.p_Bid), ask: _nNum(row.p_Ask),
-      last: _nNum(row.p_Last), iv: _nNum(row.p_IV) / 100,
-      volume: Math.round(_nNum(row.p_Volume)), oi: Math.round(_nNum(row.p_OI)), itm: false });
+        const row = {
+          strike: p.strike,
+          expiry: Math.floor(expMs / 1000),
+          bid:    o.bid ?? 0,
+          ask:    o.ask ?? 0,
+          last:   o.last_trade_price ?? 0,
+          iv:     o.iv ?? 0,
+          volume: o.volume ?? 0,
+          oi:     o.open_interest ?? 0,
+          delta:  o.delta ?? null,
+          theta:  o.theta ?? null,
+          itm:    p.type === "call" ? p.strike < spot : p.strike > spot,
+        };
+        (byExp[p.exp] ||= { calls: [], puts: [] })[p.type === "call" ? "calls" : "puts"].push(row);
+      }
+
+      const exps = Object.keys(byExp).sort();
+      if (!exps.length) { lastErr = "no_contracts_in_range"; continue; }
+      for (const e of exps) {
+        byExp[e].calls.sort((a, b) => a.strike - b.strike);
+        byExp[e].puts.sort((a, b) => a.strike - b.strike);
+      }
+      return { spot, byExp, exps };
+    } catch (e) { lastErr = e.message; }
   }
-
-  const expirations = dates.map(d => Math.floor(new Date(d + "T21:00:00Z").getTime() / 1000));
-  const selectedExp = calls[0]?.expiry ?? (expirations[0] ?? null);
-  return { calls, puts, expirations, selectedExp };
+  throw new Error(lastErr);
 }
 
 export default async function handler(req, res) {
   // ── Options chain mode (?opts=1) ─────────────────────────────────────────
   if (req.query.opts === "1") {
-    const sym     = (req.query.sym || "").toUpperCase();
-    const expiryTs = req.query.expiry || ""; // Unix timestamp string from client
+    const sym      = (req.query.sym || "").toUpperCase();
+    const expiryTs = parseInt(req.query.expiry || "0", 10) || 0;
     if (!sym) return res.status(400).json({ error: "sym required" });
-
-    // Convert Unix ts → ISO date for Nasdaq API
-    const expiryDate = expiryTs
-      ? new Date(parseInt(expiryTs, 10) * 1000).toISOString().slice(0, 10)
-      : null;
 
     const kvUrl   = process.env.KV_REST_API_URL;
     const kvToken = process.env.KV_REST_API_TOKEN;
     const kvHdr   = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
-    const cacheKey = `trendo:opts2:${sym}:${expiryDate || "0"}`;
+    const cacheKey = `trendo:opts3:${sym}`; // whole pruned chain per symbol
 
-    // Redis cache (5 min)
+    let chain = null;
     if (kvUrl && kvToken) {
       try {
         const r = await fetch(`${kvUrl}/pipeline`, {
@@ -82,37 +92,36 @@ export default async function handler(req, res) {
           body: JSON.stringify([["GET", cacheKey]]),
         });
         const [{ result }] = await r.json();
-        if (result) return res.json({ ...JSON.parse(result), cached: true });
+        if (result) chain = JSON.parse(result);
       } catch (_) {}
     }
 
     try {
-      // Fetch options chain + spot price in parallel
-      const [chainData, spotResp] = await Promise.all([
-        fetchNasdaqOptions(sym, expiryDate),
-        fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=1d`,
-          { headers: { "User-Agent": UA } }),
-      ]);
-
-      let spot = 0;
-      try { spot = (await spotResp.json())?.chart?.result?.[0]?.meta?.regularMarketPrice ?? 0; } catch (_) {}
-
-      // Mark ITM
-      const calls = chainData.calls.map(c => ({ ...c, itm: spot > 0 && c.strike < spot }));
-      const puts  = chainData.puts.map(p  => ({ ...p, itm: spot > 0 && p.strike > spot }));
-
-      const result = { sym, spot, expirations: chainData.expirations, calls, puts,
-                       selectedExp: chainData.selectedExp };
-
-      if (kvUrl && kvToken) {
-        fetch(`${kvUrl}/pipeline`, {
-          method: "POST", headers: kvHdr,
-          body: JSON.stringify([["SET", cacheKey, JSON.stringify(result)], ["EXPIRE", cacheKey, 300]]),
-        }).catch(() => {});
+      if (!chain) {
+        chain = await fetchCboeOptions(sym);
+        if (kvUrl && kvToken) {
+          fetch(`${kvUrl}/pipeline`, {
+            method: "POST", headers: kvHdr,
+            body: JSON.stringify([["SET", cacheKey, JSON.stringify(chain)], ["EXPIRE", cacheKey, 300]]),
+          }).catch(() => {});
+        }
       }
-      return res.json(result);
+
+      // Pick requested expiry (match by date), else nearest upcoming
+      const wantDate = expiryTs ? new Date(expiryTs * 1000).toISOString().slice(0, 10) : null;
+      const expKey = (wantDate && chain.byExp[wantDate]) ? wantDate : chain.exps[0];
+      const sel = chain.byExp[expKey];
+
+      return res.json({
+        sym,
+        spot: chain.spot,
+        expirations: chain.exps.map(e => Math.floor(new Date(e + "T21:00:00Z").getTime() / 1000)),
+        calls: sel.calls,
+        puts:  sel.puts,
+        selectedExp: Math.floor(new Date(expKey + "T21:00:00Z").getTime() / 1000),
+      });
     } catch (err) {
-      return res.status(500).json({ error: err.message });
+      return res.status(502).json({ error: `期权数据源不可用 (${err.message})` });
     }
   }
 
