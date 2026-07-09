@@ -3783,9 +3783,7 @@
   <div id="sim-options-section" style="display:none;margin:0 0 16px">
     <div class="sim-section-label">
       <span class="ssl-zh">期权滚动策略</span>
-      <span class="ssl-en">Wheel · CSP / Covered Call</span>
       <span class="ssl-rule"></span>
-      <span class="ssl-meta">手动记录 · ETF现价实时</span>
     </div>
     <div id="sim-opts-inner"></div>
   </div>
@@ -4260,9 +4258,9 @@
   </div>
 </div>
 
-<!-- Options wheel modal — sell (full manual fields) / close / mark -->
+<!-- Options wheel modal — sell (full manual fields) / close / mark / exit -->
 <div id="opts-entry-modal" class="modal-backdrop" style="display:none">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:480px">
     <div class="modal-header">
       <h2 class="opts-modal-title">卖出期权</h2>
       <button class="modal-close" onclick="document.getElementById('opts-entry-modal').style.display='none'">✕</button>
@@ -4282,25 +4280,31 @@
     <div class="form-row" id="opts-row-strat">
       <label>策略</label>
       <div class="seg" style="width:100%">
-        <button type="button" class="opts-type-btn" data-optstrat="csp">卖Put · CSP</button>
-        <button type="button" class="opts-type-btn" data-optstrat="cc">备兑Call · CC</button>
+        <button type="button" class="opts-type-btn" data-optstrat="csp">卖 Put · CSP 现金担保</button>
+        <button type="button" class="opts-type-btn" data-optstrat="cc">卖 Call · 备兑 CC</button>
       </div>
     </div>
-    <div class="form-row" id="opts-row-strike">
-      <label>行权价 ($)</label>
-      <input type="number" id="opts-strike" class="form-input" step="0.5" min="0" placeholder="如 480"/>
+    <!-- 行权价 + 到期日 并排 -->
+    <div id="opts-row-strike-expiry" style="display:flex;gap:12px">
+      <div class="form-row" id="opts-row-strike" style="flex:1">
+        <label>行权价 ($)</label>
+        <input type="number" id="opts-strike" class="form-input" step="0.5" min="0" placeholder="如 480"/>
+      </div>
+      <div class="form-row" id="opts-row-expiry" style="flex:1">
+        <label>到期日</label>
+        <input type="date" id="opts-expiry-date" class="form-input"/>
+      </div>
     </div>
-    <div class="form-row" id="opts-row-expiry">
-      <label>到期日</label>
-      <input type="date" id="opts-expiry-date" class="form-input"/>
-    </div>
-    <div class="form-row" id="opts-row-qty">
-      <label>手数（合约）</label>
-      <input type="number" id="opts-qty" class="form-input" min="1" step="1" value="1"/>
-    </div>
-    <div class="form-row" id="opts-row-premium">
-      <label>权利金 ($/share)</label>
-      <input type="number" id="opts-premium" class="form-input" step="0.01" min="0" placeholder="券商成交价"/>
+    <!-- 手数 + 权利金 并排 -->
+    <div id="opts-row-qty-premium" style="display:flex;gap:12px">
+      <div class="form-row" id="opts-row-qty" style="flex:1">
+        <label>手数（合约）</label>
+        <input type="number" id="opts-qty" class="form-input" min="1" step="1" value="1"/>
+      </div>
+      <div class="form-row" id="opts-row-premium" style="flex:1">
+        <label>权利金 ($/share)</label>
+        <input type="number" id="opts-premium" class="form-input" step="0.01" min="0" placeholder="券商成交价"/>
+      </div>
     </div>
     <div class="form-row" id="opts-row-exit" style="display:none">
       <label>出仓价 ($/share)</label>
@@ -4314,8 +4318,8 @@
   </div>
 </div>
 
-<script src="data.js?v=258"></script>
-<script src="desk.js?v=258"></script>
+<script src="data.js?v=259"></script>
+<script src="desk.js?v=259"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

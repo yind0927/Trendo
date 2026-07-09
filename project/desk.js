@@ -4944,15 +4944,33 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // ── Modal helpers ─────────────────────────────────────────────────────────
+  let _optModalClickOutsideReady = false;
   function _optModalMode(mode) {
     // mode: "sell" shows all fields; "close"/"mark"/"exit" show limited fields
     const modal = $("#opts-entry-modal");
-    const sellOnly = ["#opts-row-sym", "#opts-row-strat", "#opts-row-strike", "#opts-row-expiry", "#opts-row-qty"];
+    // Wrapper divs that group paired fields (hide/show the whole pair together)
+    const wrapStrikeExpiry = modal.querySelector("#opts-row-strike-expiry");
+    const wrapQtyPremium   = modal.querySelector("#opts-row-qty-premium");
+    const sellOnlyIds = ["#opts-row-sym", "#opts-row-strat"];
     const premRow  = modal.querySelector("#opts-row-premium");
     const exitRow  = modal.querySelector("#opts-row-exit");
-    sellOnly.forEach(sel => { const el = modal.querySelector(sel); if (el) el.style.display = mode === "sell" ? "" : "none"; });
-    if (premRow)  premRow.style.display  = mode === "exit" ? "none" : "";
-    if (exitRow)  exitRow.style.display  = mode === "exit" ? "" : "none";
+    const isSell = mode === "sell";
+    sellOnlyIds.forEach(sel => { const el = modal.querySelector(sel); if (el) el.style.display = isSell ? "" : "none"; });
+    if (wrapStrikeExpiry) wrapStrikeExpiry.style.display = isSell ? "" : "none";
+    if (wrapQtyPremium)   wrapQtyPremium.style.display   = isSell ? "" : "none";
+    // In close/mark modes, show just the premium field standalone
+    if (premRow) {
+      if (isSell) { premRow.style.display = ""; premRow.style.flex = "1"; }
+      else premRow.style.display = mode === "exit" ? "none" : "";
+    }
+    if (exitRow) exitRow.style.display = mode === "exit" ? "" : "none";
+    // Wire click-outside-to-close once
+    if (!_optModalClickOutsideReady) {
+      _optModalClickOutsideReady = true;
+      let _mousedownOnBg = false;
+      modal.addEventListener("mousedown", e => { _mousedownOnBg = e.target === modal; });
+      modal.addEventListener("click", e => { if (_mousedownOnBg && e.target === modal) modal.style.display = "none"; });
+    }
     return modal;
   }
 
