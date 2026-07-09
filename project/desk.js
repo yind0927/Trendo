@@ -1940,8 +1940,9 @@ function rsAdjustGrade(grade, rsResult) {
       case "progstatus": {
         if (activeTab === "closed") {
           const pnl = h.pnlFinal ?? h.pnlDollar ?? 0;
-          const win = pnl > 0;
-          return `<td><span class="status ${win ? "ok" : "danger"}"><span class="dot"></span>${win ? "盈利 · Win" : "亏损 · Loss"}</span></td>`;
+          const stCls = pnl > 0 ? "ok" : pnl < 0 ? "danger" : "neu";
+          const stLbl = pnl > 0 ? "盈利 · Win" : pnl < 0 ? "亏损 · Loss" : "持平 · Even";
+          return `<td><span class="status ${stCls}"><span class="dot"></span>${stLbl}</span></td>`;
         }
         const bucket = progressBucket(h);
         const status = BUCKET_STATUS[bucket];
@@ -4373,9 +4374,9 @@ function rsAdjustGrade(grade, rsResult) {
     // Status badge
     let badgeColor, badgeTxt;
     if (isClosed) {
-      const win = (pnlAmt ?? 0) > 0;
-      badgeColor = win ? "var(--up)" : "var(--down)";
-      badgeTxt = win ? "盈利" : "亏损";
+      const _pa = pnlAmt ?? 0;
+      badgeColor = _pa > 0 ? "var(--up)" : _pa < 0 ? "var(--down)" : "var(--neutral)";
+      badgeTxt = _pa > 0 ? "盈利" : _pa < 0 ? "亏损" : "持平";
       if (multiExit) badgeTxt += ` · ${records.length}次出场`;
     } else if (hasPartials) {
       const closedQty = partials.reduce((s, c) => s + (c.qty || 0), 0);
@@ -5588,21 +5589,26 @@ function rsAdjustGrade(grade, rsResult) {
         if (bxEntries.every(e => e.key === "—")) return "";
         const _bxMax = Math.max(1, ...bxEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
         const bxRows = bxEntries.map(({ label, sub, color, pos }) => {
-          const cnt = pos.length;
-          const wn  = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
-          const wr  = Math.round(wn / cnt * 100);
+          const cnt  = pos.length;
+          const wn   = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
+          const evn  = pos.filter(p => (p.pnlFinal ?? 0) === 0).length;
+          const wr   = cnt > 0 ? Math.round(wn / cnt * 100) : 0;
           const totalG  = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
-          const avgPctG = (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1);
-          const pnlCls  = totalG >= 0 ? "up" : "down";
-          const pctCls  = parseFloat(avgPctG) >= 0 ? "up" : "down";
+          const avgPctG = (pos.reduce((s, p) => {
+            const basis = (p.cost ?? 0) * (p.qty ?? 0);
+            return s + (basis > 0 ? (p.pnlFinal ?? 0) / basis : 0);
+          }, 0) / cnt * 100).toFixed(1);
+          const pnlCls  = totalG > 0 ? "up" : totalG < 0 ? "down" : "";
+          const pctCls  = parseFloat(avgPctG) > 0 ? "up" : parseFloat(avgPctG) < 0 ? "down" : "";
           const barPct  = Math.round(Math.abs(totalG) / _bxMax * 100);
           const barColor = totalG >= 0 ? "var(--up)" : "var(--down)";
+          const evnTxt  = evn > 0 ? `<span style="color:var(--neutral);font-size:9.5px">平${evn}</span>` : "";
           return `<div class="gp-row">
             <span class="gp-grade" style="color:${color};font-size:10px;line-height:1.3;display:flex;flex-direction:column;align-items:flex-end">${label}<span style="color:var(--fg-3);font-size:8.5px;font-weight:400">${sub}</span></span>
             <span class="gp-cnt">${cnt}</span>
             <span class="gp-wr ${wr >= 50 ? "up" : "down"}">${wr}%</span>
             <span class="gp-avg ${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</span>
-            <span class="gp-st"></span>
+            <span class="gp-st" style="display:flex;align-items:center;justify-content:center">${evnTxt}</span>
             <div class="gp-bar-wrap"><div class="gp-bar" style="background:${barColor};width:${barPct}%"></div></div>
             <span class="gp-pnl ${pnlCls}">${fmt.signed(totalG)}</span>
           </div>`;
@@ -5613,7 +5619,7 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="gp-header" style="margin-top:10px">
             <span class="gp-grade"></span><span class="gp-cnt">笔</span>
             <span class="gp-wr">胜率</span><span class="gp-avg">均%</span>
-            <span class="gp-st"></span><span class="gp-bar-wrap"></span>
+            <span class="gp-st">持平</span><span class="gp-bar-wrap"></span>
             <span class="gp-pnl">总盈亏</span>
           </div>${bxRows}
         </div>`;
