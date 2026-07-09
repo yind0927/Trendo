@@ -315,6 +315,7 @@
     { id: "sector_neg",   label: "板块拖累",    color: "var(--down)",   group: "趋势" },
     { id: "entry_good",   label: "入场精准",    color: "var(--up)",     group: "入场" },
     { id: "entry_early",  label: "入场偏早",    color: "var(--warn)",   group: "入场" },
+    { id: "entry_late",   label: "入场过晚",    color: "var(--warn)",   group: "入场" },
     { id: "entry_chase",  label: "追高入场",    color: "var(--down)",   group: "入场" },
     { id: "entry_pb",     label: "回调买入",    color: "var(--accent)", group: "入场" },
     { id: "mgmt_patient", label: "耐心持有",    color: "var(--up)",     group: "管理" },
@@ -4379,6 +4380,14 @@ function rsAdjustGrade(grade, rsResult) {
       ? `${fmt.date(h.entry)} → ${fmt.date(h.closedAt)} · ${h.days ?? "—"}d`
       : `${fmt.date(h.entry)} · ${h.days}d`;
 
+    // BX days chip
+    const bx = h.bx || {};
+    const barsCls = bx.dailyBars === "0-5" ? "bxbar-early" : bx.dailyBars === "5-15" ? "bxbar-mid" : "bxbar-late";
+    const barsLbl = bx.dailyBars === "0-5" ? "初期" : bx.dailyBars === "5-15" ? "中期" : "延续";
+    const bxChip = bx.dailyBars
+      ? `<span class="bx-bar-chip ${barsCls}" style="font-size:10px;padding:1px 6px">${bx.dailyBars}<span class="bx-bar-sub">${barsLbl}</span></span>`
+      : "";
+
     // Tags section
     const selectedTags = new Set(h.journalTags || []);
     const groupOrder = ["趋势", "入场", "管理", "风险"];
@@ -4431,6 +4440,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="statlight" style="color:${badgeColor};background:color-mix(in oklch,${badgeColor} 14%,transparent)"><span class="dot" style="background:${badgeColor}"></span>${badgeTxt}</span>
           ${pnlAmt != null ? `<span class="jc-pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>` : ""}
           ${isClosed && h.rMult != null ? `<span class="jc-rmult ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</span>` : ""}
+          ${bxChip}
           <span class="jc-date">${dateStr}</span>
         </div>
       </div>
