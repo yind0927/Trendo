@@ -4324,6 +4324,10 @@
       <label>出仓价 ($/share)</label>
       <input type="number" id="opts-exit-price" class="form-input" step="0.01" min="0" placeholder="实际卖出价"/>
     </div>
+    <div class="form-row" id="opts-row-close-date" style="display:none">
+      <label>平仓日期</label>
+      <input type="date" id="opts-close-date" class="form-input"/>
+    </div>
     <div id="opts-calc" class="opts-calc"></div>
     <div class="form-actions">
       <button type="button" class="btn" id="opts-cancel-btn">取消</button>
@@ -4332,8 +4336,8 @@
   </div>
 </div>
 
-<script src="data.js?v=260"></script>
-<script src="desk.js?v=260"></script>
+<script src="data.js?v=261"></script>
+<script src="desk.js?v=261"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

@@ -4616,19 +4616,19 @@ function rsAdjustGrade(grade, rsResult) {
     const elapsed = Math.min(totalDays, Math.max(0, Math.round((Date.now() - new Date(pos.entryDate).getTime()) / 86400000)));
     const timePct = elapsed / totalDays * 100;
 
-    // Manual mark → floating P&L
+    // Floating P&L via manually recorded current option price (broker's mark/mid)
     let markRow;
     if (pos.manualMark != null) {
       const float_ = (pos.premium - pos.manualMark) * 100 * pos.qty;
       const cap = pos.premium > 0 ? (pos.premium - pos.manualMark) / pos.premium * 100 : 0;
       const fCls = float_ > 0 ? "up" : float_ < 0 ? "down" : "";
-      markRow = `<span class="opts-mark-tag" data-opt-mark="${pos.id}" title="点击更新Mark">
-        Mark $${pos.manualMark.toFixed(2)}<span class="muted" style="font-size:9px">@${(pos.manualMarkAt || "").slice(5)}</span></span>
+      markRow = `<span class="opts-mark-tag" data-opt-mark="${pos.id}" title="点击更新当前价">
+        当前价 $${pos.manualMark.toFixed(2)}<span class="muted" style="font-size:9px">@${(pos.manualMarkAt || "").slice(5)}</span></span>
         浮盈 <b class="${fCls}">${float_ >= 0 ? "+" : "−"}$${Math.abs(float_).toFixed(0)}</b>
-        <span class="muted" style="font-size:9.5px">(${cap.toFixed(0)}%已实现)</span>`;
+        <span class="muted" style="font-size:9.5px">(${cap.toFixed(0)}%权利金已实现)</span>`;
     } else {
-      markRow = `<span class="opts-mark-tag opts-mark-empty" data-opt-mark="${pos.id}">+ 记录Mark</span>
-        <span class="muted" style="font-size:9.5px">从券商抄当前权利金算浮盈</span>`;
+      markRow = `<span class="opts-mark-tag opts-mark-empty" data-opt-mark="${pos.id}">+ 记录浮盈</span>
+        <span class="muted" style="font-size:9.5px">从券商App记录当前期权价格，计算持仓浮盈</span>`;
     }
 
     return `<div class="opts-pos-card">
@@ -4964,6 +4964,8 @@ function rsAdjustGrade(grade, rsResult) {
       else premRow.style.display = mode === "exit" ? "none" : "";
     }
     if (exitRow) exitRow.style.display = mode === "exit" ? "" : "none";
+    const closeDateRow = modal.querySelector("#opts-row-close-date");
+    if (closeDateRow) closeDateRow.style.display = mode === "close" ? "" : "none";
     // Wire click-outside-to-close once
     if (!_optModalClickOutsideReady) {
       _optModalClickOutsideReady = true;
@@ -5002,11 +5004,14 @@ function rsAdjustGrade(grade, rsResult) {
     if (prefill.strat) simOptionsStrat = prefill.strat;
     modal.querySelector(".opts-modal-title").textContent = "卖出期权 · 手动记录";
     modal.querySelector("#opts-modal-meta").textContent = "行权价/权利金/到期日按券商成交填写，现价自动取 ETF 实时价";
+    const premLabel = modal.querySelector("#opts-row-premium label");
+    if (premLabel) premLabel.textContent = "权利金 ($/share)";
     const symIn  = modal.querySelector("#opts-sym-input");
     const strkIn = modal.querySelector("#opts-strike");
     const expIn  = modal.querySelector("#opts-expiry-date");
     const qtyEl  = modal.querySelector("#opts-qty");
     const premEl = modal.querySelector("#opts-premium");
+    premEl.placeholder = "券商成交价";
     symIn.value = simOptionsSym;
     strkIn.value = prefill.strike || "";
     expIn.value = prefill.expiry || "";
@@ -5078,26 +5083,37 @@ function rsAdjustGrade(grade, rsResult) {
     modal.querySelector(".opts-modal-title").textContent =
       `${isRoll ? "滚仓 — 先买回" : "平仓买回"} · ${pos.sym} ${pos.strike}${pos.type === "call" ? "C" : "P"}`;
     modal.querySelector("#opts-modal-meta").textContent =
-      `卖出价 $${pos.premium.toFixed(2)} ×${pos.qty}手 · 填写券商买回价${isRoll ? "，确认后直接开新仓" : ""}`;
+      `卖出价 $${pos.premium.toFixed(2)}/share ×${pos.qty}手 · 到券商App查买回价格${isRoll ? "，确认后直接开新仓" : ""}`;
+    const premLabel = modal.querySelector("#opts-row-premium label");
+    if (premLabel) premLabel.textContent = "买回价格 ($/share)";
     const premEl = modal.querySelector("#opts-premium");
+    premEl.placeholder = "从券商填写买回价";
     premEl.value = pos.manualMark != null ? pos.manualMark.toFixed(2) : "";
+    const closeDateEl = modal.querySelector("#opts-close-date");
+    if (closeDateEl) closeDateEl.value = new Date().toISOString().slice(0, 10);
     const calcEl = modal.querySelector("#opts-calc");
     const recalc = () => {
-      const prem = parseFloat(premEl.value);
-      if (isNaN(prem)) { calcEl.innerHTML = `<div><span class="muted">填写买回价计算实现盈亏</span></div>`; return; }
-      const pnl = (pos.premium - prem) * 100 * pos.qty;
-      calcEl.innerHTML = `<div><span>实现盈亏</span><b class="${pnl >= 0 ? "up" : "down"}">${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(0)}</b></div>`;
+      const buyBack = parseFloat(premEl.value);
+      if (isNaN(buyBack)) { calcEl.innerHTML = `<div><span class="muted">填写买回价格计算实现盈亏</span></div>`; return; }
+      const perShare = pos.premium - buyBack;
+      const pnl = perShare * 100 * pos.qty;
+      calcEl.innerHTML = [
+        `<div><span>卖出价</span><b>$${pos.premium.toFixed(2)}/share</b></div>`,
+        `<div><span>买回价</span><b>$${buyBack.toFixed(2)}/share</b></div>`,
+        `<div><span>每股盈亏</span><b class="${perShare >= 0 ? "up" : "down"}">${perShare >= 0 ? "+" : "−"}$${Math.abs(perShare).toFixed(2)}</b></div>`,
+        `<div><span>总计盈亏</span><b class="${pnl >= 0 ? "up" : "down"}">${pnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(pnl))}</b></div>`,
+      ].join("");
     };
     premEl.oninput = recalc;
     recalc();
     modal.style.display = "flex";
     modal.querySelector("#opts-confirm-btn").onclick = () => {
-      const prem = parseFloat(premEl.value);
-      if (isNaN(prem) || prem < 0) { alert("请填写买回权利金"); return; }
+      const buyBack = parseFloat(premEl.value);
+      if (isNaN(buyBack) || buyBack < 0) { alert("请填写买回价格"); return; }
       pos.status = "closed";
-      pos.closePremium = prem;
-      pos.realized = (pos.premium - prem) * 100 * pos.qty;
-      pos.closedAt = new Date().toISOString().slice(0, 10);
+      pos.closePremium = buyBack;
+      pos.realized = (pos.premium - buyBack) * 100 * pos.qty;
+      pos.closedAt = (closeDateEl && closeDateEl.value) || new Date().toISOString().slice(0, 10);
       saveToStorage();
       modal.style.display = "none";
       if (isRoll) openOptionsSellModal({ sym: pos.sym, strat: pos.strat, qty: pos.qty });
@@ -5111,10 +5127,13 @@ function rsAdjustGrade(grade, rsResult) {
     const modal = _optModalMode("mark");
     if (!modal) return;
     modal.querySelector(".opts-modal-title").textContent =
-      `记录Mark · ${pos.sym} ${pos.strike}${pos.type === "call" ? "C" : "P"}`;
+      `记录浮盈 · ${pos.sym} ${pos.strike}${pos.type === "call" ? "C" : "P"}`;
     modal.querySelector("#opts-modal-meta").textContent =
-      `卖出价 $${pos.premium.toFixed(2)} · 填写券商显示的当前权利金，仅用于浮盈展示`;
+      `卖出价 $${pos.premium.toFixed(2)}/share · 打开券商App查看当前期权价格（Mark），填入后自动计算浮盈`;
+    const premLabel = modal.querySelector("#opts-row-premium label");
+    if (premLabel) premLabel.textContent = "当前期权价 (Mark)";
     const premEl = modal.querySelector("#opts-premium");
+    premEl.placeholder = "从券商App抄当前权利金";
     premEl.value = pos.manualMark != null ? pos.manualMark.toFixed(2) : "";
     const calcEl = modal.querySelector("#opts-calc");
     const recalc = () => {
@@ -5128,7 +5147,7 @@ function rsAdjustGrade(grade, rsResult) {
     modal.style.display = "flex";
     modal.querySelector("#opts-confirm-btn").onclick = () => {
       const prem = parseFloat(premEl.value);
-      if (isNaN(prem) || prem < 0) { alert("请填写当前权利金"); return; }
+      if (isNaN(prem) || prem < 0) { alert("请填写当前期权价格 (Mark)"); return; }
       pos.manualMark = prem;
       pos.manualMarkAt = new Date().toISOString().slice(0, 10);
       saveToStorage();
