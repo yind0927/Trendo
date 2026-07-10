@@ -1655,87 +1655,93 @@
   /* ── Options module — wheel strategy (CSP / CC) ───────────── */
   #sim-options-section { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-1); }
   #sim-options-section .sim-section-label { margin: 14px 14px 12px; }
+  /* Controls row */
   .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
-  .opts-sym-chips { display: flex; gap: 6px; }
-  /* opts-sym-chip and opts-type-btn reuse .seg button styles — custom overrides only */
   .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
   .opts-sym-chip.active, .opts-type-btn.active { background: var(--accent) !important; color: oklch(0.14 0.012 250) !important; box-shadow: none !important; }
   .opts-spots { display: flex; gap: 8px; flex-wrap: wrap; }
   .opts-spot-pill { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); border: 1px solid var(--line); border-radius: 14px; padding: 3px 11px; background: var(--bg-2); }
   .opts-spot-pill b { color: var(--fg-0); margin-right: 4px; }
-  .opts-dte-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--accent-dim); color: var(--accent); font-weight: 700; font-family: var(--f-mono); }
-  .opts-spot-inline { font-size: 10.5px; color: var(--fg-2); font-family: var(--f-mono); }
+  .opts-btns { display: flex; gap: 8px; }
+  /* Section group headers */
+  .opts-sub-label { font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); padding: 10px 14px 6px; font-family: var(--f-mono); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  .opts-sub-label:first-child { border-top: none; }
+  .opts-sub-pending { color: var(--warn) !important; }
+  /* ── Card base (all states share this) */
+  .opts-pos-card { padding: 12px 14px; border-top: 1px solid var(--bg-3); display: flex; flex-direction: column; gap: 7px; }
+  /* Open: accent teal left rule */
+  .opts-card-open { border-left: 2px solid var(--accent); padding-left: 12px; }
+  /* Pending: amber tint + left rule */
+  .opts-pending-card { border-left: 2px solid var(--warn); padding-left: 12px; background: color-mix(in oklch, var(--warn) 4%, var(--bg-1)); }
+  /* Settled/done: dim */
+  .opts-card-done { opacity: .78; }
+  /* Assigned holding: amber full border */
+  .opts-assigned-live { border-left: 3px solid var(--warn); padding-left: 11px; background: color-mix(in oklch, var(--warn) 5%, var(--bg-1)); }
+  /* ── Card header row */
+  .opts-card-hd { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .opts-card-hd-r { margin-left: auto; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  /* Badge (CSP / CC) */
+  .opts-badge { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 2px 7px; border-radius: 4px; font-family: var(--f-mono); flex-shrink: 0; }
+  .opts-badge-csp { background: var(--accent-dim); color: var(--accent); }
+  .opts-badge-cc { background: color-mix(in oklch, var(--orange) 16%, transparent); color: var(--orange); }
+  /* Symbol + strike */
+  .opts-card-sym { font-size: 13px; font-weight: 700; font-family: var(--f-mono); color: var(--fg-0); white-space: nowrap; }
+  .opts-card-sym span { color: var(--fg-1); font-weight: 600; }
+  /* DTE chip */
+  .opts-dte-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--accent-dim); color: var(--accent); font-weight: 700; font-family: var(--f-mono); flex-shrink: 0; }
+  /* Live spot bubble */
+  .opts-card-spot { font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; flex-shrink: 0; }
+  /* Status tag */
+  .opts-st-tag { font-size: 9.5px; padding: 1.5px 7px; border-radius: 9px; border: 1px solid; font-family: var(--f-mono); flex-shrink: 0; }
+  /* Pending badge */
+  .opts-pending-badge { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); border: 1px solid var(--warn); border-radius: 3px; padding: 1.5px 5px; font-family: var(--f-mono); flex-shrink: 0; }
+  /* Done amount (right of header) */
+  .opts-card-amt { font-size: 15px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
+  /* ── Metric grid (4 cells per card) */
+  .opts-card-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 10px; }
+  .opts-card-m { display: flex; flex-direction: column; gap: 2px; }
+  .opts-card-ml { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--fg-3); }
+  .opts-card-mv { font-size: 12px; font-weight: 700; font-family: var(--f-mono); color: var(--fg-0); }
+  .opts-card-mv.up { color: var(--up); }
+  .opts-card-mv.down { color: var(--down); }
+  .opts-card-mv.warn { color: var(--warn); }
+  .opts-card-mv.dim { color: var(--fg-3); font-weight: 400; }
+  /* ── Sub info row */
+  .opts-card-meta { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  /* ── Progress bar (theta decay) */
+  .opts-prog-wrap { height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+  .opts-prog-fill { height: 100%; background: var(--up); border-radius: 2px; transition: width .3s; }
+  /* ── Footer rows (mark + est) */
+  .opts-card-foot { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--fg-2); font-family: var(--f-mono); }
+  .opts-mark-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .opts-mark-tag { font-size: 10px; padding: 1.5px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--fg-2); cursor: pointer; transition: .12s; }
+  .opts-mark-tag:hover { border-color: var(--accent); color: var(--accent); }
+  .opts-mark-tag.opts-mark-empty { border-style: dashed; color: var(--fg-3); }
   .opts-itm-warn { color: var(--warn); }
-  /* stat strip */
+  .opts-est-line b { font-weight: 700; }
+  /* ── Equity breakdown rows (assigned) */
+  .opts-equity-rows { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-2); border-top: 1px solid var(--bg-3); padding-top: 5px; }
+  .opts-equity-row { display: flex; align-items: center; gap: 8px; }
+  .opts-equity-row b { font-weight: 700; }
+  .opts-equity-row.opts-equity-total { border-top: 1px solid var(--bg-3); padding-top: 3px; margin-top: 1px; }
+  /* ── Mini action buttons */
+  .opts-mini-btn { font-size: 10px; padding: 2px 9px; border-radius: 5px; border: 1px solid var(--line); color: var(--fg-2); background: transparent; cursor: pointer; transition: .12s; white-space: nowrap; }
+  .opts-mini-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .opts-mini-btn.opts-del:hover { border-color: var(--down); color: var(--down); }
+  /* ── Stat strip (live summary) */
   .opts-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); margin-top: 4px; }
   .opts-stat { background: var(--bg-1); padding: 11px 14px; }
   .opts-stat-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
   .opts-stat-val { font-size: 15px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
   .opts-stat-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
-  /* positions */
-  .opts-sub-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); padding: 12px 14px 6px; font-family: var(--f-mono); }
-  .opts-pos-card { padding: 10px 14px; border-top: 1px solid var(--bg-3); display: flex; align-items: center; gap: 12px; }
-  .opts-pos-card.opts-done { opacity: .72; }
-  .opts-pos-main { flex: 1; min-width: 0; }
-  .opts-pos-title { display: flex; align-items: center; gap: 8px; }
-  .opts-badge { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 1.5px 7px; border-radius: 4px; font-family: var(--f-mono); }
-  .opts-badge-csp { background: var(--accent-dim); color: var(--accent); }
-  .opts-badge-cc { background: color-mix(in oklch, var(--orange) 16%, transparent); color: var(--orange); }
-  .opts-pos-name { font-size: 12.5px; font-weight: 700; color: var(--fg-0); font-family: var(--f-mono); }
-  .opts-pos-dte { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
-  .opts-st-tag { font-size: 9.5px; padding: 1px 7px; border-radius: 9px; border: 1px solid; font-family: var(--f-mono); }
-  .opts-pos-meta { font-size: 10.5px; color: var(--fg-3); margin-top: 3px; font-family: var(--f-mono); }
-  .opts-est { font-size: 8.5px; color: var(--warn); border: 1px solid var(--warn); border-radius: 3px; padding: 0 3px; margin-left: 3px; }
-  .opts-prog-wrap { height: 4px; background: var(--bg-3); border-radius: 2px; margin: 7px 0 5px; overflow: hidden; max-width: 340px; }
-  .opts-prog-fill { height: 100%; background: var(--up); border-radius: 2px; transition: width .3s; }
-  .opts-prog-fill.neg { background: var(--down); }
-  .opts-pos-rows { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--fg-2); font-family: var(--f-mono); }
-  .opts-est-line b { font-weight: 700; }
-  .opts-mark-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .opts-mark-tag { font-size: 10px; padding: 1.5px 8px; border-radius: 10px; border: 1px solid var(--line); color: var(--fg-2); cursor: pointer; transition: .12s; }
-  .opts-mark-tag:hover { border-color: var(--accent); color: var(--accent); }
-  .opts-mark-tag.opts-mark-empty { border-style: dashed; color: var(--fg-3); }
-  .opts-actions-col { flex-direction: column; }
-  .opts-pos-right { text-align: right; flex-shrink: 0; }
-  .opts-pos-amt { font-size: 15px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
-  .opts-pos-cap { font-size: 9.5px; font-family: var(--f-mono); margin-top: 1px; }
-  .opts-pos-actions { display: flex; gap: 5px; justify-content: flex-end; margin-top: 5px; }
-  .opts-mini-btn { font-size: 10px; padding: 2px 9px; border-radius: 5px; border: 1px solid var(--line); color: var(--fg-2); background: transparent; cursor: pointer; transition: .12s; }
-  .opts-mini-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .opts-mini-btn.opts-del:hover { border-color: var(--down); color: var(--down); }
-  .opts-calc { display: flex; flex-direction: column; gap: 7px; border-top: 1px solid var(--line); padding: 12px 0 2px; margin: 8px 0 0; }
-  .opts-calc div { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--fg-2); }
-  .opts-calc span { color: var(--fg-3); font-size: 11.5px; }
-  .opts-calc b { font-family: var(--f-mono); color: var(--fg-0); font-weight: 600; font-size: 13px; }
-  .opts-calc b.up { color: var(--up); }
-  .opts-calc b.down { color: var(--down); }
-  .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
-  /* Pending pre-order cards */
-  .opts-pending-card { border-left: 2px solid var(--warn); }
-  .opts-pending-badge { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--warn); border: 1px solid var(--warn); border-radius: 3px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; }
-  .opts-sub-pending { color: var(--warn) !important; }
-  /* Button group in opts controls */
-  .opts-btns { display: flex; gap: 8px; }
-  @media (max-width: 640px) {
-    .opts-btns { flex-direction: column; }
-    .opts-btns .btn { width: 100%; box-sizing: border-box; }
-  }
-  .sim-topbar-actions { display: flex; gap: 8px; align-items: center; }
-  #sim-options-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-  /* Assignment equity tracking */
-  .opts-assigned-live { border-left: 3px solid var(--warn) !important; background: color-mix(in oklch, var(--warn) 5%, var(--bg-1)) !important; }
-  .opts-equity-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-2); }
-  .opts-equity-row { display: flex; align-items: center; gap: 8px; }
-  .opts-equity-row b { font-weight: 700; }
-  .opts-equity-row.opts-equity-total { border-top: 1px solid var(--bg-3); padding-top: 3px; margin-top: 2px; }
-  /* Wheel stats */
+  /* ── Wheel stats section */
   .opts-wheel-stats { padding: 0 0 14px; border-top: 1px solid var(--line); margin-top: 6px; }
   .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); margin-top: 4px; }
   .opts-ws-cell { background: var(--bg-1); padding: 11px 14px; }
   .opts-ws-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
   .opts-ws-val { font-size: 16px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
   .opts-ws-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
-  /* Monthly table */
+  /* ── Monthly table */
   .opts-month-wrap { overflow-x: auto; margin: 10px 14px 0; }
   .opts-month-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: var(--f-mono); }
   .opts-month-table th { text-align: left; color: var(--fg-3); font-weight: 600; letter-spacing: .05em; padding: 5px 8px; border-bottom: 1px solid var(--line); font-size: 9.5px; text-transform: uppercase; }
@@ -1744,6 +1750,16 @@
   .opts-month-table td.opts-mt-pnl.up { color: var(--up); }
   .opts-month-table td.opts-mt-pnl.down { color: var(--down); }
   .opts-month-table td.opts-mt-wr { color: var(--fg-2); }
+  /* ── Modal calc rows */
+  .opts-calc { display: flex; flex-direction: column; gap: 7px; border-top: 1px solid var(--line); padding: 12px 0 2px; margin: 8px 0 0; }
+  .opts-calc div { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--fg-2); }
+  .opts-calc span { color: var(--fg-3); font-size: 11.5px; }
+  .opts-calc b { font-family: var(--f-mono); color: var(--fg-0); font-weight: 600; font-size: 13px; }
+  .opts-calc b.up { color: var(--up); }
+  .opts-calc b.down { color: var(--down); }
+  .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
+  .sim-topbar-actions { display: flex; gap: 8px; align-items: center; }
+  #sim-options-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
   @media (max-width: 640px) {
     /* Sim topbar: allow the two action buttons to wrap onto a second line */
     .sim-topbar-actions { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
@@ -1751,18 +1767,16 @@
     /* Options module: stat grids collapse to 2-col */
     .opts-stats { grid-template-columns: repeat(2, 1fr); }
     .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
-    /* Position cards: stack vertically, prevent inner overflow */
-    .opts-pos-card { flex-direction: column; align-items: stretch; gap: 6px; }
-    .opts-pos-main { min-width: 0; overflow: hidden; }
-    .opts-pos-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .opts-pos-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .opts-pos-right { display: flex; align-items: center; justify-content: space-between; text-align: left; }
-    .opts-pos-actions, .opts-actions-col { margin-top: 0; flex-direction: row; flex-wrap: wrap; gap: 5px; }
-    /* Controls row: stack spots above the sell button */
+    /* Metric grid: 2x2 on mobile */
+    .opts-card-metrics { grid-template-columns: repeat(2, 1fr); }
+    /* Card header: allow wrapping, push actions below */
+    .opts-card-hd { flex-wrap: wrap; }
+    .opts-card-hd-r { margin-left: 0; width: 100%; justify-content: flex-start; margin-top: 2px; }
+    /* Controls row: stack spots above the buttons */
     .opts-controls { flex-direction: column; align-items: stretch; gap: 10px; }
     .opts-controls .btn { width: 100%; box-sizing: border-box; justify-content: center; text-align: center; }
-    /* Spot pills: wrap and constrain */
-    .opts-spots { flex-wrap: wrap; }
+    .opts-btns { flex-direction: column; }
+    .opts-btns .btn { width: 100%; box-sizing: border-box; }
     /* Section container: no horizontal scroll */
     #sim-options-section { overflow: hidden; }
   }
@@ -4346,8 +4360,8 @@
   </div>
 </div>
 
-<script src="data.js?v=264"></script>
-<script src="desk.js?v=264"></script>
+<script src="data.js?v=265"></script>
+<script src="desk.js?v=265"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

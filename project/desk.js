@@ -4596,19 +4596,16 @@ function rsAdjustGrade(grade, rsResult) {
     const typeL = pos.type === "call" ? "C" : "P";
     const premTotal = pos.premium * 100 * pos.qty;
 
-    // Cushion & expiry estimate — only when a live spot is known
-    let cushionTxt = `<span class="muted">现价待更新</span>`;
+    // Expiry estimate & ITM warning — only when a live spot is known
     let estRow = "";
     if (spot) {
-      const cushion = (isCSP ? (spot - pos.strike) : (pos.strike - spot)) / spot * 100;
-      cushionTxt = cushion >= 0
-        ? `<span class="muted">安全垫 <b class="up" style="font-weight:600">${cushion.toFixed(1)}%</b></span>`
-        : `<span class="opts-itm-warn">入价内 ${Math.abs(cushion).toFixed(1)}%</span>`;
       const intrinsic = _optIntrinsic(pos, spot);
       const est = (pos.premium - intrinsic) * 100 * pos.qty;
       const estCls = est > 0 ? "up" : est < 0 ? "down" : "";
+      const itmPct = (isCSP ? (pos.strike - spot) : (spot - pos.strike)) / spot * 100;
+      const itmWarn = itmPct > 0 ? `<span class="opts-itm-warn"> · 入价内 ${itmPct.toFixed(1)}%</span>` : "";
       estRow = `<span class="opts-est-line">到期预估 <b class="${estCls}">${est >= 0 ? "+" : "−"}$${Math.abs(est).toFixed(0)}</b>
-        <span class="muted" style="font-size:9px">${intrinsic > 0.005 ? "将被指派" : "OTM作废"}</span></span>`;
+        <span class="muted" style="font-size:9px">${intrinsic > 0.005 ? "将被指派" : "OTM作废"}</span>${itmWarn}</span>`;
     }
 
     // Time decay progress (theta works for the seller as days elapse)
@@ -4631,30 +4628,29 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="muted" style="font-size:9.5px">从券商App记录当前期权价格，计算持仓浮盈</span>`;
     }
 
-    return `<div class="opts-pos-card">
-      <div class="opts-pos-main">
-        <div class="opts-pos-title">
-          <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
-          <span class="opts-pos-name">${pos.sym} ${pos.strike}${typeL} · ${pos.expiry.slice(5)}</span>
-          <span class="opts-dte-tag">${dte}d</span>
-          ${spot ? `<span class="opts-spot-inline">$${spot.toFixed(2)}</span>` : ""}
-        </div>
-        <div class="opts-pos-meta">
-          权利金 $${pos.premium.toFixed(2)} ×${pos.qty}手 = <b class="up" style="font-weight:600">$${premTotal.toFixed(0)}</b>
-          · ${cushionTxt}
-          ${isCSP ? `· <span class="muted">占用 ${fmt.usd(pos.strike * 100 * pos.qty)}</span>` : ""}
-        </div>
-        <div class="opts-prog-wrap" title="时间损耗 ${elapsed}/${totalDays} 天">
-          <div class="opts-prog-fill" style="width:${timePct.toFixed(0)}%"></div>
-        </div>
-        <div class="opts-pos-rows">${estRow}${markRow ? `<span class="opts-mark-row">${markRow}</span>` : ""}</div>
-      </div>
-      <div class="opts-pos-right">
-        <div class="opts-pos-actions opts-actions-col">
+    const cushionPct = spot ? (isCSP ? (spot - pos.strike) : (pos.strike - spot)) / spot * 100 : null;
+    return `<div class="opts-pos-card opts-card-open">
+      <div class="opts-card-hd">
+        <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
+        <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
+        <span class="opts-dte-tag">${dte}d</span>
+        ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
+        <div class="opts-card-hd-r">
           <button class="opts-mini-btn" data-opt-roll="${pos.id}">滚仓</button>
           <button class="opts-mini-btn" data-opt-close="${pos.id}">平仓</button>
-          <button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button>
+          <button class="opts-mini-btn opts-del" data-opt-del="${pos.id}">✕</button>
         </div>
+      </div>
+      <div class="opts-card-metrics">
+        <div class="opts-card-m"><div class="opts-card-ml">权利金/张</div><div class="opts-card-mv up">$${pos.premium.toFixed(2)}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">数量</div><div class="opts-card-mv">${pos.qty}张</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">总收入</div><div class="opts-card-mv up">+$${premTotal.toFixed(0)}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">${isCSP ? "安全垫" : "溢价距"}</div><div class="opts-card-mv ${cushionPct == null ? "dim" : cushionPct >= 0 ? "up" : "warn"}">${cushionPct == null ? "—" : (cushionPct >= 0 ? "+" : "") + cushionPct.toFixed(1) + "%"}</div></div>
+      </div>
+      <div class="opts-prog-wrap" title="时间损耗 ${elapsed}/${totalDays} 天"><div class="opts-prog-fill" style="width:${timePct.toFixed(0)}%"></div></div>
+      <div class="opts-card-foot">
+        ${estRow ? `<div>${estRow}</div>` : ""}
+        <div class="opts-mark-row">${markRow}</div>
       </div>
     </div>`;
   }
@@ -4669,18 +4665,24 @@ function rsAdjustGrade(grade, rsResult) {
     const dteStr = dte != null ? `DTE ${dte}天` : "";
     const cushionStr = cushion != null ? `安全垫 ${cushion >= 0 ? "+" : ""}${cushion.toFixed(1)}%` : "";
 
+    const typeL = pos.type === "call" ? "C" : "P";
     return `<div class="opts-pos-card opts-pending-card">
-      <div class="opts-pos-main">
-        <div class="opts-pos-name">
-          <span class="opts-pending-badge">待执行</span>
-          ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"} × ${pos.qty}手
+      <div class="opts-card-hd">
+        <span class="opts-pending-badge">待执行</span>
+        <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
+        <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
+        ${dte != null ? `<span class="opts-dte-tag">${dte}d</span>` : ""}
+        ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
+        <div class="opts-card-hd-r">
+          <button class="btn primary opts-mini-btn" data-opt-fill="${pos.id}">记录成交</button>
+          <button class="opts-mini-btn" data-opt-del-pending="${pos.id}">取消</button>
         </div>
-        <div class="opts-pos-meta">${stratLabel} · 到期 ${pos.expiry}${dteStr ? " · " + dteStr : ""}</div>
-        <div class="opts-pos-meta">${targetStr}${cushionStr ? " · " + cushionStr : ""}${spot ? " · 现价 $" + spot.toFixed(2) : ""}</div>
       </div>
-      <div class="opts-pos-actions">
-        <button class="btn primary opts-mini-btn" data-opt-fill="${pos.id}">记录成交</button>
-        <button class="opts-mini-btn" data-opt-del-pending="${pos.id}">取消</button>
+      <div class="opts-card-metrics">
+        <div class="opts-card-m"><div class="opts-card-ml">目标权利金</div><div class="opts-card-mv">${pos.targetPremium != null ? "≥$" + pos.targetPremium.toFixed(2) : "未设"}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">数量</div><div class="opts-card-mv">${pos.qty}张</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">到期日</div><div class="opts-card-mv">${pos.expiry ? pos.expiry.slice(5) : "—"}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">${isCSP ? "安全垫(现)" : "溢价(现)"}</div><div class="opts-card-mv ${cushion == null ? "dim" : cushion >= 0 ? "up" : "warn"}">${cushion == null ? "—" : (cushion >= 0 ? "+" : "") + cushion.toFixed(1) + "%"}</div></div>
       </div>
     </div>`;
   }
@@ -4700,90 +4702,73 @@ function rsAdjustGrade(grade, rsResult) {
       const stockShares = pos.qty * 100;
 
       if (!pos.assignedStockSold) {
-        // Still holding the assigned stock — show live equity P&L
+        // Still holding assigned stock — show live equity P&L
         const equityPnl = spot ? (spot - pos.strike) * stockShares : null;
         const equityCls = equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down";
         const totalEst = equityPnl != null ? premIncome + equityPnl : null;
         const totalCls = totalEst == null ? "" : totalEst >= 0 ? "up" : "down";
         return `<div class="opts-pos-card opts-assigned-live">
-          <div class="opts-pos-main">
-            <div class="opts-pos-title">
-              ${stratBadge}
-              <span class="opts-pos-name">${pos.sym} ${pos.strike}${typeL} · ${pos.expiry.slice(5)}</span>
-              <span class="opts-st-tag" style="color:var(--warn);border-color:var(--warn)">持有正股</span>
-              ${spot ? `<span class="opts-spot-inline">现价 $${spot.toFixed(2)}</span>` : ""}
-            </div>
-            <div class="opts-pos-meta">期权收入 <b class="up">+${fmt.usd(premIncome)}</b> · 持有 ${stockShares}股 @$${pos.strike.toFixed(2)} · ${pos.closedAt || ""}</div>
-            <div class="opts-equity-rows">
-              <span class="opts-equity-row">
-                <span class="muted">正股浮盈</span>
-                ${equityPnl != null
-                  ? `<b class="${equityCls}">${equityPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(equityPnl))}</b>
-                     <span class="muted" style="font-size:9px">($${spot.toFixed(2)} − $${pos.strike.toFixed(2)}) × ${stockShares}</span>`
-                  : `<span class="muted">等待现价更新</span>`}
-              </span>
-              ${totalEst != null ? `<span class="opts-equity-row">
-                <span class="muted">合计估算</span>
-                <b class="${totalCls}">${totalEst >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalEst))}</b>
-              </span>` : ""}
-            </div>
-          </div>
-          <div class="opts-pos-right">
-            <div class="opts-pos-actions opts-actions-col">
+          <div class="opts-card-hd">
+            ${stratBadge}
+            <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
+            <span class="opts-st-tag" style="color:var(--warn);border-color:var(--warn)">持有正股</span>
+            ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
+            <div class="opts-card-hd-r">
               <button class="opts-mini-btn" data-opt-exit="${pos.id}">记录出仓</button>
               ${delBtn}
             </div>
           </div>
+          <div class="opts-card-metrics">
+            <div class="opts-card-m"><div class="opts-card-ml">期权收入</div><div class="opts-card-mv up">+${fmt.usd(premIncome)}</div></div>
+            <div class="opts-card-m"><div class="opts-card-ml">持有股数</div><div class="opts-card-mv">${stockShares}股</div></div>
+            <div class="opts-card-m"><div class="opts-card-ml">持股成本</div><div class="opts-card-mv">$${pos.strike.toFixed(2)}</div></div>
+            <div class="opts-card-m"><div class="opts-card-ml">正股浮盈</div><div class="opts-card-mv ${equityPnl == null ? "dim" : equityCls}">${equityPnl == null ? "待更新" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl))}</div></div>
+          </div>
+          <div class="opts-equity-rows">
+            <span class="opts-equity-row"><span class="muted">合计估算</span>${totalEst != null ? `<b class="${totalCls}">${totalEst >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalEst))}</b><span class="muted" style="font-size:9px">期权+正股 · 实时</span>` : `<span class="muted">等待现价更新</span>`}</span>
+          </div>
         </div>`;
       } else {
-        // Stock already sold — show final breakdown
+        // Stock sold — show final breakdown
         const exitPnl = (pos.assignedExitPrice - pos.strike) * stockShares;
         const exitCls = exitPnl >= 0 ? "up" : "down";
         const total = premIncome + exitPnl;
         const totalCls = total >= 0 ? "up" : "down";
-        return `<div class="opts-pos-card opts-done">
-          <div class="opts-pos-main">
-            <div class="opts-pos-title">
-              ${stratBadge}
-              <span class="opts-pos-name">${pos.sym} ${pos.strike}${typeL} · ${pos.expiry.slice(5)}</span>
-              <span class="opts-st-tag" style="color:var(--fg-3);border-color:var(--fg-3)">指派+出仓</span>
-            </div>
-            <div class="opts-pos-meta">权利金 +${fmt.usd(premIncome)} · 出仓 $${pos.assignedExitPrice.toFixed(2)} @${pos.assignedExitDate || ""}</div>
-            <div class="opts-equity-rows">
-              <span class="opts-equity-row"><span class="muted">正股盈亏</span><b class="${exitCls}">${exitPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(exitPnl))}</b></span>
-              <span class="opts-equity-row"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
-            </div>
+        return `<div class="opts-pos-card opts-card-done">
+          <div class="opts-card-hd">
+            ${stratBadge}
+            <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
+            <span class="opts-st-tag" style="color:var(--fg-3);border-color:var(--fg-3)">指派+出仓</span>
+            <div class="opts-card-hd-r"><div class="opts-card-amt ${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</div>${delBtn}</div>
           </div>
-          <div class="opts-pos-right">
-            <div class="opts-pos-actions">${delBtn}</div>
+          <div class="opts-card-meta">权利金 +${fmt.usd(premIncome)} · 出仓 $${pos.assignedExitPrice.toFixed(2)} × ${stockShares}股 @${pos.assignedExitDate || ""}</div>
+          <div class="opts-equity-rows">
+            <span class="opts-equity-row"><span class="muted">期权收入</span><b class="up">+${fmt.usd(premIncome)}</b></span>
+            <span class="opts-equity-row"><span class="muted">正股盈亏</span><b class="${exitCls}">${exitPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(exitPnl))}</b><span class="muted" style="font-size:9px">($${pos.assignedExitPrice.toFixed(2)}−$${pos.strike.toFixed(2)}) ×${stockShares}</span></span>
+            <span class="opts-equity-row opts-equity-total"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
           </div>
         </div>`;
       }
     }
 
-    // CC assigned — show option P&L + stock component
+    // CC assigned — option P&L + stock gain
     if (pos.status === "assigned" && !isCSP) {
       const optPnl = pos.realized ?? 0;
       const stockGain = pos.underlyingAtEntry ? (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty : null;
       const total = stockGain != null ? optPnl + stockGain : optPnl;
       const totalCls = total >= 0 ? "up" : "down";
-      const optCls = optPnl >= 0 ? "up" : "down";
-      return `<div class="opts-pos-card opts-done">
-        <div class="opts-pos-main">
-          <div class="opts-pos-title">
-            ${stratBadge}
-            <span class="opts-pos-name">${pos.sym} ${pos.strike}${typeL} · ${pos.expiry.slice(5)}</span>
-            <span class="opts-st-tag" style="color:${stColor};border-color:${stColor}">${stTxt}</span>
-          </div>
-          <div class="opts-pos-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}手 · 结算 $${(pos.settleSpot||0).toFixed(2)} · ${pos.closedAt || ""}</div>
-          <div class="opts-equity-rows">
-            <span class="opts-equity-row"><span class="muted">期权盈亏</span><b class="${optCls}">${optPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(optPnl))}</b></span>
-            ${stockGain != null ? `<span class="opts-equity-row"><span class="muted">正股增益</span><b class="${stockGain >= 0 ? "up" : "down"}">${stockGain >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockGain))}</b><span class="muted" style="font-size:9px">($${pos.strike}−$${pos.underlyingAtEntry?.toFixed(2)}) ×${pos.qty*100}</span></span>` : ""}
-            <span class="opts-equity-row opts-equity-total"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
-          </div>
+      return `<div class="opts-pos-card opts-card-done">
+        <div class="opts-card-hd">
+          ${stratBadge}
+          <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
+          <span class="opts-st-tag" style="color:${stColor};border-color:${stColor}">${stTxt}</span>
+          <div class="opts-card-hd-r"><div class="opts-card-amt ${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</div>${delBtn}</div>
         </div>
-        <div class="opts-pos-right">
-          <div class="opts-pos-actions">${delBtn}</div>
+        <div class="opts-card-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张 · 结算 $${(pos.settleSpot||0).toFixed(2)} · ${pos.closedAt || ""}</div>
+        <div class="opts-equity-rows">
+          <span class="opts-equity-row"><span class="muted">期权盈亏</span><b class="${optPnl >= 0 ? "up" : "down"}">${optPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(optPnl))}</b></span>
+          ${stockGain != null ? `<span class="opts-equity-row"><span class="muted">正股增益</span><b class="${stockGain >= 0 ? "up" : "down"}">${stockGain >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockGain))}</b><span class="muted" style="font-size:9px">($${pos.strike}−$${pos.underlyingAtEntry?.toFixed(2)}) ×${pos.qty*100}</span></span>` : ""}
+          <span class="opts-equity-row opts-equity-total"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
         </div>
       </div>`;
     }
@@ -4791,19 +4776,14 @@ function rsAdjustGrade(grade, rsResult) {
     // Expired / closed — standard card
     const r = pos.realized ?? 0;
     const rCls = r > 0 ? "up" : r < 0 ? "down" : "";
-    return `<div class="opts-pos-card opts-done">
-      <div class="opts-pos-main">
-        <div class="opts-pos-title">
-          ${stratBadge}
-          <span class="opts-pos-name">${pos.sym} ${pos.strike}${typeL} · ${pos.expiry.slice(5)}</span>
-          <span class="opts-st-tag" style="color:${stColor};border-color:${stColor}">${stTxt}</span>
-        </div>
-        <div class="opts-pos-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}手${pos.closePremium != null ? ` · 买回 $${pos.closePremium.toFixed(2)}` : ""}${pos.settleSpot ? ` · 结算 $${pos.settleSpot.toFixed(2)}` : ""} · ${pos.closedAt || ""}</div>
+    return `<div class="opts-pos-card opts-card-done">
+      <div class="opts-card-hd">
+        ${stratBadge}
+        <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
+        <span class="opts-st-tag" style="color:${stColor};border-color:${stColor}">${stTxt}</span>
+        <div class="opts-card-hd-r"><div class="opts-card-amt ${rCls}">${r >= 0 ? "+" : "−"}$${Math.abs(r).toFixed(0)}</div>${delBtn}</div>
       </div>
-      <div class="opts-pos-right">
-        <div class="opts-pos-amt ${rCls}">${r >= 0 ? "+" : "−"}$${Math.abs(r).toFixed(0)}</div>
-        <div class="opts-pos-actions">${delBtn}</div>
-      </div>
+      <div class="opts-card-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张${pos.closePremium != null ? ` · 买回 $${pos.closePremium.toFixed(2)}` : ""}${pos.settleSpot ? ` · 结算 $${pos.settleSpot.toFixed(2)}` : ""} · ${pos.closedAt || ""}</div>
     </div>`;
   }
 
@@ -5143,7 +5123,7 @@ function rsAdjustGrade(grade, rsResult) {
     modal.querySelector(".opts-modal-title").textContent =
       `${isRoll ? "滚仓 — 先买回" : "平仓买回"} · ${pos.sym} ${pos.strike}${pos.type === "call" ? "C" : "P"}`;
     modal.querySelector("#opts-modal-meta").textContent =
-      `卖出价 $${pos.premium.toFixed(2)}/share ×${pos.qty}手 · 到券商App查买回价格${isRoll ? "，确认后直接开新仓" : ""}`;
+      `卖出价 $${pos.premium.toFixed(2)}/share ×${pos.qty}张 · 到券商App查买回价格${isRoll ? "，确认后直接开新仓" : ""}`;
     const premLabel = modal.querySelector("#opts-row-premium label");
     if (premLabel) premLabel.textContent = "买回价格 ($/share)";
     const premEl = modal.querySelector("#opts-premium");
