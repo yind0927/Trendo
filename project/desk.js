@@ -4957,12 +4957,13 @@ function rsAdjustGrade(grade, rsResult) {
     const isSell = mode === "sell";
     sellOnlyIds.forEach(sel => { const el = modal.querySelector(sel); if (el) el.style.display = isSell ? "" : "none"; });
     if (wrapStrikeExpiry) wrapStrikeExpiry.style.display = isSell ? "" : "none";
-    if (wrapQtyPremium)   wrapQtyPremium.style.display   = isSell ? "" : "none";
-    // In close/mark modes, show just the premium field standalone
-    if (premRow) {
-      if (isSell) { premRow.style.display = ""; premRow.style.flex = "1"; }
-      else premRow.style.display = mode === "exit" ? "none" : "";
+    // In close/mark modes: show wrapper but hide just the qty column so premium shows full-width
+    if (wrapQtyPremium) {
+      wrapQtyPremium.style.display = mode === "exit" ? "none" : "flex";
+      const qtyRow = modal.querySelector("#opts-row-qty");
+      if (qtyRow) qtyRow.style.display = isSell ? "" : "none";
     }
+    if (premRow) premRow.style.flex = isSell ? "1" : "";
     if (exitRow) exitRow.style.display = mode === "exit" ? "" : "none";
     const closeDateRow = modal.querySelector("#opts-row-close-date");
     if (closeDateRow) closeDateRow.style.display = mode === "close" ? "" : "none";
