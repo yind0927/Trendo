@@ -4659,6 +4659,32 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
+  function _optPendingCard(pos) {
+    const spot = optSpot(pos.sym);
+    const dte = pos.expiry ? _optDTE(pos.expiry) : null;
+    const isCSP = pos.strat === "csp";
+    const cushion = (spot && pos.strike) ? ((isCSP ? (spot - pos.strike) : (pos.strike - spot)) / spot * 100) : null;
+    const stratLabel = isCSP ? "CSP 卖 Put" : "CC 卖 Call";
+    const targetStr = pos.targetPremium != null ? `目标 ≥$${pos.targetPremium.toFixed(2)}` : "未设目标价";
+    const dteStr = dte != null ? `DTE ${dte}天` : "";
+    const cushionStr = cushion != null ? `安全垫 ${cushion >= 0 ? "+" : ""}${cushion.toFixed(1)}%` : "";
+
+    return `<div class="opts-pos-card opts-pending-card">
+      <div class="opts-pos-main">
+        <div class="opts-pos-name">
+          <span class="opts-pending-badge">待执行</span>
+          ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"} × ${pos.qty}手
+        </div>
+        <div class="opts-pos-meta">${stratLabel} · 到期 ${pos.expiry}${dteStr ? " · " + dteStr : ""}</div>
+        <div class="opts-pos-meta">${targetStr}${cushionStr ? " · " + cushionStr : ""}${spot ? " · 现价 $" + spot.toFixed(2) : ""}</div>
+      </div>
+      <div class="opts-pos-actions">
+        <button class="btn primary opts-mini-btn" data-opt-fill="${pos.id}">记录成交</button>
+        <button class="opts-mini-btn" data-opt-del-pending="${pos.id}">取消</button>
+      </div>
+    </div>`;
+  }
+
   function _optDonePosCard(pos) {
     const typeL = pos.type === "call" ? "C" : "P";
     const isCSP = pos.strat === "csp";
@@ -4889,8 +4915,9 @@ function rsAdjustGrade(grade, rsResult) {
       return `<span class="opts-spot-pill"><b>${s}</b> ${v ? "$" + v.toFixed(2) : "—"}</span>`;
     }).join("");
 
+    const pending = SIM_OPTIONS.filter(p => p.status === "pending");
     const open = SIM_OPTIONS.filter(p => p.status === "open");
-    const done = [...SIM_OPTIONS.filter(p => p.status && p.status !== "open")]
+    const done = [...SIM_OPTIONS.filter(p => p.status && p.status !== "open" && p.status !== "pending")]
       .sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
     const all = [...open, ...done];
 
@@ -4898,18 +4925,22 @@ function rsAdjustGrade(grade, rsResult) {
     const liveAssigned = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
     const settled = done.filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold));
 
-    const body = (open.length || done.length)
+    const body = (pending.length || open.length || done.length)
       ? `${_optSummaryHTML(open, done)}
+         ${pending.length ? `<div class="opts-sub-label opts-sub-pending">待执行 · Pending · ${pending.length}</div>${pending.map(_optPendingCard).join("")}` : ""}
          ${open.length ? `<div class="opts-sub-label">持仓中 · Open · ${open.length}</div>${open.map(_optOpenPosCard).join("")}` : ""}
          ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}
          ${settled.length ? `<div class="opts-sub-label">已了结 · Settled · ${settled.length}</div>${settled.map(_optDonePosCard).join("")}` : ""}
          ${_optWheelStatsHTML(all)}`
-      : `<div class="opts-empty">暂无期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call</div>`;
+      : `<div class="opts-empty">暂无期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
 
     inner.innerHTML = `
       <div class="opts-controls">
         <div class="opts-spots">${pills}</div>
-        <button class="btn primary" id="opts-sell-btn" style="font-size:11.5px">+ 卖出期权</button>
+        <div class="opts-btns">
+          <button class="btn" id="opts-pending-btn" style="font-size:11.5px">+ 预设单</button>
+          <button class="btn primary" id="opts-sell-btn" style="font-size:11.5px">+ 卖出期权</button>
+        </div>
       </div>
       ${body}`;
 
@@ -4921,6 +4952,8 @@ function rsAdjustGrade(grade, rsResult) {
     if (!root) return;
     const sellBtn = $("#opts-sell-btn");
     if (sellBtn) sellBtn.addEventListener("click", () => openOptionsSellModal());
+    const pendingBtn = $("#opts-pending-btn");
+    if (pendingBtn) pendingBtn.addEventListener("click", () => openOptionsSellModal({ isPending: true }));
     $$("[data-opt-close]", root).forEach(btn => btn.addEventListener("click", () => {
       const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optClose);
       if (pos) openOptionsCloseModal(pos, false);
@@ -4940,6 +4973,17 @@ function rsAdjustGrade(grade, rsResult) {
     $$("[data-opt-del]", root).forEach(btn => btn.addEventListener("click", () => {
       const idx = SIM_OPTIONS.findIndex(p => p.id === btn.dataset.optDel);
       if (idx !== -1) { SIM_OPTIONS.splice(idx, 1); saveToStorage(); renderSimOptions(); }
+    }));
+    $$("[data-opt-fill]", root).forEach(btn => btn.addEventListener("click", () => {
+      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optFill);
+      if (pos) openOptionsFillModal(pos);
+    }));
+    $$("[data-opt-del-pending]", root).forEach(btn => btn.addEventListener("click", () => {
+      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optDelPending);
+      if (!pos) return;
+      if (!confirm(`确认取消预设单 ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"}？`)) return;
+      const idx = SIM_OPTIONS.findIndex(p => p.id === pos.id);
+      if (idx >= 0) { SIM_OPTIONS.splice(idx, 1); saveToStorage(); renderSimOptions(); }
     }));
   }
 
@@ -4999,20 +5043,23 @@ function rsAdjustGrade(grade, rsResult) {
 
   // ── Sell-to-open (manual entry) ───────────────────────────────────────────
   function openOptionsSellModal(prefill = {}) {
+    const isPending = prefill.isPending === true;
     const modal = _optModalMode("sell");
     if (!modal) return;
     if (prefill.sym) simOptionsSym = prefill.sym;
     if (prefill.strat) simOptionsStrat = prefill.strat;
-    modal.querySelector(".opts-modal-title").textContent = "卖出期权 · 手动记录";
-    modal.querySelector("#opts-modal-meta").textContent = "行权价/权利金/到期日按券商成交填写，现价自动取 ETF 实时价";
+    modal.querySelector(".opts-modal-title").textContent = isPending ? "预设期权单 · 盘前计划" : "卖出期权 · 手动记录";
+    modal.querySelector("#opts-modal-meta").textContent = isPending
+      ? "盘前规划期权参数，开盘成交后点击「记录成交」填入实际权利金激活仓位"
+      : "行权价/权利金/到期日按券商成交填写，现价自动取 ETF 实时价";
     const premLabel = modal.querySelector("#opts-row-premium label");
-    if (premLabel) premLabel.textContent = "权利金 ($/share)";
+    if (premLabel) premLabel.textContent = isPending ? "目标权利金（选填）" : "权利金 ($/share)";
     const symIn  = modal.querySelector("#opts-sym-input");
     const strkIn = modal.querySelector("#opts-strike");
     const expIn  = modal.querySelector("#opts-expiry-date");
     const qtyEl  = modal.querySelector("#opts-qty");
     const premEl = modal.querySelector("#opts-premium");
-    premEl.placeholder = "券商成交价";
+    premEl.placeholder = isPending ? "期望最低卖价（可不填）" : "券商成交价";
     symIn.value = simOptionsSym;
     strkIn.value = prefill.strike || "";
     expIn.value = prefill.expiry || "";
@@ -5032,7 +5079,7 @@ function rsAdjustGrade(grade, rsResult) {
       const spot = optSpot(sym);
       const lines = [];
       if (spot) lines.push(`<div><span>${sym} 现价</span><b>$${spot.toFixed(2)}</b></div>`);
-      if (prem > 0 && qty > 0) lines.push(`<div><span>权利金收入</span><b class="up">+${fmt.usd(prem * 100 * qty)}</b></div>`);
+      if (prem > 0 && qty > 0) lines.push(`<div><span>${isPending ? "目标权利金收入" : "权利金收入"}</span><b class="up">+${fmt.usd(prem * 100 * qty)}</b></div>`);
       if (strike > 0 && spot) {
         const cushion = (isCSP ? (spot - strike) : (strike - spot)) / spot * 100;
         lines.push(`<div><span>距行权价</span><b class="${cushion >= 0 ? "" : "down"}">${cushion >= 0 ? "+" : ""}${cushion.toFixed(1)}%</b></div>`);
@@ -5047,7 +5094,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (strike > 0 && prem > 0) lines.push(`<div><span>若被行权总收入</span><b>${fmt.usd((strike + prem) * 100 * qty)}</b></div>`);
         if (prem > 0 && spot && dte > 0) lines.push(`<div><span>年化收益(对现价)</span><b class="up">${(prem / spot / dte * 365 * 100).toFixed(1)}%</b></div>`);
       }
-      calcEl.innerHTML = lines.join("") || `<div><span class="muted">填写后自动计算收益指标</span></div>`;
+      calcEl.innerHTML = lines.join("") || `<div><span class="muted">${isPending ? "填写后预览收益指标（盘前参考）" : "填写后自动计算收益指标"}</span></div>`;
     };
     modal._recalc = recalc;
     [symIn, strkIn, expIn, qtyEl, premEl].forEach(el => el.oninput = recalc);
@@ -5061,15 +5108,27 @@ function rsAdjustGrade(grade, rsResult) {
       const expiry = expIn.value;
       const qty = Math.max(1, parseInt(qtyEl.value) || 1);
       const prem = parseFloat(premEl.value);
-      if (!sym || !(strike > 0) || !expiry || !(prem > 0)) { alert("请填写标的、行权价、到期日和权利金"); return; }
+      if (!sym || !(strike > 0) || !expiry) { alert("请填写标的、行权价和到期日"); return; }
+      if (!isPending && !(prem > 0)) { alert("请填写权利金"); return; }
       const isCSP = simOptionsStrat === "csp";
-      SIM_OPTIONS.push({
-        id: Date.now().toString(36),
-        sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
-        strike, expiry, qty, premium: prem,
-        underlyingAtEntry: optSpot(sym) || null,
-        entryDate: new Date().toISOString().slice(0, 10), status: "open",
-      });
+      if (isPending) {
+        SIM_OPTIONS.push({
+          id: Date.now().toString(36),
+          sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
+          strike, expiry, qty,
+          targetPremium: prem > 0 ? prem : null,
+          status: "pending",
+          createdAt: new Date().toISOString().slice(0, 10),
+        });
+      } else {
+        SIM_OPTIONS.push({
+          id: Date.now().toString(36),
+          sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
+          strike, expiry, qty, premium: prem,
+          underlyingAtEntry: optSpot(sym) || null,
+          entryDate: new Date().toISOString().slice(0, 10), status: "open",
+        });
+      }
       saveToStorage();
       modal.style.display = "none";
       renderSimOptions();
@@ -5119,6 +5178,62 @@ function rsAdjustGrade(grade, rsResult) {
       modal.style.display = "none";
       if (isRoll) openOptionsSellModal({ sym: pos.sym, strat: pos.strat, qty: pos.qty });
       else renderSimOptions();
+    };
+    modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
+  }
+
+  // ── Activate pending pre-order by recording actual fill price ───────────────
+  function openOptionsFillModal(pos) {
+    const modal = _optModalMode("close"); // reuse close mode (shows premium + date fields)
+    if (!modal) return;
+    modal.querySelector(".opts-modal-title").textContent = `记录成交 · ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"}`;
+    const hasTarget = pos.targetPremium != null && pos.targetPremium > 0;
+    modal.querySelector("#opts-modal-meta").textContent = hasTarget
+      ? `目标权利金 ≥$${pos.targetPremium.toFixed(2)}/share · 填写实际成交价激活仓位`
+      : "填写实际成交权利金激活仓位";
+    const premLabel = modal.querySelector("#opts-row-premium label");
+    if (premLabel) premLabel.textContent = "实际成交价 ($/share)";
+    const premEl = modal.querySelector("#opts-premium");
+    premEl.placeholder = "按券商实际成交价填写";
+    premEl.value = hasTarget ? pos.targetPremium.toFixed(2) : "";
+    const closeDateLabel = modal.querySelector("#opts-row-close-date label");
+    if (closeDateLabel) closeDateLabel.textContent = "成交日期";
+    const closeDateEl = modal.querySelector("#opts-close-date");
+    if (closeDateEl) closeDateEl.value = new Date().toISOString().slice(0, 10);
+    const calcEl = modal.querySelector("#opts-calc");
+    const spot = optSpot(pos.sym);
+    const isCSP = pos.strat === "csp";
+    const recalc = () => {
+      const fillPrice = parseFloat(premEl.value);
+      const lines = [];
+      if (spot) lines.push(`<div><span>${pos.sym} 现价</span><b>$${spot.toFixed(2)}</b></div>`);
+      if (!isNaN(fillPrice) && fillPrice > 0) {
+        lines.push(`<div><span>权利金收入</span><b class="up">+${fmt.usd(fillPrice * 100 * pos.qty)}</b></div>`);
+        if (hasTarget) {
+          const diff = fillPrice - pos.targetPremium;
+          lines.push(`<div><span>vs 目标</span><b class="${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "+" : ""}$${diff.toFixed(2)}/share</b></div>`);
+        }
+        const dte = pos.expiry ? _optDTE(pos.expiry) : 0;
+        if (isCSP && pos.strike > 0 && dte > 0) {
+          lines.push(`<div><span>年化收益</span><b class="up">${(fillPrice / pos.strike / dte * 365 * 100).toFixed(1)}%</b></div>`);
+        }
+      }
+      calcEl.innerHTML = lines.join("") || `<div><span class="muted">填写成交价查看收益</span></div>`;
+    };
+    premEl.oninput = recalc;
+    recalc();
+    modal.style.display = "flex";
+    modal.querySelector("#opts-confirm-btn").onclick = () => {
+      const fillPrice = parseFloat(premEl.value);
+      if (isNaN(fillPrice) || fillPrice <= 0) { alert("请填写实际成交价格"); return; }
+      pos.premium = fillPrice;
+      pos.status = "open";
+      pos.openedAt = (closeDateEl && closeDateEl.value) || new Date().toISOString().slice(0, 10);
+      pos.entryDate = pos.openedAt;
+      pos.underlyingAtEntry = spot || null;
+      saveToStorage();
+      modal.style.display = "none";
+      renderSimOptions();
     };
     modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
   }

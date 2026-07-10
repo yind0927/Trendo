@@ -1710,6 +1710,16 @@
   .opts-calc b.up { color: var(--up); }
   .opts-calc b.down { color: var(--down); }
   .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
+  /* Pending pre-order cards */
+  .opts-pending-card { border-left: 2px solid var(--warn); }
+  .opts-pending-badge { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--warn); border: 1px solid var(--warn); border-radius: 3px; padding: 1px 4px; margin-right: 4px; vertical-align: middle; }
+  .opts-sub-pending { color: var(--warn) !important; }
+  /* Button group in opts controls */
+  .opts-btns { display: flex; gap: 8px; }
+  @media (max-width: 640px) {
+    .opts-btns { flex-direction: column; }
+    .opts-btns .btn { width: 100%; box-sizing: border-box; }
+  }
   .sim-topbar-actions { display: flex; gap: 8px; align-items: center; }
   #sim-options-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
   /* Assignment equity tracking */
@@ -4336,8 +4346,8 @@
   </div>
 </div>
 
-<script src="data.js?v=263"></script>
-<script src="desk.js?v=263"></script>
+<script src="data.js?v=264"></script>
+<script src="desk.js?v=264"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
