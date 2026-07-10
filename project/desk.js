@@ -4909,7 +4909,7 @@ function rsAdjustGrade(grade, rsResult) {
     inner.innerHTML = `
       <div class="opts-controls">
         <div class="opts-spots">${pills}</div>
-        <button class="btn primary" id="opts-sell-btn" style="font-size:11.5px;padding:5px 14px">+ 卖出期权</button>
+        <button class="btn primary" id="opts-sell-btn" style="font-size:11.5px">+ 卖出期权</button>
       </div>
       ${body}`;
 

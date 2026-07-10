@@ -1750,7 +1750,7 @@
     .opts-pos-actions, .opts-actions-col { margin-top: 0; flex-direction: row; flex-wrap: wrap; gap: 5px; }
     /* Controls row: stack spots above the sell button */
     .opts-controls { flex-direction: column; align-items: stretch; gap: 10px; }
-    .opts-controls .btn { width: 100%; justify-content: center; text-align: center; }
+    .opts-controls .btn { width: 100%; box-sizing: border-box; justify-content: center; text-align: center; }
     /* Spot pills: wrap and constrain */
     .opts-spots { flex-wrap: wrap; }
     /* Section container: no horizontal scroll */
@@ -4336,8 +4336,8 @@
   </div>
 </div>
 
-<script src="data.js?v=261"></script>
-<script src="desk.js?v=261"></script>
+<script src="data.js?v=262"></script>
+<script src="desk.js?v=262"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
