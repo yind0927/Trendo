@@ -1710,6 +1710,7 @@
   .opts-calc b.up { color: var(--up); }
   .opts-calc b.down { color: var(--down); }
   .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
+  .sim-topbar-actions { display: flex; gap: 8px; align-items: center; }
   #sim-options-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
   /* Assignment equity tracking */
   .opts-assigned-live { border-left: 3px solid var(--warn) !important; background: color-mix(in oklch, var(--warn) 5%, var(--bg-1)) !important; }
@@ -1734,13 +1735,26 @@
   .opts-month-table td.opts-mt-pnl.down { color: var(--down); }
   .opts-month-table td.opts-mt-wr { color: var(--fg-2); }
   @media (max-width: 640px) {
+    /* Sim topbar: allow the two action buttons to wrap onto a second line */
+    .sim-topbar-actions { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+    #sim-options-btn, #sim-new-pos-btn { flex-shrink: 0; }
+    /* Options module: stat grids collapse to 2-col */
     .opts-stats { grid-template-columns: repeat(2, 1fr); }
     .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
+    /* Position cards: stack vertically, prevent inner overflow */
     .opts-pos-card { flex-direction: column; align-items: stretch; gap: 6px; }
+    .opts-pos-main { min-width: 0; overflow: hidden; }
+    .opts-pos-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .opts-pos-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .opts-pos-right { display: flex; align-items: center; justify-content: space-between; text-align: left; }
-    .opts-pos-actions, .opts-actions-col { margin-top: 0; flex-direction: row; }
-    .opts-controls { flex-direction: column; align-items: stretch; }
-    .opts-controls .btn { width: 100%; justify-content: center; }
+    .opts-pos-actions, .opts-actions-col { margin-top: 0; flex-direction: row; flex-wrap: wrap; gap: 5px; }
+    /* Controls row: stack spots above the sell button */
+    .opts-controls { flex-direction: column; align-items: stretch; gap: 10px; }
+    .opts-controls .btn { width: 100%; justify-content: center; text-align: center; }
+    /* Spot pills: wrap and constrain */
+    .opts-spots { flex-wrap: wrap; }
+    /* Section container: no horizontal scroll */
+    #sim-options-section { overflow: hidden; }
   }
   /* ────────────────────────────────────────────────────────── */
 
@@ -3761,7 +3775,7 @@
       </div>
       <span class="sim-sub" id="sim-subtitle" style="color:var(--fg-3);font-size:12px;margin-left:4px">— 笔持仓</span>
     </div>
-    <div style="display:flex;gap:8px;align-items:center">
+    <div class="sim-topbar-actions">
       <button class="btn secondary" id="sim-options-btn" style="font-size:11.5px;padding:5px 12px">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
         期权滚动策略
@@ -4318,8 +4332,8 @@
   </div>
 </div>
 
-<script src="data.js?v=259"></script>
-<script src="desk.js?v=259"></script>
+<script src="data.js?v=260"></script>
+<script src="desk.js?v=260"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
