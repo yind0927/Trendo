@@ -4690,7 +4690,7 @@ function rsAdjustGrade(grade, rsResult) {
   function _optDonePosCard(pos) {
     const typeL = pos.type === "call" ? "C" : "P";
     const isCSP = pos.strat === "csp";
-    const stMap = { expired: ["到期作废 OTM", "var(--up)"], assigned: ["被指派", "var(--warn)"], closed: ["已平仓", "var(--fg-3)"] };
+    const stMap = { expired: ["到期OTM", "var(--up)"], assigned: ["被指派", "var(--warn)"], closed: ["已平仓", "var(--fg-3)"] };
     const [stTxt, stColor] = stMap[pos.status] || ["—", "var(--fg-3)"];
     const delBtn = `<button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button>`;
     const stratBadge = `<span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>`;

@@ -4308,9 +4308,12 @@
       <label>标的 ETF</label>
       <div style="display:flex;gap:8px;align-items:center">
         <div class="seg" style="width:fit-content;flex-shrink:0">
-          <button type="button" class="opts-sym-chip" data-optsym="QQQ">QQQ</button>
-          <button type="button" class="opts-sym-chip" data-optsym="SMH">SMH</button>
           <button type="button" class="opts-sym-chip" data-optsym="DRAM">DRAM</button>
+          <button type="button" class="opts-sym-chip" data-optsym="MAGS">MAGS</button>
+          <button type="button" class="opts-sym-chip" data-optsym="SMH">SMH</button>
+          <button type="button" class="opts-sym-chip" data-optsym="GLD">GLD</button>
+          <button type="button" class="opts-sym-chip" data-optsym="IWM">IWM</button>
+          <button type="button" class="opts-sym-chip" data-optsym="QQQ">QQQ</button>
         </div>
         <input type="text" id="opts-sym-input" class="form-input" style="flex:1;min-width:0;text-transform:uppercase;font-family:var(--f-mono)" placeholder="自定义"/>
       </div>
@@ -4360,8 +4363,8 @@
   </div>
 </div>
 
-<script src="data.js?v=265"></script>
-<script src="desk.js?v=265"></script>
+<script src="data.js?v=266"></script>
+<script src="desk.js?v=266"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
