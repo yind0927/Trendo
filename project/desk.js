@@ -1065,7 +1065,7 @@ function rsAdjustGrade(grade, rsResult) {
   let simOptionsVisible = false;
   let simOptionsSym   = "QQQ";  // sell-modal default
   let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
-  const OPT_WATCH_SYMS = ["QQQ", "SMH", "DRAM"];
+  const OPT_WATCH_SYMS = ["DRAM", "MAGS", "SMH", "GLD", "IWM", "QQQ"];
   let _optSpot = {};            // { sym: last } — refreshed by fetchPrices()
   let newPositionContext = "desk"; // "desk" | "sim"
   let pendingCloseCtx = "desk";
