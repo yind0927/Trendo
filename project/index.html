@@ -1689,6 +1689,10 @@
   .opts-card-sym span { color: var(--fg-1); font-weight: 600; }
   /* DTE chip */
   .opts-dte-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--accent-dim); color: var(--accent); font-weight: 700; font-family: var(--f-mono); flex-shrink: 0; }
+  /* Delta tag */
+  .opts-delta-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: color-mix(in oklch, var(--fg-2) 10%, var(--bg-1)); color: var(--fg-2); font-weight: 700; font-family: var(--f-mono); flex-shrink: 0; border: 1px solid color-mix(in oklch, var(--fg-2) 20%, transparent); }
+  /* Second metrics row separator */
+  .opts-card-metrics + .opts-card-metrics { border-top: 1px solid var(--bg-3); padding-top: 6px; margin-top: 2px; }
   /* Live spot bubble */
   .opts-card-spot { font-size: 10.5px; font-family: var(--f-mono); color: var(--fg-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px; flex-shrink: 0; }
   /* Status tag */
@@ -4336,6 +4340,11 @@
         <input type="date" id="opts-expiry-date" class="form-input"/>
       </div>
     </div>
+    <!-- Delta (可选, 卖出模式) -->
+    <div class="form-row" id="opts-row-delta" style="display:none">
+      <label>入场 Delta <span style="font-size:10px;color:var(--fg-3)">(可选)</span></label>
+      <input type="number" id="opts-delta" class="form-input" step="0.01" min="0.01" max="0.99" placeholder="如 CSP: 0.30 · CC: 0.25"/>
+    </div>
     <!-- 手数 + 权利金 并排 -->
     <div id="opts-row-qty-premium" style="display:flex;gap:12px">
       <div class="form-row" id="opts-row-qty" style="flex:1">
@@ -4363,8 +4372,8 @@
   </div>
 </div>
 
-<script src="data.js?v=267"></script>
-<script src="desk.js?v=267"></script>
+<script src="data.js?v=268"></script>
+<script src="desk.js?v=268"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

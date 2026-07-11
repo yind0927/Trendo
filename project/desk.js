@@ -4634,6 +4634,7 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
         <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
         <span class="opts-dte-tag">${dte}d</span>
+        ${pos.entryDelta != null ? `<span class="opts-delta-tag">Δ${pos.entryDelta.toFixed(2)}</span>` : ""}
         ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
         <div class="opts-card-hd-r">
           <button class="opts-mini-btn" data-opt-roll="${pos.id}">滚仓</button>
@@ -4672,6 +4673,7 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
         <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
         ${dte != null ? `<span class="opts-dte-tag">${dte}d</span>` : ""}
+        ${pos.entryDelta != null ? `<span class="opts-delta-tag">Δ${pos.entryDelta.toFixed(2)}</span>` : ""}
         ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
         <div class="opts-card-hd-r">
           <button class="btn primary opts-mini-btn" data-opt-fill="${pos.id}">记录成交</button>
@@ -4685,6 +4687,29 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="opts-card-m"><div class="opts-card-ml">${isCSP ? "安全垫(现)" : "溢价(现)"}</div><div class="opts-card-mv ${cushion == null ? "dim" : cushion >= 0 ? "up" : "warn"}">${cushion == null ? "—" : (cushion >= 0 ? "+" : "") + cushion.toFixed(1) + "%"}</div></div>
       </div>
     </div>`;
+  }
+
+  function _optDoneMetaRow(pos) {
+    const items = [];
+    if (pos.entryDTE != null) items.push({ l: "入场DTE", v: pos.entryDTE + "天", cls: "" });
+    if (pos.entryDelta != null) items.push({ l: "入场Delta", v: "Δ" + pos.entryDelta.toFixed(2), cls: "" });
+    const daysHeld = pos.entryDate && pos.closedAt
+      ? Math.max(1, Math.round((new Date(pos.closedAt) - new Date(pos.entryDate)) / 86400000))
+      : null;
+    if (daysHeld != null) items.push({ l: "持仓天数", v: daysHeld + "天", cls: "" });
+    let capRate = null;
+    if (pos.status === "expired") capRate = 100;
+    else if (pos.status === "closed" && pos.closePremium != null && pos.premium > 0)
+      capRate = (1 - pos.closePremium / pos.premium) * 100;
+    if (capRate != null) items.push({ l: "权利金捕获", v: capRate.toFixed(0) + "%", cls: capRate >= 75 ? "up" : capRate >= 40 ? "" : "down" });
+    if (daysHeld && pos.premium > 0 && pos.strike > 0 && (pos.status === "expired" || pos.status === "closed")) {
+      const base = pos.strat === "csp" ? pos.strike : (pos.underlyingAtEntry || pos.strike);
+      const realPrem = pos.status === "closed" ? Math.max(0, pos.premium - (pos.closePremium || 0)) : pos.premium;
+      const ann = realPrem / base / daysHeld * 365 * 100;
+      if (ann >= 0) items.push({ l: "年化收益", v: ann.toFixed(1) + "%", cls: "up" });
+    }
+    if (!items.length) return "";
+    return `<div class="opts-card-metrics">${items.map(i => `<div class="opts-card-m"><div class="opts-card-ml">${i.l}</div><div class="opts-card-mv ${i.cls}">${i.v}</div></div>`).join("")}</div>`;
   }
 
   function _optDonePosCard(pos) {
@@ -4747,6 +4772,7 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="opts-equity-row"><span class="muted">正股盈亏</span><b class="${exitCls}">${exitPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(exitPnl))}</b><span class="muted" style="font-size:9px">($${pos.assignedExitPrice.toFixed(2)}−$${pos.strike.toFixed(2)}) ×${stockShares}</span></span>
             <span class="opts-equity-row opts-equity-total"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
           </div>
+          ${_optDoneMetaRow(pos)}
         </div>`;
       }
     }
@@ -4770,6 +4796,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${stockGain != null ? `<span class="opts-equity-row"><span class="muted">正股增益</span><b class="${stockGain >= 0 ? "up" : "down"}">${stockGain >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockGain))}</b><span class="muted" style="font-size:9px">($${pos.strike}−$${pos.underlyingAtEntry?.toFixed(2)}) ×${pos.qty*100}</span></span>` : ""}
           <span class="opts-equity-row opts-equity-total"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
         </div>
+        ${_optDoneMetaRow(pos)}
       </div>`;
     }
 
@@ -4784,6 +4811,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="opts-card-hd-r"><div class="opts-card-amt ${rCls}">${r >= 0 ? "+" : "−"}$${Math.abs(r).toFixed(0)}</div>${delBtn}</div>
       </div>
       <div class="opts-card-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张${pos.closePremium != null ? ` · 买回 $${pos.closePremium.toFixed(2)}` : ""}${pos.settleSpot ? ` · 结算 $${pos.settleSpot.toFixed(2)}` : ""} · ${pos.closedAt || ""}</div>
+      ${_optDoneMetaRow(pos)}
     </div>`;
   }
 
@@ -4991,6 +5019,8 @@ function rsAdjustGrade(grade, rsResult) {
     if (exitRow) exitRow.style.display = mode === "exit" ? "" : "none";
     const closeDateRow = modal.querySelector("#opts-row-close-date");
     if (closeDateRow) closeDateRow.style.display = mode === "close" ? "" : "none";
+    const deltaRow = modal.querySelector("#opts-row-delta");
+    if (deltaRow) deltaRow.style.display = isSell ? "" : "none";
     // Wire click-outside-to-close once
     if (!_optModalClickOutsideReady) {
       _optModalClickOutsideReady = true;
@@ -5037,8 +5067,9 @@ function rsAdjustGrade(grade, rsResult) {
     const symIn  = modal.querySelector("#opts-sym-input");
     const strkIn = modal.querySelector("#opts-strike");
     const expIn  = modal.querySelector("#opts-expiry-date");
-    const qtyEl  = modal.querySelector("#opts-qty");
-    const premEl = modal.querySelector("#opts-premium");
+    const qtyEl   = modal.querySelector("#opts-qty");
+    const premEl  = modal.querySelector("#opts-premium");
+    const deltaEl = modal.querySelector("#opts-delta");
     premEl.placeholder = isPending ? "期望最低卖价（可不填）" : "券商成交价";
     symIn.value = simOptionsSym;
     strkIn.value = prefill.strike || "";
@@ -5047,6 +5078,7 @@ function rsAdjustGrade(grade, rsResult) {
     qtyEl.value = String(prefill.qty || 1);
     qtyEl.disabled = false;
     premEl.value = "";
+    if (deltaEl) deltaEl.value = "";
     const calcEl = modal.querySelector("#opts-calc");
 
     const recalc = () => {
@@ -5077,7 +5109,7 @@ function rsAdjustGrade(grade, rsResult) {
       calcEl.innerHTML = lines.join("") || `<div><span class="muted">${isPending ? "填写后预览收益指标（盘前参考）" : "填写后自动计算收益指标"}</span></div>`;
     };
     modal._recalc = recalc;
-    [symIn, strkIn, expIn, qtyEl, premEl].forEach(el => el.oninput = recalc);
+    [symIn, strkIn, expIn, qtyEl, premEl, deltaEl].filter(Boolean).forEach(el => el.oninput = recalc);
     _optWireModalChips(modal);
     recalc();
     modal.style.display = "flex";
@@ -5091,20 +5123,25 @@ function rsAdjustGrade(grade, rsResult) {
       if (!sym || !(strike > 0) || !expiry) { alert("请填写标的、行权价和到期日"); return; }
       if (!isPending && !(prem > 0)) { alert("请填写权利金"); return; }
       const isCSP = simOptionsStrat === "csp";
+      const entryDelta = deltaEl ? (parseFloat(deltaEl.value) || null) : null;
       if (isPending) {
         SIM_OPTIONS.push({
           id: Date.now().toString(36),
           sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
           strike, expiry, qty,
           targetPremium: prem > 0 ? prem : null,
+          ...(entryDelta > 0 ? { entryDelta } : {}),
           status: "pending",
           createdAt: new Date().toISOString().slice(0, 10),
         });
       } else {
+        const entryDTE = _optDTE(expiry);
         SIM_OPTIONS.push({
           id: Date.now().toString(36),
           sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
           strike, expiry, qty, premium: prem,
+          entryDTE,
+          ...(entryDelta > 0 ? { entryDelta } : {}),
           underlyingAtEntry: optSpot(sym) || null,
           entryDate: new Date().toISOString().slice(0, 10), status: "open",
         });
@@ -5210,6 +5247,7 @@ function rsAdjustGrade(grade, rsResult) {
       pos.status = "open";
       pos.openedAt = (closeDateEl && closeDateEl.value) || new Date().toISOString().slice(0, 10);
       pos.entryDate = pos.openedAt;
+      pos.entryDTE = pos.expiry ? _optDTE(pos.expiry) : null;
       pos.underlyingAtEntry = spot || null;
       saveToStorage();
       modal.style.display = "none";
