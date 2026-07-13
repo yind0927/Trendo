@@ -1655,7 +1655,7 @@
   /* ── Options module — wheel strategy (CSP / CC) ───────────── */
   #opts-real-panel, #opts-sim-panel { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-1); margin-top: 12px; }
   /* Controls row */
-  .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 0; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
   .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
   .opts-sym-chip.active, .opts-type-btn.active { background: var(--accent) !important; color: oklch(0.14 0.012 250) !important; box-shadow: none !important; }
   .opts-spots { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -1671,7 +1671,6 @@
   /* Inspirations/Options view base styles */
   #inspirations-view { padding: 24px 20px 60px; }
   #options-view { padding: 24px 20px 60px; }
-  #opts-real-panel, #opts-sim-panel { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-1); margin-top: 12px; }
   /* Section group headers */
   .opts-sub-label { font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); padding: 10px 14px 6px; font-family: var(--f-mono); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
   .opts-sub-label:first-child { border-top: none; }
@@ -4383,8 +4382,8 @@
   </div>
 </div>
 
-<script src="data.js?v=272"></script>
-<script src="desk.js?v=272"></script>
+<script src="data.js?v=273"></script>
+<script src="desk.js?v=273"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

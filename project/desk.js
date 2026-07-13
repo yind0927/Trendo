@@ -4567,6 +4567,10 @@ function rsAdjustGrade(grade, rsResult) {
     return [...new Set([...OPT_WATCH_SYMS, ..._optLiveSyms()])];
   }
 
+  function _activeOpts() {
+    return currentOptMode === "real" ? REAL_OPTIONS : SIM_OPTIONS;
+  }
+
   // Live spot: quote map → any open stock holding with the same symbol → entry snapshot
   function optSpot(sym) {
     if (_optSpot[sym] > 0) return _optSpot[sym];
