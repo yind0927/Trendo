@@ -1065,6 +1065,7 @@ function rsAdjustGrade(grade, rsResult) {
   let simOptionsVisible = false;
   let currentOptMode  = "real"; // "real" | "sim" — which Options sub-tab is active
   let inspSubTab      = "journal"; // "journal" | "watchlist" — Inspirations sub-tab
+  let _optsSettledOpen = false; // collapsed by default
   let simOptionsSym   = "QQQ";  // sell-modal default
   let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
   const OPT_WATCH_SYMS = ["DRAM", "MAGS", "SMH", "GLD", "IWM", "QQQ"];
@@ -4769,6 +4770,16 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="opts-card-metrics">${items.map(i => `<div class="opts-card-m"><div class="opts-card-ml">${i.l}</div><div class="opts-card-mv ${i.cls}">${i.v}</div></div>`).join("")}</div>`;
   }
 
+  function _optAnn(pos) {
+    if (!pos.entryDate || !pos.closedAt) return -Infinity;
+    if (pos.status !== "expired" && pos.status !== "closed") return -Infinity;
+    const days = Math.max(1, Math.round((new Date(pos.closedAt) - new Date(pos.entryDate)) / 86400000));
+    const base = pos.strat === "csp" ? pos.strike : (pos.underlyingAtEntry || pos.strike);
+    if (!base) return -Infinity;
+    const realPrem = pos.status === "closed" ? Math.max(0, pos.premium - (pos.closePremium || 0)) : pos.premium;
+    return realPrem / base / days * 365 * 100;
+  }
+
   function _optDonePosCard(pos) {
     const typeL = pos.type === "call" ? "C" : "P";
     const isCSP = pos.strat === "csp";
@@ -4885,18 +4896,36 @@ function rsAdjustGrade(grade, rsResult) {
     const all = [...open, ...done];
     const totalPrem = all.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
     const realized = done.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
-    // Assigned CSP positions still holding stock: don't count as "realized"
+    // Assigned CSP positions still holding stock
     const liveAssigned = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
+    // Equity floating P&L for assigned stock being held
+    let equityPnl = null, equityKnown = true;
+    for (const p of liveAssigned) {
+      const spot = optSpot(p.sym);
+      if (!spot) { equityKnown = false; continue; }
+      if (equityPnl === null) equityPnl = 0;
+      equityPnl += (spot - p.strike) * p.qty * 100;
+    }
     const cell = (label, val, cls = "", sub = "") => `<div class="opts-stat">
       <div class="opts-stat-label">${label}</div>
       <div class="opts-stat-val ${cls}">${val}</div>
       ${sub ? `<div class="opts-stat-sub">${sub}</div>` : ""}
     </div>`;
-    return `<div class="opts-stats">
+    const realizedSub = done.length
+      ? done.length + " 笔" + (liveAssigned.length ? ` · ${liveAssigned.length}笔持股中` : "")
+      : "";
+    const equityCell = liveAssigned.length ? cell(
+      "正股浮盈",
+      equityPnl == null ? "待更新" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl)),
+      equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down",
+      liveAssigned.map(p => p.sym).join(" / ")
+    ) : "";
+    return `<div class="opts-stats ${liveAssigned.length ? "opts-stats-5" : ""}">
       ${cell("持仓权利金", prem > 0 ? fmt.usd(prem) : "—", "", open.length + " 笔持仓")}
       ${cell("CSP 现金占用", secured > 0 ? fmt.usd(secured) : "—", "", "保证金要求")}
       ${cell("持仓预估(现价)", open.length === 0 ? "—" : estKnown ? (est >= 0 ? "+" : "−") + "$" + Math.abs(est).toFixed(0) : "待更新", est > 0 ? "up" : est < 0 ? "down" : "")}
-      ${cell("已实现 P&L", done.length === 0 ? "—" : (realized >= 0 ? "+" : "−") + "$" + Math.abs(realized).toFixed(0), realized > 0 ? "up" : realized < 0 ? "down" : "", done.length ? done.length + " 笔" + (liveAssigned.length ? ` · ${liveAssigned.length}笔持股中` : "") : "")}
+      ${cell("已实现 P&L", done.length === 0 ? "—" : (realized >= 0 ? "+" : "−") + "$" + Math.abs(realized).toFixed(0), realized > 0 ? "up" : realized < 0 ? "down" : "", realizedSub)}
+      ${equityCell}
     </div>`;
   }
 
@@ -4948,7 +4977,7 @@ function rsAdjustGrade(grade, rsResult) {
     }).join("");
 
     return `<div class="opts-wheel-stats">
-      <div class="opts-sub-label" style="padding-top:18px">策略统计 · Wheel Stats</div>
+      <div class="opts-sub-label" style="padding-top:18px">策略统计 · Option Stats</div>
       <div class="opts-ws-grid">
         ${cell("胜率", winRate + "%", wins >= done.length * 0.6 ? "up" : "down", wins + "/" + done.length + " 笔")}
         ${cell("被指派率", assignRate + "%", "", assigned.length + " 笔被行权")}
@@ -4980,19 +5009,30 @@ function rsAdjustGrade(grade, rsResult) {
 
     const pending = arr.filter(p => p.status === "pending");
     const open = arr.filter(p => p.status === "open");
-    const done = [...arr.filter(p => p.status && p.status !== "open" && p.status !== "pending")]
-      .sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
+    const done = [...arr.filter(p => p.status && p.status !== "open" && p.status !== "pending")];
     const all = [...open, ...done];
 
     const liveAssigned = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
-    const settled = done.filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold));
+    // Settled: sort by annualized return desc (unknown ann goes to bottom by date)
+    const settled = done
+      .filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold))
+      .sort((a, b) => {
+        const annA = _optAnn(a), annB = _optAnn(b);
+        if (annA === -Infinity && annB === -Infinity) return (b.closedAt || "").localeCompare(a.closedAt || "");
+        if (annA === -Infinity) return 1;
+        if (annB === -Infinity) return -1;
+        return annB - annA;
+      });
+
+    const settledArrow = _optsSettledOpen ? "▾" : "▸";
+    const settledCards = _optsSettledOpen ? settled.map(_optDonePosCard).join("") : "";
 
     const body = (pending.length || open.length || done.length)
       ? `${_optSummaryHTML(open, done)}
          ${pending.length ? `<div class="opts-sub-label opts-sub-pending">待执行 · Pending · ${pending.length}</div>${pending.map(_optPendingCard).join("")}` : ""}
          ${open.length ? `<div class="opts-sub-label">持仓中 · Open · ${open.length}</div>${open.map(_optOpenPosCard).join("")}` : ""}
          ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}
-         ${settled.length ? `<div class="opts-sub-label">已了结 · Settled · ${settled.length}</div>${settled.map(_optDonePosCard).join("")}` : ""}
+         ${settled.length ? `<div class="opts-sub-label opts-settled-toggle" style="cursor:pointer;user-select:none">${settledArrow} 已了结 · Settled · ${settled.length} <span style="font-size:9px;color:var(--accent);margin-left:4px">按年化排序</span></div>${settledCards}` : ""}
          ${_optWheelStatsHTML(all)}`
       : `<div class="opts-empty">暂无${currentOptMode === "real" ? "实盘" : "模拟"}期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
 
@@ -5017,6 +5057,11 @@ function rsAdjustGrade(grade, rsResult) {
     const root = document.getElementById(innerId);
     if (!root) return;
     const arr = _activeOpts();
+    const settledToggle = root.querySelector(".opts-settled-toggle");
+    if (settledToggle) settledToggle.addEventListener("click", () => {
+      _optsSettledOpen = !_optsSettledOpen;
+      renderOptions();
+    });
     const sellBtn = root.querySelector("#opts-sell-btn");
     if (sellBtn) sellBtn.addEventListener("click", () => openOptionsSellModal());
     const pendingBtn = root.querySelector("#opts-pending-btn");
