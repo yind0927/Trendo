@@ -3636,7 +3636,15 @@ function rsAdjustGrade(grade, rsResult) {
     if (lu) lu.textContent = "更新于 " + hh + ":" + mm + ":" + ss;
 
     const now = Date.now();
-    if (now - lastPriceFetch >= priceIntervalMs) {
+    // Off-hours throttle: with the US market closed and no crypto in the book, every
+    // quote is frozen at the last close — polling at 30s just burns serverless CPU
+    // (each poll = 2 upstream fetches per symbol). Stretch to 10min; pull-to-refresh,
+    // tab re-focus and order submission still force an immediate fetch (lastPriceFetch=0).
+    const hasCrypto = [...SIM_HOLDINGS, ...HOLDINGS, ...SIM_PENDING].some(h => h.kind === "crypto");
+    const effInterval = (!isUSMarketOpen() && !hasCrypto)
+      ? Math.max(priceIntervalMs, 600000)
+      : priceIntervalMs;
+    if (now - lastPriceFetch >= effInterval) {
       lastPriceFetch = now;
       fetchPrices();
     }
@@ -3759,9 +3767,13 @@ function rsAdjustGrade(grade, rsResult) {
       ...SIM_PENDING.map(p => p.sym),
       ...SIM_CLOSE_PENDING.map(p => p.sym),
     ];
-    // Underlying ETFs for the options wheel module (spot pills + expiry settlement)
-    const optSyms = (SIM_OPTIONS.some(p => p.status === "open") || simOptionsVisible)
-      ? _optWatchSyms() : [];
+    // Underlying ETFs for the options wheel module. The full 6-ETF watch list (spot
+    // pills) is only needed while the panel is actually on screen; everywhere else
+    // fetch just the symbols with live positions (expiry settlement + card math).
+    // Carrying all 6 ETFs on every 30s poll 24/7 multiplied serverless CPU usage.
+    const optSyms = (simOptionsVisible && currentPage === "sim")
+      ? _optWatchSyms()
+      : _optLiveSyms();
 
     // Pending symbols go first so they are never truncated by the API limit
     const allSyms = [...pendingSyms, ...optSyms, ...all.map(h => h.sym)];
@@ -4510,8 +4522,16 @@ function rsAdjustGrade(grade, rsResult) {
 
   const _optDTE = expiryDate => Math.max(0, Math.ceil((new Date(expiryDate + "T21:00:00Z").getTime() - Date.now()) / 86400000));
 
+  // Symbols that genuinely need a live spot: open positions (expiry settlement,
+  // cushion, ITM estimate) and CSP-assigned stock still held (live equity P&L).
+  function _optLiveSyms() {
+    return [...new Set(SIM_OPTIONS
+      .filter(p => p.status === "open" || (p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold))
+      .map(p => p.sym))];
+  }
+
   function _optWatchSyms() {
-    return [...new Set([...OPT_WATCH_SYMS, ...SIM_OPTIONS.filter(p => p.status === "open").map(p => p.sym)])];
+    return [...new Set([...OPT_WATCH_SYMS, ..._optLiveSyms()])];
   }
 
   // Live spot: quote map → any open stock holding with the same symbol → entry snapshot
