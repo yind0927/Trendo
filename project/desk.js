@@ -1119,6 +1119,7 @@ function rsAdjustGrade(grade, rsResult) {
       watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
       simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
       simOptions: SIM_OPTIONS,
+      realOptions: REAL_OPTIONS,
       analysisHistory: histForSync,
       savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
     };
@@ -1242,6 +1243,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (Array.isArray(data.simPending))      SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending);
     if (Array.isArray(data.simClosePending)) SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending);
     if (Array.isArray(data.simOptions))      SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...data.simOptions);
+    if (Array.isArray(data.realOptions))     REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions);
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
@@ -1356,6 +1358,7 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
       localStorage.setItem("trendo_v4_sim_options",        JSON.stringify(SIM_OPTIONS));
+      localStorage.setItem("trendo_v4_real_options",       JSON.stringify(REAL_OPTIONS));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_analysis_hist", JSON.stringify(analysisHistory));
       // Skip timestamp update for price-only ticks so they don't make local appear "newer"
@@ -1394,6 +1397,8 @@ function rsAdjustGrade(grade, rsResult) {
       if (scp) { const parsed = JSON.parse(scp); SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...parsed); }
       const so = localStorage.getItem("trendo_v4_sim_options");
       if (so) { const parsed = JSON.parse(so); SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...parsed); }
+      const ro = localStorage.getItem("trendo_v4_real_options");
+      if (ro) { const parsed = JSON.parse(ro); REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...parsed); }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
@@ -3428,6 +3433,33 @@ function rsAdjustGrade(grade, rsResult) {
       a.addEventListener("click", e => { e.preventDefault(); switchPage(a.dataset.page); });
     });
 
+    // Inspirations sub-tabs (Journal / Preparation)
+    $$("[data-insp-tab]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        inspSubTab = btn.dataset.inspTab;
+        $$("[data-insp-tab]").forEach(b => b.classList.toggle("active", b.dataset.inspTab === inspSubTab));
+        const jp = document.getElementById("insp-journal-panel");
+        const wp = document.getElementById("insp-watchlist-panel");
+        if (jp) jp.style.display = inspSubTab === "journal" ? "" : "none";
+        if (wp) wp.style.display = inspSubTab === "watchlist" ? "" : "none";
+        if (inspSubTab === "journal") renderJournal();
+        else renderWatchlist();
+      });
+    });
+
+    // Options sub-tabs (Live / Sim)
+    $$("[data-opts-tab]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        currentOptMode = btn.dataset.optsTab;
+        $$("[data-opts-tab]").forEach(b => b.classList.toggle("active", b.dataset.optsTab === currentOptMode));
+        const rp = document.getElementById("opts-real-panel");
+        const sp = document.getElementById("opts-sim-panel");
+        if (rp) rp.style.display = currentOptMode === "real" ? "" : "none";
+        if (sp) sp.style.display = currentOptMode === "sim" ? "" : "none";
+        renderOptions();
+      });
+    });
+
     $("#search-input").addEventListener("input", e => { query = e.target.value; renderTable(); });
     document.addEventListener("click", e => {
       const b = e.target.closest("[data-filter]");
@@ -4142,7 +4174,7 @@ function rsAdjustGrade(grade, rsResult) {
   function switchPage(page) {
     currentPage = page;
     localStorage.setItem("trendo_last_page", page);
-    const VIEWS = { desk: "desk-view", journal: "journal-view", sim: "sim-view", analytics: "analytics-view", watchlist: "watchlist-view", market: "market-view" };
+    const VIEWS = { desk: "desk-view", inspirations: "inspirations-view", sim: "sim-view", analytics: "analytics-view", options: "options-view", market: "market-view" };
     const mainEl = document.querySelector("main");
     Object.entries(VIEWS).forEach(([p, id]) => {
       const el = document.getElementById(id);
@@ -4168,11 +4200,11 @@ function rsAdjustGrade(grade, rsResult) {
     }
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
     applySidebarActiveColor(page);
-    if (page === "journal")   renderJournal();
-    if (page === "sim")       renderSim();
-    if (page === "analytics") { fetchAndBuildHistory(); }
-    if (page === "watchlist") renderWatchlist();
-    if (page === "market")    fetchMarketData();
+    if (page === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
+    if (page === "sim")          renderSim();
+    if (page === "analytics")    { fetchAndBuildHistory(); }
+    if (page === "options")      renderOptions();
+    if (page === "market")       fetchMarketData();
     if (page === "desk" && HOLDINGS.length > 0) {
       fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
       initHoldingsBriefCard();
@@ -4509,7 +4541,6 @@ function rsAdjustGrade(grade, rsResult) {
   function renderSim() {
     renderSimOverview();
     renderSimPending();
-    renderSimOptions();
     renderSimTable();
     renderSimAnalytics();
     renderSimDailySources();
@@ -4927,13 +4958,11 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
-  function renderSimOptions() {
-    const section = $("#sim-options-section");
-    if (!section) return;
-    section.style.display = simOptionsVisible ? "" : "none";
-    if (!simOptionsVisible) return;
-    const inner = $("#sim-opts-inner");
+  function renderOptions() {
+    const innerId = currentOptMode === "real" ? "real-opts-inner" : "sim-opts-inner";
+    const inner = document.getElementById(innerId);
     if (!inner) return;
+    const arr = _activeOpts();
     _optMigrate();
     settleExpiredOptions();
 
@@ -4943,13 +4972,12 @@ function rsAdjustGrade(grade, rsResult) {
       return `<span class="opts-spot-pill"><b>${s}</b> ${v ? "$" + v.toFixed(2) : "—"}</span>`;
     }).join("");
 
-    const pending = SIM_OPTIONS.filter(p => p.status === "pending");
-    const open = SIM_OPTIONS.filter(p => p.status === "open");
-    const done = [...SIM_OPTIONS.filter(p => p.status && p.status !== "open" && p.status !== "pending")]
+    const pending = arr.filter(p => p.status === "pending");
+    const open = arr.filter(p => p.status === "open");
+    const done = [...arr.filter(p => p.status && p.status !== "open" && p.status !== "pending")]
       .sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
     const all = [...open, ...done];
 
-    // Label for done section — split: assigned-holding vs settled
     const liveAssigned = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
     const settled = done.filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold));
 
@@ -4960,7 +4988,7 @@ function rsAdjustGrade(grade, rsResult) {
          ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}
          ${settled.length ? `<div class="opts-sub-label">已了结 · Settled · ${settled.length}</div>${settled.map(_optDonePosCard).join("")}` : ""}
          ${_optWheelStatsHTML(all)}`
-      : `<div class="opts-empty">暂无期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
+      : `<div class="opts-empty">暂无${currentOptMode === "real" ? "实盘" : "模拟"}期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
 
     inner.innerHTML = `
       <div class="opts-controls">
@@ -4972,48 +5000,55 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       ${body}`;
 
-    wireSimOptions();
+    wireOptions();
   }
 
-  function wireSimOptions() {
-    const root = $("#sim-opts-inner");
+  // Backward-compat alias
+  function renderSimOptions() { renderOptions(); }
+
+  function wireOptions() {
+    const innerId = currentOptMode === "real" ? "real-opts-inner" : "sim-opts-inner";
+    const root = document.getElementById(innerId);
     if (!root) return;
-    const sellBtn = $("#opts-sell-btn");
+    const arr = _activeOpts();
+    const sellBtn = root.querySelector("#opts-sell-btn");
     if (sellBtn) sellBtn.addEventListener("click", () => openOptionsSellModal());
-    const pendingBtn = $("#opts-pending-btn");
+    const pendingBtn = root.querySelector("#opts-pending-btn");
     if (pendingBtn) pendingBtn.addEventListener("click", () => openOptionsSellModal({ isPending: true }));
     $$("[data-opt-close]", root).forEach(btn => btn.addEventListener("click", () => {
-      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optClose);
+      const pos = arr.find(p => p.id === btn.dataset.optClose);
       if (pos) openOptionsCloseModal(pos, false);
     }));
     $$("[data-opt-roll]", root).forEach(btn => btn.addEventListener("click", () => {
-      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optRoll);
+      const pos = arr.find(p => p.id === btn.dataset.optRoll);
       if (pos) openOptionsCloseModal(pos, true);
     }));
     $$("[data-opt-mark]", root).forEach(el => el.addEventListener("click", () => {
-      const pos = SIM_OPTIONS.find(p => p.id === el.dataset.optMark);
+      const pos = arr.find(p => p.id === el.dataset.optMark);
       if (pos) openOptionsMarkModal(pos);
     }));
     $$("[data-opt-exit]", root).forEach(btn => btn.addEventListener("click", () => {
-      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optExit);
+      const pos = arr.find(p => p.id === btn.dataset.optExit);
       if (pos) openAssignedExitModal(pos);
     }));
     $$("[data-opt-del]", root).forEach(btn => btn.addEventListener("click", () => {
-      const idx = SIM_OPTIONS.findIndex(p => p.id === btn.dataset.optDel);
-      if (idx !== -1) { SIM_OPTIONS.splice(idx, 1); saveToStorage(); renderSimOptions(); }
+      const idx = arr.findIndex(p => p.id === btn.dataset.optDel);
+      if (idx !== -1) { arr.splice(idx, 1); saveToStorage(); renderOptions(); }
     }));
     $$("[data-opt-fill]", root).forEach(btn => btn.addEventListener("click", () => {
-      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optFill);
+      const pos = arr.find(p => p.id === btn.dataset.optFill);
       if (pos) openOptionsFillModal(pos);
     }));
     $$("[data-opt-del-pending]", root).forEach(btn => btn.addEventListener("click", () => {
-      const pos = SIM_OPTIONS.find(p => p.id === btn.dataset.optDelPending);
+      const pos = arr.find(p => p.id === btn.dataset.optDelPending);
       if (!pos) return;
       if (!confirm(`确认取消预设单 ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"}？`)) return;
-      const idx = SIM_OPTIONS.findIndex(p => p.id === pos.id);
-      if (idx >= 0) { SIM_OPTIONS.splice(idx, 1); saveToStorage(); renderSimOptions(); }
+      const idx = arr.findIndex(p => p.id === pos.id);
+      if (idx >= 0) { arr.splice(idx, 1); saveToStorage(); renderOptions(); }
     }));
   }
+  // Legacy alias
+  function wireSimOptions() { wireOptions(); }
 
   // ── Modal helpers ─────────────────────────────────────────────────────────
   let _optModalClickOutsideReady = false;
@@ -5144,8 +5179,9 @@ function rsAdjustGrade(grade, rsResult) {
       if (!isPending && !(prem > 0)) { alert("请填写权利金"); return; }
       const isCSP = simOptionsStrat === "csp";
       const entryDelta = deltaEl ? (parseFloat(deltaEl.value) || null) : null;
+      const optArr = _activeOpts();
       if (isPending) {
-        SIM_OPTIONS.push({
+        optArr.push({
           id: Date.now().toString(36),
           sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
           strike, expiry, qty,
@@ -5156,7 +5192,7 @@ function rsAdjustGrade(grade, rsResult) {
         });
       } else {
         const entryDTE = _optDTE(expiry);
-        SIM_OPTIONS.push({
+        optArr.push({
           id: Date.now().toString(36),
           sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
           strike, expiry, qty, premium: prem,
@@ -5168,7 +5204,7 @@ function rsAdjustGrade(grade, rsResult) {
       }
       saveToStorage();
       modal.style.display = "none";
-      renderSimOptions();
+      renderOptions();
     };
     modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
   }
@@ -6029,15 +6065,6 @@ function rsAdjustGrade(grade, rsResult) {
       const ei = $("#form-entry"); if (ei) ei.required = true;
       openModal("new-position-modal");
     });
-
-    const simOptsToggle = $("#sim-options-btn");
-    if (simOptsToggle) {
-      simOptsToggle.addEventListener("click", () => {
-        simOptionsVisible = !simOptionsVisible;
-        simOptsToggle.classList.toggle("active", simOptionsVisible);
-        renderSimOptions();
-      });
-    }
 
     const tabOpen   = $("#sim-tab-open");
     const tabClosed = $("#sim-tab-closed");
@@ -10441,7 +10468,8 @@ function rsAdjustGrade(grade, rsResult) {
     } catch (_) {}
   });
   // Restore last visited page so refresh doesn't always reset to Dashboard
-  const _lastPage = localStorage.getItem("trendo_last_page");
+  let _lastPage = localStorage.getItem("trendo_last_page");
+  if (_lastPage === "journal" || _lastPage === "watchlist") _lastPage = "inspirations";
   if (_lastPage && _lastPage !== "desk") switchPage(_lastPage);
 
   tick(); setInterval(tick, 1000);

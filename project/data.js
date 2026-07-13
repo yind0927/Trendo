@@ -77,3 +77,4 @@ window.SIM_CLOSE_PENDING = []; // { id, sym, qty, orderType:"market"|"limit", li
 //   manualMark?, manualMarkAt?,          — 手动记录的当前权利金（浮盈展示）
 //   closePremium?, settleSpot?, realized?, closedAt? }
 window.SIM_OPTIONS = [];
+window.REAL_OPTIONS = [];

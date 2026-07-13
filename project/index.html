@@ -1653,8 +1653,7 @@
   .sim-section-label.is-major .ssl-rule { background: linear-gradient(90deg, var(--fg-3), transparent); opacity: .5; }
 
   /* ── Options module — wheel strategy (CSP / CC) ───────────── */
-  #sim-options-section { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-1); }
-  #sim-options-section .sim-section-label { margin: 14px 14px 12px; }
+  #opts-real-panel, #opts-sim-panel { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-1); margin-top: 12px; }
   /* Controls row */
   .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
   .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
@@ -1663,6 +1662,16 @@
   .opts-spot-pill { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); border: 1px solid var(--line); border-radius: 14px; padding: 3px 11px; background: var(--bg-2); }
   .opts-spot-pill b { color: var(--fg-0); margin-right: 4px; }
   .opts-btns { display: flex; gap: 8px; }
+  /* Page sub-tab bar (Inspirations + Options pages) */
+  .page-subtab-bar { display: flex; gap: 4px; align-items: center; }
+  .page-subtab { background: none; border: none; font-size: 12px; color: var(--fg-3); cursor: pointer; padding: 4px 10px; border-radius: 6px; font-family: inherit; transition: background .15s, color .15s; }
+  .page-subtab.active { background: var(--accent); color: var(--bg-0); font-weight: 600; }
+  .page-subtab:not(.active):hover { color: var(--fg-1); background: var(--line); }
+  .opts-real-badge { display: inline-block; background: var(--warn); color: var(--bg-0); font-size: 9.5px; font-weight: 700; padding: 1px 5px; border-radius: 3px; vertical-align: middle; margin-right: 3px; }
+  /* Inspirations/Options view base styles */
+  #inspirations-view { padding: 24px 20px 60px; }
+  #options-view { padding: 24px 20px 60px; }
+  #opts-real-panel, #opts-sim-panel { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-1); margin-top: 12px; }
   /* Section group headers */
   .opts-sub-label { font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); padding: 10px 14px 6px; font-family: var(--f-mono); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
   .opts-sub-label:first-child { border-top: none; }
@@ -1763,11 +1772,10 @@
   .opts-calc b.down { color: var(--down); }
   .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
   .sim-topbar-actions { display: flex; gap: 8px; align-items: center; }
-  #sim-options-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
   @media (max-width: 640px) {
     /* Sim topbar: allow the two action buttons to wrap onto a second line */
     .sim-topbar-actions { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
-    #sim-options-btn, #sim-new-pos-btn { flex-shrink: 0; }
+    #sim-new-pos-btn { flex-shrink: 0; }
     /* Options module: stat grids collapse to 2-col */
     .opts-stats { grid-template-columns: repeat(2, 1fr); }
     .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1782,7 +1790,6 @@
     .opts-btns { flex-direction: column; }
     .opts-btns .btn { width: 100%; box-sizing: border-box; }
     /* Section container: no horizontal scroll */
-    #sim-options-section { overflow: hidden; }
   }
   /* ────────────────────────────────────────────────────────── */
 
@@ -1855,8 +1862,7 @@
   table.sim-holdings tbody tr:hover .close-pos-btn,
   table.sim-holdings tbody tr:hover .delete-btn { opacity: 1; }
 
-  /* JOURNAL VIEW */
-  #journal-view { padding: 24px 20px 60px; }
+
   .journal-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 16px; flex-wrap: wrap; }
   .journal-filters-row { display: flex; gap: 6px; }
 
@@ -2631,14 +2637,14 @@
     /* Shift all page content right of the sidebar (with smooth transition) */
     .sticky-header,
     #desk-view, #sim-view, #analytics-view,
-    #journal-view, #watchlist-view, #market-view {
+    #inspirations-view, #options-view, #market-view {
       margin-left: var(--sb-w) !important;
       margin-right: 0 !important;
       transition: margin-left 0.28s cubic-bezier(0.4,0,0.2,1);
     }
     /* Prevent centered-content views from staying viewport-centered */
     #sim-view, #analytics-view, #market-view,
-    #journal-view, #watchlist-view {
+    #inspirations-view, #options-view {
       max-width: none !important;
     }
     /* Topbar: hide brand + nav (sidebar owns them) */
@@ -2647,11 +2653,11 @@
     .topbar { padding: 10px 24px; gap: 14px; }
     .topbar .search  { width: 280px; }
     main { padding: 20px 32px 40px; }
-    #journal-view { padding: 20px 32px 40px; }
+    #inspirations-view { padding: 20px 32px 40px; }
+    #options-view { padding: 20px 32px 40px; }
     #analytics-view { padding: 20px 32px 60px; }
     #market-view { padding: 20px 32px 60px; }
     #sim-view { padding: 20px 32px 60px; }
-    #watchlist-view .page-topbar { padding: 20px 32px 0; }
     /* Overview: 3 cards per row; alloc card spans last 2 cols on row 2 */
     .overview { grid-template-columns: repeat(3, 1fr) !important; }
     .overview > .ov-alloc { grid-column: 2 / span 2; }
@@ -2685,7 +2691,7 @@
     /* PWA standalone: constrain body height so position:fixed navbar stays at bottom */
     @media (display-mode: standalone) {
       body { overflow-x: hidden; }
-      main, #journal-view, #sim-view, #analytics-view, #watchlist-view {
+      main, #inspirations-view, #sim-view, #analytics-view, #options-view {
         -webkit-overflow-scrolling: touch;
         overscroll-behavior-y: contain;
       }
@@ -2778,8 +2784,9 @@
     table.sim-holdings th:first-child { position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
     table.sim-holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
 
-    /* ---- Journal ---- */
-    #journal-view { padding: 12px 12px 86px; }
+    /* ---- Inspirations / Options ---- */
+    #inspirations-view { padding: 12px 12px 86px; }
+    #options-view { padding: 12px 12px 86px; }
     .j-statsbar { flex-wrap: wrap; }
     .j-statsbar-item { padding: 8px 12px; }
     .journal-card { padding: 11px 13px; gap: 9px; }
@@ -2803,8 +2810,7 @@
     .cal-day-num { font-size: 9px; }
     .cal-month-lbl { min-width: 90px; font-size: 11px; }
 
-    /* ---- Watchlist ---- */
-    #watchlist-view { padding: 12px 12px 86px; }
+    /* ---- Watchlist (now inside Inspirations) ---- */
     .wl-card { padding: 11px 13px; }
     .wl-bx-rs-grid { grid-template-columns: 1fr; }
     .wl-card-main {
@@ -3354,12 +3360,12 @@
     <a class="navlink" href="#" data-page="analytics">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
       Analytics</a>
-    <a class="navlink" href="#" data-page="journal">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      Journal</a>
-    <a class="navlink" href="#" data-page="watchlist">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-      Preparation</a>
+    <a class="navlink" href="#" data-page="inspirations">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+      Inspirations</a>
+    <a class="navlink" href="#" data-page="options">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><line x1="12" y1="7" x2="12" y2="17"/></svg>
+      Options</a>
   </nav>
 
   <div class="search" role="search">
@@ -3509,13 +3515,13 @@
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
       <span class="sb-lbl">Analytics</span>
     </a>
-    <a class="navlink" href="#" data-page="journal">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-      <span class="sb-lbl">Journal</span>
+    <a class="navlink" href="#" data-page="inspirations">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>
+      <span class="sb-lbl">Inspirations</span>
     </a>
-    <a class="navlink" href="#" data-page="watchlist">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-      <span class="sb-lbl">Preparation</span>
+    <a class="navlink" href="#" data-page="options">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><line x1="12" y1="7" x2="12" y2="17"/></svg>
+      <span class="sb-lbl">Options</span>
     </a>
   </nav>
 
@@ -3778,20 +3784,70 @@
 </main>
 </div><!-- #desk-view -->
 
-<!-- ============ JOURNAL VIEW ============ -->
-<div id="journal-view" style="display:none">
+<!-- ============ INSPIRATIONS VIEW ============ -->
+<div id="inspirations-view" style="display:none">
   <div class="page-topbar">
     <div class="page-title">
-      <span class="page-title-en">Journal</span>
-      <span class="page-title-zh">记录</span>
+      <span class="page-title-en">Inspirations</span>
+      <span class="page-title-zh">灵感</span>
     </div>
-    <div class="journal-filters-row">
+    <div class="page-subtab-bar">
+      <button class="page-subtab active" data-insp-tab="journal">复盘 Journal</button>
+      <button class="page-subtab" data-insp-tab="watchlist">准备 Preparation</button>
+    </div>
+  </div>
+
+  <!-- Journal sub-panel -->
+  <div id="insp-journal-panel">
+    <div class="journal-filters-row" style="padding:8px 0 4px">
       <button class="filter-chip active" data-journal-filter="all">所有</button>
       <button class="filter-chip" data-journal-filter="open">持仓中</button>
       <button class="filter-chip" data-journal-filter="closed">已平仓</button>
     </div>
+    <div id="journal-feed" class="journal-feed"></div>
   </div>
-  <div id="journal-feed" class="journal-feed"></div>
+
+  <!-- Preparation sub-panel -->
+  <div id="insp-watchlist-panel" style="display:none">
+    <!-- AI Analysis Search Bar -->
+    <div class="wl-analyze-wrap">
+      <form id="wl-analyze-form" class="wl-analyze-form" autocomplete="off">
+        <input id="wl-analyze-sym" class="wl-analyze-input"
+               placeholder="输入股票代码进行 AI 分析… e.g. AAPL"
+               autocapitalize="characters" spellcheck="false" maxlength="10" />
+        <button type="submit" class="wl-analyze-btn" id="wl-analyze-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          AI 分析
+        </button>
+      </form>
+    </div>
+    <!-- Analysis Result Panel -->
+    <div id="wl-analysis-panel" style="display:none;max-width:960px;margin:0 auto;padding:8px 20px 0"></div>
+    <!-- Today's analysis history cards -->
+    <div id="wl-analyze-history" class="wl-history" style="display:none"></div>
+    <!-- Collapsible scoring rules panel -->
+    <div id="wl-scoring-rules" class="wl-scoring-panel"></div>
+    <!-- Watchlist Section -->
+    <div style="max-width:960px;margin:0 auto;padding:0 20px">
+      <div class="sim-section-label is-major" style="margin-top:20px">
+        <span class="ssl-zh">自选列表</span>
+        <button class="btn" id="wl-toggle-form" style="font-size:11px;padding:4px 10px;height:auto;margin-left:auto">+ 手动添加</button>
+      </div>
+    </div>
+    <!-- Manual Add Form -->
+    <div id="wl-form-body" style="display:none;max-width:960px;margin:0 auto;padding:0 20px 8px">
+      <form id="wl-add-form" class="wl-add-form">
+        <div class="wl-form-row">
+          <input id="wl-sym"   class="form-input" placeholder="代码 e.g. TSLA" required style="width:90px"/>
+          <input id="wl-name"  class="form-input" placeholder="名称" style="flex:1"/>
+          <input id="wl-price" class="form-input" type="number" placeholder="参考价" step="0.01" style="width:85px"/>
+          <button type="submit" class="btn primary" style="flex-shrink:0">添加</button>
+        </div>
+      </form>
+    </div>
+    <!-- Watchlist Cards -->
+    <div id="watchlist-content" class="watchlist-content" style="max-width:960px;margin:0 auto;padding:8px 20px 60px"></div>
+  </div>
 </div>
 
 <!-- ============ SIMULATION VIEW ============ -->
@@ -3805,10 +3861,6 @@
       <span class="sim-sub" id="sim-subtitle" style="color:var(--fg-3);font-size:12px;margin-left:4px">— 笔持仓</span>
     </div>
     <div class="sim-topbar-actions">
-      <button class="btn secondary" id="sim-options-btn" style="font-size:11.5px;padding:5px 12px">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-        期权滚动策略
-      </button>
       <button class="btn primary" id="sim-new-pos-btn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
         New Sim Position
@@ -3822,14 +3874,6 @@
     <div id="sim-pending-list"></div>
   </div>
 
-  <!-- § 期权滚动策略 Options Wheel -->
-  <div id="sim-options-section" style="display:none;margin:0 0 16px">
-    <div class="sim-section-label">
-      <span class="ssl-zh">期权滚动策略</span>
-      <span class="ssl-rule"></span>
-    </div>
-    <div id="sim-opts-inner"></div>
-  </div>
 
   <!-- § 概览 Overview -->
   <div class="sim-section-label" id="sim-analytics-label" style="display:none">
@@ -3929,60 +3973,26 @@
   <div id="analytics-content"></div>
 </div>
 
-<!-- ============ WATCHLIST VIEW ============ -->
-<div id="watchlist-view" style="display:none">
-  <!-- Page title -->
-  <div class="page-topbar" style="max-width:960px;margin:0 auto;padding:24px 20px 0">
+<!-- ============ OPTIONS VIEW ============ -->
+<div id="options-view" style="display:none">
+  <div class="page-topbar">
     <div class="page-title">
-      <span class="page-title-en">Preparation</span>
-      <span class="page-title-zh">预备</span>
+      <span class="page-title-en">Options</span>
+      <span class="page-title-zh">期权</span>
+    </div>
+    <div class="page-subtab-bar">
+      <button class="page-subtab active" data-opts-tab="real"><span class="opts-real-badge">实盘</span> Live</button>
+      <button class="page-subtab" data-opts-tab="sim">模拟 Sim</button>
     </div>
   </div>
-
-  <!-- AI Analysis Search Bar -->
-  <div class="wl-analyze-wrap">
-    <form id="wl-analyze-form" class="wl-analyze-form" autocomplete="off">
-      <input id="wl-analyze-sym" class="wl-analyze-input"
-             placeholder="输入股票代码进行 AI 分析… e.g. AAPL"
-             autocapitalize="characters" spellcheck="false" maxlength="10" />
-      <button type="submit" class="wl-analyze-btn" id="wl-analyze-btn">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        AI 分析
-      </button>
-    </form>
+  <!-- Real options panel -->
+  <div id="opts-real-panel">
+    <div id="real-opts-inner"></div>
   </div>
-
-  <!-- Analysis Result Panel -->
-  <div id="wl-analysis-panel" style="display:none;max-width:960px;margin:0 auto;padding:8px 20px 0"></div>
-
-  <!-- Today's analysis history cards (below the result panel) -->
-  <div id="wl-analyze-history" class="wl-history" style="display:none"></div>
-
-  <!-- Collapsible scoring rules panel -->
-  <div id="wl-scoring-rules" class="wl-scoring-panel"></div>
-
-  <!-- Watchlist Section -->
-  <div style="max-width:960px;margin:0 auto;padding:0 20px">
-    <div class="sim-section-label is-major" style="margin-top:20px">
-      <span class="ssl-zh">自选列表</span>
-      <button class="btn" id="wl-toggle-form" style="font-size:11px;padding:4px 10px;height:auto;margin-left:auto">+ 手动添加</button>
-    </div>
+  <!-- Sim options panel -->
+  <div id="opts-sim-panel" style="display:none">
+    <div id="sim-opts-inner"></div>
   </div>
-
-  <!-- Manual Add Form (secondary, hidden by default) -->
-  <div id="wl-form-body" style="display:none;max-width:960px;margin:0 auto;padding:0 20px 8px">
-    <form id="wl-add-form" class="wl-add-form">
-      <div class="wl-form-row">
-        <input id="wl-sym"   class="form-input" placeholder="代码 e.g. TSLA" required style="width:90px"/>
-        <input id="wl-name"  class="form-input" placeholder="名称" style="flex:1"/>
-        <input id="wl-price" class="form-input" type="number" placeholder="参考价" step="0.01" style="width:85px"/>
-        <button type="submit" class="btn primary" style="flex-shrink:0">添加</button>
-      </div>
-    </form>
-  </div>
-
-  <!-- Watchlist Cards -->
-  <div id="watchlist-content" class="watchlist-content" style="max-width:960px;margin:0 auto;padding:8px 20px 60px"></div>
 </div>
 <!-- ============ MARKET VIEW ============ -->
 <div id="market-view" style="display:none">
@@ -4373,8 +4383,8 @@
   </div>
 </div>
 
-<script src="data.js?v=270"></script>
-<script src="desk.js?v=270"></script>
+<script src="data.js?v=271"></script>
+<script src="desk.js?v=271"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
