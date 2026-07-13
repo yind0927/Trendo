@@ -97,7 +97,6 @@
       })
       .sort((a, b) => b.today - a.today);
 
-    const hasData = rows.some(r => r.today !== 0 || r.todayPct !== 0);
     if (label) label.style.display = HOLDINGS.length ? "" : "none";
     if (!HOLDINGS.length) { el.innerHTML = ""; return; }
 
@@ -105,9 +104,10 @@
     const wins  = rows.filter(r => r.today > 0).length;
     const loses = rows.filter(r => r.today < 0).length;
     const tSign = total > 0 ? "up" : total < 0 ? "down" : "";
-    const tStr  = !hasData ? "行情加载中…" : total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
+    const hasLoaded = HOLDINGS.some(h => h.prevClose > 0);
+    const tStr  = !hasLoaded ? "行情加载中…" : total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
     const metaEl = $("#daily-sources-meta");
-    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span>${hasData ? ` · ${wins}↑ ${loses}↓` : ""}`;
+    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span>${hasLoaded ? ` · ${wins}↑ ${loses}↓` : ""}`;
 
     const maxAbs = Math.max(...rows.map(r => Math.abs(r.today)), 1);
 
@@ -1063,6 +1063,8 @@ function rsAdjustGrade(grade, rsResult) {
   // Only the underlying ETF spot is live (via /api/quote, same path as stock
   // positions); strikes/premiums/expiries are typed in from the broker.
   let simOptionsVisible = false;
+  let currentOptMode  = "real"; // "real" | "sim" — which Options sub-tab is active
+  let inspSubTab      = "journal"; // "journal" | "watchlist" — Inspirations sub-tab
   let simOptionsSym   = "QQQ";  // sell-modal default
   let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
   const OPT_WATCH_SYMS = ["DRAM", "MAGS", "SMH", "GLD", "IWM", "QQQ"];
@@ -1289,10 +1291,10 @@ function rsAdjustGrade(grade, rsResult) {
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
-    if (currentPage === "journal")   renderJournal();
+    if (currentPage === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
     renderSim();
     if (currentPage === "analytics") renderAnalytics();
-    if (currentPage === "watchlist") renderWatchlist();
+    if (currentPage === "options") renderOptions();
   }
 
   function renderSyncStatus(state) {
@@ -3803,7 +3805,7 @@ function rsAdjustGrade(grade, rsResult) {
     // pills) is only needed while the panel is actually on screen; everywhere else
     // fetch just the symbols with live positions (expiry settlement + card math).
     // Carrying all 6 ETFs on every 30s poll 24/7 multiplied serverless CPU usage.
-    const optSyms = (simOptionsVisible && currentPage === "sim")
+    const optSyms = currentPage === "options"
       ? _optWatchSyms()
       : _optLiveSyms();
 
@@ -3902,7 +3904,7 @@ function rsAdjustGrade(grade, rsResult) {
         const q = results[sym];
         if (q?.last > 0 && _optSpot[sym] !== q.last) { _optSpot[sym] = q.last; optSpotChanged = true; }
       });
-      if (optSpotChanged && simOptionsVisible && currentPage === "sim") renderSimOptions();
+      if (optSpotChanged && currentPage === "options") renderOptions();
 
       // Auto-execute pending orders
       const executed = [];
@@ -4556,7 +4558,7 @@ function rsAdjustGrade(grade, rsResult) {
   // Symbols that genuinely need a live spot: open positions (expiry settlement,
   // cushion, ITM estimate) and CSP-assigned stock still held (live equity P&L).
   function _optLiveSyms() {
-    return [...new Set(SIM_OPTIONS
+    return [...new Set([...SIM_OPTIONS, ...REAL_OPTIONS]
       .filter(p => p.status === "open" || (p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold))
       .map(p => p.sym))];
   }
@@ -4574,7 +4576,7 @@ function rsAdjustGrade(grade, rsResult) {
 
   // One-time migration of earlier-model entries into the manual wheel model
   function _optMigrate() {
-    SIM_OPTIONS.forEach(p => {
+    [...SIM_OPTIONS, ...REAL_OPTIONS].forEach(p => {
       if (!p.strat) {
         p.strat = p.type === "put" ? "csp" : "cc";
         p.qty = Math.abs(p.qty || 1);
@@ -4594,7 +4596,7 @@ function rsAdjustGrade(grade, rsResult) {
   function settleExpiredOptions() {
     let changed = false;
     const today = new Date().toISOString().slice(0, 10);
-    for (const pos of SIM_OPTIONS) {
+    for (const pos of [...SIM_OPTIONS, ...REAL_OPTIONS]) {
       if (pos.status !== "open") continue;
       if (pos.expiry >= today) continue;
       const spot = optSpot(pos.sym);
@@ -5601,14 +5603,14 @@ function rsAdjustGrade(grade, rsResult) {
     if (label) label.style.display = SIM_HOLDINGS.length ? "" : "none";
     if (!SIM_HOLDINGS.length) { el.innerHTML = ""; return; }
 
-    const hasSimData = rows.some(r => r.today !== 0 || r.todayPct !== 0);
     const total = rows.reduce((s, r) => s + r.today, 0);
     const wins  = rows.filter(r => r.today > 0).length;
     const loses = rows.filter(r => r.today < 0).length;
     const tSign = total > 0 ? "up" : total < 0 ? "down" : "";
-    const tStr  = !hasSimData ? "行情加载中…" : total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
+    const hasSimLoaded = SIM_HOLDINGS.some(h => h.prevClose > 0);
+    const tStr  = !hasSimLoaded ? "行情加载中…" : total === 0 ? "±$0" : (total > 0 ? "+" : "−") + "$" + Math.abs(total).toLocaleString("en-US");
     const metaEl = $("#sim-daily-sources-meta");
-    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span>${hasSimData ? ` · ${wins}↑ ${loses}↓` : ""}`;
+    if (metaEl) metaEl.innerHTML = `<span class="ssl-total ${tSign}">${tStr}</span>${hasSimLoaded ? ` · ${wins}↑ ${loses}↓` : ""}`;
 
     const maxAbs = Math.max(...rows.map(r => Math.abs(r.today)), 1);
     el.innerHTML = `<div class="panel" style="padding:0;overflow:hidden">` +
@@ -10436,7 +10438,7 @@ function rsAdjustGrade(grade, rsResult) {
     const upgraded = upgradeAnalysisHistory();
     if (changed || upgraded) {
       saveToStorage(); // bumps savedAt + schedules syncPush → other devices pull the full content
-      if (currentPage === "watchlist") renderAnalysisHistory();
+      if (currentPage === "inspirations" && inspSubTab === "watchlist") renderAnalysisHistory();
     }
   }
   // Sync strategy: last-write-wins based on savedAt timestamp.
