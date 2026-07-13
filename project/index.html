@@ -1742,6 +1742,7 @@
   .opts-mini-btn.opts-del:hover { border-color: var(--down); color: var(--down); }
   /* ── Stat strip (live summary) */
   .opts-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); margin-top: 4px; }
+  .opts-stats.opts-stats-5 { grid-template-columns: repeat(5, 1fr); }
   .opts-stat { background: var(--bg-1); padding: 11px 14px; }
   .opts-stat-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
   .opts-stat-val { font-size: 15px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
@@ -1776,7 +1777,7 @@
     .sim-topbar-actions { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
     #sim-new-pos-btn { flex-shrink: 0; }
     /* Options module: stat grids collapse to 2-col */
-    .opts-stats { grid-template-columns: repeat(2, 1fr); }
+    .opts-stats, .opts-stats.opts-stats-5 { grid-template-columns: repeat(2, 1fr); }
     .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
     /* Metric grid: 2x2 on mobile */
     .opts-card-metrics { grid-template-columns: repeat(2, 1fr); }
@@ -4382,8 +4383,8 @@
   </div>
 </div>
 
-<script src="data.js?v=273"></script>
-<script src="desk.js?v=273"></script>
+<script src="data.js?v=275"></script>
+<script src="desk.js?v=275"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
