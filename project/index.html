@@ -1685,6 +1685,8 @@
   .opts-card-done { opacity: .78; }
   /* Assigned holding: amber full border */
   .opts-assigned-live { border-left: 3px solid var(--warn); padding-left: 11px; background: color-mix(in oklch, var(--warn) 5%, var(--bg-1)); }
+  /* Sell CC from assigned position — accent teal to distinguish from exit/delete */
+  .opts-sell-cc-btn { color: var(--accent) !important; border-color: var(--accent) !important; font-weight: 700; }
   /* ── Card header row */
   .opts-card-hd { display: flex; align-items: center; gap: 7px; min-width: 0; }
   .opts-card-hd-r { margin-left: auto; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
@@ -4383,8 +4385,8 @@
   </div>
 </div>
 
-<script src="data.js?v=276"></script>
-<script src="desk.js?v=276"></script>
+<script src="data.js?v=277"></script>
+<script src="desk.js?v=277"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

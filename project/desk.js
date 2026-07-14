@@ -4561,7 +4561,15 @@ function rsAdjustGrade(grade, rsResult) {
   // 到期预估按当前现价：OTM → 全收权利金；ITM → 权利金 − 内在价值。
   // 可选手动记录 Mark（从券商抄当前权利金）得到浮动盈亏。
 
-  const _optDTE = expiryDate => Math.max(0, Math.ceil((new Date(expiryDate + "T21:00:00Z").getTime() - Date.now()) / 86400000));
+  // DTE: expiry day itself = 0. Compare calendar dates (UTC midnight) to avoid the
+  // ceil-of-a-fraction problem where "today at 2pm" → ceil(0.38) = 1 instead of 0.
+  const _optDTE = expiryDate => {
+    if (!expiryDate) return 0;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (expiryDate <= todayStr) return 0;
+    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+    return Math.round((new Date(expiryDate + "T00:00:00Z") - today) / 86400000);
+  };
 
   // Symbols that genuinely need a live spot: open positions (expiry settlement,
   // cushion, ITM estimate) and CSP-assigned stock still held (live equity P&L).
@@ -4644,11 +4652,12 @@ function rsAdjustGrade(grade, rsResult) {
   function _optFinalPnl(pos) {
     if (pos.status === "open") return null;
     if (pos.strat === "csp" && pos.status === "assigned") {
-      if (pos.assignedStockSold && pos.assignedExitPrice != null) {
+      // Still holding the assigned stock: equity P&L is unrealized — exclude from stats.
+      if (!pos.assignedStockSold) return null;
+      // Stock sold: full cycle settled = option premium + stock exit gain/loss.
+      if (pos.assignedExitPrice != null)
         return (pos.premium + pos.assignedExitPrice - pos.strike) * 100 * pos.qty;
-      }
-      // Not yet exited: use settlement spot as proxy (still unrealized)
-      return (pos.premium + (pos.settleSpot || pos.strike) - pos.strike) * 100 * pos.qty;
+      return null;
     }
     return pos.realized ?? 0;
   }
@@ -4814,6 +4823,7 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="opts-st-tag" style="color:var(--warn);border-color:var(--warn)">持有正股</span>
             ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
             <div class="opts-card-hd-r">
+              <button class="opts-mini-btn opts-sell-cc-btn" data-opt-sell-cc="${pos.id}" data-cc-sym="${pos.sym}" data-cc-qty="${pos.qty}" title="持有 ${stockShares} 股，可卖出 ${pos.qty} 张备兑 Call">+ CC</button>
               <button class="opts-mini-btn" data-opt-exit="${pos.id}">记录出仓</button>
               ${delBtn}
             </div>
@@ -4918,9 +4928,11 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="opts-stat-val ${cls}">${val}</div>
       ${sub ? `<div class="opts-stat-sub">${sub}</div>` : ""}
     </div>`;
-    const realizedSub = done.length
-      ? done.length + " 笔" + (liveAssigned.length ? ` · ${liveAssigned.length}笔持股中` : "")
-      : "";
+    // Settled count excludes liveAssigned (holding stock = unrealized)
+    const settledCount = done.length - liveAssigned.length;
+    const realizedSub = settledCount > 0
+      ? settledCount + " 笔已了结" + (liveAssigned.length ? ` · ${liveAssigned.length}笔持股中` : "")
+      : liveAssigned.length ? liveAssigned.length + "笔持股中" : "";
     const equityCell = liveAssigned.length ? cell(
       "正股浮盈",
       equityPnl == null ? "待更新" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl)),
@@ -4931,7 +4943,7 @@ function rsAdjustGrade(grade, rsResult) {
       ${cell("持仓权利金", prem > 0 ? fmt.usd(prem) : "—", "", open.length + " 笔持仓")}
       ${cell("CSP 现金占用", secured > 0 ? fmt.usd(secured) : "—", "", "保证金要求")}
       ${cell("持仓预估(现价)", open.length === 0 ? "—" : estKnown ? (est >= 0 ? "+" : "−") + "$" + Math.abs(est).toFixed(0) : "待更新", est > 0 ? "up" : est < 0 ? "down" : "")}
-      ${cell("已实现 P&L", done.length === 0 ? "—" : (realized >= 0 ? "+" : "−") + "$" + Math.abs(realized).toFixed(0), realized > 0 ? "up" : realized < 0 ? "down" : "", realizedSub)}
+      ${cell("已了结 P&L", settledCount === 0 ? "—" : (realized >= 0 ? "+" : "−") + "$" + Math.abs(realized).toFixed(0), realized > 0 ? "up" : realized < 0 ? "down" : "", realizedSub)}
       ${equityCell}
     </div>`;
   }
@@ -4989,7 +5001,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${cell("胜率", winRate + "%", wins >= done.length * 0.6 ? "up" : "down", wins + "/" + done.length + " 笔")}
         ${cell("被指派率", assignRate + "%", "", assigned.length + " 笔被行权")}
         ${cell("总权利金", "+" + fmt.usd(totalPrem), "up", done.length + " 笔收入")}
-        ${cell("已实现 P&L", (totalPnl >= 0 ? "+" : "−") + "$" + Math.abs(totalPnl).toFixed(0), totalPnlCls, "")}
+        ${cell("已了结 P&L", (totalPnl >= 0 ? "+" : "−") + "$" + Math.abs(totalPnl).toFixed(0), totalPnlCls, "")}
       </div>
       ${months.length > 1 ? `<div class="opts-month-wrap">
         <table class="opts-month-table">
@@ -5020,26 +5032,39 @@ function rsAdjustGrade(grade, rsResult) {
     const all = [...open, ...done];
 
     const liveAssigned = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
-    // Settled: sort by annualized return desc (unknown ann goes to bottom by date)
-    const settled = done
-      .filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold))
-      .sort((a, b) => {
-        const annA = _optAnn(a), annB = _optAnn(b);
-        if (annA === -Infinity && annB === -Infinity) return (b.closedAt || "").localeCompare(a.closedAt || "");
-        if (annA === -Infinity) return 1;
-        if (annB === -Infinity) return -1;
-        return annB - annA;
-      });
+
+    // Settled: split into 3 semantic sub-groups, each sorted by annualized return desc
+    const _sortByAnn = arr => arr.sort((a, b) => {
+      const annA = _optAnn(a), annB = _optAnn(b);
+      if (annA === -Infinity && annB === -Infinity) return (b.closedAt || "").localeCompare(a.closedAt || "");
+      if (annA === -Infinity) return 1;
+      if (annB === -Infinity) return -1;
+      return annB - annA;
+    });
+    const settledExpired   = _sortByAnn(done.filter(p => p.status === "expired"));
+    const settledClosed    = _sortByAnn(done.filter(p => p.status === "closed"));
+    const settledFullCycle = _sortByAnn(done.filter(p =>
+      p.status === "assigned" && !(p.strat === "csp" && !p.assignedStockSold)));
+    const totalSettled = settledExpired.length + settledClosed.length + settledFullCycle.length;
 
     const settledArrow = _optsSettledOpen ? "▾" : "▸";
-    const settledCards = _optsSettledOpen ? settled.map(_optDonePosCard).join("") : "";
+    const settledSection = totalSettled ? `
+      <div class="opts-sub-label opts-settled-toggle" style="cursor:pointer;user-select:none">
+        ${settledArrow} 已了结 · Settled · ${totalSettled}
+        <span style="font-size:9px;color:var(--accent);margin-left:4px">按年化排序</span>
+      </div>
+      ${_optsSettledOpen ? `
+        ${settledExpired.length ? `<div class="opts-sub-label" style="color:var(--up);padding-top:8px;font-size:9px">到期 OTM · Expired · ${settledExpired.length}</div>${settledExpired.map(_optDonePosCard).join("")}` : ""}
+        ${settledClosed.length  ? `<div class="opts-sub-label" style="color:var(--fg-2);padding-top:8px;font-size:9px">买回平仓 · Closed · ${settledClosed.length}</div>${settledClosed.map(_optDonePosCard).join("")}` : ""}
+        ${settledFullCycle.length ? `<div class="opts-sub-label" style="color:var(--accent);padding-top:8px;font-size:9px">完整轮转 · Full Cycle · ${settledFullCycle.length}</div>${settledFullCycle.map(_optDonePosCard).join("")}` : ""}
+      ` : ""}` : "";
 
     const body = (pending.length || open.length || done.length)
       ? `${_optSummaryHTML(open, done)}
          ${pending.length ? `<div class="opts-sub-label opts-sub-pending">待执行 · Pending · ${pending.length}</div>${pending.map(_optPendingCard).join("")}` : ""}
          ${open.length ? `<div class="opts-sub-label">持仓中 · Open · ${open.length}</div>${open.map(_optOpenPosCard).join("")}` : ""}
          ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}
-         ${settled.length ? `<div class="opts-sub-label opts-settled-toggle" style="cursor:pointer;user-select:none">${settledArrow} 已了结 · Settled · ${settled.length} <span style="font-size:9px;color:var(--accent);margin-left:4px">按年化排序</span></div>${settledCards}` : ""}
+         ${settledSection}
          ${_optWheelStatsHTML(all)}`
       : `<div class="opts-empty">暂无${currentOptMode === "real" ? "实盘" : "模拟"}期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
 
@@ -5088,6 +5113,11 @@ function rsAdjustGrade(grade, rsResult) {
     $$("[data-opt-exit]", root).forEach(btn => btn.addEventListener("click", () => {
       const pos = arr.find(p => p.id === btn.dataset.optExit);
       if (pos) openAssignedExitModal(pos);
+    }));
+    $$("[data-opt-sell-cc]", root).forEach(btn => btn.addEventListener("click", () => {
+      const sym = btn.dataset.ccSym;
+      const qty = parseInt(btn.dataset.ccQty) || 1;
+      openOptionsSellModal({ sym, strat: "cc", qty });
     }));
     $$("[data-opt-del]", root).forEach(btn => btn.addEventListener("click", () => {
       const idx = arr.findIndex(p => p.id === btn.dataset.optDel);
