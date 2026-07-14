@@ -240,6 +240,12 @@ export default async function handler(req, res) {
     } catch (_) {}
   }
 
-  res.setHeader("Cache-Control", "s-maxage=29, stale-while-revalidate=60");
+  // Edge-cache each identical (symbol-set) request for 45s. The client polls every 30s
+  // with a stable query string, so ~every other poll is served from the CDN WITHOUT
+  // invoking the function → roughly halves invocations, and multiple tabs/devices hitting
+  // the same edge dedupe onto one origin call. Max staleness ~45s (fine for swing trading).
+  // NOTE: no stale-while-revalidate — SWR revalidates in the background on every request,
+  // which re-invokes the function and defeats the dedup. A plain s-maxage cache does not.
+  res.setHeader("Cache-Control", "public, s-maxage=45");
   res.status(200).json({ results });
 }
