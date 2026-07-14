@@ -4304,17 +4304,39 @@ function rsAdjustGrade(grade, rsResult) {
       }))
       .sort((a, b) => (b.h.closedAt || "").localeCompare(a.h.closedAt || ""));
 
+    // Build partial items — partial closes of still-open positions, bucketed by last close date
+    const partialItems = [];
+    openItems.forEach(item => {
+      if (!item.partials.length) return;
+      const { h, partials } = item;
+      const sorted = [...partials].sort((a, b) => (a.closedAt||"").localeCompare(b.closedAt||""));
+      const closedQty = partials.reduce((s, c) => s + (c.qty || 0), 0);
+      const origQty   = closedQty + (h.qty || 0);
+      const trimPct   = origQty > 0 ? Math.round(closedQty / origQty * 100) : 0;
+      const pnlFinal  = partials.reduce((s, c) => s + (c.pnlFinal ?? 0), 0);
+      const avgRMult  = partials.length ? partials.reduce((s, c) => s + (c.rMult||0), 0) / partials.length : null;
+      partialItems.push({
+        h: { ...h, closedAt: sorted[sorted.length-1].closedAt, pnlFinal, qty: closedQty, rMult: avgRMult, trimPct },
+        from: "partial",
+        records: sorted,
+      });
+    });
+
     // Apply filter
-    const filteredOpen   = journalFilter === "closed" ? [] : openItems;
-    const filteredClosed = journalFilter === "open"   ? [] : closedItems;
+    const filteredOpen    = journalFilter === "closed" ? [] : openItems;
+    const filteredClosed  = journalFilter === "open"   ? [] : closedItems;
+    const filteredPartial = journalFilter === "open"   ? [] : partialItems;
 
     // Stats bar
     const allClosedTrades = groupTrades(CLOSED_POSITIONS);
     const wins = allClosedTrades.filter(t => t.pnlFinal > 0);
     const totalPnl = allClosedTrades.reduce((s, t) => s + t.pnlFinal, 0);
     const winRate = allClosedTrades.length ? Math.round(wins.length / allClosedTrades.length * 100) : null;
-    const statsBar = allClosedTrades.length > 0 ? `
+    const floatingPnl = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
+    const showStatsBar = allClosedTrades.length > 0 || HOLDINGS.length > 0;
+    const statsBar = showStatsBar ? `
       <div class="j-statsbar">
+        ${allClosedTrades.length > 0 ? `
         <div class="j-statsbar-item">
           <span class="j-statsbar-label">已平仓</span>
           <span class="j-statsbar-value">${allClosedTrades.length} 笔</span>
@@ -4329,51 +4351,64 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="j-statsbar-label">总盈亏</span>
           <span class="j-statsbar-value ${fmt.sign(totalPnl)}">${fmt.signed(Math.round(totalPnl))}</span>
         </div>
-        <div class="j-statsbar-sep"></div>
+        <div class="j-statsbar-sep"></div>` : ""}
         <div class="j-statsbar-item">
           <span class="j-statsbar-label">持仓中</span>
           <span class="j-statsbar-value">${HOLDINGS.length} 笔</span>
         </div>
+        ${HOLDINGS.length > 0 ? `
+        <div class="j-statsbar-sep"></div>
+        <div class="j-statsbar-item">
+          <span class="j-statsbar-label">持仓浮盈</span>
+          <span class="j-statsbar-value ${floatingPnl >= 0 ? "up" : "down"}">${fmt.signed(Math.round(floatingPnl))}</span>
+        </div>` : ""}
       </div>` : "";
 
-    // Attribution summary (closed trades with tags)
-    const summaryHTML = journalSummaryHTML(closedItems);
+    // Attribution summary (closed trades with tags, including partially-closed open positions)
+    const summaryHTML = journalSummaryHTML([...closedItems, ...partialItems]);
 
     // Group into year-month buckets
     const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
     const groups = {};
     filteredOpen.forEach(item => {
       const key = item.h.entry?.slice(0, 7) || "0000-00";
-      if (!groups[key]) groups[key] = { open: [], closed: [] };
+      if (!groups[key]) groups[key] = { open: [], closed: [], partial: [] };
       groups[key].open.push(item);
     });
     filteredClosed.forEach(item => {
       const key = item.h.closedAt?.slice(0, 7) || "0000-00";
-      if (!groups[key]) groups[key] = { open: [], closed: [] };
+      if (!groups[key]) groups[key] = { open: [], closed: [], partial: [] };
       groups[key].closed.push(item);
+    });
+    filteredPartial.forEach(item => {
+      const key = item.h.closedAt?.slice(0, 7) || "0000-00";
+      if (!groups[key]) groups[key] = { open: [], closed: [], partial: [] };
+      groups[key].partial.push(item);
     });
 
     const groupsHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(key => {
-      const { open: openG, closed: closedG } = groups[key];
+      const { open: openG, closed: closedG, partial: partialG } = groups[key];
       const [yr, mo] = key.split("-");
       const label = key === "0000-00" ? "未知日期" : `${yr}年 ${MO_ZH[parseInt(mo) - 1]}`;
       const mWins = closedG.filter(x => (x.h.pnlFinal || 0) > 0);
-      const mPnl  = closedG.reduce((s, x) => s + (x.h.pnlFinal || 0), 0);
+      const mPnl  = [...closedG, ...partialG].reduce((s, x) => s + (x.h.pnlFinal || 0), 0);
+      const mExitCount = closedG.length + partialG.length;
       let mStats = "";
-      if (closedG.length > 0 && openG.length > 0)
-        mStats = `${closedG.length}笔平 · ${mWins.length}胜 · ${fmt.signed(Math.round(mPnl))} · ${openG.length}笔持仓`;
-      else if (closedG.length > 0)
-        mStats = `${closedG.length}笔 · ${mWins.length}胜${closedG.length - mWins.length}负 · ${fmt.signed(Math.round(mPnl))}`;
+      if (mExitCount > 0 && openG.length > 0)
+        mStats = `${mExitCount}笔平 · ${mWins.length}胜 · ${fmt.signed(Math.round(mPnl))} · ${openG.length}笔持仓`;
+      else if (mExitCount > 0)
+        mStats = `${mExitCount}笔 · ${mWins.length}胜${closedG.length - mWins.length}负 · ${fmt.signed(Math.round(mPnl))}`;
       else if (openG.length > 0)
         mStats = `${openG.length}笔持仓中`;
 
-      const needsSep = openG.length > 0 && closedG.length > 0;
+      const needsSep = openG.length > 0 && (closedG.length > 0 || partialG.length > 0);
       const openHTML = openG.length ? `
         ${needsSep ? `<div class="jc-section-sep">持仓中</div>` : ""}
         ${openG.map(x => journalCardHTML(x.h, "open", x.partials)).join("")}` : "";
-      const closedHTML = closedG.length ? `
+      const closedHTML = (closedG.length || partialG.length) ? `
         ${needsSep ? `<div class="jc-section-sep">已平仓</div>` : ""}
-        ${closedG.map(x => journalCardHTML(x.h, "closed", [], x.records)).join("")}` : "";
+        ${closedG.map(x => journalCardHTML(x.h, "closed", [], x.records)).join("")}
+        ${partialG.map(x => journalCardHTML(x.h, "partial", [], x.records)).join("")}` : "";
 
       return `<div class="jm-group">
         <div class="jm-header">
@@ -4441,10 +4476,10 @@ function rsAdjustGrade(grade, rsResult) {
     });
   }
 
-  // partials: partial-close records for an open position
-  // records:  all exit records for a grouped closed trade
+  // partials: partial-close records for an open position (from="open")
+  // records:  all exit records for a closed/partial-closed trade (from="closed"|"partial")
   function journalCardHTML(h, from, partials = [], records = []) {
-    const isClosed = from === "closed";
+    const isClosed = from === "closed" || from === "partial";
     const hasPartials = partials.length > 0;
     const multiExit = records.length > 1;
     const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
@@ -4452,7 +4487,11 @@ function rsAdjustGrade(grade, rsResult) {
 
     // Status badge
     let badgeColor, badgeTxt;
-    if (isClosed) {
+    if (from === "partial") {
+      badgeColor = "oklch(0.76 0.13 60)";
+      badgeTxt = `已减仓 ${h.trimPct || 0}%`;
+      if (records.length > 1) badgeTxt += ` · ${records.length}次`;
+    } else if (isClosed) {
       const _pa = pnlAmt ?? 0;
       badgeColor = _pa > 0 ? "var(--up)" : _pa < 0 ? "var(--down)" : "var(--neutral)";
       badgeTxt = _pa > 0 ? "盈利" : _pa < 0 ? "亏损" : "持平";
@@ -4500,8 +4539,8 @@ function rsAdjustGrade(grade, rsResult) {
         }).join("")}
       </div>`).join("");
 
-    // Exit records mini-list (only for multi-exit closed trades)
-    const exitsHTML = isClosed && multiExit ? `
+    // Exit records mini-list — for multi-exit closed trades, and always for partial-close cards
+    const exitsHTML = isClosed && (multiExit || from === "partial") && records.length > 0 ? `
       <div class="jc-exits">
         ${records.map(c => {
           const isFull = c.exitReason !== "partial";
