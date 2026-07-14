@@ -1689,6 +1689,12 @@
   .opts-sell-cc-btn { color: var(--accent) !important; border-color: var(--accent) !important; font-weight: 700; }
   .opts-wheel-badge { font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--accent); color: var(--accent); font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
   .opts-linked-cc-row { font-size: 10.5px; color: var(--fg-2); padding: 6px 0 2px; border-top: 1px solid var(--line); margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 7px; }
+  .opts-wheel-flow { font-size: 9px; color: var(--accent); letter-spacing: .04em; opacity: 0.8; flex-shrink: 0; }
+  .opts-wheel-toggle-btn { font-size: 10px; }
+  .opts-wheel-sub-cards { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 2px; display: flex; flex-direction: column; }
+  .opts-wheel-sub-label { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); padding: 4px 0; }
+  .opts-wheel-sub-cards .opts-pos-card { border: 1px solid var(--bg-3); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; }
   /* ── Card header row */
   .opts-card-hd { display: flex; align-items: center; gap: 7px; min-width: 0; }
   .opts-card-hd-r { margin-left: auto; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
@@ -4388,8 +4394,8 @@
   </div>
 </div>
 
-<script src="data.js?v=282"></script>
-<script src="desk.js?v=282"></script>
+<script src="data.js?v=283"></script>
+<script src="desk.js?v=283"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
