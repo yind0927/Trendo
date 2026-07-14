@@ -3676,9 +3676,16 @@ function rsAdjustGrade(grade, rsResult) {
     // (each poll = 2 upstream fetches per symbol). Stretch to 10min; pull-to-refresh,
     // tab re-focus and order submission still force an immediate fetch (lastPriceFetch=0).
     const hasCrypto = [...SIM_HOLDINGS, ...HOLDINGS, ...SIM_PENDING].some(h => h.kind === "crypto");
-    const effInterval = (!isUSMarketOpen() && !hasCrypto)
-      ? Math.max(priceIntervalMs, 600000)
-      : priceIntervalMs;
+    let effInterval = priceIntervalMs;
+    // Off-hours (market closed, no crypto): every quote is frozen at the last close, so
+    // stretch to 10min.
+    if (!isUSMarketOpen() && !hasCrypto) effInterval = Math.max(effInterval, 600000);
+    // Backgrounded tab: nobody is watching the numbers. A dashboard left open on a second
+    // monitor / background tab was polling every 30s all session and burning serverless CPU
+    // for a page in view of no one. Stretch to 5min while hidden — pending orders still fill
+    // (background order-check worker + the visibilitychange handler forces an immediate
+    // catch-up fetch the moment the tab is foregrounded again).
+    if (document.hidden) effInterval = Math.max(effInterval, 300000);
     if (now - lastPriceFetch >= effInterval) {
       lastPriceFetch = now;
       fetchPrices();
