@@ -1687,7 +1687,7 @@
   .opts-assigned-live { border-left: 3px solid var(--warn); padding-left: 11px; background: color-mix(in oklch, var(--warn) 5%, var(--bg-1)); }
   /* Sell CC from assigned position — accent teal to distinguish from exit/delete */
   .opts-sell-cc-btn { color: var(--accent) !important; border-color: var(--accent) !important; font-weight: 700; }
-  .opts-wheel-badge { font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid oklch(0.72 0.14 270); color: oklch(0.72 0.14 270); font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
+  .opts-wheel-badge { font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--accent); color: var(--accent); font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
   .opts-linked-cc-row { font-size: 10.5px; color: var(--fg-2); padding: 6px 0 2px; border-top: 1px solid var(--line); margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   /* ── Card header row */
   .opts-card-hd { display: flex; align-items: center; gap: 7px; min-width: 0; }
@@ -4388,8 +4388,8 @@
   </div>
 </div>
 
-<script src="data.js?v=281"></script>
-<script src="desk.js?v=281"></script>
+<script src="data.js?v=282"></script>
+<script src="desk.js?v=282"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
