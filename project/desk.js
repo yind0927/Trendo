@@ -4233,19 +4233,16 @@ function rsAdjustGrade(grade, rsResult) {
     if (saved) saveToStorage();
   }
 
-  function journalSummaryHTML(closedItems) {
+  function journalSummaryHTML(closedItems, openItems = []) {
     const taggedClosed = closedItems.filter(x => x.h.journalTags?.length);
-    if (taggedClosed.length < 2) return "";
-    const wins   = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) > 0);
-    const losses  = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) < 0);
+    const taggedOpen   = openItems.filter(x => x.h.journalTags?.length);
+    if (taggedClosed.length < 2 && taggedOpen.length === 0) return "";
+
     const countTags = items => {
       const cnt = {};
       items.forEach(x => (x.h.journalTags || []).forEach(id => { cnt[id] = (cnt[id] || 0) + 1; }));
       return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 4);
     };
-    const topWin  = countTags(wins);
-    const topLoss = countTags(losses);
-    if (!topWin.length && !topLoss.length) return "";
     const tagLabel = id => JOURNAL_TAGS.find(t => t.id === id)?.label || id;
     const tagColor = id => JOURNAL_TAGS.find(t => t.id === id)?.color || "var(--fg-3)";
     const mkRows = rows => rows.length
@@ -4254,22 +4251,51 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="jts-count">×${n}</span>
         </div>`).join("")
       : `<div class="jts-empty">暂无标注</div>`;
-    return `<div class="jt-summary">
-      <div class="jts-header">
-        <span class="jts-title">归因摘要</span>
-        <span class="jts-sub">Insight · ${taggedClosed.length} 笔已标注</span>
-      </div>
+    const mkCols = (leftHead, leftRows, rightHead, rightRows) => `
       <div class="jts-cols">
         <div class="jts-col">
-          <div class="jts-col-head" style="color:var(--up)">盈利主因</div>
-          ${mkRows(topWin)}
+          <div class="jts-col-head" style="color:var(--up)">${leftHead}</div>
+          ${mkRows(leftRows)}
         </div>
         <div class="jts-divider"></div>
         <div class="jts-col">
-          <div class="jts-col-head" style="color:var(--down)">亏损主因</div>
-          ${mkRows(topLoss)}
+          <div class="jts-col-head" style="color:var(--down)">${rightHead}</div>
+          ${mkRows(rightRows)}
         </div>
+      </div>`;
+
+    // Closed / partial section (盈利 vs 亏损 by realized P&L)
+    let closedSection = "";
+    if (taggedClosed.length >= 2) {
+      const wins   = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) > 0);
+      const losses = taggedClosed.filter(x => (x.h.pnlFinal ?? 0) < 0);
+      const topWin  = countTags(wins);
+      const topLoss = countTags(losses);
+      if (topWin.length || topLoss.length)
+        closedSection = mkCols("盈利主因", topWin, "亏损主因", topLoss);
+    }
+
+    // Open holdings section (浮盈 vs 浮亏 by floating P&L)
+    let openSection = "";
+    if (taggedOpen.length >= 1) {
+      const gainers = taggedOpen.filter(x => (x.h.pnlDollar ?? 0) > 0);
+      const losers  = taggedOpen.filter(x => (x.h.pnlDollar ?? 0) < 0);
+      openSection = mkCols("浮盈主因", countTags(gainers), "浮亏主因", countTags(losers));
+    }
+
+    if (!closedSection && !openSection) return "";
+
+    const hasBoth = closedSection && openSection;
+    const totalTagged = taggedClosed.length + taggedOpen.length;
+    return `<div class="jt-summary">
+      <div class="jts-header">
+        <span class="jts-title">归因摘要</span>
+        <span class="jts-sub">Insight · ${totalTagged} 笔已标注</span>
       </div>
+      ${hasBoth ? `<div class="jts-sub-header">已平仓 · ${taggedClosed.length} 笔</div>` : ""}
+      ${closedSection}
+      ${hasBoth ? `<div class="jts-sub-header" style="margin-top:12px">持仓中 · ${taggedOpen.length} 笔</div>` : ""}
+      ${openSection}
     </div>`;
   }
 
@@ -4364,8 +4390,8 @@ function rsAdjustGrade(grade, rsResult) {
         </div>` : ""}
       </div>` : "";
 
-    // Attribution summary (closed trades with tags, including partially-closed open positions)
-    const summaryHTML = journalSummaryHTML([...closedItems, ...partialItems]);
+    // Attribution summary — closed/partial by realized P&L, open holdings by floating P&L
+    const summaryHTML = journalSummaryHTML([...closedItems, ...partialItems], openItems);
 
     // Group into year-month buckets
     const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
@@ -4454,7 +4480,7 @@ function rsAdjustGrade(grade, rsResult) {
         }
         // Refresh attribution summary
         const sumEl = feed.querySelector(".jt-summary");
-        const newSum = journalSummaryHTML(closedItems);
+        const newSum = journalSummaryHTML([...closedItems, ...partialItems], openItems);
         if (sumEl) { if (newSum) sumEl.outerHTML = newSum; else sumEl.remove(); }
         else if (newSum) {
           const sb = feed.querySelector(".j-statsbar");
