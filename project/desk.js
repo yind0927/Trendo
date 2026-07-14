@@ -4668,6 +4668,18 @@ function rsAdjustGrade(grade, rsResult) {
       }
       if (!p.status) p.status = "open";
     });
+    // Retroactive Wheel link: CC positions created before v280 have no linkedCspId.
+    // Auto-detect: if an open/pending CC has the same symbol as an assigned CSP
+    // in the same array that still holds stock, link them now.
+    [SIM_OPTIONS, REAL_OPTIONS].forEach(arr => {
+      arr.filter(p => p.strat === "cc" && !p.linkedCspId && (p.status === "open" || p.status === "pending"))
+        .forEach(cc => {
+          const csp = arr.find(p =>
+            p.sym === cc.sym && p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold
+          );
+          if (csp) cc.linkedCspId = csp.id;
+        });
+    });
   }
 
   function _optIntrinsic(pos, spot) {
