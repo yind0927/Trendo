@@ -4703,6 +4703,15 @@ function rsAdjustGrade(grade, rsResult) {
           // CC: stock called away at strike — capture both components now
           const stockGain = pos.underlyingAtEntry ? (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty : 0;
           pos.realized = (pos.premium - intrinsic) * 100 * pos.qty + stockGain;
+          // Auto-complete Wheel: linked CSP's stock was called away at this strike
+          if (pos.linkedCspId) {
+            const parentCsp = [...SIM_OPTIONS, ...REAL_OPTIONS].find(p => p.id === pos.linkedCspId);
+            if (parentCsp && parentCsp.status === "assigned" && !parentCsp.assignedStockSold) {
+              parentCsp.assignedStockSold = true;
+              parentCsp.assignedExitPrice = pos.strike;
+              parentCsp.assignedExitDate  = pos.closedAt;
+            }
+          }
         }
       } else {
         pos.status = "expired";
@@ -4774,6 +4783,7 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
         <span class="opts-dte-tag">${dte}d</span>
         ${pos.entryDelta != null ? `<span class="opts-delta-tag">Δ${pos.entryDelta.toFixed(2)}</span>` : ""}
+        ${pos.linkedCspId ? `<span class="opts-wheel-badge">轮组</span>` : ""}
         ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
         <div class="opts-card-hd-r">
           <button class="opts-mini-btn" data-opt-roll="${pos.id}">滚仓</button>
@@ -4902,6 +4912,13 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="opts-equity-rows">
             <span class="opts-equity-row"><span class="muted">合计估算</span>${totalEst != null ? `<b class="${totalCls}">${totalEst >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalEst))}</b><span class="muted" style="font-size:9px">期权+正股 · 实时</span>` : `<span class="muted">等待现价更新</span>`}</span>
           </div>
+          ${(() => {
+            const activeCC = _activeOpts().find(p => p.linkedCspId === pos.id && p.strat === "cc" && p.status === "open");
+            if (!activeCC) return "";
+            const ccDTE = _optDTE(activeCC.expiry);
+            const ccPrem = activeCC.premium * 100 * activeCC.qty;
+            return `<div class="opts-linked-cc-row"><span class="opts-wheel-badge">轮组</span><span class="muted">备兑CC中:</span> $${activeCC.strike}C · 到期 ${activeCC.expiry.slice(5)} · DTE ${ccDTE}d · <b class="up">+${fmt.usd(ccPrem)}</b></div>`;
+          })()}
         </div>`;
       } else {
         // Stock sold — show final breakdown
@@ -5182,7 +5199,8 @@ function rsAdjustGrade(grade, rsResult) {
     $$("[data-opt-sell-cc]", root).forEach(btn => btn.addEventListener("click", () => {
       const sym = btn.dataset.ccSym;
       const qty = parseInt(btn.dataset.ccQty) || 1;
-      openOptionsSellModal({ sym, strat: "cc", qty });
+      const linkedCspId = btn.dataset.optSellCc; // pos.id of the parent CSP
+      openOptionsSellModal({ sym, strat: "cc", qty, linkedCspId });
     }));
     $$("[data-opt-del]", root).forEach(btn => btn.addEventListener("click", () => {
       const idx = arr.findIndex(p => p.id === btn.dataset.optDel);
@@ -5334,16 +5352,27 @@ function rsAdjustGrade(grade, rsResult) {
       const entryDelta = deltaEl ? (parseFloat(deltaEl.value) || null) : null;
       const optArr = _activeOpts();
       if (isPending) {
+        // Carry through explicit link; do NOT auto-detect here — CC isn't open yet
+        const pendingLink = prefill.linkedCspId || null;
         optArr.push({
           id: Date.now().toString(36),
           sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
           strike, expiry, qty,
           targetPremium: prem > 0 ? prem : null,
           ...(entryDelta > 0 ? { entryDelta } : {}),
+          ...(pendingLink ? { linkedCspId: pendingLink } : {}),
           status: "pending",
           createdAt: new Date().toISOString().slice(0, 10),
         });
       } else {
+        // Auto-detect parent CSP when not explicitly provided (direct sell)
+        let linkedCspId = prefill.linkedCspId || null;
+        if (!linkedCspId && !isCSP) {
+          const parentCsp = optArr.find(p =>
+            p.sym === sym && p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold
+          );
+          if (parentCsp) linkedCspId = parentCsp.id;
+        }
         const entryDTE = _optDTE(expiry);
         optArr.push({
           id: Date.now().toString(36),
@@ -5351,6 +5380,7 @@ function rsAdjustGrade(grade, rsResult) {
           strike, expiry, qty, premium: prem,
           entryDTE,
           ...(entryDelta > 0 ? { entryDelta } : {}),
+          ...(linkedCspId ? { linkedCspId } : {}),
           underlyingAtEntry: optSpot(sym) || null,
           entryDate: new Date().toISOString().slice(0, 10), status: "open",
         });
@@ -5402,7 +5432,7 @@ function rsAdjustGrade(grade, rsResult) {
       pos.closedAt = (closeDateEl && closeDateEl.value) || new Date().toISOString().slice(0, 10);
       saveToStorage();
       modal.style.display = "none";
-      if (isRoll) openOptionsSellModal({ sym: pos.sym, strat: pos.strat, qty: pos.qty });
+      if (isRoll) openOptionsSellModal({ sym: pos.sym, strat: pos.strat, qty: pos.qty, linkedCspId: pos.linkedCspId });
       else renderSimOptions();
     };
     modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
@@ -5458,6 +5488,14 @@ function rsAdjustGrade(grade, rsResult) {
       pos.entryDate = pos.openedAt;
       pos.entryDTE = pos.expiry ? _optDTE(pos.expiry) : null;
       pos.underlyingAtEntry = spot || null;
+      // Auto-link to assigned CSP for the same symbol if not already linked
+      if (!pos.linkedCspId && pos.strat === "cc") {
+        const optArr = _activeOpts();
+        const parentCsp = optArr.find(p =>
+          p.sym === pos.sym && p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold
+        );
+        if (parentCsp) pos.linkedCspId = parentCsp.id;
+      }
       saveToStorage();
       modal.style.display = "none";
       renderSimOptions();
