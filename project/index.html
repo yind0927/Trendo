@@ -1710,6 +1710,9 @@
   .opts-pnl-side-label { font-size: 9px; color: var(--fg-3); }
   .opts-pnl-side-val { font-size: 14px; font-weight: 700; font-family: var(--f-mono); }
   .opts-pnl-side-sub { font-size: 9px; color: var(--fg-3); }
+  .opts-pnl-occ-row { display: flex; justify-content: space-between; font-size: 10px; color: var(--fg-2); line-height: 1.6; gap: 8px; }
+  .opts-pnl-occ-total { font-weight: 700; color: var(--fg-1); border-top: 1px solid var(--line); margin-top: 2px; padding-top: 2px; }
+  .opts-pnl-item-sep { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
   .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 7px; }
   .opts-wheel-flow { font-size: 9px; color: var(--accent); letter-spacing: .04em; opacity: 0.8; flex-shrink: 0; }
   .opts-wheel-toggle-btn { font-size: 10px; }
@@ -4415,8 +4418,8 @@
   </div>
 </div>
 
-<script src="data.js?v=284"></script>
-<script src="desk.js?v=284"></script>
+<script src="data.js?v=285"></script>
+<script src="desk.js?v=285"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
