@@ -5088,6 +5088,12 @@ function rsAdjustGrade(grade, rsResult) {
     const expiredPosns  = settledPosns.filter(p => p.status === "expired");
     const closedPosns   = settledPosns.filter(p => p.status === "closed");
     const assignedPosns = settledPosns.filter(p => p.status === "assigned");
+    // CSP指派率：全部done里的CSP（含liveAssigned），分母=全部CSP
+    const allCspDone      = done.filter(p => p.strat === "csp");
+    const allCspAssigned  = done.filter(p => p.strat === "csp" && p.status === "assigned");
+    const cspAssignRate   = allCspDone.length > 0
+      ? (allCspAssigned.length / allCspDone.length * 100).toFixed(0) + "%"
+      : "—";
     const realizedPnl   = settledPosns.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
     const settledPrem   = done.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
     const openPrem      = open.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
@@ -5178,7 +5184,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       <div class="opts-ws-grid">
         ${cell("期权胜率", winRate, winTotal > 0 && wins / winTotal >= 0.6 ? "up" : "down", "OTM+盈利平仓 · " + wins + "/" + winTotal + "笔")}
-        ${cell("被指派", assignedPosns.length + "笔", "", settledPosns.length ? (assignedPosns.length / settledPosns.length * 100).toFixed(0) + "% 被行权" : "")}
+        ${cell("CSP指派率", cspAssignRate, "", allCspAssigned.length + "/" + allCspDone.length + "笔CSP")}
         ${cell("平均年化", avgAnn ? (parseFloat(avgAnn) >= 0 ? "+" : "") + avgAnn + "%" : "—", avgAnn && parseFloat(avgAnn) >= 0 ? "up" : "down", annVals.length + " 笔计算")}
         ${cell("已收权利金", "+" + fmt.usd(settledPrem + openPrem), "up", "历史累计")}
       </div>
