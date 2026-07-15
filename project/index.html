@@ -1689,6 +1689,27 @@
   .opts-sell-cc-btn { color: var(--accent) !important; border-color: var(--accent) !important; font-weight: 700; }
   .opts-wheel-badge { font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--accent); color: var(--accent); font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
   .opts-linked-cc-row { font-size: 10.5px; color: var(--fg-2); padding: 6px 0 2px; border-top: 1px solid var(--line); margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  /* ── Three-layer P&L breakdown row */
+  .opts-pnl-row { display: flex; align-items: flex-end; gap: 6px; padding: 8px 0 2px; border-top: 1px solid var(--line); margin-top: 2px; }
+  .opts-pnl-col { flex: 1; min-width: 0; }
+  .opts-pnl-total { flex: 1.3; }
+  .opts-pnl-label { font-size: 9px; color: var(--fg-3); margin-bottom: 2px; }
+  .opts-pnl-val { font-size: 13px; font-weight: 700; line-height: 1; }
+  .opts-pnl-op { color: var(--fg-3); font-size: 14px; padding-bottom: 1px; flex-shrink: 0; }
+  /* ── Summary hero P&L block */
+  .opts-summary-block { margin-bottom: 10px; }
+  .opts-pnl-hero { background: var(--bg-1); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+  .opts-pnl-hero-split { display: flex; align-items: stretch; gap: 0; }
+  .opts-pnl-hero-main { flex: 1.4; min-width: 0; }
+  .opts-pnl-hero-div { width: 1px; background: var(--line); margin: 0 16px; flex-shrink: 0; }
+  .opts-pnl-hero-side { flex: 1; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+  .opts-pnl-hero-label { font-size: 9px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+  .opts-pnl-hero-val { font-size: 22px; font-weight: 800; line-height: 1; font-family: var(--f-mono); margin-bottom: 4px; }
+  .opts-pnl-hero-sub { font-size: 9.5px; color: var(--fg-3); }
+  .opts-pnl-side-item { display: flex; flex-direction: column; gap: 2px; }
+  .opts-pnl-side-label { font-size: 9px; color: var(--fg-3); }
+  .opts-pnl-side-val { font-size: 14px; font-weight: 700; font-family: var(--f-mono); }
+  .opts-pnl-side-sub { font-size: 9px; color: var(--fg-3); }
   .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 7px; }
   .opts-wheel-flow { font-size: 9px; color: var(--accent); letter-spacing: .04em; opacity: 0.8; flex-shrink: 0; }
   .opts-wheel-toggle-btn { font-size: 10px; }
@@ -4394,8 +4415,8 @@
   </div>
 </div>
 
-<script src="data.js?v=283"></script>
-<script src="desk.js?v=283"></script>
+<script src="data.js?v=284"></script>
+<script src="desk.js?v=284"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

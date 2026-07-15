@@ -4749,6 +4749,65 @@ function rsAdjustGrade(grade, rsResult) {
     return pos.realized ?? 0;
   }
 
+  // Returns { income, cost, net, incomeLabel, costLabel, costOp } for any settled position
+  function _optPnlBreakdown(pos) {
+    if (pos.status === "expired") {
+      const income = pos.premium * 100 * pos.qty;
+      return { income, cost: 0, net: income, incomeLabel: "权利金收入", costLabel: "买回成本", costOp: "sub" };
+    }
+    if (pos.status === "closed") {
+      const income = pos.premium * 100 * pos.qty;
+      const cost   = (pos.closePremium || 0) * 100 * pos.qty;
+      return { income, cost, net: income - cost, incomeLabel: "权利金收入", costLabel: "买回成本", costOp: "sub" };
+    }
+    if (pos.status === "assigned" && pos.strat === "csp" && pos.assignedStockSold && pos.assignedExitPrice != null) {
+      const income   = pos.premium * 100 * pos.qty;
+      const stockPnl = (pos.assignedExitPrice - pos.strike) * pos.qty * 100;
+      return { income, cost: stockPnl, net: income + stockPnl, incomeLabel: "期权收入", costLabel: "正股盈亏", costOp: "add" };
+    }
+    if (pos.status === "assigned" && pos.strat === "cc") {
+      const optPnl    = pos.realized ?? 0;
+      const stockGain = pos.underlyingAtEntry != null ? (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty : null;
+      const net       = stockGain != null ? optPnl + stockGain : optPnl;
+      return { income: optPnl, cost: stockGain, net, incomeLabel: "期权盈亏", costLabel: stockGain != null ? "正股增益" : null, costOp: stockGain != null ? "add" : null };
+    }
+    return null;
+  }
+
+  // Renders the canonical 3-column P&L breakdown row: income [op] cost = net
+  function _pnlBreakdownHTML(bd) {
+    if (!bd) return "";
+    const netCls = bd.net >= 0 ? "up" : "down";
+    let costCol = "";
+    if (bd.costLabel) {
+      let costFmt, costCls;
+      if (bd.costOp === "sub") {
+        costFmt = bd.cost === 0 ? "—" : "−" + fmt.usd(bd.cost);
+        costCls = bd.cost > 0 ? "down" : "";
+      } else {
+        costFmt = (bd.cost == null ? "—" : (bd.cost >= 0 ? "+" : "−") + fmt.usd(Math.abs(bd.cost)));
+        costCls = bd.cost == null ? "" : bd.cost >= 0 ? "up" : "down";
+      }
+      costCol = `<div class="opts-pnl-op">${bd.costOp === "sub" ? "−" : "+"}</div>
+        <div class="opts-pnl-col">
+          <div class="opts-pnl-label">${bd.costLabel}</div>
+          <div class="opts-pnl-val ${costCls}">${costFmt}</div>
+        </div>`;
+    }
+    return `<div class="opts-pnl-row">
+      <div class="opts-pnl-col">
+        <div class="opts-pnl-label">${bd.incomeLabel}</div>
+        <div class="opts-pnl-val up">+${fmt.usd(bd.income)}</div>
+      </div>
+      ${costCol}
+      <div class="opts-pnl-op">=</div>
+      <div class="opts-pnl-col opts-pnl-total">
+        <div class="opts-pnl-label">净盈亏</div>
+        <div class="opts-pnl-val ${netCls}">${bd.net >= 0 ? "+" : "−"}${fmt.usd(Math.abs(bd.net))}</div>
+      </div>
+    </div>`;
+  }
+
   // ── Position cards ────────────────────────────────────────────────────────
   function _optOpenPosCard(pos) {
     const spot = optSpot(pos.sym);
@@ -4777,16 +4836,16 @@ function rsAdjustGrade(grade, rsResult) {
     // Floating P&L via manually recorded current option price (broker's mark/mid)
     let markRow;
     if (pos.manualMark != null) {
-      const float_ = (pos.premium - pos.manualMark) * 100 * pos.qty;
-      const cap = pos.premium > 0 ? (pos.premium - pos.manualMark) / pos.premium * 100 : 0;
-      const fCls = float_ > 0 ? "up" : float_ < 0 ? "down" : "";
-      markRow = `<span class="opts-mark-tag" data-opt-mark="${pos.id}" title="点击更新当前价">
-        当前价 $${pos.manualMark.toFixed(2)}<span class="muted" style="font-size:9px">@${(pos.manualMarkAt || "").slice(5)}</span></span>
-        浮盈 <b class="${fCls}">${float_ >= 0 ? "+" : "−"}$${Math.abs(float_).toFixed(0)}</b>
-        <span class="muted" style="font-size:9.5px">(${cap.toFixed(0)}%权利金已实现)</span>`;
+      const float_    = (pos.premium - pos.manualMark) * 100 * pos.qty;
+      const remaining = pos.manualMark * 100 * pos.qty;
+      const cap       = pos.premium > 0 ? (pos.premium - pos.manualMark) / pos.premium * 100 : 0;
+      const fCls      = float_ > 0 ? "up" : float_ < 0 ? "down" : "";
+      markRow = `<span class="opts-mark-tag" data-opt-mark="${pos.id}" title="点击更新当前价">现价 $${pos.manualMark.toFixed(2)}<span class="muted" style="font-size:9px"> @${(pos.manualMarkAt || "").slice(5)}</span></span>
+        <span class="muted">已捕获</span> <b class="${fCls}">${float_ >= 0 ? "+" : "−"}$${Math.abs(float_).toFixed(0)}</b>
+        <span class="muted" style="font-size:9.5px">(${cap.toFixed(0)}%) · 尚余 $${remaining.toFixed(0)}</span>`;
     } else {
       markRow = `<span class="opts-mark-tag opts-mark-empty" data-opt-mark="${pos.id}">+ 记录浮盈</span>
-        <span class="muted" style="font-size:9.5px">从券商App记录当前期权价格，计算持仓浮盈</span>`;
+        <span class="muted" style="font-size:9.5px">记录现价，查看已捕获权利金</span>`;
     }
 
     const cushionPct = spot ? (isCSP ? (spot - pos.strike) : (pos.strike - spot)) / spot * 100 : null;
@@ -4807,7 +4866,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="opts-card-metrics">
         <div class="opts-card-m"><div class="opts-card-ml">权利金/张</div><div class="opts-card-mv up">$${pos.premium.toFixed(2)}</div></div>
         <div class="opts-card-m"><div class="opts-card-ml">数量</div><div class="opts-card-mv">${pos.qty}张</div></div>
-        <div class="opts-card-m"><div class="opts-card-ml">总收入</div><div class="opts-card-mv up">+$${premTotal.toFixed(0)}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">最大盈利</div><div class="opts-card-mv up" title="OTM到期时全额获得">+$${premTotal.toFixed(0)}</div></div>
         <div class="opts-card-m"><div class="opts-card-ml">${isCSP ? "安全垫" : "溢价距"}</div><div class="opts-card-mv ${cushionPct == null ? "dim" : cushionPct >= 0 ? "up" : "warn"}">${cushionPct == null ? "—" : (cushionPct >= 0 ? "+" : "") + cushionPct.toFixed(1) + "%"}</div></div>
       </div>
       <div class="opts-prog-wrap" title="时间损耗 ${elapsed}/${totalDays} 天"><div class="opts-prog-fill" style="width:${timePct.toFixed(0)}%"></div></div>
@@ -4853,35 +4912,36 @@ function rsAdjustGrade(grade, rsResult) {
 
   function _optDoneMetaRow(pos) {
     const items = [];
-    if (pos.entryDTE != null) items.push({ l: "入场DTE", v: pos.entryDTE + "天", cls: "" });
-    if (pos.entryDelta != null) items.push({ l: "入场Delta", v: "Δ" + pos.entryDelta.toFixed(2), cls: "" });
+    if (pos.entryDTE != null)   items.push({ l: "入场DTE", v: pos.entryDTE + "天", cls: "" });
+    if (pos.entryDelta != null) items.push({ l: "入场Δ",   v: "Δ" + pos.entryDelta.toFixed(2), cls: "" });
     const daysHeld = pos.entryDate && pos.closedAt
       ? Math.max(1, Math.round((new Date(pos.closedAt) - new Date(pos.entryDate)) / 86400000))
       : null;
     if (daysHeld != null) items.push({ l: "持仓天数", v: daysHeld + "天", cls: "" });
-    let capRate = null;
-    if (pos.status === "expired") capRate = 100;
-    else if (pos.status === "closed" && pos.closePremium != null && pos.premium > 0)
-      capRate = (1 - pos.closePremium / pos.premium) * 100;
-    if (capRate != null) items.push({ l: "权利金捕获", v: capRate.toFixed(0) + "%", cls: capRate >= 75 ? "up" : capRate >= 40 ? "" : "down" });
-    if (daysHeld && pos.premium > 0 && pos.strike > 0 && (pos.status === "expired" || pos.status === "closed")) {
-      const base = pos.strat === "csp" ? pos.strike : (pos.underlyingAtEntry || pos.strike);
-      const realPrem = pos.status === "closed" ? Math.max(0, pos.premium - (pos.closePremium || 0)) : pos.premium;
-      const ann = realPrem / base / daysHeld * 365 * 100;
-      if (ann >= 0) items.push({ l: "年化收益", v: ann.toFixed(1) + "%", cls: "up" });
+    if (pos.status === "expired") {
+      items.push({ l: "权利金捕获", v: "100%", cls: "up" });
+    } else if (pos.status === "closed" && pos.closePremium != null && pos.premium > 0) {
+      const capRate = (1 - pos.closePremium / pos.premium) * 100;
+      items.push({ l: "权利金捕获", v: capRate.toFixed(0) + "%", cls: capRate >= 75 ? "up" : capRate >= 40 ? "" : "down" });
     }
+    const ann = _optAnn(pos);
+    if (ann !== -Infinity) items.push({ l: "年化收益", v: (ann >= 0 ? "+" : "") + ann.toFixed(1) + "%", cls: ann >= 0 ? "up" : "down" });
     if (!items.length) return "";
     return `<div class="opts-card-metrics">${items.map(i => `<div class="opts-card-m"><div class="opts-card-ml">${i.l}</div><div class="opts-card-mv ${i.cls}">${i.v}</div></div>`).join("")}</div>`;
   }
 
   function _optAnn(pos) {
     if (!pos.entryDate || !pos.closedAt) return -Infinity;
-    if (pos.status !== "expired" && pos.status !== "closed") return -Infinity;
+    if (pos.status === "open" || pos.status === "pending") return -Infinity;
+    if (pos.strat === "csp" && pos.status === "assigned" && !pos.assignedStockSold) return -Infinity;
     const days = Math.max(1, Math.round((new Date(pos.closedAt) - new Date(pos.entryDate)) / 86400000));
-    const base = pos.strat === "csp" ? pos.strike : (pos.underlyingAtEntry || pos.strike);
-    if (!base) return -Infinity;
-    const realPrem = pos.status === "closed" ? Math.max(0, pos.premium - (pos.closePremium || 0)) : pos.premium;
-    return realPrem / base / days * 365 * 100;
+    const finalPnl = _optFinalPnl(pos);
+    if (finalPnl == null) return -Infinity;
+    const capitalBase = pos.strat === "csp"
+      ? pos.strike * 100 * pos.qty
+      : (pos.underlyingAtEntry || pos.strike) * 100 * pos.qty;
+    if (!capitalBase) return -Infinity;
+    return finalPnl / capitalBase / days * 365 * 100;
   }
 
   function _optDonePosCard(pos) {
@@ -4892,105 +4952,82 @@ function rsAdjustGrade(grade, rsResult) {
     const delBtn = `<button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button>`;
     const stratBadge = `<span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>`;
 
-    // CSP assigned — stock equity tracking
-    if (pos.status === "assigned" && isCSP) {
-      const spot = optSpot(pos.sym);
+    // CSP assigned — still holding stock (live card, not "settled")
+    if (pos.status === "assigned" && isCSP && !pos.assignedStockSold) {
+      const spot       = optSpot(pos.sym);
       const premIncome = pos.premium * 100 * pos.qty;
       const stockShares = pos.qty * 100;
-
-      if (!pos.assignedStockSold) {
-        // Still holding assigned stock — show live equity P&L
-        const equityPnl = spot ? (spot - pos.strike) * stockShares : null;
-        const equityCls = equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down";
-        const totalEst = equityPnl != null ? premIncome + equityPnl : null;
-        const totalCls = totalEst == null ? "" : totalEst >= 0 ? "up" : "down";
-        return `<div class="opts-pos-card opts-assigned-live">
-          <div class="opts-card-hd">
-            ${stratBadge}
-            <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
-            <span class="opts-st-tag" style="color:var(--warn);border-color:var(--warn)">持有正股</span>
-            ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
-            <div class="opts-card-hd-r">
-              <button class="opts-mini-btn opts-sell-cc-btn" data-opt-sell-cc="${pos.id}" data-cc-sym="${pos.sym}" data-cc-qty="${pos.qty}" title="持有 ${stockShares} 股，可卖出 ${pos.qty} 张备兑 Call">+ CC</button>
-              <button class="opts-mini-btn" data-opt-exit="${pos.id}">记录出仓</button>
-              ${delBtn}
-            </div>
-          </div>
-          <div class="opts-card-metrics">
-            <div class="opts-card-m"><div class="opts-card-ml">期权收入</div><div class="opts-card-mv up">+${fmt.usd(premIncome)}</div></div>
-            <div class="opts-card-m"><div class="opts-card-ml">持有股数</div><div class="opts-card-mv">${stockShares}股</div></div>
-            <div class="opts-card-m"><div class="opts-card-ml">持股成本</div><div class="opts-card-mv">$${pos.strike.toFixed(2)}</div></div>
-            <div class="opts-card-m"><div class="opts-card-ml">正股浮盈</div><div class="opts-card-mv ${equityPnl == null ? "dim" : equityCls}">${equityPnl == null ? "待更新" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl))}</div></div>
-          </div>
-          <div class="opts-equity-rows">
-            <span class="opts-equity-row"><span class="muted">合计估算</span>${totalEst != null ? `<b class="${totalCls}">${totalEst >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalEst))}</b><span class="muted" style="font-size:9px">期权+正股 · 实时</span>` : `<span class="muted">等待现价更新</span>`}</span>
-          </div>
-          ${(() => {
-            const activeCC = _activeOpts().find(p => p.linkedCspId === pos.id && p.strat === "cc" && p.status === "open");
-            if (!activeCC) return "";
-            const ccDTE = _optDTE(activeCC.expiry);
-            const ccPrem = activeCC.premium * 100 * activeCC.qty;
-            return `<div class="opts-linked-cc-row"><span class="opts-wheel-badge">轮组</span><span class="muted">备兑CC中:</span> $${activeCC.strike}C · 到期 ${activeCC.expiry.slice(5)} · DTE ${ccDTE}d · <b class="up">+${fmt.usd(ccPrem)}</b></div>`;
-          })()}
-        </div>`;
-      } else {
-        // Stock sold — show final breakdown
-        const exitPnl = (pos.assignedExitPrice - pos.strike) * stockShares;
-        const exitCls = exitPnl >= 0 ? "up" : "down";
-        const total = premIncome + exitPnl;
-        const totalCls = total >= 0 ? "up" : "down";
-        return `<div class="opts-pos-card opts-card-done">
-          <div class="opts-card-hd">
-            ${stratBadge}
-            <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
-            <span class="opts-st-tag" style="color:var(--fg-3);border-color:var(--fg-3)">指派+出仓</span>
-            <div class="opts-card-hd-r"><div class="opts-card-amt ${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</div>${delBtn}</div>
-          </div>
-          <div class="opts-card-meta">权利金 +${fmt.usd(premIncome)} · 出仓 $${pos.assignedExitPrice.toFixed(2)} × ${stockShares}股 @${pos.assignedExitDate || ""}</div>
-          <div class="opts-equity-rows">
-            <span class="opts-equity-row"><span class="muted">期权收入</span><b class="up">+${fmt.usd(premIncome)}</b></span>
-            <span class="opts-equity-row"><span class="muted">正股盈亏</span><b class="${exitCls}">${exitPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(exitPnl))}</b><span class="muted" style="font-size:9px">($${pos.assignedExitPrice.toFixed(2)}−$${pos.strike.toFixed(2)}) ×${stockShares}</span></span>
-            <span class="opts-equity-row opts-equity-total"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
-          </div>
-          ${_optDoneMetaRow(pos)}
-        </div>`;
-      }
-    }
-
-    // CC assigned — option P&L + stock gain
-    if (pos.status === "assigned" && !isCSP) {
-      const optPnl = pos.realized ?? 0;
-      const stockGain = pos.underlyingAtEntry ? (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty : null;
-      const total = stockGain != null ? optPnl + stockGain : optPnl;
-      const totalCls = total >= 0 ? "up" : "down";
-      return `<div class="opts-pos-card opts-card-done">
+      const equityPnl  = spot ? (spot - pos.strike) * stockShares : null;
+      const equityCls  = equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down";
+      const totalEst   = equityPnl != null ? premIncome + equityPnl : null;
+      const totalCls   = totalEst == null ? "" : totalEst >= 0 ? "up" : "down";
+      const cushionPct = spot ? (spot - pos.strike) / pos.strike * 100 : null;
+      return `<div class="opts-pos-card opts-assigned-live">
         <div class="opts-card-hd">
           ${stratBadge}
           <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
-          <span class="opts-st-tag" style="color:${stColor};border-color:${stColor}">${stTxt}</span>
-          <div class="opts-card-hd-r"><div class="opts-card-amt ${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</div>${delBtn}</div>
+          <span class="opts-st-tag" style="color:var(--warn);border-color:var(--warn)">持有正股</span>
+          ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
+          <div class="opts-card-hd-r">
+            <button class="opts-mini-btn opts-sell-cc-btn" data-opt-sell-cc="${pos.id}" data-cc-sym="${pos.sym}" data-cc-qty="${pos.qty}" title="持有 ${stockShares} 股，可卖出 ${pos.qty} 张备兑 Call">+ CC</button>
+            <button class="opts-mini-btn" data-opt-exit="${pos.id}">记录出仓</button>
+            ${delBtn}
+          </div>
         </div>
-        <div class="opts-card-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张 · 结算 $${(pos.settleSpot||0).toFixed(2)} · ${pos.closedAt || ""}</div>
-        <div class="opts-equity-rows">
-          <span class="opts-equity-row"><span class="muted">期权盈亏</span><b class="${optPnl >= 0 ? "up" : "down"}">${optPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(optPnl))}</b></span>
-          ${stockGain != null ? `<span class="opts-equity-row"><span class="muted">正股增益</span><b class="${stockGain >= 0 ? "up" : "down"}">${stockGain >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockGain))}</b><span class="muted" style="font-size:9px">($${pos.strike}−$${pos.underlyingAtEntry?.toFixed(2)}) ×${pos.qty*100}</span></span>` : ""}
-          <span class="opts-equity-row opts-equity-total"><span class="muted">合计</span><b class="${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</b></span>
+        <div class="opts-card-metrics">
+          <div class="opts-card-m"><div class="opts-card-ml">持股成本</div><div class="opts-card-mv">$${pos.strike.toFixed(2)}</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">持有股数</div><div class="opts-card-mv">${stockShares}股</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">现价</div><div class="opts-card-mv">${spot ? "$" + spot.toFixed(2) : "—"}</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">安全垫</div><div class="opts-card-mv ${cushionPct == null ? "" : cushionPct >= 0 ? "up" : "down"}">${cushionPct == null ? "—" : (cushionPct >= 0 ? "+" : "") + cushionPct.toFixed(1) + "%"}</div></div>
         </div>
-        ${_optDoneMetaRow(pos)}
+        <div class="opts-pnl-row">
+          <div class="opts-pnl-col"><div class="opts-pnl-label">期权收入</div><div class="opts-pnl-val up">+${fmt.usd(premIncome)}</div></div>
+          <div class="opts-pnl-op">+</div>
+          <div class="opts-pnl-col"><div class="opts-pnl-label">正股浮盈(估)</div><div class="opts-pnl-val ${equityCls}">${equityPnl == null ? "—" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl))}</div></div>
+          <div class="opts-pnl-op">=</div>
+          <div class="opts-pnl-col opts-pnl-total"><div class="opts-pnl-label">合计(估)</div><div class="opts-pnl-val ${totalCls}">${totalEst == null ? "—" : (totalEst >= 0 ? "+" : "−") + fmt.usd(Math.abs(totalEst))}</div></div>
+        </div>
+        ${(() => {
+          const activeCC = _activeOpts().find(p => p.linkedCspId === pos.id && p.strat === "cc" && p.status === "open");
+          if (!activeCC) return "";
+          const ccDTE  = _optDTE(activeCC.expiry);
+          const ccPrem = activeCC.premium * 100 * activeCC.qty;
+          return `<div class="opts-linked-cc-row"><span class="opts-wheel-badge">轮组</span><span class="muted">备兑CC中:</span> $${activeCC.strike}C · 到期 ${activeCC.expiry.slice(5)} · DTE ${ccDTE}d · <b class="up">+${fmt.usd(ccPrem)}</b></div>`;
+        })()}
       </div>`;
     }
 
-    // Expired / closed — standard card
-    const r = pos.realized ?? 0;
-    const rCls = r > 0 ? "up" : r < 0 ? "down" : "";
+    // All other settled cards — unified P&L breakdown layout
+    const bd = _optPnlBreakdown(pos);
+    const total    = bd?.net ?? (pos.realized ?? 0);
+    const totalCls = total >= 0 ? "up" : "down";
+
+    // Header tag text/color by settlement type
+    let tagTxt = stTxt, tagColor = stColor;
+    if (pos.status === "assigned" && isCSP && pos.assignedStockSold) { tagTxt = "指派+出仓"; tagColor = "var(--fg-3)"; }
+
+    // Secondary info line
+    let metaLine = "";
+    if (pos.status === "expired") {
+      metaLine = `到期日 ${pos.expiry || ""} · 卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张`;
+    } else if (pos.status === "closed") {
+      metaLine = `卖出 $${pos.premium.toFixed(2)} · 买回 $${(pos.closePremium||0).toFixed(2)} ×${pos.qty}张 · ${pos.closedAt || ""}`;
+    } else if (pos.status === "assigned" && isCSP) {
+      const stockShares = pos.qty * 100;
+      metaLine = `指派 $${pos.strike.toFixed(2)} · 出仓 $${pos.assignedExitPrice?.toFixed(2)} × ${stockShares}股 · ${pos.assignedExitDate || ""}`;
+    } else if (pos.status === "assigned" && !isCSP) {
+      metaLine = `卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张 · 结算 $${(pos.settleSpot||0).toFixed(2)} · ${pos.closedAt || ""}`;
+    }
+
     return `<div class="opts-pos-card opts-card-done">
       <div class="opts-card-hd">
         ${stratBadge}
         <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
-        <span class="opts-st-tag" style="color:${stColor};border-color:${stColor}">${stTxt}</span>
-        <div class="opts-card-hd-r"><div class="opts-card-amt ${rCls}">${r >= 0 ? "+" : "−"}$${Math.abs(r).toFixed(0)}</div>${delBtn}</div>
+        <span class="opts-st-tag" style="color:${tagColor};border-color:${tagColor}">${tagTxt}</span>
+        <div class="opts-card-hd-r"><div class="opts-card-amt ${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</div>${delBtn}</div>
       </div>
-      <div class="opts-card-meta">卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张${pos.closePremium != null ? ` · 买回 $${pos.closePremium.toFixed(2)}` : ""}${pos.settleSpot ? ` · 结算 $${pos.settleSpot.toFixed(2)}` : ""} · ${pos.closedAt || ""}</div>
+      <div class="opts-card-meta">${metaLine}</div>
+      ${_pnlBreakdownHTML(bd)}
       ${_optDoneMetaRow(pos)}
     </div>`;
   }
@@ -5039,29 +5076,35 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="opts-card-m"><div class="opts-card-ml">正股盈亏</div><div class="opts-card-mv ${stockPnl >= 0 ? "up" : "down"}">${stockPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockPnl))}</div></div>
         <div class="opts-card-m"><div class="opts-card-ml">轮转年化</div><div class="opts-card-mv ${totalPnl >= 0 ? "up" : "down"}">${annualized}</div></div>
       </div>
-      <div class="opts-equity-rows">
-        ${daysTotal ? `<span class="opts-equity-row"><span class="muted">轮转周期</span><b>${daysTotal}天</b><span class="muted" style="font-size:9px">${startDate} → ${endDate}</span></span>` : ""}
-      </div>
+      ${daysTotal ? `<div class="opts-card-meta">轮转周期 ${daysTotal}天 · ${startDate} → ${endDate}</div>` : ""}
       ${expandedHTML}
     </div>`;
   }
 
   function _optSummaryHTML(open, done) {
-    let prem = 0, secured = 0, est = 0;
-    let estKnown = true;
+    // Layer 1 — Realized net P&L (settled positions, excluding live assigned stock)
+    const liveAssigned = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
+    const settledPosns  = done.filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold));
+    const realizedPnl   = settledPosns.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
+    const settledPrem   = done.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
+    const openPrem      = open.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
+    const realCls       = realizedPnl >= 0 ? "up" : "down";
+
+    // Layer 2 — Floating P&L on open option positions (mark or intrinsic estimate)
+    let openFloat = null, openFloatKnown = true, secured = 0;
     for (const pos of open) {
-      prem += pos.premium * 100 * pos.qty;
       if (pos.strat === "csp") secured += pos.strike * 100 * pos.qty;
       const spot = optSpot(pos.sym);
-      if (spot) est += (pos.premium - _optIntrinsic(pos, spot)) * 100 * pos.qty;
-      else estKnown = false;
+      if (pos.manualMark != null) {
+        if (openFloat === null) openFloat = 0;
+        openFloat += (pos.premium - pos.manualMark) * 100 * pos.qty;
+      } else if (spot) {
+        if (openFloat === null) openFloat = 0;
+        openFloat += (pos.premium - _optIntrinsic(pos, spot)) * 100 * pos.qty;
+      } else { openFloatKnown = false; }
     }
-    const all = [...open, ...done];
-    const totalPrem = all.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
-    const realized = done.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
-    // Assigned CSP positions still holding stock
-    const liveAssigned = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
-    // Equity floating P&L for assigned stock being held
+
+    // Layer 3 — Equity floating P&L on assigned stock positions
     let equityPnl = null, equityKnown = true;
     for (const p of liveAssigned) {
       const spot = optSpot(p.sym);
@@ -5069,92 +5112,96 @@ function rsAdjustGrade(grade, rsResult) {
       if (equityPnl === null) equityPnl = 0;
       equityPnl += (spot - p.strike) * p.qty * 100;
     }
+
+    // Stats
+    const wins      = settledPosns.filter(p => (_optFinalPnl(p) ?? 0) > 0).length;
+    const winRate   = settledPosns.length ? (wins / settledPosns.length * 100).toFixed(0) + "%" : "—";
+    const assigned  = done.filter(p => p.status === "assigned");
+    const assignRate = settledPosns.length ? (assigned.length / settledPosns.length * 100).toFixed(0) + "%" : "—";
+    const annVals   = settledPosns.map(p => _optAnn(p)).filter(v => v !== -Infinity);
+    const avgAnn    = annVals.length ? (annVals.reduce((s,v)=>s+v,0)/annVals.length).toFixed(1) : null;
+
     const cell = (label, val, cls = "", sub = "") => `<div class="opts-stat">
       <div class="opts-stat-label">${label}</div>
       <div class="opts-stat-val ${cls}">${val}</div>
       ${sub ? `<div class="opts-stat-sub">${sub}</div>` : ""}
     </div>`;
-    // Settled count excludes liveAssigned (holding stock = unrealized)
-    const settledCount = done.length - liveAssigned.length;
-    const realizedSub = settledCount > 0
-      ? settledCount + " 笔已了结" + (liveAssigned.length ? ` · ${liveAssigned.length}笔持股中` : "")
-      : liveAssigned.length ? liveAssigned.length + "笔持股中" : "";
-    const equityCell = liveAssigned.length ? cell(
-      "正股浮盈",
-      equityPnl == null ? "待更新" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl)),
-      equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down",
-      liveAssigned.map(p => p.sym).join(" / ")
-    ) : "";
-    return `<div class="opts-stats ${liveAssigned.length ? "opts-stats-5" : ""}">
-      ${cell("持仓权利金", prem > 0 ? fmt.usd(prem) : "—", "", open.length + " 笔持仓")}
-      ${cell("CSP 现金占用", secured > 0 ? fmt.usd(secured) : "—", "", "保证金要求")}
-      ${cell("持仓预估(现价)", open.length === 0 ? "—" : estKnown ? (est >= 0 ? "+" : "−") + "$" + Math.abs(est).toFixed(0) : "待更新", est > 0 ? "up" : est < 0 ? "down" : "")}
-      ${cell("已了结 P&L", settledCount === 0 ? "—" : (realized >= 0 ? "+" : "−") + "$" + Math.abs(realized).toFixed(0), realized > 0 ? "up" : realized < 0 ? "down" : "", realizedSub)}
-      ${equityCell}
+
+    const floatCls = openFloat == null ? "" : openFloat >= 0 ? "up" : "down";
+    const floatStr = openFloat == null ? "—" : (openFloat >= 0 ? "+" : "−") + fmt.usd(Math.abs(openFloat));
+    const eqCls    = equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down";
+    const eqStr    = equityPnl == null ? "—" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl));
+    const hasSide  = open.length > 0 || liveAssigned.length > 0;
+
+    return `<div class="opts-summary-block">
+      <div class="opts-pnl-hero${hasSide ? " opts-pnl-hero-split" : ""}">
+        <div class="opts-pnl-hero-main">
+          <div class="opts-pnl-hero-label">净盈亏 · 已了结</div>
+          <div class="opts-pnl-hero-val ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
+          <div class="opts-pnl-hero-sub">已收权利金 +${fmt.usd(settledPrem + openPrem)} · ${settledPosns.length}笔了结</div>
+        </div>
+        ${hasSide ? `<div class="opts-pnl-hero-div"></div>
+        <div class="opts-pnl-hero-side">
+          ${open.length ? `<div class="opts-pnl-side-item">
+            <div class="opts-pnl-side-label">持仓浮盈(估) · ${open.length}张${!openFloatKnown ? " · 部分估算" : ""}</div>
+            <div class="opts-pnl-side-val ${floatCls}">${floatStr}</div>
+            ${secured > 0 ? `<div class="opts-pnl-side-sub">CSP占用 ${fmt.usd(secured)}</div>` : ""}
+          </div>` : ""}
+          ${liveAssigned.length ? `<div class="opts-pnl-side-item">
+            <div class="opts-pnl-side-label">持股浮盈(估) · ${liveAssigned.map(p=>p.sym).join("/")}${!equityKnown ? " · 部分估算" : ""}</div>
+            <div class="opts-pnl-side-val ${eqCls}">${eqStr}</div>
+          </div>` : ""}
+        </div>` : ""}
+      </div>
+      <div class="opts-ws-grid">
+        ${cell("胜率", winRate, wins >= settledPosns.length * 0.6 ? "up" : "down", wins + "/" + settledPosns.length + " 笔")}
+        ${cell("被指派率", assignRate, "", assigned.length + " 笔被行权")}
+        ${cell("平均年化", avgAnn ? (parseFloat(avgAnn) >= 0 ? "+" : "") + avgAnn + "%" : "—", avgAnn && parseFloat(avgAnn) >= 0 ? "up" : "down", annVals.length + " 笔计算")}
+        ${cell("已收权利金", "+" + fmt.usd(settledPrem + openPrem), "up", "历史合计")}
+      </div>
     </div>`;
   }
 
   function _optWheelStatsHTML(all) {
-    const done = all.filter(p => p.status !== "open");
-    if (done.length < 2) return "";
-    const expired = done.filter(p => p.status === "expired");
-    const assigned = done.filter(p => p.status === "assigned");
-    const closed = done.filter(p => p.status === "closed");
-    // Win = expired OTM or closed with positive P&L
-    const wins = expired.length + closed.filter(p => (p.realized ?? 0) > 0).length;
-    const winRate = (wins / done.length * 100).toFixed(0);
-    const assignRate = (assigned.length / done.length * 100).toFixed(0);
-    const totalPnl = done.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
-    const totalPnlCls = totalPnl >= 0 ? "up" : "down";
-    const totalPrem = done.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
+    const done = all.filter(p => p.status !== "open" && p.status !== "pending");
+    if (done.length < 3) return "";
 
-    // Monthly breakdown (last 6 months)
+    // Monthly breakdown (last 6 months with settled data)
     const byMonth = {};
     for (const p of done) {
       const key = (p.closedAt || p.expiry || "").slice(0, 7);
       if (!key) continue;
       if (!byMonth[key]) byMonth[key] = { pnl: 0, count: 0, wins: 0, prem: 0 };
       const pnl = _optFinalPnl(p) ?? 0;
-      byMonth[key].pnl += pnl;
-      byMonth[key].prem += p.premium * 100 * p.qty;
-      byMonth[key].count++;
-      if (p.status === "expired" || (p.status === "closed" && pnl > 0)) byMonth[key].wins++;
+      byMonth[key].pnl   += pnl;
+      byMonth[key].prem  += p.premium * 100 * p.qty;
+      byMonth[key].count += 1;
+      if (pnl > 0) byMonth[key].wins++;
     }
     const months = Object.keys(byMonth).sort().reverse().slice(0, 6);
-
-    const cell = (label, val, cls = "", sub = "") => `<div class="opts-ws-cell">
-      <div class="opts-ws-label">${label}</div>
-      <div class="opts-ws-val ${cls}">${val}</div>
-      ${sub ? `<div class="opts-ws-sub">${sub}</div>` : ""}
-    </div>`;
+    if (months.length < 2) return "";
 
     const monthRows = months.map(m => {
-      const d = byMonth[m];
+      const d      = byMonth[m];
       const pnlCls = d.pnl > 0 ? "up" : d.pnl < 0 ? "down" : "";
-      const wr = d.count ? (d.wins / d.count * 100).toFixed(0) + "%" : "—";
+      const wr     = d.count ? (d.wins / d.count * 100).toFixed(0) + "%" : "—";
       return `<tr>
         <td class="opts-mt-month">${m.slice(5)}</td>
-        <td class="opts-mt-count">${d.count}笔</td>
-        <td class="opts-mt-prem">+${fmt.usd(d.prem)}</td>
         <td class="opts-mt-pnl ${pnlCls}">${d.pnl >= 0 ? "+" : "−"}$${Math.abs(d.pnl).toFixed(0)}</td>
         <td class="opts-mt-wr">${wr}</td>
+        <td class="opts-mt-count">${d.count}笔</td>
+        <td class="opts-mt-prem" style="color:var(--fg-3)">+${fmt.usd(d.prem)}</td>
       </tr>`;
     }).join("");
 
     return `<div class="opts-wheel-stats">
-      <div class="opts-sub-label" style="padding-top:18px">策略统计 · Option Stats</div>
-      <div class="opts-ws-grid">
-        ${cell("胜率", winRate + "%", wins >= done.length * 0.6 ? "up" : "down", wins + "/" + done.length + " 笔")}
-        ${cell("被指派率", assignRate + "%", "", assigned.length + " 笔被行权")}
-        ${cell("总权利金", "+" + fmt.usd(totalPrem), "up", done.length + " 笔收入")}
-        ${cell("已了结 P&L", (totalPnl >= 0 ? "+" : "−") + "$" + Math.abs(totalPnl).toFixed(0), totalPnlCls, "")}
-      </div>
-      ${months.length > 1 ? `<div class="opts-month-wrap">
+      <div class="opts-sub-label" style="padding-top:18px">月度明细 · Monthly</div>
+      <div class="opts-month-wrap">
         <table class="opts-month-table">
-          <thead><tr><th>月份</th><th>笔数</th><th>权利金</th><th>P&L</th><th>胜率</th></tr></thead>
+          <thead><tr><th>月份</th><th>净P&L</th><th>胜率</th><th>笔数</th><th style="color:var(--fg-3)">权利金收入</th></tr></thead>
           <tbody>${monthRows}</tbody>
         </table>
-      </div>` : ""}
+      </div>
     </div>`;
   }
 
