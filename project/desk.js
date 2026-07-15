@@ -1066,6 +1066,7 @@ function rsAdjustGrade(grade, rsResult) {
   let currentOptMode  = "real"; // "real" | "sim" — which Options sub-tab is active
   let inspSubTab      = "journal"; // "journal" | "watchlist" — Inspirations sub-tab
   let _optsSettledOpen = false; // collapsed by default
+  const _optsWheelExpanded = new Set(); // group IDs of expanded wheel combo cards
   let simOptionsSym   = "QQQ";  // sell-modal default
   let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
   const OPT_WATCH_SYMS = ["DRAM", "MAGS", "SMH", "GLD", "IWM", "QQQ"];
@@ -4994,6 +4995,57 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
+  function _optWheelGroupCard(csp, cc) {
+    const groupId = csp.id + "_" + cc.id;
+    const isExpanded = _optsWheelExpanded.has(groupId);
+    const cspPrem   = csp.premium * 100 * csp.qty;
+    const ccOptPnl  = cc.realized ?? 0;
+    const stockShares = csp.qty * 100;
+    const stockPnl  = (cc.strike - csp.strike) * stockShares;
+    const totalPnl  = cspPrem + ccOptPnl + stockPnl;
+    const totalCls  = totalPnl >= 0 ? "up" : "down";
+    const startDate = csp.entryDate || "";
+    const endDate   = (cc.closedAt || "").slice(0, 10);
+    const daysTotal = (startDate && endDate)
+      ? Math.max(1, Math.round((new Date(endDate) - new Date(startDate)) / 86400000))
+      : null;
+    const capitalBase = csp.strike * stockShares;
+    const annualized  = (daysTotal && capitalBase > 0)
+      ? (totalPnl / capitalBase / daysTotal * 365 * 100).toFixed(1) + "%"
+      : "—";
+    const toggleLabel = isExpanded ? "▾ 合看" : "▸ 分看";
+
+    const expandedHTML = isExpanded ? `
+      <div class="opts-wheel-sub-cards">
+        <div class="opts-wheel-sub-label">CSP 期权</div>
+        ${_optDonePosCard(csp)}
+        <div class="opts-wheel-sub-label">CC 备兑</div>
+        ${_optDonePosCard(cc)}
+      </div>` : "";
+
+    return `<div class="opts-wheel-group-card">
+      <div class="opts-card-hd">
+        <span class="opts-wheel-badge">轮组</span>
+        <span class="opts-card-sym">${csp.sym}</span>
+        <span class="opts-wheel-flow">CSP→正股→CC</span>
+        <div class="opts-card-hd-r">
+          <div class="opts-card-amt ${totalCls}">${totalPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalPnl))}</div>
+          <button class="opts-mini-btn opts-wheel-toggle-btn" data-wheel-toggle="${groupId}">${toggleLabel}</button>
+        </div>
+      </div>
+      <div class="opts-card-metrics">
+        <div class="opts-card-m"><div class="opts-card-ml">CSP权利金</div><div class="opts-card-mv up">+${fmt.usd(cspPrem)}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">CC期权盈亏</div><div class="opts-card-mv ${ccOptPnl >= 0 ? "up" : "down"}">${ccOptPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(ccOptPnl))}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">正股盈亏</div><div class="opts-card-mv ${stockPnl >= 0 ? "up" : "down"}">${stockPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockPnl))}</div></div>
+        <div class="opts-card-m"><div class="opts-card-ml">轮转年化</div><div class="opts-card-mv ${totalPnl >= 0 ? "up" : "down"}">${annualized}</div></div>
+      </div>
+      <div class="opts-equity-rows">
+        ${daysTotal ? `<span class="opts-equity-row"><span class="muted">轮转周期</span><b>${daysTotal}天</b><span class="muted" style="font-size:9px">${startDate} → ${endDate}</span></span>` : ""}
+      </div>
+      ${expandedHTML}
+    </div>`;
+  }
+
   function _optSummaryHTML(open, done) {
     let prem = 0, secured = 0, est = 0;
     let estKnown = true;
@@ -5139,7 +5191,28 @@ function rsAdjustGrade(grade, rsResult) {
     const settledClosed    = _sortByAnn(done.filter(p => p.status === "closed"));
     const settledFullCycle = _sortByAnn(done.filter(p =>
       p.status === "assigned" && !(p.strat === "csp" && !p.assignedStockSold)));
-    const totalSettled = settledExpired.length + settledClosed.length + settledFullCycle.length;
+
+    // Group linked CSP + CC pairs into Wheel combo cards
+    const _wheelPairs   = [];
+    const _wheelUsedIds = new Set();
+    settledFullCycle.forEach(p => {
+      if (p.strat === "cc" && p.linkedCspId && !_wheelUsedIds.has(p.id)) {
+        const parentCsp = settledFullCycle.find(c => c.id === p.linkedCspId && !_wheelUsedIds.has(c.id));
+        if (parentCsp) {
+          _wheelPairs.push({ csp: parentCsp, cc: p });
+          _wheelUsedIds.add(p.id);
+          _wheelUsedIds.add(parentCsp.id);
+        }
+      }
+    });
+    const _soloSettled   = settledFullCycle.filter(p => !_wheelUsedIds.has(p.id));
+    const fullCycleCount = _wheelPairs.length + _soloSettled.length;
+    const fullCycleHTML  = [
+      ..._wheelPairs.map(({csp, cc}) => _optWheelGroupCard(csp, cc)),
+      ..._soloSettled.map(_optDonePosCard),
+    ].join("");
+
+    const totalSettled = settledExpired.length + settledClosed.length + fullCycleCount;
 
     const settledArrow = _optsSettledOpen ? "▾" : "▸";
     const settledSection = totalSettled ? `
@@ -5150,7 +5223,7 @@ function rsAdjustGrade(grade, rsResult) {
       ${_optsSettledOpen ? `
         ${settledExpired.length ? `<div class="opts-sub-label" style="color:var(--up);padding-top:8px;font-size:9px">到期 OTM · Expired · ${settledExpired.length}</div>${settledExpired.map(_optDonePosCard).join("")}` : ""}
         ${settledClosed.length  ? `<div class="opts-sub-label" style="color:var(--fg-2);padding-top:8px;font-size:9px">买回平仓 · Closed · ${settledClosed.length}</div>${settledClosed.map(_optDonePosCard).join("")}` : ""}
-        ${settledFullCycle.length ? `<div class="opts-sub-label" style="color:var(--accent);padding-top:8px;font-size:9px">完整轮转 · Full Cycle · ${settledFullCycle.length}</div>${settledFullCycle.map(_optDonePosCard).join("")}` : ""}
+        ${fullCycleCount ? `<div class="opts-sub-label" style="color:var(--accent);padding-top:8px;font-size:9px">完整轮转 · Full Cycle · ${fullCycleCount}</div>${fullCycleHTML}` : ""}
       ` : ""}` : "";
 
     const body = (pending.length || open.length || done.length)
@@ -5188,6 +5261,12 @@ function rsAdjustGrade(grade, rsResult) {
       _optsSettledOpen = !_optsSettledOpen;
       renderOptions();
     });
+    $$("[data-wheel-toggle]", root).forEach(btn => btn.addEventListener("click", () => {
+      const gid = btn.dataset.wheelToggle;
+      if (_optsWheelExpanded.has(gid)) _optsWheelExpanded.delete(gid);
+      else _optsWheelExpanded.add(gid);
+      renderOptions();
+    }));
     const sellBtn = root.querySelector("#opts-sell-btn");
     if (sellBtn) sellBtn.addEventListener("click", () => openOptionsSellModal());
     const pendingBtn = root.querySelector("#opts-pending-btn");
