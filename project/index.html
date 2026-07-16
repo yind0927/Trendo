@@ -1738,12 +1738,28 @@
   .opts-sb-prin { color: var(--fg-2); font-size: 10.5px; min-width: 180px; }
   .opts-sb-method { font-size: 10.5px; color: var(--fg-1); font-family: var(--f-mono); min-width: 150px; }
   .opts-sb-timing { font-size: 10.5px; color: var(--accent); white-space: nowrap; min-width: 120px; }
-  .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 7px; }
-  .opts-wheel-flow { font-size: 9px; color: var(--accent); letter-spacing: .04em; opacity: 0.8; flex-shrink: 0; }
+  .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 10px; }
   .opts-wheel-toggle-btn { font-size: 10px; }
   .opts-wheel-sub-cards { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 2px; display: flex; flex-direction: column; }
   .opts-wheel-sub-label { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); padding: 4px 0; }
   .opts-wheel-sub-cards .opts-pos-card { border: 1px solid var(--bg-3); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; }
+  /* ── Wheel timeline */
+  .opts-wt-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .opts-wheel-timeline { display: flex; align-items: flex-start; gap: 0; min-width: 360px; padding: 2px 0 4px; }
+  .opts-wt-step { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 72px; }
+  .opts-wt-tag { font-size: 9px; font-weight: 700; color: var(--fg-3); letter-spacing: .04em; margin-bottom: 2px; }
+  .opts-wt-val { font-size: 13px; font-weight: 800; font-family: var(--f-mono); }
+  .opts-wt-desc { font-size: 9.5px; color: var(--fg-2); }
+  .opts-wt-date { font-size: 9px; color: var(--fg-3); margin-top: 2px; }
+  .opts-wt-arrow { font-size: 14px; color: var(--accent); opacity: 0.5; padding: 18px 6px 0; flex-shrink: 0; }
+  /* ── Wheel calc row */
+  .opts-wheel-calc { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 8px 0 2px; border-top: 1px solid var(--line); font-size: 11px; }
+  .opts-wc { font-family: var(--f-mono); font-weight: 700; }
+  .opts-wc-op { color: var(--fg-3); font-size: 11px; }
+  .opts-wc-total { font-size: 14px; font-weight: 800; font-family: var(--f-mono); }
+  .opts-wc-meta { margin-left: auto; font-size: 9.5px; color: var(--fg-3); }
+  /* ── Open CSP/CC sub-label */
+  .opts-sub-strat { font-size: 9px !important; color: var(--accent) !important; padding-left: 8px; margin-top: -6px; }
   /* ── Card header row */
   .opts-card-hd { display: flex; align-items: center; gap: 7px; min-width: 0; }
   .opts-card-hd-r { margin-left: auto; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
@@ -4443,8 +4459,8 @@
   </div>
 </div>
 
-<script src="data.js?v=289"></script>
-<script src="desk.js?v=289"></script>
+<script src="data.js?v=290"></script>
+<script src="desk.js?v=290"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

@@ -5033,30 +5033,74 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function _optWheelGroupCard(csp, cc) {
-    const groupId = csp.id + "_" + cc.id;
+    const groupId    = csp.id + "_" + cc.id;
     const isExpanded = _optsWheelExpanded.has(groupId);
-    const cspPrem   = csp.premium * 100 * csp.qty;
-    const ccOptPnl  = cc.realized ?? 0;
-    const stockShares = csp.qty * 100;
-    const stockPnl  = (cc.strike - csp.strike) * stockShares;
-    const totalPnl  = cspPrem + ccOptPnl + stockPnl;
-    const totalCls  = totalPnl >= 0 ? "up" : "down";
-    const startDate = csp.entryDate || "";
-    const endDate   = (cc.closedAt || "").slice(0, 10);
-    const daysTotal = (startDate && endDate)
-      ? Math.max(1, Math.round((new Date(endDate) - new Date(startDate)) / 86400000))
-      : null;
-    const capitalBase = csp.strike * stockShares;
+    const shares     = csp.qty * 100;
+    const cspPrem    = csp.premium * 100 * csp.qty;
+    const ccPnl      = cc.realized ?? ((cc.premium - (cc.closePremium || 0)) * 100 * cc.qty);
+    const stockPnl   = (cc.strike - csp.strike) * shares;
+    const totalPnl   = cspPrem + ccPnl + stockPnl;
+    const totalCls   = totalPnl >= 0 ? "up" : "down";
+    const startDate  = csp.entryDate || "";
+    const assignDate = (csp.closedAt || "").slice(0, 10);
+    const endDate    = (cc.closedAt || "").slice(0, 10);
+    const daysTotal  = (startDate && endDate)
+      ? Math.max(1, Math.round((new Date(endDate) - new Date(startDate)) / 86400000)) : null;
+    const capitalBase = csp.strike * shares;
     const annualized  = (daysTotal && capitalBase > 0)
-      ? (totalPnl / capitalBase / daysTotal * 365 * 100).toFixed(1) + "%"
-      : "—";
-    const toggleLabel = isExpanded ? "▾ 合看" : "▸ 分看";
+      ? (totalPnl / capitalBase / daysTotal * 365 * 100).toFixed(1) + "%" : "—";
+    const adjCost     = (csp.strike - csp.premium).toFixed(2);
+    const ccEndLabel  = cc.status === "expired" ? "到期OTM" : cc.status === "assigned" ? "被行权" : "买回平仓";
+
+    // ── 流程时间轴
+    const flowHTML = `<div class="opts-wheel-timeline">
+      <div class="opts-wt-step">
+        <div class="opts-wt-tag">① 卖出CSP</div>
+        <div class="opts-wt-val up">+${fmt.usd(cspPrem)}</div>
+        <div class="opts-wt-desc">$${csp.strike}P · ${csp.qty}张</div>
+        ${startDate ? `<div class="opts-wt-date">${startDate}</div>` : ""}
+      </div>
+      <div class="opts-wt-arrow">→</div>
+      <div class="opts-wt-step">
+        <div class="opts-wt-tag">② 被行权</div>
+        <div class="opts-wt-val">@$${csp.strike}</div>
+        <div class="opts-wt-desc">${shares}股 · 调整成本</div>
+        <div class="opts-wt-desc" style="color:var(--accent)">$${adjCost}/股</div>
+        ${assignDate ? `<div class="opts-wt-date">${assignDate}</div>` : ""}
+      </div>
+      <div class="opts-wt-arrow">→</div>
+      <div class="opts-wt-step">
+        <div class="opts-wt-tag">③ 卖出CC</div>
+        <div class="opts-wt-val ${ccPnl >= 0 ? "up" : "down"}">${ccPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(ccPnl))}</div>
+        <div class="opts-wt-desc">$${cc.strike}C · ${cc.qty}张</div>
+        ${cc.entryDate ? `<div class="opts-wt-date">${cc.entryDate}</div>` : ""}
+      </div>
+      <div class="opts-wt-arrow">→</div>
+      <div class="opts-wt-step">
+        <div class="opts-wt-tag">④ ${ccEndLabel}</div>
+        <div class="opts-wt-val ${stockPnl >= 0 ? "up" : "down"}">${stockPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockPnl))}</div>
+        <div class="opts-wt-desc">@$${cc.strike} · 正股盈亏</div>
+        ${endDate ? `<div class="opts-wt-date">${endDate}</div>` : ""}
+      </div>
+    </div>`;
+
+    // ── 公式汇总行
+    const calcHTML = `<div class="opts-wheel-calc">
+      <span class="opts-wc up">CSP +${fmt.usd(cspPrem)}</span>
+      <span class="opts-wc-op">+</span>
+      <span class="opts-wc ${ccPnl >= 0 ? "up" : "down"}">CC ${ccPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(ccPnl))}</span>
+      <span class="opts-wc-op">+</span>
+      <span class="opts-wc ${stockPnl >= 0 ? "up" : "down"}">正股 ${stockPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockPnl))}</span>
+      <span class="opts-wc-op">=</span>
+      <span class="opts-wc-total ${totalCls}">${totalPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalPnl))}</span>
+      ${daysTotal ? `<span class="opts-wc-meta">${daysTotal}天 · ${annualized}年化</span>` : ""}
+    </div>`;
 
     const expandedHTML = isExpanded ? `
       <div class="opts-wheel-sub-cards">
-        <div class="opts-wheel-sub-label">CSP 期权</div>
+        <div class="opts-wheel-sub-label">CSP 期权明细</div>
         ${_optDonePosCard(csp)}
-        <div class="opts-wheel-sub-label">CC 备兑</div>
+        <div class="opts-wheel-sub-label">CC 备兑明细</div>
         ${_optDonePosCard(cc)}
       </div>` : "";
 
@@ -5064,19 +5108,13 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="opts-card-hd">
         <span class="opts-wheel-badge">轮组</span>
         <span class="opts-card-sym">${csp.sym}</span>
-        <span class="opts-wheel-flow">CSP→正股→CC</span>
         <div class="opts-card-hd-r">
           <div class="opts-card-amt ${totalCls}">${totalPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalPnl))}</div>
-          <button class="opts-mini-btn opts-wheel-toggle-btn" data-wheel-toggle="${groupId}">${toggleLabel}</button>
+          <button class="opts-mini-btn opts-wheel-toggle-btn" data-wheel-toggle="${groupId}">${isExpanded ? "▾ 合看" : "▸ 分看"}</button>
         </div>
       </div>
-      <div class="opts-card-metrics">
-        <div class="opts-card-m"><div class="opts-card-ml">CSP权利金</div><div class="opts-card-mv up">+${fmt.usd(cspPrem)}</div></div>
-        <div class="opts-card-m"><div class="opts-card-ml">CC期权盈亏</div><div class="opts-card-mv ${ccOptPnl >= 0 ? "up" : "down"}">${ccOptPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(ccOptPnl))}</div></div>
-        <div class="opts-card-m"><div class="opts-card-ml">正股盈亏</div><div class="opts-card-mv ${stockPnl >= 0 ? "up" : "down"}">${stockPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockPnl))}</div></div>
-        <div class="opts-card-m"><div class="opts-card-ml">轮转年化</div><div class="opts-card-mv ${totalPnl >= 0 ? "up" : "down"}">${annualized}</div></div>
-      </div>
-      ${daysTotal ? `<div class="opts-card-meta">轮转周期 ${daysTotal}天 · ${startDate} → ${endDate}</div>` : ""}
+      <div class="opts-wt-scroll">${flowHTML}</div>
+      ${calcHTML}
       ${expandedHTML}
     </div>`;
   }
@@ -5095,7 +5133,11 @@ function rsAdjustGrade(grade, rsResult) {
       ? (allCspAssigned.length / allCspDone.length * 100).toFixed(0) + "%"
       : "—";
     const realizedPnl   = settledPosns.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
-    const settledPrem   = done.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
+    // NET settled premium: gross for expired/assigned, minus buyback for closed
+    const settledPrem   = settledPosns.reduce((s, p) => {
+      if (p.status === "closed") return s + (p.premium - (p.closePremium || 0)) * 100 * p.qty;
+      return s + p.premium * 100 * p.qty;
+    }, 0);
     const openPrem      = open.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
     const realCls       = realizedPnl >= 0 ? "up" : "down";
 
@@ -5418,7 +5460,13 @@ function rsAdjustGrade(grade, rsResult) {
     const body = (pending.length || open.length || done.length)
       ? `${_optSummaryHTML(open, done)}
          ${pending.length ? `<div class="opts-sub-label opts-sub-pending">待执行 · Pending · ${pending.length}</div>${pending.map(_optPendingCard).join("")}` : ""}
-         ${open.length ? `<div class="opts-sub-label">持仓中 · Open · ${open.length}</div>${open.map(_optOpenPosCard).join("")}` : ""}
+         ${open.length ? (() => {
+           const oCsp = open.filter(p => p.strat === "csp");
+           const oCc  = open.filter(p => p.strat === "cc");
+           return `<div class="opts-sub-label">持仓中 · Open · ${open.length}</div>` +
+             (oCsp.length ? `<div class="opts-sub-label opts-sub-strat">CSP · 卖看跌 · ${oCsp.length}</div>${oCsp.map(_optOpenPosCard).join("")}` : "") +
+             (oCc.length  ? `<div class="opts-sub-label opts-sub-strat">CC · 备兑看涨 · ${oCc.length}</div>${oCc.map(_optOpenPosCard).join("")}` : "");
+         })() : ""}
          ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}
          ${settledSection}
          ${_optWheelStatsHTML(all)}`
