@@ -1713,6 +1713,30 @@
   .opts-pnl-occ-row { display: flex; justify-content: space-between; font-size: 10px; color: var(--fg-2); line-height: 1.6; gap: 8px; }
   .opts-pnl-occ-total { font-weight: 700; color: var(--fg-1); border-top: 1px solid var(--line); margin-top: 2px; padding-top: 2px; }
   .opts-pnl-item-sep { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
+  /* ── Strategy Handbook */
+  .opts-strat-ref { margin-top: 22px; }
+  .opts-strat-ref details > summary { list-style: none; }
+  .opts-strat-ref details > summary::-webkit-details-marker { display: none; }
+  .opts-strat-sum { font-size: 11px; color: var(--fg-3); cursor: pointer; padding: 8px 0; letter-spacing: .04em; user-select: none; display: flex; align-items: center; gap: 6px; }
+  .opts-strat-sum::before { content: "▸"; font-size: 9px; transition: transform .2s; }
+  details[open] .opts-strat-sum::before { transform: rotate(90deg); }
+  .opts-strat-book { padding-top: 10px; display: flex; flex-direction: column; gap: 18px; }
+  .opts-sb-section { }
+  .opts-sb-hd { font-size: 11px; font-weight: 700; color: var(--fg-1); display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .opts-sb-tag { font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 4px; letter-spacing: .05em; font-family: var(--f-mono); }
+  .opts-sb-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .opts-sb-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 620px; }
+  .opts-sb-table thead th { font-size: 9px; font-weight: 700; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; padding: 4px 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+  .opts-sb-table tbody tr { border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
+  .opts-sb-table tbody tr:last-child { border-bottom: none; }
+  .opts-sb-table td { padding: 8px 8px; vertical-align: top; line-height: 1.5; color: var(--fg-1); }
+  .opts-sb-name { white-space: nowrap; min-width: 90px; }
+  .opts-sb-name b { font-size: 12px; font-weight: 800; font-family: var(--f-mono); display: block; }
+  .opts-sb-zh { font-size: 9.5px; color: var(--fg-3); display: block; margin-top: 1px; white-space: nowrap; }
+  .opts-sb-struct { font-size: 10.5px; color: var(--fg-2); font-family: var(--f-mono); min-width: 130px; }
+  .opts-sb-rep { min-width: 160px; }
+  .opts-sb-scene { color: var(--fg-2); min-width: 120px; }
+  .opts-sb-timing { font-size: 10.5px; color: var(--accent); min-width: 140px; }
   .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 7px; }
   .opts-wheel-flow { font-size: 9px; color: var(--accent); letter-spacing: .04em; opacity: 0.8; flex-shrink: 0; }
   .opts-wheel-toggle-btn { font-size: 10px; }
@@ -4418,8 +4442,8 @@
   </div>
 </div>
 
-<script src="data.js?v=286"></script>
-<script src="desk.js?v=286"></script>
+<script src="data.js?v=287"></script>
+<script src="desk.js?v=287"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
