@@ -5235,100 +5235,51 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function _optStrategiesHTML() {
+    // Grouped by market direction / scenario
     const STRATS = [
-      { group: "卖方策略 · Premium Selling", tag: "Theta+", tagColor: "var(--accent)", strats: [
-        { name: "CSP", zh: "现金担保看跌",
-          struct: "卖 Put · 保证金 = 行权价×100×张数",
-          rep: "愿以行权价买入正股，OTM 到期则全收权利金；本质是有偿设定买入价",
-          scene: "中性偏多，支撑位附近；ETF/优质股",
-          timing: "IV 高（VIX 突升后）· 明确支撑位 · 现金充裕 · 30–45 DTE" },
-        { name: "CC", zh: "备兑看涨",
-          struct: "持正股 + 卖 Call · 以持股作担保",
-          rep: "对持仓增收权利金，主动降低持股成本；限制上行但换取现金流",
-          scene: "已持股，预期横盘或缓涨，不期待近期大涨",
-          timing: "接近阻力位 · IV 偏高 · 股价回升中 · 21–30 DTE" },
-        { name: "Wheel", zh: "轮转策略",
-          struct: "CSP → 被指派持股 → CC → 循环",
-          rep: "反复收权利金，长期以低于市价买入并以目标价卖出；把波动变现",
-          scene: "看好标的长期，愿意持股，流动性好的 ETF（QQQ/IWM）",
-          timing: "清晰估值支撑 · IV 偏高 · 充足资金备用" },
-        { name: "Bull Put Spread", zh: "牛市看跌价差",
-          struct: "卖高行权价 Put + 买低行权价 Put（同期限）",
-          rep: "限定最大损失，中性偏多；保证金仅为价差宽度，杠杆更高",
-          scene: "偏多但不确定，高 IV 标的（SMH/MAGS），资金有限",
-          timing: "明确支撑位 · IV 高 · 价差宽度 = 预期支撑区间 · 30 DTE" },
-        { name: "Bear Call Spread", zh: "熊市看涨价差",
-          struct: "卖低行权价 Call + 买高行权价 Call（同期限）",
-          rep: "限定最大损失，中性偏空；适合压力位上方布局或对冲",
-          scene: "反弹至阻力位，预期承压回落；也用于对冲多头持仓",
-          timing: "阻力位附近 · RSI > 70 超买 · IV 高 · 21–30 DTE" },
-        { name: "Iron Condor", zh: "铁鹰",
-          struct: "Bull Put Spread + Bear Call Spread（同期限双边）",
-          rep: "双边卖权，价格在区间内到期即双收；IV 压缩是最大助力",
-          scene: "明确震荡区间，财报季后 IV 将下降，VIX 开始回落",
-          timing: "IV Rank > 50% 进场 · FOMC/财报后 · QQQ/GLD 首选" },
+      { icon: "📈", group: "看涨", sub: "Bullish", strats: [
+        { name: "CSP",            zh: "现金担保看跌", desc: "有偿设定买入价，OTM到期全收权利金",   timing: "IV高 · 支撑位附近 · 30–45 DTE" },
+        { name: "Bull Put Spread",zh: "牛市看跌价差", desc: "限定风险做多，保证金小于CSP",         timing: "支撑位 · IV高 · 高波动标的" },
+        { name: "Long Call",      zh: "买入看涨",     desc: "有限成本博上涨，损失封顶于权利金",   timing: "IV低 · 有明确催化剂 · 30 DTE+" },
+        { name: "PMCC",           zh: "穷人版备兑",   desc: "LEAPS代替持股 + 卖Call降成本",       timing: "趋势确立 · LEAPS Delta ≥ 0.8" },
       ]},
-      { group: "买方策略 · Directional", tag: "Gamma+", tagColor: "var(--warn)", strats: [
-        { name: "Long Call", zh: "买入看涨",
-          struct: "买 Call · 付权利金 · 无保证金",
-          rep: "以有限成本博取上涨收益，损失封顶在权利金；适合强方向判断",
-          scene: "强烈看涨有催化剂，不想持股但要方向暴露",
-          timing: "IV Rank < 30% 便宜 · 突破前 · 财报前低 IV 标的 · 30 DTE+" },
-        { name: "Protective Put", zh: "保护性看跌",
-          struct: "持正股 + 买 Put · 本质是给持仓买保险",
-          rep: "对持仓下行对冲，正股价值设底；盈利锁住 + 保留上行潜力",
-          scene: "重要事件前（财报/FOMC），持仓已大幅盈利不想减仓",
-          timing: "IV 低时买便宜 · 行权价 = 止损位 · 选 1–3 个月期限" },
-        { name: "PMCC", zh: "穷人版备兑",
-          struct: "买深度实值 LEAPS Call（Delta≥0.8，>12M）+ 卖近期 OTM Call",
-          rep: "以 LEAPS 替代持股，资本效率高；卖 Call 收入摊薄 LEAPS 成本",
-          scene: "强烈看涨，资金有限，愿意做长期；QQQ/IWM 最优",
-          timing: "LEAPS Delta ≥ 0.80 · 趋势明确向上 · 卖 Call Delta 0.25–0.35" },
+      { icon: "📉", group: "看跌 / 对冲", sub: "Bearish · Hedge", strats: [
+        { name: "Bear Call Spread", zh: "熊市看涨价差", desc: "限定风险做空，阻力位上方布局",     timing: "阻力位 · RSI > 70 · IV高" },
+        { name: "Protective Put",   zh: "保护性看跌",   desc: "给持仓买保险，盈利锁住保留上行",  timing: "IV低时便宜 · 重大事件前" },
       ]},
-      { group: "波动率策略 · Volatility", tag: "Vega", tagColor: "oklch(0.75 0.17 50)", strats: [
-        { name: "Long Straddle", zh: "买入跨式",
-          struct: "买平值 Call + 买平值 Put（同行权价，同期限）",
-          rep: "押注大幅波动，方向未知；IV 低时买便宜，靠实际波动率超过隐含波动率盈利",
-          scene: "财报/重大消息前，预期单日大波动，IV 历史低位",
-          timing: "IV Rank < 30% · 财报前 1–2 周 · 避免事件后买（IV crush）" },
-        { name: "Short Strangle", zh: "卖出宽跨式",
-          struct: "卖 OTM Put + 卖 OTM Call（同期限，两侧对称）",
-          rep: "双边收权利金，押注价格在区间内；赚 IV 压缩；理论无限风险需严守止损",
-          scene: "IV 高位预期回落，横盘震荡，无重大催化剂",
-          timing: "IV Rank > 70% · 选 Delta 0.15–0.20 两侧 · 设最大亏损 2× 权利金" },
-        { name: "Calendar Spread", zh: "日历价差",
-          struct: "卖近期 Call/Put + 买远期同行权价 Call/Put",
-          rep: "赚近期快速时间价值衰减；远期慢 Theta，近期快 Theta；期限结构套利",
-          scene: "预期横盘，短期 IV 高于长期；事件前近月 IV 被抬高",
-          timing: "近月 IV > 远月 IV · 选平值行权价 · 事件后平掉近月留远月" },
+      { icon: "↔️", group: "横盘收租", sub: "Neutral · Income", strats: [
+        { name: "CC",             zh: "备兑看涨",     desc: "持股卖Call增收，主动降低持股成本",   timing: "阻力位附近 · IV偏高 · 21–30 DTE" },
+        { name: "Wheel",          zh: "轮转策略",     desc: "CSP→持股→CC循环，把波动变现金流",   timing: "流动性ETF · 估值支撑 · IV偏高" },
+        { name: "Iron Condor",    zh: "铁鹰",         desc: "双边卖权，价格在区间内双收",         timing: "IV Rank > 50% · FOMC/财报后" },
+        { name: "Short Strangle", zh: "卖出宽跨式",   desc: "双边OTM收租，押注不大波动",         timing: "IV Rank > 70% · 无催化剂" },
+        { name: "Calendar Spread",zh: "日历价差",     desc: "近期快Theta − 远期慢Theta套利",     timing: "近月IV > 远月IV · 平值行权价" },
+      ]},
+      { icon: "💥", group: "押注大波动", sub: "Volatility Play", strats: [
+        { name: "Long Straddle",  zh: "买入跨式",     desc: "方向未知押大波动，损失封顶于权利金", timing: "IV Rank < 30% · 财报前1–2周" },
       ]},
     ];
 
     const rows = strats => strats.map(s => `<tr>
       <td class="opts-sb-name"><b>${s.name}</b><span class="opts-sb-zh">${s.zh}</span></td>
-      <td class="opts-sb-struct">${s.struct}</td>
-      <td class="opts-sb-rep">${s.rep}</td>
-      <td class="opts-sb-scene">${s.scene}</td>
+      <td class="opts-sb-desc">${s.desc}</td>
       <td class="opts-sb-timing">${s.timing}</td>
     </tr>`).join("");
 
     const sections = STRATS.map(g => `
       <div class="opts-sb-section">
         <div class="opts-sb-hd">
-          ${g.group}
-          <span class="opts-sb-tag" style="background:color-mix(in oklch,${g.tagColor} 18%,transparent);color:${g.tagColor}">${g.tag}</span>
+          <span class="opts-sb-icon">${g.icon}</span>${g.group}
+          <span class="opts-sb-sub">${g.sub}</span>
         </div>
-        <div class="opts-sb-wrap">
-          <table class="opts-sb-table">
-            <thead><tr><th>策略</th><th>结构</th><th>代表</th><th>适合场景</th><th>入场时机</th></tr></thead>
-            <tbody>${rows(g.strats)}</tbody>
-          </table>
-        </div>
+        <table class="opts-sb-table">
+          <thead><tr><th>策略</th><th>代表</th><th>入场时机</th></tr></thead>
+          <tbody>${rows(g.strats)}</tbody>
+        </table>
       </div>`).join("");
 
     return `<div class="opts-strat-ref">
       <details>
-        <summary class="opts-strat-sum">策略手册 · 12种常见期权组合 · 点击展开</summary>
+        <summary class="opts-strat-sum">策略手册 · 按场景分类 · 点击展开</summary>
         <div class="opts-strat-book">${sections}</div>
       </details>
     </div>`;
