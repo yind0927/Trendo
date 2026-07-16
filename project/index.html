@@ -1720,21 +1720,24 @@
   .opts-strat-sum { font-size: 11px; color: var(--fg-3); cursor: pointer; padding: 8px 0; letter-spacing: .04em; user-select: none; display: flex; align-items: center; gap: 6px; }
   .opts-strat-sum::before { content: "▸"; font-size: 9px; transition: transform .2s; }
   details[open] .opts-strat-sum::before { transform: rotate(90deg); }
-  .opts-strat-book { padding: 10px 4px 4px; display: flex; flex-direction: column; gap: 20px; }
+  .opts-strat-book { padding: 10px 0 4px; display: flex; flex-direction: column; gap: 14px; }
   .opts-sb-section { background: var(--bg-1); border-radius: 8px; padding: 12px 14px; }
   .opts-sb-hd { font-size: 11.5px; font-weight: 700; color: var(--fg-1); display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
   .opts-sb-icon { font-size: 13px; }
   .opts-sb-sub { font-size: 9px; color: var(--fg-3); font-weight: 400; letter-spacing: .04em; margin-left: 2px; }
-  .opts-sb-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-  .opts-sb-table thead th { font-size: 9px; font-weight: 700; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; padding: 0 8px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+  .opts-sb-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .opts-sb-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 560px; }
+  .opts-sb-table thead th { font-size: 9px; font-weight: 700; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; padding: 0 18px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
   .opts-sb-table tbody tr { border-bottom: 1px solid color-mix(in oklch, var(--line) 40%, transparent); }
   .opts-sb-table tbody tr:last-child { border-bottom: none; }
-  .opts-sb-table td { padding: 8px 8px 8px 0; vertical-align: top; line-height: 1.5; }
+  .opts-sb-table td { padding: 8px 18px 8px 0; vertical-align: top; line-height: 1.55; color: var(--fg-1); }
+  .opts-sb-table td:last-child { padding-right: 0; }
   .opts-sb-name { white-space: nowrap; width: 1%; }
   .opts-sb-name b { font-size: 12px; font-weight: 800; font-family: var(--f-mono); display: block; color: var(--fg-0); }
   .opts-sb-zh { font-size: 9.5px; color: var(--fg-3); display: block; margin-top: 1px; white-space: nowrap; }
-  .opts-sb-desc { color: var(--fg-1); padding-right: 16px !important; }
-  .opts-sb-timing { font-size: 10.5px; color: var(--accent); white-space: nowrap; }
+  .opts-sb-prin { color: var(--fg-2); font-size: 10.5px; min-width: 180px; }
+  .opts-sb-method { font-size: 10.5px; color: var(--fg-1); font-family: var(--f-mono); min-width: 150px; }
+  .opts-sb-timing { font-size: 10.5px; color: var(--accent); white-space: nowrap; min-width: 120px; }
   .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 7px; }
   .opts-wheel-flow { font-size: 9px; color: var(--accent); letter-spacing: .04em; opacity: 0.8; flex-shrink: 0; }
   .opts-wheel-toggle-btn { font-size: 10px; }
@@ -4440,8 +4443,8 @@
   </div>
 </div>
 
-<script src="data.js?v=288"></script>
-<script src="desk.js?v=288"></script>
+<script src="data.js?v=289"></script>
+<script src="desk.js?v=289"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

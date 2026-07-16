@@ -5235,33 +5235,93 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function _optStrategiesHTML() {
-    // Grouped by market direction / scenario
     const STRATS = [
       { icon: "📈", group: "看涨", sub: "Bullish", strats: [
-        { name: "CSP",            zh: "现金担保看跌", desc: "有偿设定买入价，OTM到期全收权利金",   timing: "IV高 · 支撑位附近 · 30–45 DTE" },
-        { name: "Bull Put Spread",zh: "牛市看跌价差", desc: "限定风险做多，保证金小于CSP",         timing: "支撑位 · IV高 · 高波动标的" },
-        { name: "Long Call",      zh: "买入看涨",     desc: "有限成本博上涨，损失封顶于权利金",   timing: "IV低 · 有明确催化剂 · 30 DTE+" },
-        { name: "PMCC",           zh: "穷人版备兑",   desc: "LEAPS代替持股 + 卖Call降成本",       timing: "趋势确立 · LEAPS Delta ≥ 0.8" },
+        { name: "CSP",             zh: "现金担保看跌",
+          prin: "卖Put收权利金，以行权价为有偿买入意愿价；OTM到期权利金全收，被指派则以更低成本持股",
+          method: "卖OTM Put · 保证金=行权价×100×张 · 30–45 DTE",
+          timing: "IV高 · 明确支撑位 · 现金充裕" },
+        { name: "Bull Put Spread",  zh: "牛市看跌价差",
+          prin: "同CSP方向，但买入更低行权价Put对冲，把最大亏损锁定在价差宽度内，保证金大幅减少",
+          method: "卖高Put + 买低Put（同期限） · 最大亏损=价差宽度−净权利金",
+          timing: "支撑位 · IV高 · SMH/MAGS等高波动标的" },
+        { name: "Bull Call Spread", zh: "牛市看涨价差",
+          prin: "以卖出更高行权价Call来抵消买Call成本，在定义范围内博涨，IV高时卖腿权利金厚",
+          method: "买低Call + 卖高Call（同期限） · 最大收益=价差宽度−净权利金",
+          timing: "明确上涨目标价 · 30 DTE+ · IV适中" },
+        { name: "Long Call",        zh: "买入看涨",
+          prin: "付权利金买入上涨权利，损失封顶在权利金；不占用大量资本即可获得方向暴露",
+          method: "买ATM/轻虚值Call · 30 DTE+",
+          timing: "IV Rank < 30% · 有明确催化剂 · 突破前" },
+        { name: "Risk Reversal",    zh: "风险逆转",
+          prin: "卖OTM Put筹资支付买OTM Call成本，接近零净成本的方向性押注；代价是承担下行风险",
+          method: "卖OTM Put + 买OTM Call（同期限，权利金近似抵消）",
+          timing: "强烈看涨 · 愿意承担下行 · 两腿权利金接近" },
       ]},
       { icon: "📉", group: "看跌 / 对冲", sub: "Bearish · Hedge", strats: [
-        { name: "Bear Call Spread", zh: "熊市看涨价差", desc: "限定风险做空，阻力位上方布局",     timing: "阻力位 · RSI > 70 · IV高" },
-        { name: "Protective Put",   zh: "保护性看跌",   desc: "给持仓买保险，盈利锁住保留上行",  timing: "IV低时便宜 · 重大事件前" },
+        { name: "Bear Call Spread", zh: "熊市看涨价差",
+          prin: "卖低行权价Call收权利金，买高行权价Call封顶风险；价格不超过卖腿行权价则全收",
+          method: "卖低Call + 买高Call（同期限） · 最大亏损=价差宽度−净权利金",
+          timing: "阻力位附近 · RSI > 70 · IV高" },
+        { name: "Bear Put Spread",  zh: "熊市看跌价差",
+          prin: "买Put同时卖更低行权价Put降成本，锁定下跌收益区间，适合IV低时代替Long Put",
+          method: "买高Put + 卖低Put（同期限） · 净权利金低于单买Put",
+          timing: "偏空方向明确 · IV低时性价比优 · 30 DTE+" },
+        { name: "Protective Put",   zh: "保护性看跌",
+          prin: "持正股同时买Put，相当于给持仓买保险；设定最大损失底线，同时保留上涨潜力",
+          method: "持股 + 买OTM Put · 行权价≈止损位",
+          timing: "IV低便宜 · 重大事件前 · 持仓盈利想锁住" },
+        { name: "Collar",           zh: "领口策略",
+          prin: "卖Call所收权利金支付买Put成本，实现低成本甚至零成本对冲；代价是限制上行收益",
+          method: "持股 + 买OTM Put + 卖OTM Call（同期限）",
+          timing: "持仓大幅盈利需保护 · IV偏高（卖腿收益厚）" },
       ]},
       { icon: "↔️", group: "横盘收租", sub: "Neutral · Income", strats: [
-        { name: "CC",             zh: "备兑看涨",     desc: "持股卖Call增收，主动降低持股成本",   timing: "阻力位附近 · IV偏高 · 21–30 DTE" },
-        { name: "Wheel",          zh: "轮转策略",     desc: "CSP→持股→CC循环，把波动变现金流",   timing: "流动性ETF · 估值支撑 · IV偏高" },
-        { name: "Iron Condor",    zh: "铁鹰",         desc: "双边卖权，价格在区间内双收",         timing: "IV Rank > 50% · FOMC/财报后" },
-        { name: "Short Strangle", zh: "卖出宽跨式",   desc: "双边OTM收租，押注不大波动",         timing: "IV Rank > 70% · 无催化剂" },
-        { name: "Calendar Spread",zh: "日历价差",     desc: "近期快Theta − 远期慢Theta套利",     timing: "近月IV > 远月IV · 平值行权价" },
+        { name: "CC",              zh: "备兑看涨",
+          prin: "以持股作担保卖出Call，OTM到期权利金全收，被行权则以行权价卖出正股；主动摊薄持股成本",
+          method: "持股 + 卖OTM Call · 21–30 DTE",
+          timing: "阻力位附近 · IV偏高 · 不期待近期大涨" },
+        { name: "Wheel",           zh: "轮转策略",
+          prin: "CSP被指派持股后转做CC，反复收取权利金；把价格波动转化为持续现金流，长期降低持股成本",
+          method: "CSP → 被指派持股 → CC → 循环",
+          timing: "流动性好的ETF · 清晰估值支撑 · IV持续偏高" },
+        { name: "Iron Condor",    zh: "铁鹰",
+          prin: "同时做Bull Put Spread + Bear Call Spread，双边收权利金；价格在区间内到期则双收，IV压缩是最大助力",
+          method: "卖Put+买低Put + 卖Call+买高Call（同期限） · 双边对称",
+          timing: "IV Rank > 50% · FOMC/财报后 · QQQ/GLD首选" },
+        { name: "Short Strangle",  zh: "卖出宽跨式",
+          prin: "双边卖出OTM Put和Call收权利金，理论无限风险；比铁鹰权利金更多但保证金更大，押注低波动",
+          method: "卖OTM Put + 卖OTM Call（同期限） · 两侧Delta≈0.15–0.20",
+          timing: "IV Rank > 70% · 无重大催化剂 · 设最大亏损止损" },
+        { name: "Jade Lizard",     zh: "玉蜥蜴",
+          prin: "卖Put同时卖Call Spread（非裸Call），整体权利金超过Call Spread宽度，理论消除上行风险",
+          method: "卖OTM Put + 卖低Call + 买高Call（同期限）",
+          timing: "偏多中性 · IV高 · 不想要裸卖Call的无限上行风险" },
+        { name: "Calendar Spread", zh: "日历价差",
+          prin: "卖近期快速衰减的期权同时买远期期权，赚取近远期时间价值差；远期慢Theta，近期快Theta",
+          method: "卖近期期权 + 买远期同行权价期权 · 平值行权价",
+          timing: "近月IV > 远月IV · 预期价格横盘 · 事件前近月IV被抬高" },
       ]},
-      { icon: "💥", group: "押注大波动", sub: "Volatility Play", strats: [
-        { name: "Long Straddle",  zh: "买入跨式",     desc: "方向未知押大波动，损失封顶于权利金", timing: "IV Rank < 30% · 财报前1–2周" },
+      { icon: "💥", group: "波动率", sub: "Volatility Play", strats: [
+        { name: "Long Straddle",  zh: "买入跨式",
+          prin: "同时买ATM Call + ATM Put，方向未知押大波动；只要实际波动率超过隐含波动率就能盈利",
+          method: "买ATM Call + 买ATM Put（同行权价，同期限）",
+          timing: "IV Rank < 30% · 财报前1–2周 · 避免事件后买" },
+        { name: "Long Strangle",  zh: "买入宽跨式",
+          prin: "买OTM Call + OTM Put，比跨式成本更低但需要更大波动才盈利；两侧行权价均在价外",
+          method: "买OTM Call + 买OTM Put（同期限） · 各Delta≈0.25",
+          timing: "IV低 · 预期极大波动 · 财报前" },
+        { name: "Long Butterfly", zh: "蝶式价差",
+          prin: "押注价格在到期时精确落在中间行权价，最大收益在目标价；IV越低越便宜",
+          method: "买低Call + 卖2×中Call + 买高Call（等间距，同期限）",
+          timing: "明确目标价位 · IV低 · 30 DTE · 低成本定向押注" },
       ]},
     ];
 
     const rows = strats => strats.map(s => `<tr>
       <td class="opts-sb-name"><b>${s.name}</b><span class="opts-sb-zh">${s.zh}</span></td>
-      <td class="opts-sb-desc">${s.desc}</td>
+      <td class="opts-sb-prin">${s.prin}</td>
+      <td class="opts-sb-method">${s.method}</td>
       <td class="opts-sb-timing">${s.timing}</td>
     </tr>`).join("");
 
@@ -5271,10 +5331,12 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="opts-sb-icon">${g.icon}</span>${g.group}
           <span class="opts-sb-sub">${g.sub}</span>
         </div>
-        <table class="opts-sb-table">
-          <thead><tr><th>策略</th><th>代表</th><th>入场时机</th></tr></thead>
-          <tbody>${rows(g.strats)}</tbody>
-        </table>
+        <div class="opts-sb-scroll">
+          <table class="opts-sb-table">
+            <thead><tr><th>策略</th><th>原理</th><th>策略方法</th><th>入场时机</th></tr></thead>
+            <tbody>${rows(g.strats)}</tbody>
+          </table>
+        </div>
       </div>`).join("");
 
     return `<div class="opts-strat-ref">
