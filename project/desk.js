@@ -9614,10 +9614,11 @@ function rsAdjustGrade(grade, rsResult) {
     const ratio = (vxn / vix).toFixed(2);
     const r = parseFloat(ratio);
     let zone;
-    if      (r < 1.0)  zone = { color: "#ef4444", badge: "倒挂", desc: "VIX > VXN · 宏观系统性压力，大盘恐慌超过科技板块，极少见" };
-    else if (r < 1.15) zone = { color: "#f97316", badge: "趋同", desc: "宏观风险上升，科技溢价压缩，需全面谨慎，警惕系统性回调" };
-    else if (r < 1.35) zone = { color: "#22c55e", badge: "正常溢价", desc: "Nasdaq 自然波动高于大盘，情绪正常分化，科技无特别压力" };
-    else               zone = { color: "#eab308", badge: "科技溢价偏高", desc: "科技板块承压，留意资金向防御/非科技板块轮动" };
+    if      (r < 1.0)  zone = { color: "#2dd4bf", badge: "倒挂",      desc: "VIX > VXN · S&P 500风险定价高于Nasdaq，广泛市场风险占主导，极少见" };
+    else if (r < 1.15) zone = { color: "#eab308", badge: "比例压缩",  desc: "两者风险接近，常见于系统性市场冲击或科技相对稳定" };
+    else if (r < 1.30) zone = { color: "#22c55e", badge: "常态区间",  desc: "Nasdaq存在正常的结构性波动溢价，科技无特别压力" };
+    else if (r < 1.50) zone = { color: "#f97316", badge: "科技波动偏贵", desc: "市场更担忧科技、成长股或大型科技公司的风险" };
+    else               zone = { color: "#ef4444", badge: "极端溢价",  desc: "可能存在科技板块事件风险，或VIX自身处于异常低位" };
     return `
       <div class="mkt-vix-ratio-strip">
         <span class="mkt-vxr-key">VXN ÷ VIX</span>
