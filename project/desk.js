@@ -9608,6 +9608,27 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
   }
 
+
+  function mkVxnVixRatioHTML(vxn, vix) {
+    if (!vix || !vxn) return "";
+    const ratio = (vxn / vix).toFixed(2);
+    const r = parseFloat(ratio);
+    let zone;
+    if      (r < 1.0)  zone = { color: "#ef4444", badge: "倒挂", desc: "VIX > VXN · 宏观系统性压力，大盘恐慌超过科技板块，极少见" };
+    else if (r < 1.15) zone = { color: "#f97316", badge: "趋同", desc: "宏观风险上升，科技溢价压缩，需全面谨慎，警惕系统性回调" };
+    else if (r < 1.35) zone = { color: "#22c55e", badge: "正常溢价", desc: "Nasdaq 自然波动高于大盘，情绪正常分化，科技无特别压力" };
+    else               zone = { color: "#eab308", badge: "科技溢价偏高", desc: "科技板块承压，留意资金向防御/非科技板块轮动" };
+    return `
+      <div class="mkt-vix-ratio-strip">
+        <span class="mkt-vxr-key">VXN ÷ VIX</span>
+        <span class="mkt-vxr-num" style="color:${zone.color}">${ratio}</span>
+        <span class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}12">
+          <span class="mkt-badge-dot" style="background:${zone.color}"></span>${zone.badge}
+        </span>
+        <span class="mkt-vxr-desc">${zone.desc}</span>
+      </div>`;
+  }
+
   function mkPlaybookHTML() {
     // Three-axis reference handbook (replaces old 6-regime table).
     const axisA = [
@@ -9813,6 +9834,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
       </div>
+      ${mkVxnVixRatioHTML(vxn, vix)}
       <div class="mkt-row">
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
