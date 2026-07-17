@@ -4955,14 +4955,27 @@ function rsAdjustGrade(grade, rsResult) {
 
     // CSP assigned — still holding stock (live card, not "settled")
     if (pos.status === "assigned" && isCSP && !pos.assignedStockSold) {
-      const spot       = optSpot(pos.sym);
-      const premIncome = pos.premium * 100 * pos.qty;
+      const spot        = optSpot(pos.sym);
+      const premIncome  = pos.premium * 100 * pos.qty;
       const stockShares = pos.qty * 100;
+
+      // Accumulate all linked CC premiums (open + expired + closed, net of buyback)
+      const allLinkedCC  = _activeOpts().filter(p => p.linkedCspId === pos.id && p.strat === "cc");
+      const totalCcPrem  = allLinkedCC.reduce((s, p) => {
+        if (p.status === "closed") return s + (p.premium - (p.closePremium || 0)) * 100 * p.qty;
+        return s + p.premium * 100 * p.qty;
+      }, 0);
+      const hasCc        = allLinkedCC.length > 0;
+      const ccPerShare   = hasCc ? totalCcPrem / stockShares : 0;
+      const adjustedCost = pos.strike - ccPerShare;
+
       const equityPnl  = spot ? (spot - pos.strike) * stockShares : null;
       const equityCls  = equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down";
-      const totalEst   = equityPnl != null ? premIncome + equityPnl : null;
+      const totalEst   = equityPnl != null ? premIncome + (hasCc ? totalCcPrem : 0) + equityPnl : null;
       const totalCls   = totalEst == null ? "" : totalEst >= 0 ? "up" : "down";
       const cushionPct = spot ? (spot - pos.strike) / pos.strike * 100 : null;
+      const adjCushion = spot ? (spot - adjustedCost) / adjustedCost * 100 : null;
+
       return `<div class="opts-pos-card opts-assigned-live">
         <div class="opts-card-hd">
           ${stratBadge}
@@ -4975,12 +4988,32 @@ function rsAdjustGrade(grade, rsResult) {
             ${delBtn}
           </div>
         </div>
+        ${hasCc ? `
+        <div class="opts-card-metrics">
+          <div class="opts-card-m"><div class="opts-card-ml">持股成本</div><div class="opts-card-mv">$${pos.strike.toFixed(2)}</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">CC累计/股</div><div class="opts-card-mv up">−$${ccPerShare.toFixed(2)}</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">调整成本</div><div class="opts-card-mv">$${adjustedCost.toFixed(2)}</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">调整安全垫</div><div class="opts-card-mv ${adjCushion == null ? "" : adjCushion >= 0 ? "up" : "down"}">${adjCushion == null ? "—" : (adjCushion >= 0 ? "+" : "") + adjCushion.toFixed(1) + "%"}</div></div>
+        </div>
+        ` : `
         <div class="opts-card-metrics">
           <div class="opts-card-m"><div class="opts-card-ml">持股成本</div><div class="opts-card-mv">$${pos.strike.toFixed(2)}</div></div>
           <div class="opts-card-m"><div class="opts-card-ml">持有股数</div><div class="opts-card-mv">${stockShares}股</div></div>
           <div class="opts-card-m"><div class="opts-card-ml">现价</div><div class="opts-card-mv">${spot ? "$" + spot.toFixed(2) : "—"}</div></div>
           <div class="opts-card-m"><div class="opts-card-ml">安全垫</div><div class="opts-card-mv ${cushionPct == null ? "" : cushionPct >= 0 ? "up" : "down"}">${cushionPct == null ? "—" : (cushionPct >= 0 ? "+" : "") + cushionPct.toFixed(1) + "%"}</div></div>
         </div>
+        `}
+        ${hasCc ? `
+        <div class="opts-pnl-row">
+          <div class="opts-pnl-col"><div class="opts-pnl-label">CSP收入</div><div class="opts-pnl-val up">+${fmt.usd(premIncome)}</div></div>
+          <div class="opts-pnl-op">+</div>
+          <div class="opts-pnl-col"><div class="opts-pnl-label">CC累计</div><div class="opts-pnl-val up">+${fmt.usd(totalCcPrem)}</div></div>
+          <div class="opts-pnl-op">+</div>
+          <div class="opts-pnl-col"><div class="opts-pnl-label">正股浮盈(估)</div><div class="opts-pnl-val ${equityCls}">${equityPnl == null ? "—" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl))}</div></div>
+          <div class="opts-pnl-op">=</div>
+          <div class="opts-pnl-col opts-pnl-total"><div class="opts-pnl-label">合计(估)</div><div class="opts-pnl-val ${totalCls}">${totalEst == null ? "—" : (totalEst >= 0 ? "+" : "−") + fmt.usd(Math.abs(totalEst))}</div></div>
+        </div>
+        ` : `
         <div class="opts-pnl-row">
           <div class="opts-pnl-col"><div class="opts-pnl-label">期权收入</div><div class="opts-pnl-val up">+${fmt.usd(premIncome)}</div></div>
           <div class="opts-pnl-op">+</div>
@@ -4988,6 +5021,7 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="opts-pnl-op">=</div>
           <div class="opts-pnl-col opts-pnl-total"><div class="opts-pnl-label">合计(估)</div><div class="opts-pnl-val ${totalCls}">${totalEst == null ? "—" : (totalEst >= 0 ? "+" : "−") + fmt.usd(Math.abs(totalEst))}</div></div>
         </div>
+        `}
         ${(() => {
           const activeCC = _activeOpts().find(p => p.linkedCspId === pos.id && p.strat === "cc" && p.status === "open");
           if (!activeCC) return "";
