@@ -1677,14 +1677,21 @@
   .opts-sub-pending { color: var(--warn) !important; }
   /* ── Card base (all states share this) */
   .opts-pos-card { padding: 12px 14px; border-top: 1px solid var(--bg-3); display: flex; flex-direction: column; gap: 7px; }
-  /* Open: accent teal left rule */
-  .opts-card-open { border-left: 2px solid var(--accent); padding-left: 12px; }
-  /* Pending: amber tint + left rule */
-  .opts-pending-card { border-left: 2px solid var(--warn); padding-left: 12px; background: color-mix(in oklch, var(--warn) 4%, var(--bg-1)); }
-  /* Settled/done: dim */
-  .opts-card-done { opacity: .78; }
+  /* Open: strat classes own the border */
+  .opts-card-open { border-left: none; }
+  /* Pending: amber tint; strat classes own the border */
+  .opts-pending-card { background: color-mix(in oklch, var(--warn) 4%, var(--bg-1)); }
+  /* Settled/done: strat + result classes handle styling */
+  .opts-card-done { opacity: 1; }
   /* Assigned holding: amber full border */
   .opts-assigned-live { border-left: 3px solid var(--warn); padding-left: 11px; background: color-mix(in oklch, var(--warn) 5%, var(--bg-1)); }
+  /* Strategy-based left border (CSP = teal, CC = orange) */
+  .opts-strat-csp { border-left: 3px solid var(--accent); padding-left: 11px; }
+  .opts-strat-cc  { border-left: 3px solid var(--orange); padding-left: 11px; }
+  /* Done card result tints */
+  .opts-result-expired  { background: color-mix(in oklch, var(--up) 5%, transparent); }
+  .opts-result-closed   { opacity: .72; }
+  .opts-result-assigned { background: color-mix(in oklch, var(--warn) 5%, transparent); }
   /* Sell CC from assigned position — accent teal to distinguish from exit/delete */
   .opts-sell-cc-btn { color: var(--accent) !important; border-color: var(--accent) !important; font-weight: 700; }
   .opts-wheel-badge { font-size: 9px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--accent); color: var(--accent); font-weight: 600; letter-spacing: .03em; white-space: nowrap; }
@@ -4459,8 +4466,8 @@
   </div>
 </div>
 
-<script src="data.js?v=291"></script>
-<script src="desk.js?v=291"></script>
+<script src="data.js?v=292"></script>
+<script src="desk.js?v=292"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

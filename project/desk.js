@@ -4849,7 +4849,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     const cushionPct = spot ? (isCSP ? (spot - pos.strike) : (pos.strike - spot)) / spot * 100 : null;
-    return `<div class="opts-pos-card opts-card-open">
+    return `<div class="opts-pos-card opts-card-open ${isCSP ? "opts-strat-csp" : "opts-strat-cc"}">
       <div class="opts-card-hd">
         <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
         <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
@@ -4888,7 +4888,8 @@ function rsAdjustGrade(grade, rsResult) {
     const cushionStr = cushion != null ? `安全垫 ${cushion >= 0 ? "+" : ""}${cushion.toFixed(1)}%` : "";
 
     const typeL = pos.type === "call" ? "C" : "P";
-    return `<div class="opts-pos-card opts-pending-card">
+    const isPendingCSP = pos.strat === "csp";
+    return `<div class="opts-pos-card opts-pending-card ${isPendingCSP ? "opts-strat-csp" : "opts-strat-cc"}">
       <div class="opts-card-hd">
         <span class="opts-pending-badge">待执行</span>
         <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
@@ -5019,7 +5020,8 @@ function rsAdjustGrade(grade, rsResult) {
       metaLine = `卖出 $${pos.premium.toFixed(2)} ×${pos.qty}张 · 结算 $${(pos.settleSpot||0).toFixed(2)} · ${pos.closedAt || ""}`;
     }
 
-    return `<div class="opts-pos-card opts-card-done">
+    const resultCls = pos.status === "expired" ? "opts-result-expired" : pos.status === "closed" ? "opts-result-closed" : "opts-result-assigned";
+    return `<div class="opts-pos-card opts-card-done ${isCSP ? "opts-strat-csp" : "opts-strat-cc"} ${resultCls}">
       <div class="opts-card-hd">
         ${stratBadge}
         <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
@@ -5344,7 +5346,7 @@ function rsAdjustGrade(grade, rsResult) {
           method: "卖近期期权 + 买远期同行权价期权 · 平值行权价",
           timing: "近月IV > 远月IV · 预期价格横盘 · 事件前近月IV被抬高" },
       ]},
-      { icon: "💥", group: "波动率", sub: "Volatility Play", strats: [
+      { icon: "📊", group: "波动率", sub: "Volatility Play", strats: [
         { name: "Long Straddle",  zh: "买入跨式",
           prin: "同时买ATM Call + ATM Put，方向未知押大波动；只要实际波动率超过隐含波动率就能盈利",
           method: "买ATM Call + 买ATM Put（同行权价，同期限）",
