@@ -1251,6 +1251,27 @@ function rsAdjustGrade(grade, rsResult) {
         }
         if (out.journalTags == null && localH.journalTags?.length) out.journalTags = localH.journalTags;
         if (out.journalNote == null && localH.journalNote) out.journalNote = localH.journalNote;
+        // Merge bxHistory by date union (additive snapshots, no conflict possible)
+        if (localH.bxHistory?.length) {
+          const cloudDates = new Set((out.bxHistory || []).map(r => r.date));
+          const localOnly = localH.bxHistory.filter(r => !cloudDates.has(r.date));
+          if (localOnly.length) {
+            out.bxHistory = [...(out.bxHistory || []), ...localOnly]
+              .sort((a, b) => a.date.localeCompare(b.date));
+          }
+        }
+        // Protect bx entry-grade fields (set once at open, null-guard only)
+        if (localH.bx) {
+          if (!out.bx) {
+            out.bx = localH.bx;
+          } else {
+            let bx = out.bx;
+            const fill = (k) => { if (bx[k] == null && localH.bx[k] != null) bx = { ...bx, [k]: localH.bx[k] }; };
+            fill("entryBxGrade"); fill("entryFinalGrade");
+            fill("entryRsResult"); fill("entrySectorEtf"); fill("entryST");
+            if (bx !== out.bx) out.bx = bx;
+          }
+        }
         return out;
       });
       HOLDINGS.splice(0, HOLDINGS.length, ...merged);
@@ -7051,7 +7072,7 @@ function rsAdjustGrade(grade, rsResult) {
 
       <div class="analytics-card" style="margin-bottom:14px">
         <div class="analytics-card-title">评级绩效 · Grade Performance</div>
-        <div class="analytics-card-sub">胜率 · 盈亏分布 · 按开仓评级</div>
+        <div class="analytics-card-sub">胜率 · 盈亏分布 · 按开仓评级 · 含部分平仓（已实现），纯持仓不计入</div>
         ${(() => {
             if (aGradeEntries.length === 0) return `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`;
             const _maxAbs = Math.max(1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
@@ -7128,7 +7149,7 @@ function rsAdjustGrade(grade, rsResult) {
         }).join("");
         return `<div class="analytics-card" style="margin-bottom:14px">
           <div class="analytics-card-title">入场时机绩效 · Entry Timing</div>
-          <div class="analytics-card-sub">按开仓时 BX 天数分段</div>
+          <div class="analytics-card-sub">按开仓时日线BX趋势已持续天数分段（初期0–5d · 中期5–15d · 延续15+d）· 同上仅算已实现</div>
           <div class="gp-header" style="margin-top:10px">
             <span class="gp-grade"></span><span class="gp-cnt">笔</span>
             <span class="gp-wr">胜率</span><span class="gp-avg">均%</span>
