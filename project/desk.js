@@ -1238,18 +1238,39 @@ function rsAdjustGrade(grade, rsResult) {
       if (h.prevClose > 0) live[h.sym] = { prevClose: h.prevClose, changePct: h.changePct, last: h.last };
     });
     if (Array.isArray(data.holdings)) {
-      // Merge cc records: union by ID so records added locally but not yet pushed to cloud
-      // (or lost in a cross-device race) are never silently dropped.
+      // Merge cc records by ID union + preserve journalTags/journalNote:
+      // cross-device race can cause cloud to overwrite local fields not yet pushed.
       const merged = data.holdings.map(cloudH => {
         const localH = HOLDINGS.find(h => h.sym === cloudH.sym && h.entry === cloudH.entry && h.cost === cloudH.cost);
-        if (!localH?.cc?.length) return cloudH;
-        const cloudIds = new Set((cloudH.cc || []).map(c => c.id));
-        const localOnly = localH.cc.filter(c => !cloudIds.has(c.id));
-        return localOnly.length ? { ...cloudH, cc: [...(cloudH.cc || []), ...localOnly] } : cloudH;
+        if (!localH) return cloudH;
+        const out = { ...cloudH };
+        if (localH.cc?.length) {
+          const cloudIds = new Set((out.cc || []).map(c => c.id));
+          const localOnly = localH.cc.filter(c => !cloudIds.has(c.id));
+          if (localOnly.length) out.cc = [...(out.cc || []), ...localOnly];
+        }
+        if (out.journalTags == null && localH.journalTags?.length) out.journalTags = localH.journalTags;
+        if (out.journalNote == null && localH.journalNote) out.journalNote = localH.journalNote;
+        return out;
       });
       HOLDINGS.splice(0, HOLDINGS.length, ...merged);
     }
-    if (Array.isArray(data.closed))      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
+    if (Array.isArray(data.closed)) {
+      // Preserve local journalTags/journalNote on closed records when cloud lacks them.
+      // Match by sym+entry+cost+closedAt (unique per partial-close record).
+      const mergedClosed = data.closed.map(cloudH => {
+        const localH = CLOSED_POSITIONS.find(h =>
+          h.sym === cloudH.sym && h.entry === cloudH.entry &&
+          Math.abs(h.cost - cloudH.cost) < 0.001 && h.closedAt === cloudH.closedAt
+        );
+        if (!localH) return cloudH;
+        const out = { ...cloudH };
+        if (out.journalTags == null && localH.journalTags?.length) out.journalTags = localH.journalTags;
+        if (out.journalNote == null && localH.journalNote) out.journalNote = localH.journalNote;
+        return out;
+      });
+      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...mergedClosed);
+    }
     if (data.notional != null)           totalNotional = data.notional;
     if (Array.isArray(data.watchlist))   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);
     if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
