@@ -4389,8 +4389,14 @@ function rsAdjustGrade(grade, rsResult) {
     // Stats bar
     const allClosedTrades = groupTrades(CLOSED_POSITIONS);
     const wins = allClosedTrades.filter(t => t.pnlFinal > 0);
+    const losses = allClosedTrades.filter(t => t.pnlFinal < 0);
     const totalPnl = allClosedTrades.reduce((s, t) => s + t.pnlFinal, 0);
     const winRate = allClosedTrades.length ? Math.round(wins.length / allClosedTrades.length * 100) : null;
+    const grossWin  = wins.reduce((s, t) => s + t.pnlFinal, 0);
+    const grossLoss = losses.reduce((s, t) => s + Math.abs(t.pnlFinal), 0);
+    const profitFactor = grossLoss > 0 ? (grossWin / grossLoss) : (grossWin > 0 ? Infinity : null);
+    const pfStr = profitFactor === null ? "—" : profitFactor === Infinity ? "∞" : profitFactor.toFixed(2) + "x";
+    const pfCls = profitFactor === null ? "" : profitFactor >= 1 ? "up" : "down";
     const floatingPnl = HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
     const showStatsBar = allClosedTrades.length > 0 || HOLDINGS.length > 0;
     const statsBar = showStatsBar ? `
@@ -4409,6 +4415,11 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="j-statsbar-item">
           <span class="j-statsbar-label">总盈亏</span>
           <span class="j-statsbar-value ${fmt.sign(totalPnl)}">${fmt.signed(Math.round(totalPnl))}</span>
+        </div>
+        <div class="j-statsbar-sep"></div>
+        <div class="j-statsbar-item">
+          <span class="j-statsbar-label">盈亏因子</span>
+          <span class="j-statsbar-value ${pfCls}">${pfStr}</span>
         </div>
         <div class="j-statsbar-sep"></div>` : ""}
         <div class="j-statsbar-item">
