@@ -1237,7 +1237,18 @@ function rsAdjustGrade(grade, rsResult) {
     [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => {
       if (h.prevClose > 0) live[h.sym] = { prevClose: h.prevClose, changePct: h.changePct, last: h.last };
     });
-    if (Array.isArray(data.holdings))    HOLDINGS.splice(0, HOLDINGS.length, ...data.holdings);
+    if (Array.isArray(data.holdings)) {
+      // Merge cc records: union by ID so records added locally but not yet pushed to cloud
+      // (or lost in a cross-device race) are never silently dropped.
+      const merged = data.holdings.map(cloudH => {
+        const localH = HOLDINGS.find(h => h.sym === cloudH.sym && h.entry === cloudH.entry && h.cost === cloudH.cost);
+        if (!localH?.cc?.length) return cloudH;
+        const cloudIds = new Set((cloudH.cc || []).map(c => c.id));
+        const localOnly = localH.cc.filter(c => !cloudIds.has(c.id));
+        return localOnly.length ? { ...cloudH, cc: [...(cloudH.cc || []), ...localOnly] } : cloudH;
+      });
+      HOLDINGS.splice(0, HOLDINGS.length, ...merged);
+    }
     if (Array.isArray(data.closed))      CLOSED_POSITIONS.splice(0, CLOSED_POSITIONS.length, ...data.closed);
     if (data.notional != null)           totalNotional = data.notional;
     if (Array.isArray(data.watchlist))   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);

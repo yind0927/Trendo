@@ -2870,8 +2870,9 @@
     /* ---- Inspirations / Options ---- */
     #inspirations-view { padding: 12px 12px 86px; }
     #options-view { padding: 12px 12px 86px; }
-    .j-statsbar { flex-wrap: wrap; }
-    .j-statsbar-item { padding: 8px 12px; }
+    .j-statsbar { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg-1); }
+    .j-statsbar-sep { display: none; }
+    .j-statsbar-item { flex: unset; padding: 9px 10px; box-shadow: 1px 0 0 0 var(--line), 0 1px 0 0 var(--line); background: var(--bg-1); }
     .journal-card { padding: 11px 13px; gap: 9px; }
     .jc-right { gap: 6px; }
     .jts-cols { grid-template-columns: 1fr 1px 1fr; gap: 0 10px; }
@@ -4470,8 +4471,8 @@
   </div>
 </div>
 
-<script src="data.js?v=296"></script>
-<script src="desk.js?v=296"></script>
+<script src="data.js?v=297"></script>
+<script src="desk.js?v=297"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
