@@ -96,20 +96,17 @@ async function processKey(syncKey, redis, fhKey, pgKey) {
     const today0    = new Date(); today0.setUTCHours(0, 0, 0, 0);
     const daysHeld  = Math.max(1, Math.round((today0 - entryDate) / 86400000) + 1);
 
-    const actualStop = order.stopMode === "pct" && order.stopPct > 0
-      ? last * (1 - order.stopPct / 100)
-      : (order.stop || 0);
     simHoldings.push({
       sym: order.sym, name: order.name || order.sym, kind: order.kind,
       qty: order.qty, cost: last, last, prevClose: null,
-      stop: actualStop, target: order.target,
+      stop: order.stop, target: order.target,
       entry: order.entryDate,
       size: simNotional > 0 ? (order.qty * last / simNotional) * 100 : 2.5,
       earnings: order.earnings, holdEarn: false,
       setup: order.orderType === "market" ? "市价单" : `限价单 @${order.limitPrice}`,
       thesis: "",
       status: "ok", pnlPct: 0, pnlDollar: 0,
-      risk1R: actualStop ? last - actualStop : 0,
+      risk1R: order.stop ? last - order.stop : 0,
       rMult: 0, days: daysHeld, spark: [last],
       bx: order.bx,
     });
