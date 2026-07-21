@@ -1234,7 +1234,7 @@
   .fetch-btn:hover { background: var(--bg-4); color: var(--fg-0); }
   .fetch-btn:disabled { opacity: 0.45; cursor: default; }
   /* Position sizer */
-  .form-sizer-hint { border-left: 2px solid var(--accent); background: color-mix(in oklch, var(--accent) 5%, var(--bg-1)); border-radius: 0 7px 7px 0; padding: 10px 12px; margin-top: 2px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .form-sizer-hint { border-left: 2px solid var(--accent); background: color-mix(in oklch, var(--accent) 5%, var(--bg-1)); border-radius: 0 7px 7px 0; padding: 10px 12px; margin-top: 8px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 8px; }
   .sizer-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); flex-shrink: 0; }
   .sizer-risk-line { display: flex; align-items: center; gap: 7px; }
   .sizer-risk-tail { font-size: 10px; color: var(--fg-3); flex-shrink: 0; }
@@ -4190,6 +4190,21 @@
         <label>止损价</label>
         <input type="number" id="form-stop" placeholder="0.00" step="0.01" required/>
       </div>
+      <div class="form-row">
+        <label>目标价</label>
+        <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
+      </div>
+      <div class="form-row">
+        <label>财报日期 <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(可选)</span></label>
+        <div class="form-row-inline">
+          <input type="date" id="form-earnings"/>
+          <button type="button" class="fetch-btn" id="form-earnings-fetch">自动获取</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>数量（股）</label>
+        <input type="number" id="form-qty" placeholder="100" step="1" required/>
+      </div>
       <div id="form-sizer-hint" style="display:none" class="form-sizer-hint">
         <div class="sizer-risk-line">
           <span class="sizer-lbl">仓位</span>
@@ -4212,21 +4227,6 @@
           <span id="form-sizer-suggest" class="sizer-suggest"></span>
           <button type="button" class="sizer-fill-btn" id="form-sizer-fill">填入</button>
         </div>
-      </div>
-      <div class="form-row">
-        <label>目标价</label>
-        <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
-      </div>
-      <div class="form-row">
-        <label>财报日期 <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(可选)</span></label>
-        <div class="form-row-inline">
-          <input type="date" id="form-earnings"/>
-          <button type="button" class="fetch-btn" id="form-earnings-fetch">自动获取</button>
-        </div>
-      </div>
-      <div class="form-row">
-        <label>数量（股）</label>
-        <input type="number" id="form-qty" placeholder="100" step="1" required/>
       </div>
       <button type="button" id="form-bx-toggle" class="form-bx-toggle">
         <span>综合评分信息 <span class="form-bx-hint">可选</span></span>
@@ -4526,8 +4526,8 @@
   </div>
 </div>
 
-<script src="data.js?v=305"></script>
-<script src="desk.js?v=305"></script>
+<script src="data.js?v=306"></script>
+<script src="desk.js?v=306"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
