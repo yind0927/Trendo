@@ -3075,7 +3075,10 @@ function rsAdjustGrade(grade, rsResult) {
     const _sizerEntryIn = $("#form-entry");
     const _sizerStopIn  = $("#form-stop");
     const _sizerAtrIn   = $("#form-atr");
-    if (_sizerEntryIn) _sizerEntryIn.addEventListener("input", _updateSizer);
+    if (_sizerEntryIn) {
+      _sizerEntryIn.addEventListener("input", _updateSizer);
+      _sizerEntryIn.addEventListener("focus", _updateSizer);
+    }
     if (_sizerStopIn)  _sizerStopIn.addEventListener("input", _updateSizer);
     if (_sizerAtrIn) {
       _sizerAtrIn.addEventListener("input", () => {
@@ -3084,6 +3087,16 @@ function rsAdjustGrade(grade, rsResult) {
         if (!entry || !atr || isNaN(entry) || isNaN(atr) || atr <= 0) return;
         const stopEl = $("#form-stop");
         if (stopEl) { stopEl.value = (entry - 2.5 * atr).toFixed(2); stopEl.dispatchEvent(new Event("input")); }
+      });
+    }
+    // Collapse sizer when focus moves to any input outside the sizer panel
+    const _sizerModal = $("#new-position-modal");
+    if (_sizerModal && _sizerHint) {
+      _sizerModal.addEventListener("focusin", e => {
+        if (_sizerHint.style.display === "none") return;
+        if (_sizerHint.contains(e.target)) return;
+        if (e.target === _sizerEntryIn) return;
+        _sizerHint.style.display = "none";
       });
     }
 

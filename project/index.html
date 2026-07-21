@@ -1233,21 +1233,25 @@
   .fetch-btn { all: unset; cursor: pointer; padding: 9px 12px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; color: var(--fg-1); white-space: nowrap; transition: background .12s, color .12s; }
   .fetch-btn:hover { background: var(--bg-4); color: var(--fg-0); }
   .fetch-btn:disabled { opacity: 0.45; cursor: default; }
-  /* Position sizer hint */
-  .form-sizer-hint { background: var(--bg-2); border-radius: 7px; border: 1px solid var(--line); padding: 9px 12px; margin-top: 2px; }
-  .sizer-risk-line { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-  .sizer-lbl { font-size: 11px; color: var(--fg-2); white-space: nowrap; flex-shrink: 0; }
-  .sizer-risk-seg { display: flex; gap: 4px; flex-wrap: wrap; }
-  .sizer-risk-seg button { all: unset; cursor: pointer; padding: 3px 9px; border-radius: 4px; font-size: 11px; font-family: var(--f-mono); font-weight: 600; color: var(--fg-2); background: var(--bg-3); border: 1px solid var(--line); transition: all .12s; white-space: nowrap; }
-  .sizer-risk-seg button:hover { color: var(--fg-0); background: var(--bg-4); }
+  /* Position sizer */
+  .form-sizer-hint { border-left: 2px solid var(--accent); background: color-mix(in oklch, var(--accent) 5%, var(--bg-1)); border-radius: 0 7px 7px 0; padding: 10px 12px; margin-top: 2px; display: flex; flex-direction: column; gap: 8px; }
+  .sizer-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); flex-shrink: 0; }
+  .sizer-risk-line { display: flex; align-items: center; gap: 7px; }
+  .sizer-risk-tail { font-size: 10px; color: var(--fg-3); flex-shrink: 0; }
+  .sizer-risk-seg { display: flex; gap: 3px; }
+  .sizer-risk-seg button { all: unset; cursor: pointer; padding: 2px 8px; border-radius: 3px; font-size: 10.5px; font-family: var(--f-mono); font-weight: 700; color: var(--fg-2); background: var(--bg-3); border: 1px solid var(--line); transition: all .12s; white-space: nowrap; }
+  .sizer-risk-seg button:hover { color: var(--accent); border-color: var(--accent); }
   .sizer-risk-seg button.active { color: oklch(0.14 0.012 250); background: var(--accent); border-color: var(--accent); }
-  .sizer-atr-line { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-  .sizer-atr-input { background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px; color: var(--fg-0); font-family: var(--f-mono); font-size: 12px; padding: 4px 8px; width: 88px; min-width: 0; box-sizing: border-box; }
-  .sizer-atr-input::placeholder { color: var(--fg-3); font-family: var(--f-sans); font-size: 11px; }
+  .sizer-atr-line { display: flex; align-items: center; gap: 7px; }
+  .sizer-atr-tag { font-size: 10px; font-family: var(--f-mono); font-weight: 700; color: var(--fg-3); background: var(--bg-3); border: 1px solid var(--line); border-radius: 3px; padding: 2px 6px; flex-shrink: 0; }
+  .sizer-atr-input { background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px; color: var(--fg-0); font-family: var(--f-mono); font-size: 12px; padding: 4px 8px; width: 80px; min-width: 0; box-sizing: border-box; }
+  .sizer-atr-input::placeholder { color: var(--fg-3); font-family: var(--f-sans); font-size: 10.5px; }
   .sizer-atr-input:focus { outline: none; border-color: var(--accent); }
-  .sizer-atr-hint { font-size: 11px; color: var(--fg-3); white-space: nowrap; }
-  .sizer-calc-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .sizer-suggest { font-size: 12px; font-weight: 700; color: var(--fg-0); font-family: var(--f-mono); flex: 1; }
+  .sizer-atr-hint { font-size: 10.5px; color: var(--fg-3); white-space: nowrap; }
+  .sizer-calc-line { display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid color-mix(in oklch, var(--accent) 20%, transparent); }
+  .sizer-suggest { font-size: 13px; font-weight: 800; color: var(--fg-0); font-family: var(--f-mono); flex: 1; letter-spacing: -0.01em; }
+  .sizer-fill-btn { all: unset; cursor: pointer; padding: 4px 12px; background: var(--accent); border-radius: 5px; font-size: 11px; font-weight: 700; color: oklch(0.14 0.012 250); white-space: nowrap; transition: opacity .12s; flex-shrink: 0; }
+  .sizer-fill-btn:hover { opacity: 0.82; }
   .form-actions {
     display: flex; gap: 10px; margin-top: 20px;
   }
@@ -4187,7 +4191,7 @@
       </div>
       <div id="form-sizer-hint" style="display:none" class="form-sizer-hint">
         <div class="sizer-risk-line">
-          <span class="sizer-lbl">单笔风险</span>
+          <span class="sizer-lbl">仓位</span>
           <div class="sizer-risk-seg" id="form-risk-seg">
             <button type="button" data-rpct="0.25">0.25%</button>
             <button type="button" data-rpct="0.5">0.5%</button>
@@ -4195,15 +4199,16 @@
             <button type="button" data-rpct="1.0">1%</button>
             <button type="button" data-rpct="1.5">1.5%</button>
           </div>
+          <span class="sizer-risk-tail">风险</span>
         </div>
         <div class="sizer-atr-line">
-          <span class="sizer-lbl">ATR(14)</span>
-          <input type="number" id="form-atr" class="sizer-atr-input" placeholder="选填，自动算止损" step="0.01" min="0"/>
+          <span class="sizer-atr-tag">ATR(14)</span>
+          <input type="number" id="form-atr" class="sizer-atr-input" placeholder="选填" step="0.01" min="0"/>
           <span class="sizer-atr-hint">× 2.5 → 止损</span>
         </div>
         <div class="sizer-calc-line" id="form-sizer-calc-line" style="display:none">
           <span id="form-sizer-suggest" class="sizer-suggest"></span>
-          <button type="button" class="fetch-btn" id="form-sizer-fill">填入</button>
+          <button type="button" class="sizer-fill-btn" id="form-sizer-fill">填入</button>
         </div>
       </div>
       <div class="form-row">
@@ -4519,8 +4524,8 @@
   </div>
 </div>
 
-<script src="data.js?v=303"></script>
-<script src="desk.js?v=303"></script>
+<script src="data.js?v=304"></script>
+<script src="desk.js?v=304"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
