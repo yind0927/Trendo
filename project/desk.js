@@ -3023,6 +3023,58 @@ function rsAdjustGrade(grade, rsResult) {
       etfInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); rsCalcBtn?.click(); } });
     }
 
+    // Position sizer: shows suggested qty based on risk% of notional
+    const _sizerHint = $("#form-sizer-hint");
+    const _r1El      = $("#form-sizer-1r");
+    const _suggEl    = $("#form-sizer-suggest");
+    const _fillBtn   = $("#form-sizer-fill");
+
+    const _updateSizer = () => {
+      if (!_sizerHint) return;
+      const entry = parseFloat($("#form-entry")?.value);
+      const stop  = parseFloat($("#form-stop")?.value);
+      if (!entry || !stop || entry <= stop || isNaN(entry) || isNaN(stop)) {
+        _sizerHint.style.display = "none";
+        return;
+      }
+      _sizerHint.style.display = "";
+      const rp = localStorage.getItem("trendo_risk_pct") || "1.0";
+      $$("[data-rpct]", _sizerHint).forEach(b => b.classList.toggle("active", b.dataset.rpct === rp));
+      const riskPerShare = entry - stop;
+      const notional     = newPositionContext === "sim" ? simNotional : totalNotional;
+      const riskPct      = parseFloat(rp);
+      const sugQty = Math.max(1, Math.floor(notional * riskPct / 100 / riskPerShare));
+      const sugAmt = sugQty * entry;
+      const sugPct = notional > 0 ? (sugAmt / notional * 100).toFixed(1) : "?";
+      if (_r1El)   _r1El.textContent   = `1R ${riskPerShare.toFixed(2)}/股`;
+      if (_suggEl) _suggEl.textContent = `→ ${sugQty}股 · $${Math.round(sugAmt).toLocaleString()} · ${sugPct}%`;
+    };
+
+    if (_sizerHint) {
+      _sizerHint.addEventListener("click", e => {
+        const btn = e.target.closest("[data-rpct]");
+        if (!btn) return;
+        localStorage.setItem("trendo_risk_pct", btn.dataset.rpct);
+        _updateSizer();
+      });
+    }
+    if (_fillBtn) {
+      _fillBtn.addEventListener("click", () => {
+        const entry = parseFloat($("#form-entry")?.value);
+        const stop  = parseFloat($("#form-stop")?.value);
+        if (!entry || !stop || entry <= stop) return;
+        const notional = newPositionContext === "sim" ? simNotional : totalNotional;
+        const riskPct  = parseFloat(localStorage.getItem("trendo_risk_pct") || "1.0");
+        const sugQty = Math.max(1, Math.floor(notional * riskPct / 100 / (entry - stop)));
+        const q = $("#form-qty");
+        if (q) { q.value = sugQty; q.dispatchEvent(new Event("input")); }
+      });
+    }
+    const _sizerEntryIn = $("#form-entry");
+    const _sizerStopIn  = $("#form-stop");
+    if (_sizerEntryIn) _sizerEntryIn.addEventListener("input", _updateSizer);
+    if (_sizerStopIn)  _sizerStopIn.addEventListener("input", _updateSizer);
+
     form.addEventListener("submit", e => {
       e.preventDefault();
       const sym    = $("#form-ticker").value.toUpperCase().trim();

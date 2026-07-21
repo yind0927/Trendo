@@ -1233,6 +1233,17 @@
   .fetch-btn { all: unset; cursor: pointer; padding: 9px 12px; background: var(--bg-3); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; color: var(--fg-1); white-space: nowrap; transition: background .12s, color .12s; }
   .fetch-btn:hover { background: var(--bg-4); color: var(--fg-0); }
   .fetch-btn:disabled { opacity: 0.45; cursor: default; }
+  /* Position sizer hint */
+  .form-sizer-hint { background: var(--bg-2); border-radius: 7px; border: 1px solid var(--line); padding: 9px 12px; margin-top: 2px; }
+  .sizer-risk-line { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .sizer-lbl { font-size: 11px; color: var(--fg-2); white-space: nowrap; flex-shrink: 0; }
+  .sizer-risk-seg { display: flex; gap: 4px; flex-wrap: wrap; }
+  .sizer-risk-seg button { all: unset; cursor: pointer; padding: 3px 9px; border-radius: 4px; font-size: 11px; font-family: var(--f-mono); font-weight: 600; color: var(--fg-2); background: var(--bg-3); border: 1px solid var(--line); transition: all .12s; white-space: nowrap; }
+  .sizer-risk-seg button:hover { color: var(--fg-0); background: var(--bg-4); }
+  .sizer-risk-seg button.active { color: oklch(0.14 0.012 250); background: var(--accent); border-color: var(--accent); }
+  .sizer-calc-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sizer-1r { font-size: 11px; color: var(--fg-3); font-family: var(--f-mono); }
+  .sizer-suggest { font-size: 12px; font-weight: 700; color: var(--fg-0); font-family: var(--f-mono); flex: 1; }
   .form-actions {
     display: flex; gap: 10px; margin-top: 20px;
   }
@@ -4170,6 +4181,22 @@
         <label>止损价</label>
         <input type="number" id="form-stop" placeholder="0.00" step="0.01" required/>
       </div>
+      <div id="form-sizer-hint" style="display:none" class="form-sizer-hint">
+        <div class="sizer-risk-line">
+          <span class="sizer-lbl">单笔风险</span>
+          <div class="sizer-risk-seg" id="form-risk-seg">
+            <button type="button" data-rpct="0.5">0.5%</button>
+            <button type="button" data-rpct="1.0">1%</button>
+            <button type="button" data-rpct="1.5">1.5%</button>
+            <button type="button" data-rpct="2.0">2%</button>
+          </div>
+        </div>
+        <div class="sizer-calc-line">
+          <span id="form-sizer-1r" class="sizer-1r"></span>
+          <span id="form-sizer-suggest" class="sizer-suggest"></span>
+          <button type="button" class="fetch-btn" id="form-sizer-fill">填入</button>
+        </div>
+      </div>
       <div class="form-row">
         <label>目标价</label>
         <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
@@ -4483,8 +4510,8 @@
   </div>
 </div>
 
-<script src="data.js?v=301"></script>
-<script src="desk.js?v=301"></script>
+<script src="data.js?v=302"></script>
+<script src="desk.js?v=302"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
