@@ -2809,6 +2809,8 @@ function rsAdjustGrade(grade, rsResult) {
       $$("[data-fbx-st]", body).forEach(b => b.classList.toggle("active", b.dataset.fbxSt === "null"));
       const esc = $("#entry-scorecard");
       if (esc) esc.style.display = "none";
+      const gTag = $("#sizer-grade-tag");
+      if (gTag) gTag.style.display = "none";
     };
 
     const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -2973,6 +2975,8 @@ function rsAdjustGrade(grade, rsResult) {
         const mo  = parseFloat(formBxBody.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
         const grade = calcBXGrade(cur, wk, mo);
         renderEntryScorecard(grade, _pendingRsResult, false, null, _pendingST);
+        const finalGrade = _pendingRsResult ? rsAdjustGrade(grade, _pendingRsResult) : grade;
+        _applyGradeToSizer(finalGrade);
       };
       formBxBody.addEventListener("click", e => {
         if (e.target.closest("[data-fbx='current'],[data-fbx='weekly'],[data-fbx='monthly']")) {
@@ -3013,6 +3017,7 @@ function rsAdjustGrade(grade, rsResult) {
           _pendingRsResult = rsResult;
           _pendingRsEtf    = sectorEtf;
           renderEntryScorecard(grade, rsResult, false, null, _pendingST);
+          _applyGradeToSizer(rsAdjustGrade(grade, rsResult));
         } catch (_) {
           renderEntryScorecard(grade, null, false, null, _pendingST);
         }
@@ -3028,6 +3033,16 @@ function rsAdjustGrade(grade, rsResult) {
     const _sizerCalcLn  = $("#form-sizer-calc-line");
     const _suggEl       = $("#form-sizer-suggest");
     const _fillBtn      = $("#form-sizer-fill");
+
+    const _GRADE_RISK = { "A+": "1.5", "A": "1.5", "A-": "1.0", "B+": "1.0", "B": "0.75", "B-": "0.75", "C+": "0.5", "C": "0.25", "Exit": "0.25" };
+    const _applyGradeToSizer = (finalGrade) => {
+      const rp = _GRADE_RISK[finalGrade];
+      if (!rp || !_sizerHint) return;
+      localStorage.setItem("trendo_risk_pct", rp);
+      const gTag = $("#sizer-grade-tag");
+      if (gTag) { gTag.textContent = finalGrade; gTag.style.display = ""; }
+      _updateSizer();
+    };
 
     const _updateSizer = () => {
       if (!_sizerHint) return;
@@ -3057,6 +3072,8 @@ function rsAdjustGrade(grade, rsResult) {
         const btn = e.target.closest("[data-rpct]");
         if (!btn) return;
         localStorage.setItem("trendo_risk_pct", btn.dataset.rpct);
+        const gTag = $("#sizer-grade-tag");
+        if (gTag) gTag.style.display = "none";
         _updateSizer();
       });
     }
