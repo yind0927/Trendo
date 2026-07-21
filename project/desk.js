@@ -785,27 +785,36 @@ function rsAdjustGrade(grade, rsResult) {
 
   function wireDrawerEdits(h) {
     const dr = $("#drawer");
+    const _dispField = (el, f) => {
+      if (f === "size") el.textContent = h.size.toFixed(1);
+      else if (f === "qty") el.textContent = Math.round(h.qty).toString();
+      else el.textContent = `$${price(h[f])}`;
+    };
     $$("[data-pos-field]", dr).forEach(el => {
       el.addEventListener("focus", () => {
-        // strip leading $ for easier editing
         el.textContent = el.textContent.replace(/^\$/, "");
         document.execCommand("selectAll", false, null);
       });
       el.addEventListener("blur", () => {
         const f = el.dataset.posField;
-        const v = parseFloat(el.textContent.trim().replace(/[^0-9.-]/g, ""));
-        if (isNaN(v) || v <= 0) {
-          el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`;
-          return;
+        const raw = parseFloat(el.textContent.trim().replace(/[^0-9.-]/g, ""));
+        if (isNaN(raw) || raw <= 0) { _dispField(el, f); return; }
+        if (f === "qty") {
+          h.qty = Math.max(1, Math.round(raw));
+        } else {
+          h[f] = raw;
         }
-        h[f] = v;
         const notional = currentPage === "sim" ? simNotional : totalNotional;
         recomputeHolding(h, notional);
         saveToStorage();
         if (currentPage === "sim") { renderSimTable(); renderSimOverview(); }
         else { renderTable(); renderOverview(); }
-        // Restore display format
-        el.textContent = f === "size" ? h[f].toFixed(1) : `$${price(h[f])}`;
+        _dispField(el, f);
+        // Sync sibling fields that changed due to recompute
+        $$("[data-pos-field]", dr).forEach(sib => {
+          const sf = sib.dataset.posField;
+          if (sib !== el && (sf === "size" || sf === "qty" || (f === "cost" && sf === "cost"))) _dispField(sib, sf);
+        });
         // Update hero price / pnl
         const pnlSign = fmt.sign(h.pnlDollar);
         const heroP = $(".hero-price .p", dr);
@@ -2377,7 +2386,8 @@ function rsAdjustGrade(grade, rsResult) {
             <div><div class="k">持有天数</div><div class="v">${dispDays}<span class="sub">交易日</span></div></div>
           </div>` : `
           <div class="kv-grid">
-            <div><div class="k">入场成本${ccNet(h) > 0 ? `<span class="edit-hint">CC调整后</span>` : ""}</div><div class="v mono" ${ccNet(h) > 0 ? `title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"` : ""}>${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>$${price(ccAdjCost(h))}` : `$${price(h.cost)}`}</div></div>
+            <div><div class="k">入场成本<span class="edit-hint">点击编辑</span>${ccNet(h) > 0 ? `<span class="edit-hint" style="margin-left:4px">CC调整后</span>` : ""}</div><div class="v mono" ${ccNet(h) > 0 ? `title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"` : ""}>${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>` : ""}<span class="pos-edit mono" data-pos-field="cost" contenteditable="true" spellcheck="false">$${price(h.cost)}</span></div></div>
+            <div><div class="k">持股数量<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit mono" data-pos-field="qty" contenteditable="true" spellcheck="false">${h.qty}</span><span class="sub">股</span></div></div>
             <div><div class="k">现价<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit mono" data-pos-field="last" contenteditable="true" spellcheck="false">$${price(h.last)}</span></div></div>
             <div><div class="k">止损<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="stop" contenteditable="true" spellcheck="false">$${price(h.stop)}</span></div></div>
             <div><div class="k">目标<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="target" contenteditable="true" spellcheck="false">$${price(h.target)}</span></div></div>
@@ -2974,7 +2984,8 @@ function rsAdjustGrade(grade, rsResult) {
         const mo  = parseFloat(formBxBody.querySelector("[data-fbx='monthly'].active")?.dataset.val) || 0;
         const grade = calcBXGrade(cur, wk, mo);
         renderEntryScorecard(grade, _pendingRsResult, false, null, _pendingST);
-        const finalGrade = _pendingRsResult ? rsAdjustGrade(grade, _pendingRsResult) : grade;
+        const afterRS = _pendingRsResult ? rsAdjustGrade(grade, _pendingRsResult) : grade;
+        const finalGrade = _pendingST != null ? stAdjustGrade(afterRS, _pendingST) : afterRS;
         _applyGradeToSizer(finalGrade);
       };
       formBxBody.addEventListener("click", e => {
@@ -3016,7 +3027,8 @@ function rsAdjustGrade(grade, rsResult) {
           _pendingRsResult = rsResult;
           _pendingRsEtf    = sectorEtf;
           renderEntryScorecard(grade, rsResult, false, null, _pendingST);
-          _applyGradeToSizer(rsAdjustGrade(grade, rsResult));
+          const afterRS2 = rsAdjustGrade(grade, rsResult);
+          _applyGradeToSizer(_pendingST != null ? stAdjustGrade(afterRS2, _pendingST) : afterRS2);
         } catch (_) {
           renderEntryScorecard(grade, null, false, null, _pendingST);
         }
