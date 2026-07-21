@@ -1746,6 +1746,18 @@
   .opts-sb-method { font-size: 10.5px; color: var(--fg-1); font-family: var(--f-mono); min-width: 150px; }
   .opts-sb-timing { font-size: 10.5px; color: var(--accent); white-space: nowrap; min-width: 120px; }
   .opts-wheel-group-card { background: var(--bg-1); border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 10px; }
+  /* ── Symbol grouping for settled section */
+  .opts-sym-groups { border-top: 1px solid var(--bg-3); }
+  .opts-sym-group-hd { display: flex; align-items: center; gap: 7px; padding: 10px 14px; cursor: pointer; user-select: none; border-top: 1px solid var(--bg-3); transition: background .12s; }
+  .opts-sym-group:first-child .opts-sym-group-hd { border-top: none; }
+  .opts-sym-group-hd:hover { background: color-mix(in oklch, var(--accent) 5%, transparent); }
+  .opts-sym-arrow { font-size: 10px; color: var(--fg-3); flex-shrink: 0; width: 10px; }
+  .opts-sym-grp-name { font-size: 13px; font-weight: 800; font-family: var(--f-mono); color: var(--fg-0); flex-shrink: 0; min-width: 36px; }
+  .opts-sym-grp-meta { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .opts-sym-grp-cnt { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
+  .opts-sym-grp-pnl { font-size: 12px; font-weight: 700; font-family: var(--f-mono); }
+  .opts-sym-grp-ann { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
+  .opts-sym-group-body { border-top: 1px solid var(--bg-3); }
   .opts-wheel-toggle-btn { font-size: 10px; }
   .opts-wheel-sub-cards { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 2px; display: flex; flex-direction: column; }
   .opts-wheel-sub-label { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); padding: 4px 0; }
@@ -4471,8 +4483,8 @@
   </div>
 </div>
 
-<script src="data.js?v=300"></script>
-<script src="desk.js?v=300"></script>
+<script src="data.js?v=301"></script>
+<script src="desk.js?v=301"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

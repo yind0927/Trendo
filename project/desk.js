@@ -1066,7 +1066,8 @@ function rsAdjustGrade(grade, rsResult) {
   let currentOptMode  = "real"; // "real" | "sim" — which Options sub-tab is active
   let inspSubTab      = "journal"; // "journal" | "watchlist" — Inspirations sub-tab
   let _optsSettledOpen = false; // collapsed by default
-  const _optsWheelExpanded = new Set(); // group IDs of expanded wheel combo cards
+  const _optsWheelExpanded  = new Set();
+  const _optsSymGroupsOpen  = new Set(); // which symbol groups are expanded in settled section // group IDs of expanded wheel combo cards
   let simOptionsSym   = "QQQ";  // sell-modal default
   let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
   const OPT_WATCH_SYMS = ["DRAM", "MAGS", "SMH", "GLD", "IWM", "QQQ"];
@@ -5545,17 +5546,59 @@ function rsAdjustGrade(grade, rsResult) {
 
     const totalSettled = settledExpired.length + settledClosed.length + fullCycleCount;
 
+    // ── Symbol grouping for settled section ──────────────────────────────
+    // All settled trades grouped by underlying, sorted by most-recent trade date
+    const _settledAll = [...settledExpired, ...settledClosed, ...settledFullCycle];
+    const _symGroupMap = new Map();
+    _settledAll.forEach(p => {
+      if (!_symGroupMap.has(p.sym)) _symGroupMap.set(p.sym, []);
+      _symGroupMap.get(p.sym).push(p);
+    });
+    const _symGroups = [..._symGroupMap.entries()].map(([sym, trades]) => {
+      const latestDate = trades.reduce((d, t) => ((t.closedAt || t.expiry || "") > d ? (t.closedAt || t.expiry || "") : d), "");
+      const totalNet   = trades.reduce((s, t) => s + (_optFinalPnl(t) ?? 0), 0);
+      const annVals    = trades.map(t => _optAnn(t)).filter(v => v !== -Infinity);
+      const avgAnn     = annVals.length ? annVals.reduce((a, b) => a + b, 0) / annVals.length : null;
+      const cspCnt     = trades.filter(t => t.strat === "csp").length;
+      const ccCnt      = trades.filter(t => t.strat === "cc").length;
+      return { sym, trades, latestDate, totalNet, avgAnn, cspCnt, ccCnt };
+    }).sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+
+    const symGroupsHTML = _symGroups.map(({ sym, trades, totalNet, avgAnn, cspCnt, ccCnt }) => {
+      const isOpen   = _optsSymGroupsOpen.has(sym);
+      const totalCls = totalNet >= 0 ? "up" : "down";
+      // Wheel pairs in this symbol
+      const grpWheelPairs = _wheelPairs.filter(({ csp }) => csp.sym === sym);
+      const grpWheelIds   = new Set(grpWheelPairs.flatMap(({ csp, cc }) => [csp.id, cc.id]));
+      const grpSolo       = trades.filter(t => !grpWheelIds.has(t.id))
+                                  .sort((a, b) => (b.closedAt || "").localeCompare(a.closedAt || ""));
+      const bodyHTML = isOpen ? `<div class="opts-sym-group-body">${
+        [...grpWheelPairs.map(({ csp, cc }) => _optWheelGroupCard(csp, cc)),
+         ...grpSolo.map(_optDonePosCard)].join("")
+      }</div>` : "";
+      return `<div class="opts-sym-group">
+        <div class="opts-sym-group-hd" data-sym-group="${sym}">
+          <span class="opts-sym-arrow">${isOpen ? "▾" : "▸"}</span>
+          <span class="opts-sym-grp-name">${sym}</span>
+          ${cspCnt ? `<span class="opts-badge opts-badge-csp">CSP ${cspCnt}</span>` : ""}
+          ${ccCnt  ? `<span class="opts-badge opts-badge-cc">CC ${ccCnt}</span>`   : ""}
+          <div class="opts-sym-grp-meta">
+            <span class="opts-sym-grp-cnt">${trades.length}笔</span>
+            <span class="opts-sym-grp-pnl ${totalCls}">${totalNet >= 0 ? "+" : "−"}${fmt.usd(Math.abs(totalNet))}</span>
+            ${avgAnn != null ? `<span class="opts-sym-grp-ann">${avgAnn >= 0 ? "+" : ""}${avgAnn.toFixed(1)}%年化</span>` : ""}
+          </div>
+        </div>
+        ${bodyHTML}
+      </div>`;
+    }).join("");
+
     const settledArrow = _optsSettledOpen ? "▾" : "▸";
     const settledSection = totalSettled ? `
       <div class="opts-sub-label opts-settled-toggle" style="cursor:pointer;user-select:none">
         ${settledArrow} 已了结 · Settled · ${totalSettled}
-        <span style="font-size:9px;color:var(--accent);margin-left:4px">按年化排序</span>
+        <span style="font-size:9px;color:var(--accent);margin-left:4px">按标的分组</span>
       </div>
-      ${_optsSettledOpen ? `
-        ${settledExpired.length ? `<div class="opts-sub-label" style="color:var(--up);padding-top:8px;font-size:9px">到期 OTM · Expired · ${settledExpired.length}</div>${settledExpired.map(_optDonePosCard).join("")}` : ""}
-        ${settledClosed.length  ? `<div class="opts-sub-label" style="color:var(--fg-2);padding-top:8px;font-size:9px">买回平仓 · Closed · ${settledClosed.length}</div>${settledClosed.map(_optDonePosCard).join("")}` : ""}
-        ${fullCycleCount ? `<div class="opts-sub-label" style="color:var(--accent);padding-top:8px;font-size:9px">完整轮转 · Full Cycle · ${fullCycleCount}</div>${fullCycleHTML}` : ""}
-      ` : ""}` : "";
+      ${_optsSettledOpen ? `<div class="opts-sym-groups">${symGroupsHTML}</div>` : ""}` : "";
 
     const body = (pending.length || open.length || done.length)
       ? `${_optSummaryHTML(open, done)}
@@ -5605,6 +5648,14 @@ function rsAdjustGrade(grade, rsResult) {
       else _optsWheelExpanded.add(gid);
       renderOptions();
     }));
+    $$("[data-sym-group]", root).forEach(el => {
+      el.addEventListener("click", () => {
+        const sym = el.dataset.symGroup;
+        if (_optsSymGroupsOpen.has(sym)) _optsSymGroupsOpen.delete(sym);
+        else _optsSymGroupsOpen.add(sym);
+        renderOptions();
+      });
+    });
     const sellBtn = root.querySelector("#opts-sell-btn");
     if (sellBtn) sellBtn.addEventListener("click", () => openOptionsSellModal());
     const pendingBtn = root.querySelector("#opts-pending-btn");
