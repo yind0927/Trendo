@@ -2809,8 +2809,7 @@ function rsAdjustGrade(grade, rsResult) {
       $$("[data-fbx-st]", body).forEach(b => b.classList.toggle("active", b.dataset.fbxSt === "null"));
       const esc = $("#entry-scorecard");
       if (esc) esc.style.display = "none";
-      const gTag = $("#sizer-grade-tag");
-      if (gTag) gTag.style.display = "none";
+      _setSizerGradeMode(false);
     };
 
     const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -3035,12 +3034,21 @@ function rsAdjustGrade(grade, rsResult) {
     const _fillBtn      = $("#form-sizer-fill");
 
     const _GRADE_RISK = { "A+": "1.5", "A": "1.5", "A-": "1.0", "B+": "1.0", "B": "0.75", "B-": "0.75", "C+": "0.5", "C": "0.25", "Exit": "0.25" };
+    const _setSizerGradeMode = (on) => {
+      const gradeMode  = $("#sizer-grade-mode");
+      const manualMode = $("#sizer-manual-mode");
+      if (gradeMode)  gradeMode.style.display  = on ? "" : "none";
+      if (manualMode) manualMode.style.display = on ? "none" : "";
+    };
     const _applyGradeToSizer = (finalGrade) => {
       const rp = _GRADE_RISK[finalGrade];
       if (!rp || !_sizerHint) return;
       localStorage.setItem("trendo_risk_pct", rp);
-      const gTag = $("#sizer-grade-tag");
-      if (gTag) { gTag.textContent = finalGrade; gTag.style.display = ""; }
+      const badge = $("#sgm-grade-badge");
+      const rpLbl = $("#sgm-rp-label");
+      if (badge) { badge.textContent = finalGrade; badge.style.background = BX_GRADE_META[finalGrade]?.color || "var(--accent)"; }
+      if (rpLbl) rpLbl.textContent = rp + "%";
+      _setSizerGradeMode(true);
       _updateSizer();
     };
 
@@ -3072,10 +3080,12 @@ function rsAdjustGrade(grade, rsResult) {
         const btn = e.target.closest("[data-rpct]");
         if (!btn) return;
         localStorage.setItem("trendo_risk_pct", btn.dataset.rpct);
-        const gTag = $("#sizer-grade-tag");
-        if (gTag) gTag.style.display = "none";
         _updateSizer();
       });
+    }
+    const _sizerManualBtn = $("#sgm-manual-btn");
+    if (_sizerManualBtn) {
+      _sizerManualBtn.addEventListener("click", () => _setSizerGradeMode(false));
     }
     if (_fillBtn) {
       _fillBtn.addEventListener("click", () => {

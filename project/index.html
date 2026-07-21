@@ -1238,7 +1238,12 @@
   .sizer-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); flex-shrink: 0; }
   .sizer-risk-line { display: flex; align-items: center; gap: 7px; }
   .sizer-risk-tail { font-size: 10px; color: var(--fg-3); flex-shrink: 0; }
-  .sizer-grade-tag { font-size: 10px; font-family: var(--f-mono); font-weight: 700; color: oklch(0.14 0.012 250); background: var(--accent); border-radius: 3px; padding: 1px 5px; flex-shrink: 0; }
+  .sizer-grade-mode { display: flex; align-items: center; gap: 8px; }
+  .sgm-grade { font-size: 13px; font-weight: 800; font-family: var(--f-mono); background: var(--accent); color: oklch(0.14 0.012 250); border-radius: 4px; padding: 2px 9px; flex-shrink: 0; }
+  .sgm-arrow { font-size: 11px; color: var(--fg-3); flex-shrink: 0; }
+  .sgm-rp { font-size: 13px; font-weight: 800; font-family: var(--f-mono); color: var(--fg-0); flex-shrink: 0; }
+  .sgm-manual-btn { all: unset; cursor: pointer; margin-left: auto; font-size: 10px; color: var(--fg-3); border: 1px solid color-mix(in oklch, var(--accent) 35%, var(--line)); border-radius: 3px; padding: 2px 7px; white-space: nowrap; transition: color .12s; }
+  .sgm-manual-btn:hover { color: var(--accent); }
   .sizer-risk-seg { display: flex; gap: 3px; }
   .sizer-risk-seg button { all: unset; cursor: pointer; padding: 2px 8px; border-radius: 3px; font-size: 10.5px; font-family: var(--f-mono); font-weight: 700; color: var(--fg-2); background: var(--bg-3); border: 1px solid var(--line); transition: all .12s; white-space: nowrap; }
   .sizer-risk-seg button:hover { color: var(--accent); border-color: var(--accent); }
@@ -4206,9 +4211,17 @@
         <input type="number" id="form-qty" placeholder="100" step="1" required/>
       </div>
       <div id="form-sizer-hint" style="display:none" class="form-sizer-hint">
-        <div class="sizer-risk-line">
+        <!-- Grade mode: shown when BX/RS grade has been computed -->
+        <div id="sizer-grade-mode" class="sizer-grade-mode" style="display:none">
+          <span class="sgm-grade" id="sgm-grade-badge"></span>
+          <span class="sgm-arrow">→</span>
+          <span class="sgm-rp" id="sgm-rp-label"></span>
+          <span class="sizer-risk-tail">风险</span>
+          <button type="button" class="sgm-manual-btn" id="sgm-manual-btn">手动调整</button>
+        </div>
+        <!-- Manual mode: default, shown before grade is computed -->
+        <div id="sizer-manual-mode" class="sizer-risk-line">
           <span class="sizer-lbl">仓位</span>
-          <span id="sizer-grade-tag" class="sizer-grade-tag" style="display:none"></span>
           <div class="sizer-risk-seg" id="form-risk-seg">
             <button type="button" data-rpct="0.25">0.25%</button>
             <button type="button" data-rpct="0.5">0.5%</button>
@@ -4526,8 +4539,8 @@
   </div>
 </div>
 
-<script src="data.js?v=306"></script>
-<script src="desk.js?v=306"></script>
+<script src="data.js?v=500"></script>
+<script src="desk.js?v=500"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
