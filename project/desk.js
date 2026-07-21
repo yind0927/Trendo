@@ -2881,17 +2881,36 @@ function rsAdjustGrade(grade, rsResult) {
 
     // Order type segmented control (sim only)
     const orderSeg = $("#form-order-seg");
+    const updateStopModeUI = () => {
+      const mode       = $("#form-stop-mode-seg .active")?.dataset.stopMode || "abs";
+      const stopIn     = $("#form-stop");
+      const stopPctIn  = $("#form-stop-pct");
+      const stopPctLbl = $("#form-stop-pct-label");
+      if (stopIn)     { stopIn.style.display     = mode === "abs" ? "" : "none"; stopIn.required = mode === "abs"; }
+      if (stopPctIn)  { stopPctIn.style.display  = mode === "pct" ? "" : "none"; stopPctIn.required = mode === "pct"; }
+      if (stopPctLbl)   stopPctLbl.style.display  = mode === "pct" ? "" : "none";
+      _updateSizer();
+    };
     const updateOrderUI = () => {
       const active = orderSeg?.querySelector(".active")?.dataset.order || "manual";
       const entryRow      = $("#form-entry-row");
       const limitRow      = $("#form-limit-row");
       const marketHintRow = $("#form-market-hint-row");
+      const estEntryRow   = $("#form-est-entry-row");
       if (entryRow)      entryRow.style.display      = active === "manual" ? "" : "none";
       if (limitRow)      limitRow.style.display      = active === "limit"  ? "" : "none";
       if (marketHintRow) marketHintRow.style.display  = active === "market" ? "" : "none";
+      if (estEntryRow)   estEntryRow.style.display    = active === "market" ? "" : "none";
       // required only for manual entry
       const entryInput = $("#form-entry");
       if (entryInput) entryInput.required = active === "manual";
+      // Default stop mode: % for market orders, abs for others
+      const stopModeSeg = $("#form-stop-mode-seg");
+      if (stopModeSeg) {
+        const targetMode = active === "market" ? "pct" : "abs";
+        $$("button", stopModeSeg).forEach(b => b.classList.toggle("active", b.dataset.stopMode === targetMode));
+        updateStopModeUI();
+      }
     };
     if (orderSeg) {
       orderSeg.addEventListener("click", e => {
@@ -3066,7 +3085,12 @@ function rsAdjustGrade(grade, rsResult) {
 
     const _updateSizer = () => {
       if (!_sizerHint) return;
-      const entry = parseFloat($("#form-entry")?.value);
+      const orderMode = orderSeg?.querySelector(".active")?.dataset.order || "manual";
+      // Resolve entry price for sizer
+      let entry;
+      if (orderMode === "market") entry = parseFloat($("#form-est-entry")?.value);
+      else if (orderMode === "limit") entry = parseFloat($("#form-limit-price")?.value);
+      else entry = parseFloat($("#form-entry")?.value);
       if (!entry || isNaN(entry) || entry <= 0) {
         _sizerHint.style.display = "none";
         return;
@@ -3074,7 +3098,16 @@ function rsAdjustGrade(grade, rsResult) {
       _sizerHint.style.display = "";
       const rp = localStorage.getItem("trendo_risk_pct") || "0.5";
       $$("[data-rpct]", _sizerHint).forEach(b => b.classList.toggle("active", b.dataset.rpct === rp));
-      const stop = parseFloat($("#form-stop")?.value);
+      // Resolve effective stop: pct mode derives from entry x (1 - pct%)
+      const stopMode = $("#form-stop-mode-seg .active")?.dataset.stopMode || "abs";
+      let stop;
+      if (stopMode === "pct") {
+        const pct = parseFloat($("#form-stop-pct")?.value);
+        if (!pct || isNaN(pct) || pct <= 0) { if (_sizerCalcLn) _sizerCalcLn.style.display = "none"; return; }
+        stop = entry * (1 - pct / 100);
+      } else {
+        stop = parseFloat($("#form-stop")?.value);
+      }
       if (!stop || isNaN(stop) || entry <= stop) {
         if (_sizerCalcLn) _sizerCalcLn.style.display = "none";
         return;
@@ -3101,8 +3134,20 @@ function rsAdjustGrade(grade, rsResult) {
     }
     if (_fillBtn) {
       _fillBtn.addEventListener("click", () => {
-        const entry = parseFloat($("#form-entry")?.value);
-        const stop  = parseFloat($("#form-stop")?.value);
+        const orderMode = orderSeg?.querySelector(".active")?.dataset.order || "manual";
+        let entry;
+        if (orderMode === "market") entry = parseFloat($("#form-est-entry")?.value);
+        else if (orderMode === "limit") entry = parseFloat($("#form-limit-price")?.value);
+        else entry = parseFloat($("#form-entry")?.value);
+        const stopMode = $("#form-stop-mode-seg .active")?.dataset.stopMode || "abs";
+        let stop;
+        if (stopMode === "pct") {
+          const pct = parseFloat($("#form-stop-pct")?.value);
+          if (!pct || isNaN(pct) || pct <= 0 || !entry) return;
+          stop = entry * (1 - pct / 100);
+        } else {
+          stop = parseFloat($("#form-stop")?.value);
+        }
         if (!entry || !stop || entry <= stop) return;
         const notional = newPositionContext === "sim" ? simNotional : totalNotional;
         const riskPct  = parseFloat(localStorage.getItem("trendo_risk_pct") || "0.5");
@@ -3116,13 +3161,37 @@ function rsAdjustGrade(grade, rsResult) {
     const _sizerAtrIn   = $("#form-atr");
     if (_sizerEntryIn) _sizerEntryIn.addEventListener("input", _updateSizer);
     if (_sizerStopIn)  _sizerStopIn.addEventListener("input", _updateSizer);
+    $("#form-stop-pct")?.addEventListener("input", _updateSizer);
+    $("#form-est-entry")?.addEventListener("input", _updateSizer);
+    $("#form-limit-price")?.addEventListener("input", _updateSizer);
+    const _stopModeSeg2 = $("#form-stop-mode-seg");
+    if (_stopModeSeg2) {
+      _stopModeSeg2.addEventListener("click", e => {
+        const btn = e.target.closest("[data-stop-mode]");
+        if (!btn) return;
+        $$("button", _stopModeSeg2).forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        updateStopModeUI();
+      });
+    }
     if (_sizerAtrIn) {
       _sizerAtrIn.addEventListener("input", () => {
-        const entry = parseFloat($("#form-entry")?.value);
-        const atr   = parseFloat(_sizerAtrIn.value);
-        if (!entry || !atr || isNaN(entry) || isNaN(atr) || atr <= 0) return;
-        const stopEl = $("#form-stop");
-        if (stopEl) { stopEl.value = (entry - 2.5 * atr).toFixed(2); stopEl.dispatchEvent(new Event("input")); }
+        const atr = parseFloat(_sizerAtrIn.value);
+        if (!atr || isNaN(atr) || atr <= 0) return;
+        const stopMode = $("#form-stop-mode-seg .active")?.dataset.stopMode || "abs";
+        const orderMode = orderSeg?.querySelector(".active")?.dataset.order || "manual";
+        // Resolve reference price for ATR calculation
+        let refEntry = parseFloat($("#form-entry")?.value) || parseFloat($("#form-est-entry")?.value) || parseFloat($("#form-limit-price")?.value);
+        if (stopMode === "pct") {
+          if (!refEntry || isNaN(refEntry) || refEntry <= 0) return;
+          const pct = (2.5 * atr / refEntry * 100);
+          const pctEl = $("#form-stop-pct");
+          if (pctEl) { pctEl.value = pct.toFixed(2); pctEl.dispatchEvent(new Event("input")); }
+        } else {
+          if (!refEntry || isNaN(refEntry) || refEntry <= 0) return;
+          const stopEl = $("#form-stop");
+          if (stopEl) { stopEl.value = (refEntry - 2.5 * atr).toFixed(2); stopEl.dispatchEvent(new Event("input")); }
+        }
       });
     }
 
@@ -3130,12 +3199,14 @@ function rsAdjustGrade(grade, rsResult) {
       e.preventDefault();
       const sym    = $("#form-ticker").value.toUpperCase().trim();
       const name   = ($("#form-name")?.value.trim()) || sym;
-      const stop   = parseFloat($("#form-stop").value)   || 0;
       const target = parseFloat($("#form-target").value) || 0;
       const qty    = parseInt($("#form-qty").value);
       const isSim  = newPositionContext === "sim";
 
       const orderType  = isSim ? ($("#form-order-seg .active")?.dataset.order || "manual") : "manual";
+      const stopMode   = isSim ? ($("#form-stop-mode-seg .active")?.dataset.stopMode || "abs") : "abs";
+      const stopPct    = stopMode === "pct" ? parseFloat($("#form-stop-pct").value) || 0 : null;
+      const stop       = stopMode === "abs" ? parseFloat($("#form-stop").value) || 0 : 0;
       const limitPrice = orderType === "limit" ? parseFloat($("#form-limit-price").value) : null;
       const entry      = orderType === "manual" ? parseFloat($("#form-entry").value) : null;
 
@@ -3145,6 +3216,7 @@ function rsAdjustGrade(grade, rsResult) {
       if (!sym || !qty) { alert("请填写 Ticker 和数量"); return; }
       if (orderType === "manual" && !entry) { alert("请填写入场价"); return; }
       if (orderType === "limit"  && !limitPrice) { alert("请填写限价"); return; }
+      if (stopMode === "pct" && (!stopPct || stopPct <= 0)) { alert("请填写止损百分比"); return; }
       if (!isSim && (!stop || !target)) { alert("真实仓位必须填写止损和止盈"); return; }
       if (!isSim && entry && (stop >= entry || entry >= target)) {
         alert("Invalid price levels: stop < entry < target");
@@ -3160,7 +3232,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (SIM_HOLDINGS.find(h => h.sym === sym)) { alert("Position already exists"); return; }
         SIM_PENDING.push({
           id: Date.now().toString(36),
-          sym, name, kind, qty, stop, target,
+          sym, name, kind, qty, stop, stopMode, stopPct, target,
           orderType, limitPrice,
           entryDate: entryDateStr,
           earnings: earningsStr,
@@ -4089,17 +4161,20 @@ function rsAdjustGrade(grade, rsResult) {
         const daysHeld  = Math.max(1, Math.round((today - entryDate) / 86400000) + 1);
         const size      = simNotional > 0 ? (order.qty * execPrice / simNotional) * 100 : 2.5;
 
+        const actualStop = order.stopMode === "pct" && order.stopPct > 0
+          ? execPrice * (1 - order.stopPct / 100)
+          : (order.stop || 0);
         const newPos = {
           sym: order.sym, name: order.name || order.sym, kind: order.kind,
           qty: order.qty, cost: execPrice, last: execPrice,
           prevClose: q.prevClose ?? execPrice,
-          stop: order.stop, target: order.target,
+          stop: actualStop, target: order.target,
           entry: order.entryDate,
           size, earnings: order.earnings, holdEarn: false,
           setup: order.orderType === "market" ? "市价单" : `限价单 @${order.limitPrice}`,
           thesis: "",
           status: "ok", pnlPct: 0, pnlDollar: 0,
-          risk1R: order.stop ? execPrice - order.stop : 0,
+          risk1R: actualStop ? execPrice - actualStop : 0,
           rMult: 0, days: daysHeld, spark: [execPrice],
           bx: order.bx,
         };
@@ -6193,8 +6268,10 @@ function rsAdjustGrade(grade, rsResult) {
       const priceHint = order.orderType === "limit"
         ? `限价 $${order.limitPrice?.toFixed(2)} · `
         : mktOpen ? "等待成交 · " : "等待开盘 · ";
-      const stopTarget = order.stop && order.target
-        ? `止损 $${order.stop} / 止盈 $${order.target}` : "";
+      const stopDisplay = order.stopMode === "pct" && order.stopPct
+        ? `止损 -${order.stopPct}%`
+        : (order.stop ? `止损 $${order.stop}` : "");
+      const stopTarget = [stopDisplay, order.target ? `止盈 $${order.target}` : ""].filter(Boolean).join(" / ");
       return `
         <div class="pending-order-card" data-pending-id="${order.id}">
           <span class="pending-order-badge ${typeCls}">${typeLabel}</span>
