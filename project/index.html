@@ -1384,19 +1384,20 @@
   }
   .nav-edit-btn:hover { color: var(--accent); background: var(--accent-dim); }
 
-  /* ROW ACTIONS: close (archive) vs delete (permanent) */
-  .close-pos-btn, .delete-btn, .sim-restore-btn {
+  /* ROW ACTIONS: close (archive) vs delete (permanent) vs restore (undo close) */
+  .close-pos-btn, .delete-btn, .restore-btn, .sim-restore-btn {
     all: unset; cursor: pointer; opacity: 0; transition: opacity .15s;
     display: grid; place-items: center; border-radius: 4px; width: 22px; height: 22px;
   }
   .close-pos-btn { color: var(--accent); }
   .delete-btn { color: var(--down); }
-  .sim-restore-btn { color: var(--warn); }
+  .restore-btn, .sim-restore-btn { color: var(--warn); }
   table.holdings tbody tr:hover .close-pos-btn,
-  table.holdings tbody tr:hover .delete-btn { opacity: 1; }
+  table.holdings tbody tr:hover .delete-btn,
+  table.holdings tbody tr:hover .restore-btn { opacity: 1; }
   .close-pos-btn:hover { background: var(--accent-dim); opacity: 1 !important; }
   .delete-btn:hover { background: var(--down-dim); opacity: 1 !important; }
-  .sim-restore-btn:hover { background: var(--warn-dim); opacity: 1 !important; }
+  .restore-btn:hover, .sim-restore-btn:hover { background: var(--warn-dim); opacity: 1 !important; }
   table.sim-holdings tbody tr:hover .sim-restore-btn { opacity: 1; }
 
   /* row-actions cell */
@@ -1407,7 +1408,8 @@
   table.sim-holdings .delete-btn svg,
   table.sim-holdings .sim-restore-btn svg,
   table.holdings .close-pos-btn svg,
-  table.holdings .delete-btn svg { width: 12px; height: 12px; }
+  table.holdings .delete-btn svg,
+  table.holdings .restore-btn svg { width: 12px; height: 12px; }
 
   /* 5-BUCKET PROGRESS STATUS COLORS */
   .status.early {
@@ -3378,6 +3380,7 @@
     table.sim-holdings tbody tr:hover::before { background: transparent !important; }
     table.holdings tbody tr:hover .close-pos-btn,
     table.holdings tbody tr:hover .delete-btn,
+    table.holdings tbody tr:hover .restore-btn,
     table.sim-holdings tbody tr:hover .close-pos-btn,
     table.sim-holdings tbody tr:hover .delete-btn,
     table.sim-holdings tbody tr:hover .sim-restore-btn { opacity: 0; }
