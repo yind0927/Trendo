@@ -57,24 +57,27 @@
     const ov = $("#overview");
     ov.innerHTML = `
       <div class="ov-card" id="nav-card">
-        <div class="label" style="justify-content:space-between">总资产<button class="nav-edit-btn" title="编辑基准总额"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>
+        <div class="ov-card-hd">
+          <div class="ov-tick"></div>
+          <div class="label" style="justify-content:space-between">NAV · 总资产<button class="nav-edit-btn" title="编辑基准总额"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>
+        </div>
         <div class="value">$${portfolioValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
         <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${totalPnlDollar >= 0 ? "+" : ""}${fmt.signed(totalPnlDollar)} 浮</span>${realizedPnl !== 0 ? ` <span class="${fmt.sign(realizedPnl)}" style="font-size:10.5px">${realizedPnl >= 0 ? "+" : ""}${fmt.signed(realizedPnl)} 已</span>` : ""}</span></div>
       </div>
       ${card({
-        label: "总浮盈 / 浮亏", info: false,
+        label: "OPEN P&L · 总浮盈/浮亏", info: false,
         value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
         sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners}W · ${losers}L</span>${avgWinLossLine}`,
         spark: ""
       })}
       ${card({
-        label: "今日盈亏", info: false,
+        label: "DAY P&L · 今日盈亏", info: false,
         value: `<span class="${todaySign}">${fmt.signed(todayPnl)}</span>`,
         sub: `<span class="chip ${todaySign}">${fmt.pct(todayPct)}</span><span class="muted">vs 昨收</span>`,
         spark: ""
       })}
       ${card({
-        label: "当前持仓数", info: false,
+        label: "OPEN POSITIONS · 当前持仓数", info: false,
         value: `${HOLDINGS.length}`,
         sub: `<span class="muted">现持仓</span>`,
         spark: ""
@@ -135,7 +138,10 @@
   function card({ label, info, value, sub, spark }) {
     return `
       <div class="ov-card">
-        <div class="label">${label}${info ? `<span class="info">i</span>` : ""}</div>
+        <div class="ov-card-hd">
+          <div class="ov-tick"></div>
+          <div class="label">${label}${info ? `<span class="info">i</span>` : ""}</div>
+        </div>
         <div class="value">${value}</div>
         <div class="sub">${sub}</div>
         ${spark ? `<div class="spark">${spark}</div>` : ""}
@@ -196,7 +202,7 @@
     return `
       <div class="ov-pie ov-alloc">
         <div class="alloc-head">
-          <span class="label">仓位分布</span>
+          <span class="label">ALLOCATION · 仓位分布</span>
           <span class="big">${invested.toFixed(0)}% <span style="font-size:var(--fs-small);font-weight:500;opacity:.6">已投</span></span>
         </div>
         <div class="alloc-bars">
