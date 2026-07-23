@@ -1050,6 +1050,7 @@ function rsAdjustGrade(grade, rsResult) {
   let reviewPeriod = "week";
   let pendingCloseSym = null;
   let pendingDeleteSym = null, pendingDeleteFrom = null;
+  let pendingDeleteEntry = null, pendingDeleteCost = null, pendingDeleteClosedAt = null, pendingDeleteMerged = false;
   let currentPage = "desk";
   let journalFilter = "all";
   let equityPeriod  = "week";
@@ -1655,7 +1656,7 @@ function rsAdjustGrade(grade, rsResult) {
 
   // ============ TAB & DATA ROUTING ============
   function getTableData() {
-    return activeTab === "open" ? HOLDINGS : CLOSED_POSITIONS;
+    return activeTab === "open" ? HOLDINGS : mergeClosedForDisplay(CLOSED_POSITIONS, HOLDINGS);
   }
 
   // ============ HOLDINGS TABLE ============
@@ -1742,8 +1743,8 @@ function rsAdjustGrade(grade, rsResult) {
                <button class="delete-btn" data-sym="${h.sym}" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
              </div></td>`
           : `<td style="width:60px;padding:6px 4px"><div class="row-actions">
-               <button class="restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
-               <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+               <button class="restore-btn" data-sym="${h.sym}" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+               <button class="delete-btn" data-sym="${h.sym}" data-from="closed" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" data-closedat="${h.closedAt || ''}" data-merged="${h._mergedCount > 1 ? 1 : 0}" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
              </div></td>`;
         return `<tr class="${isSel}" data-sym="${h.sym}" data-idx="${i}">${cells}${actions}</tr>`;
       };
@@ -1786,13 +1787,13 @@ function rsAdjustGrade(grade, rsResult) {
       $$(".delete-btn").forEach(btn => {
         btn.addEventListener("click", e => {
           e.stopPropagation();
-          openDeleteModal(btn.dataset.sym, btn.dataset.from || "open");
+          openDeleteModal(btn.dataset.sym, btn.dataset.from || "open", { entry: btn.dataset.entry || null, cost: btn.dataset.cost ? parseFloat(btn.dataset.cost) : null, closedAt: btn.dataset.closedat || null, merged: btn.dataset.merged === "1" });
         });
       });
       $$(".restore-btn").forEach(btn => {
         btn.addEventListener("click", e => {
           e.stopPropagation();
-          restoreClosedPosition(btn.dataset.sym);
+          restoreClosedPosition(btn.dataset.sym, btn.dataset.entry || null, btn.dataset.cost ? parseFloat(btn.dataset.cost) : null);
         });
       });
     }
@@ -1854,8 +1855,8 @@ function rsAdjustGrade(grade, rsResult) {
     const actions = !isClosed
       ? `${flagBtn}<button class="hc-action close-pos-btn" data-sym="${h.sym}" title="平仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button>
          <button class="hc-action delete-btn" data-sym="${h.sym}" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`
-      : `<button class="hc-action ${opts.sim ? 'sim-restore-btn' : 'restore-btn'}" data-sym="${h.sym}" title="撤回至持仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
-         <button class="hc-action delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+      : `<button class="hc-action ${opts.sim ? 'sim-restore-btn' : 'restore-btn'}" data-sym="${h.sym}" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" title="撤回至持仓"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+         <button class="hc-action delete-btn" data-sym="${h.sym}" data-from="closed" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" data-closedat="${h.closedAt || ''}" data-merged="${h._mergedCount > 1 ? 1 : 0}" title="删除"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
 
         const selectedCls = opts.selected ? " selected" : "";
     const flaggedCls  = opts.sim && h.flagged ? " sim-flagged" : "";
@@ -1891,7 +1892,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="hc-pnl ${pnlSign}">${fmt.signed(pnl)}</span>
           <span class="hc-pct ${pnlSign}">${fmt.pct(pct)}</span>
           <span class="hc-sep muted">·</span>
-          <span class="hc-days muted">${h.days ?? 0}天</span>
+          <span class="hc-days muted">${h.days ?? 0}天${h._mergedCount > 1 ? ` · ${h._mergedCount}次出场` : ""}</span>
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
@@ -1931,9 +1932,9 @@ function rsAdjustGrade(grade, rsResult) {
     el.querySelectorAll(".close-pos-btn").forEach(btn =>
       btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); }));
     el.querySelectorAll(".delete-btn").forEach(btn =>
-      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); }));
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open", { entry: btn.dataset.entry || null, cost: btn.dataset.cost ? parseFloat(btn.dataset.cost) : null, closedAt: btn.dataset.closedat || null, merged: btn.dataset.merged === "1" }); }));
     el.querySelectorAll(".restore-btn").forEach(btn =>
-      btn.addEventListener("click", e => { e.stopPropagation(); restoreClosedPosition(btn.dataset.sym); }));
+      btn.addEventListener("click", e => { e.stopPropagation(); restoreClosedPosition(btn.dataset.sym, btn.dataset.entry || null, btn.dataset.cost ? parseFloat(btn.dataset.cost) : null); }));
   }
 
   function renderSimHoldingsCards(rows) {
@@ -1974,21 +1975,22 @@ function rsAdjustGrade(grade, rsResult) {
     el.querySelectorAll(".close-pos-btn").forEach(btn =>
       btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); }));
     el.querySelectorAll(".delete-btn").forEach(btn =>
-      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); }));
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open", { entry: btn.dataset.entry || null, cost: btn.dataset.cost ? parseFloat(btn.dataset.cost) : null, closedAt: btn.dataset.closedat || null, merged: btn.dataset.merged === "1" }); }));
     el.querySelectorAll(".sim-restore-btn").forEach(btn =>
-      btn.addEventListener("click", e => { e.stopPropagation(); simRestoreClosedPosition(btn.dataset.sym); }));
+      btn.addEventListener("click", e => { e.stopPropagation(); simRestoreClosedPosition(btn.dataset.sym, btn.dataset.entry || null, btn.dataset.cost ? parseFloat(btn.dataset.cost) : null); }));
   }
 
   function renderCell(h, id) {
     switch (id) {
       case "tk": {
         const initials = h.sym.slice(0, h.kind === "crypto" ? 3 : 4);
+        const mergedTag = h._mergedCount > 1 ? ` <span style="color:var(--fg-3);font-size:10px">· ${h._mergedCount}次出场</span>` : "";
         return `<td class="ticker"><div class="tk">
             <div class="avatar ${h.kind === "crypto" ? "crypto" : ""}">
               ${logoImg(h)}
               ${initials}
             </div>
-            <div class="meta"><div class="sym">${h.sym}</div><div class="nm">${h.name}</div></div>
+            <div class="meta"><div class="sym">${h.sym}</div><div class="nm">${h.name}${mergedTag}</div></div>
           </div></td>`;
       }
       case "bxbars": {
@@ -2308,14 +2310,19 @@ function rsAdjustGrade(grade, rsResult) {
   function drawerHTML(h, isSim = false) {
     const isClosed = activeTab === "closed";
     const closedArr = isSim ? SIM_CLOSED : CLOSED_POSITIONS;
-    // Partial close records for this symbol (for open positions that have been partially exited)
-    const partialCloses = closedArr
-      .filter(c => c.sym === h.sym && c.entry === h.entry && Math.abs(c.cost - h.cost) < 0.001 && c.exitReason === "partial")
+    // All raw closed records for this trade (partial exits + the final close), sorted
+    // chronologically — used to reconstruct the true per-leg breakdown even when `h`
+    // is a merged summary row (multiple exits collapsed into one closed-table row).
+    const allCloseRecords = closedArr
+      .filter(c => c.sym === h.sym && c.entry === h.entry && Math.abs(c.cost - h.cost) < 0.001)
       .sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+    // Partial close records for this symbol (for open positions that have been partially exited)
+    const partialCloses = allCloseRecords.filter(c => c.exitReason === "partial");
+    const isMerged = (h._mergedCount || 0) > 1;
     // Status badge
     let badgeColor, badgeTxt;
     if (isClosed) {
-      badgeColor = "var(--fg-2)"; badgeTxt = "已平仓 · Closed";
+      badgeColor = "var(--fg-2)"; badgeTxt = isMerged ? `已平仓 · Closed · ${h._mergedCount}次出场` : "已平仓 · Closed";
     } else {
       const bucket = progressBucket(h);
       const bs = BUCKET_STATUS[bucket];
@@ -2379,7 +2386,9 @@ function rsAdjustGrade(grade, rsResult) {
           ${isClosed ? `
           <div class="kv-grid">
             <div><div class="k">入场成本${ccNet(h) > 0 ? `<span class="edit-hint">CC调整后</span>` : ""}</div><div class="v mono" ${ccNet(h) > 0 ? `title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"` : ""}>${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>$${price(ccAdjCost(h))}` : `$${price(h.cost)}`}</div></div>
-            <div><div class="k">出场价格<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit-closed mono" data-closed-field="closePrice" contenteditable="true" spellcheck="false">$${price(h.closePrice ?? h.last)}</span></div></div>
+            <div><div class="k">${isMerged ? "加权出场价" : "出场价格"}${isMerged ? "" : `<span class="edit-hint">点击编辑</span>`}</div><div class="v">${isMerged
+              ? `<span class="mono" title="按各笔出场数量加权平均，共 ${h._mergedCount} 笔">$${price(h.closePrice ?? h.last)}</span>`
+              : `<span class="pos-edit-closed mono" data-closed-field="closePrice" contenteditable="true" spellcheck="false">$${price(h.closePrice ?? h.last)}</span>`}</div></div>
             <div><div class="k">盈亏金额</div><div class="v big ${fmt.sign(pnlAmt)}">${fmt.signed(pnlAmt)}</div></div>
             <div><div class="k">盈亏百分比</div><div class="v ${fmt.sign(pnlAmt)}">${fmt.pct(h.pnlPct)}</div></div>
             <div><div class="k">R 倍数</div><div class="v big ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</div></div>
@@ -2435,22 +2444,25 @@ function rsAdjustGrade(grade, rsResult) {
                 <span class="exec-price mono">$${price(h.cost)}</span>
                 <span class="exec-qty muted">${h.qty} 股</span>
               </div>`}
-            ${partialCloses.map(c => `
-              <div class="exec-item">
-                <span class="exec-type" style="background:color-mix(in oklch,var(--warn) 18%,transparent);color:var(--warn)">减仓</span>
-                <span class="exec-date">${fmt.date(c.closedAt)}</span>
-                <span class="exec-price mono">$${price(c.closePrice)}</span>
-                <span class="exec-qty muted">${c.qty} 股</span>
-                <span class="exec-qty muted ${fmt.sign(c.pnlFinal)}" style="margin-left:auto">${fmt.signed(c.pnlFinal)}</span>
-                <button class="exec-del" data-exec-type="partial" data-exec-closedat="${c.closedAt}" data-exec-qty="${c.qty}" title="删除记录">✕</button>
-              </div>`).join("")}
-            ${h.closedAt ? `
-              <div class="exec-item">
-                <span class="exec-type" style="background:color-mix(in oklch,var(--fg-3) 18%,transparent);color:var(--fg-2)">平仓</span>
-                <span class="exec-date">${fmt.date(h.closedAt)}</span>
-                <span class="exec-price mono">$${price(h.closePrice ?? h.last)}</span>
-                <span class="exec-qty muted">${h.qty} 股</span>
-              </div>` : ""}
+            ${isClosed
+              ? allCloseRecords.map(c => `
+                  <div class="exec-item">
+                    <span class="exec-type" style="background:color-mix(in oklch,${c.exitReason === "partial" ? "var(--warn)" : "var(--fg-3)"} 18%,transparent);color:${c.exitReason === "partial" ? "var(--warn)" : "var(--fg-2)"}">${c.exitReason === "partial" ? "减仓" : "平仓"}</span>
+                    <span class="exec-date">${fmt.date(c.closedAt)}</span>
+                    <span class="exec-price mono">$${price(c.closePrice ?? c.last)}</span>
+                    <span class="exec-qty muted">${c.qty} 股</span>
+                    <span class="exec-qty muted ${fmt.sign(c.pnlFinal)}" style="margin-left:auto">${fmt.signed(c.pnlFinal)}</span>
+                    ${c.exitReason === "partial" ? `<button class="exec-del" data-exec-type="partial" data-exec-closedat="${c.closedAt}" data-exec-qty="${c.qty}" title="删除记录">✕</button>` : ""}
+                  </div>`).join("")
+              : partialCloses.map(c => `
+                  <div class="exec-item">
+                    <span class="exec-type" style="background:color-mix(in oklch,var(--warn) 18%,transparent);color:var(--warn)">减仓</span>
+                    <span class="exec-date">${fmt.date(c.closedAt)}</span>
+                    <span class="exec-price mono">$${price(c.closePrice)}</span>
+                    <span class="exec-qty muted">${c.qty} 股</span>
+                    <span class="exec-qty muted ${fmt.sign(c.pnlFinal)}" style="margin-left:auto">${fmt.signed(c.pnlFinal)}</span>
+                    <button class="exec-del" data-exec-type="partial" data-exec-closedat="${c.closedAt}" data-exec-qty="${c.qty}" title="删除记录">✕</button>
+                  </div>`).join("")}
           </div>
 
           <div class="plan-subhead" style="display:flex;align-items:center;gap:8px">权利金记录 · Covered Call
@@ -2543,6 +2555,50 @@ function rsAdjustGrade(grade, rsResult) {
         days:      calcTradingDays(t.entry, t._lastClose),
       };
     });
+  }
+
+  // Merge fully-closed multi-leg trades (partial exits + the final close) into a single
+  // display row once the position no longer exists in holdings. Trades still being
+  // trimmed keep showing each raw exit record separately (position still open = still
+  // watching how it plays out, so each trim stays visible as its own event).
+  function mergeClosedForDisplay(closedArr, holdingsArr) {
+    const openKeys = new Set(holdingsArr.map(h => `${h.sym}|${h.entry}|${h.cost}`));
+    const groups = new Map();
+    const order = [];
+    closedArr.forEach(c => {
+      const key = `${c.sym}|${c.entry}|${c.cost}`;
+      if (!groups.has(key)) { groups.set(key, []); order.push(key); }
+      groups.get(key).push(c);
+    });
+    const result = [];
+    order.forEach(key => {
+      const recs = groups.get(key);
+      if (recs.length === 1 || openKeys.has(key)) { result.push(...recs); return; }
+      const sorted = [...recs].sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+      const first  = sorted[0];
+      const last   = sorted[sorted.length - 1];
+      const cost   = first.cost;
+      const totalQty = recs.reduce((s, r) => s + (r.qty || 0), 0);
+      const totalPnl = recs.reduce((s, r) => s + (r.pnlFinal ?? r.pnlDollar ?? 0), 0);
+      const weightedClose = totalQty > 0
+        ? recs.reduce((s, r) => s + (r.closePrice ?? r.last ?? cost) * (r.qty || 0), 0) / totalQty
+        : (last.closePrice ?? last.last);
+      const risk1R = (cost && first.stop && cost > first.stop) ? (cost - first.stop) * totalQty : 0;
+      result.push({
+        ...last,
+        qty:       totalQty,
+        closePrice: Math.round(weightedClose * 100) / 100,
+        closedAt:  last.closedAt,
+        pnlDollar: totalPnl,
+        pnlFinal:  totalPnl,
+        pnlPct:    (cost > 0 && totalQty > 0) ? totalPnl / (cost * totalQty) : 0,
+        rMult:     risk1R > 0 ? Math.round(totalPnl / risk1R * 100) / 100 : (last.rMult ?? 0),
+        days:      calcTradingDays(first.entry, last.closedAt),
+        exitReason: "manual",
+        _mergedCount: recs.length,
+      });
+    });
+    return result;
   }
 
   // ============ EVENTS CALENDAR ============
@@ -3502,18 +3558,25 @@ function rsAdjustGrade(grade, rsResult) {
     }
   }
 
-  function openDeleteModal(sym, from) {
+  function openDeleteModal(sym, from, extra = {}) {
     pendingDeleteSym = sym;
     pendingDeleteFrom = from || "open";
     pendingDeleteCtx = currentPage === "sim" ? "sim" : "desk";
+    pendingDeleteEntry = extra.entry ?? null;
+    pendingDeleteCost = extra.cost ?? null;
+    pendingDeleteClosedAt = extra.closedAt ?? null;
+    pendingDeleteMerged = !!extra.merged;
     const msg = $("#delete-confirm-msg");
-    if (msg) msg.textContent = `永久删除 ${sym}？此操作不可撤销。`;
+    if (msg) msg.textContent = pendingDeleteMerged
+      ? `永久删除 ${sym} 的全部分批平仓记录？此操作不可撤销。`
+      : `永久删除 ${sym}？此操作不可撤销。`;
     openModal("delete-confirm-modal");
   }
 
   function wireDeleteModal() {
     const deleteCancelFn = () => {
       pendingDeleteSym = null; pendingDeleteFrom = null;
+      pendingDeleteEntry = null; pendingDeleteCost = null; pendingDeleteClosedAt = null; pendingDeleteMerged = false;
       closeModal("delete-confirm-modal");
     };
     $("#delete-confirm-modal-x").addEventListener("click", deleteCancelFn);
@@ -3527,13 +3590,14 @@ function rsAdjustGrade(grade, rsResult) {
     $("#delete-confirm-btn").addEventListener("click", () => {
       if (!pendingDeleteSym) return;
       if (pendingDeleteCtx === "sim") {
-        if (pendingDeleteFrom === "closed") simDeleteClosedPosition(pendingDeleteSym);
+        if (pendingDeleteFrom === "closed") simDeleteClosedPosition(pendingDeleteSym, pendingDeleteEntry, pendingDeleteCost, pendingDeleteClosedAt, pendingDeleteMerged);
         else simDeletePosition(pendingDeleteSym);
       } else {
-        if (pendingDeleteFrom === "closed") deleteClosedPosition(pendingDeleteSym);
+        if (pendingDeleteFrom === "closed") deleteClosedPosition(pendingDeleteSym, pendingDeleteEntry, pendingDeleteCost, pendingDeleteClosedAt, pendingDeleteMerged);
         else deletePosition(pendingDeleteSym);
       }
       pendingDeleteSym = null; pendingDeleteFrom = null; pendingDeleteCtx = "desk";
+      pendingDeleteEntry = null; pendingDeleteCost = null; pendingDeleteClosedAt = null; pendingDeleteMerged = false;
       closeModal("delete-confirm-modal");
     });
   }
@@ -3550,17 +3614,35 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // deleteClosedPosition → permanently removes from CLOSED_POSITIONS
-  function deleteClosedPosition(sym) {
-    const idx = CLOSED_POSITIONS.findIndex(h => h.sym === sym);
-    if (idx === -1) return;
-    CLOSED_POSITIONS.splice(idx, 1);
+  // entry/cost identify the trade group; merged=true removes every leg of a fully-closed
+  // multi-exit trade, otherwise only the one record matching closedAt is removed.
+  function deleteClosedPosition(sym, entry, cost, closedAt, merged) {
+    if (entry != null && cost != null && !isNaN(cost)) {
+      if (merged) {
+        for (let i = CLOSED_POSITIONS.length - 1; i >= 0; i--) {
+          const c = CLOSED_POSITIONS[i];
+          if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) CLOSED_POSITIONS.splice(i, 1);
+        }
+      } else {
+        const idx = CLOSED_POSITIONS.findIndex(c =>
+          c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001 &&
+          (!closedAt || c.closedAt === closedAt));
+        if (idx !== -1) CLOSED_POSITIONS.splice(idx, 1);
+      }
+    } else {
+      const idx = CLOSED_POSITIONS.findIndex(h => h.sym === sym);
+      if (idx === -1) return;
+      CLOSED_POSITIONS.splice(idx, 1);
+    }
     saveToStorage();
     if (selectedSym === sym) closeDrawer();
     renderTable();
   }
 
-  function restoreClosedPosition(sym) {
-    const records = CLOSED_POSITIONS.filter(h => h.sym === sym);
+  function restoreClosedPosition(sym, entry, cost) {
+    const scoped = entry != null && cost != null && !isNaN(cost);
+    const matches = h => h.sym === sym && (!scoped || (h.entry === entry && Math.abs(h.cost - cost) < 0.001));
+    const records = CLOSED_POSITIONS.filter(matches);
     if (!records.length) return;
     if (HOLDINGS.find(x => x.sym === sym)) { alert("持仓中已有该股票"); return; }
     const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
@@ -3571,15 +3653,17 @@ function rsAdjustGrade(grade, rsResult) {
     recomputeHolding(restored, totalNotional);
     HOLDINGS.push(restored);
     for (let i = CLOSED_POSITIONS.length - 1; i >= 0; i--) {
-      if (CLOSED_POSITIONS[i].sym === sym) CLOSED_POSITIONS.splice(i, 1);
+      if (matches(CLOSED_POSITIONS[i])) CLOSED_POSITIONS.splice(i, 1);
     }
     saveToStorage();
     if (selectedSym === sym) closeDrawer();
     renderTable(); renderOverview();
   }
 
-  function simRestoreClosedPosition(sym) {
-    const records = SIM_CLOSED.filter(h => h.sym === sym);
+  function simRestoreClosedPosition(sym, entry, cost) {
+    const scoped = entry != null && cost != null && !isNaN(cost);
+    const matches = h => h.sym === sym && (!scoped || (h.entry === entry && Math.abs(h.cost - cost) < 0.001));
+    const records = SIM_CLOSED.filter(matches);
     if (!records.length) return;
     if (SIM_HOLDINGS.find(x => x.sym === sym)) { alert("模拟仓中已有该持仓"); return; }
     const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
@@ -3590,7 +3674,7 @@ function rsAdjustGrade(grade, rsResult) {
     recomputeHolding(restored, simNotional);
     SIM_HOLDINGS.push(restored);
     for (let i = SIM_CLOSED.length - 1; i >= 0; i--) {
-      if (SIM_CLOSED[i].sym === sym) SIM_CLOSED.splice(i, 1);
+      if (matches(SIM_CLOSED[i])) SIM_CLOSED.splice(i, 1);
     }
     saveToStorage();
     if (simSelectedSym === sym) closeSimDrawer();
@@ -3601,8 +3685,8 @@ function rsAdjustGrade(grade, rsResult) {
     const btn = $("#drawer-restore-btn");
     if (!btn) return;
     btn.addEventListener("click", () => {
-      if (isSim) simRestoreClosedPosition(h.sym);
-      else restoreClosedPosition(h.sym);
+      if (isSim) simRestoreClosedPosition(h.sym, h.entry, h.cost);
+      else restoreClosedPosition(h.sym, h.entry, h.cost);
     });
   }
 
@@ -6481,7 +6565,7 @@ function rsAdjustGrade(grade, rsResult) {
     const tbody = $("#sim-tbody");
     if (!thead || !tbody) return;
 
-    const data = simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED;
+    const data = simActiveTab === "open" ? SIM_HOLDINGS : mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS);
 
     // Header
     thead.innerHTML = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide)).map(c => {
@@ -6585,8 +6669,8 @@ function rsAdjustGrade(grade, rsResult) {
              <button class="delete-btn" data-sym="${h.sym}" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
            </div></td>`
         : `<td style="width:60px;padding:6px 4px"><div class="row-actions">
-             <button class="sim-restore-btn" data-sym="${h.sym}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
-             <button class="delete-btn" data-sym="${h.sym}" data-from="closed" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+             <button class="sim-restore-btn" data-sym="${h.sym}" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+             <button class="delete-btn" data-sym="${h.sym}" data-from="closed" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" data-closedat="${h.closedAt || ''}" data-merged="${h._mergedCount > 1 ? 1 : 0}" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
            </div></td>`;
       const flaggedCls = h.flagged ? "sim-flagged" : "";
       return `<tr class="${isSel} ${flaggedCls}" data-sym="${h.sym}" data-idx="${idx}">${cells}${actions}</tr>`;
@@ -6636,12 +6720,12 @@ function rsAdjustGrade(grade, rsResult) {
       btn.addEventListener("click", e => { e.stopPropagation(); openCloseModal(btn.dataset.sym); });
     });
     $$(".delete-btn", tbody).forEach(btn => {
-      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open"); });
+      btn.addEventListener("click", e => { e.stopPropagation(); openDeleteModal(btn.dataset.sym, btn.dataset.from || "open", { entry: btn.dataset.entry || null, cost: btn.dataset.cost ? parseFloat(btn.dataset.cost) : null, closedAt: btn.dataset.closedat || null, merged: btn.dataset.merged === "1" }); });
     });
     $$(".sim-restore-btn", tbody).forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        simRestoreClosedPosition(btn.dataset.sym);
+        simRestoreClosedPosition(btn.dataset.sym, btn.dataset.entry || null, btn.dataset.cost ? parseFloat(btn.dataset.cost) : null);
       });
     });
 
@@ -6812,10 +6896,24 @@ function rsAdjustGrade(grade, rsResult) {
     renderSimTable(); renderSimOverview();
   }
 
-  function simDeleteClosedPosition(sym) {
-    const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
-    if (idx === -1) return;
-    SIM_CLOSED.splice(idx, 1);
+  function simDeleteClosedPosition(sym, entry, cost, closedAt, merged) {
+    if (entry != null && cost != null && !isNaN(cost)) {
+      if (merged) {
+        for (let i = SIM_CLOSED.length - 1; i >= 0; i--) {
+          const c = SIM_CLOSED[i];
+          if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) SIM_CLOSED.splice(i, 1);
+        }
+      } else {
+        const idx = SIM_CLOSED.findIndex(c =>
+          c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001 &&
+          (!closedAt || c.closedAt === closedAt));
+        if (idx !== -1) SIM_CLOSED.splice(idx, 1);
+      }
+    } else {
+      const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
+      if (idx === -1) return;
+      SIM_CLOSED.splice(idx, 1);
+    }
     saveToStorage();
     if (simSelectedSym === sym) closeSimDrawer();
     renderSimTable(); renderSimOverview();
