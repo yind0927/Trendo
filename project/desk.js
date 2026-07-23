@@ -1667,17 +1667,32 @@ function rsAdjustGrade(grade, rsResult) {
 
   // ============ HOLDINGS TABLE ============
 
+  // Relative width weights (px-equivalent) used to build <colgroup> so <thead> and
+  // <tbody> always share the exact same column widths — table-layout:auto lets long
+  // wrapped ticker names / badges reflow the body's columns independently of the
+  // header, visibly desyncing the two.
+  const COL_WEIGHT = { tk: 240, bxbars: 90, cost: 90, last: 90, qty: 65, stop: 90, target: 90, pnl: 110, progstatus: 140 };
+  function colgroupHTML(cols, actionsWidth) {
+    const weights = cols.map(c => COL_WEIGHT[c.id] || 90);
+    const total = weights.reduce((s, w) => s + w, 0) + actionsWidth;
+    const pct = w => (w / total * 100).toFixed(3) + "%";
+    return cols.map((c, i) => `<col style="width:${pct(weights[i])}">`).join("") + `<col style="width:${pct(actionsWidth)}">`;
+  }
+
   function renderTable() {
     // header
     const thead = $("#thead-row");
-    thead.innerHTML = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide)).map(c => {
+    const _visCols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
+    const _cg = $("#holdings-colgroup");
+    if (_cg) _cg.innerHTML = colgroupHTML(_visCols, 60);
+    thead.innerHTML = _visCols.map(c => {
       const sorted = sortKey === c.id ? "sorted" : "";
       const label = (activeTab === "closed" && c.id === "last") ? "平仓价"
                   : (activeTab === "closed" && c.id === "pnl")  ? "盈亏"
                   : c.label;
       return `<th class="${c.r ? "right" : ""} ${sorted}" data-col="${c.id}">${label}</th>`;
-    }).join("");
-    $$("#thead-row th").forEach(th => th.addEventListener("click", () => {
+    }).join("") + `<th class="th-actions" style="width:60px"></th>`;
+    $$("#thead-row th[data-col]").forEach(th => th.addEventListener("click", () => {
       const col = th.dataset.col;
       if (sortKey === col) sortDir *= -1; else { sortKey = col; sortDir = -1; }
       renderTable();
@@ -1738,7 +1753,7 @@ function rsAdjustGrade(grade, rsResult) {
       if (_hc) _hc.style.display = "none";
 
       // body
-      const cols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
+      const cols = _visCols;
       const colSpan = cols.length + 1; // +1 for actions column
       const makeHoldingRow = (h, i) => {
         const isSel = selectedSym === h.sym ? "selected" : "";
@@ -6574,13 +6589,17 @@ function rsAdjustGrade(grade, rsResult) {
     const data = simActiveTab === "open" ? SIM_HOLDINGS : mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS);
 
     // Header
-    thead.innerHTML = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide)).map(c => {
+    const _simVisCols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
+    const _simActionsW = simActiveTab === "open" ? 72 : 60;
+    const _simCg = $("#sim-holdings-colgroup");
+    if (_simCg) _simCg.innerHTML = colgroupHTML(_simVisCols, _simActionsW);
+    thead.innerHTML = _simVisCols.map(c => {
       const sorted = simSortKey === c.id ? "sorted" : "";
       const label = (simActiveTab === "closed" && c.id === "last") ? "平仓价"
                   : (simActiveTab === "closed" && c.id === "pnl")  ? "盈亏"
                   : c.label;
       return `<th class="${c.r ? "right" : ""} ${sorted}" data-simcol="${c.id}">${label}</th>`;
-    }).join("");
+    }).join("") + `<th class="th-actions" style="width:${_simActionsW}px"></th>`;
     $$("[data-simcol]", thead).forEach(th => th.addEventListener("click", () => {
       const col = th.dataset.simcol;
       if (simSortKey === col) simSortDir *= -1; else { simSortKey = col; simSortDir = -1; }
@@ -6661,7 +6680,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (_shc) _shc.style.display = "none";
 
     // Body
-    const cols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
+    const cols = _simVisCols;
     const colSpan = cols.length + 1;
 
     const makeRow = (h, idx) => {
