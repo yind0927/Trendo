@@ -288,18 +288,10 @@
     width: 100%; border-collapse: collapse; table-layout: fixed;
     font-size: var(--fs-body);
   }
-  /* Fixed column widths so <thead> lines up with <tbody> regardless of content
-     (wrapped company names, badges) — table-layout:auto lets those reflow the
-     column widths independently of the header, which visibly desyncs them. */
-  table.holdings col.c-tk        { width: 24%; }
-  table.holdings col.c-bxbars    { width: 9%; }
-  table.holdings col.c-cost      { width: 9%; }
-  table.holdings col.c-last      { width: 9%; }
-  table.holdings col.c-qty       { width: 7%; }
-  table.holdings col.c-stop      { width: 9%; }
-  table.holdings col.c-target    { width: 9%; }
-  table.holdings col.c-pnl       { width: 11%; }
-  table.holdings col.c-progstatus{ width: 13%; }
+  /* Column widths come from a JS-generated <colgroup> (colgroupHTML() in desk.js) so
+     <thead> always lines up with <tbody> regardless of content (wrapped company names,
+     badges) — table-layout:auto lets those reflow the body's columns independently of
+     the header, which visibly desyncs them. */
   table.holdings thead th{
     text-align: left; font-weight: 500; color: var(--fg-2);
     font-size: var(--fs-small); letter-spacing: 0.06em; text-transform: uppercase;
@@ -311,6 +303,7 @@
     overflow: hidden; text-overflow: ellipsis;
   }
   table.holdings thead th:hover{ color: var(--fg-0); }
+  table.holdings thead th[data-col="bxbars"]{ text-align: center; }
   table.holdings thead th.th-actions{ cursor: default; }
   table.holdings thead th.th-actions:hover{ color: var(--fg-2); }
   table.holdings thead th.sorted::after{ content: "↓"; margin-left: 4px; color: var(--accent); font-size: 10px;}
@@ -752,14 +745,13 @@
   body[data-theme="light"] table.holdings thead th{
     background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%) !important;
   }
-  table.holdings tbody tr{ position: relative; }
-  table.holdings tbody tr::before{
-    content: ""; position: absolute; left: 0; top: 6px; bottom: 6px;
-    width: 2px; background: transparent; transition: background .15s;
-    border-radius: 0 2px 2px 0;
-  }
-  table.holdings tbody tr:hover::before{ background: var(--accent); }
-  table.holdings tbody tr.selected::before{ background: var(--accent); box-shadow: 0 0 12px var(--accent);}
+  /* Row accent bar via box-shadow, not ::before — a "" content pseudo-element on a
+     table-row gets fixed up into an anonymous table-cell by the table layout algorithm
+     (even with position:absolute), silently consuming column 0's slot and shifting
+     every real <td> one column to the right under table-layout:fixed + <colgroup>. */
+  table.holdings tbody tr{ box-shadow: inset 2px 0 0 0 transparent; transition: box-shadow .15s; }
+  table.holdings tbody tr:hover{ box-shadow: inset 2px 0 0 0 var(--accent); }
+  table.holdings tbody tr.selected{ box-shadow: inset 2px 0 0 0 var(--accent), 0 0 12px -4px var(--accent); }
 
   .tk .avatar{
     background: linear-gradient(135deg, var(--bg-3) 0%, var(--bg-2) 100%) !important;
@@ -1999,19 +1991,16 @@
   table.sim-holdings th.right { text-align: right; }
   table.sim-holdings th.sorted { color: var(--accent); }
   table.sim-holdings th.th-actions { cursor: default; }
+  table.sim-holdings th[data-simcol="bxbars"]{ text-align: center; }
   table.sim-holdings td { padding: 7px 10px; border-bottom: 1px solid color-mix(in oklch,var(--line) 50%,transparent); vertical-align: middle; }
-  table.sim-holdings tbody tr { cursor: pointer; transition: background .12s; position: relative; }
-  table.sim-holdings tbody tr::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; border-radius: 2px; transition: background .15s; }
-  table.sim-holdings tbody tr:hover::before { background: var(--accent); }
-  table.sim-holdings tbody tr:hover { background: color-mix(in oklch,var(--bg-2) 70%,transparent); }
-  table.sim-holdings tbody tr.selected { background: var(--accent-dim); }
+  /* Row accent bar via box-shadow, not ::before — see table.holdings note above for why. */
+  table.sim-holdings tbody tr { cursor: pointer; transition: background .12s, box-shadow .15s; box-shadow: inset 3px 0 0 0 transparent; }
+  table.sim-holdings tbody tr:hover { background: color-mix(in oklch,var(--bg-2) 70%,transparent); box-shadow: inset 3px 0 0 0 var(--accent); }
+  table.sim-holdings tbody tr.selected { background: var(--accent-dim); box-shadow: inset 3px 0 0 0 var(--accent), 0 0 12px -4px var(--accent); }
   table.sim-holdings tbody tr.date-group-hdr,
-  table.holdings tbody tr.date-group-hdr { cursor: default; background: transparent !important; }
-  table.sim-holdings tbody tr.date-group-hdr::before,
-  table.holdings tbody tr.date-group-hdr::before { display: none; }
+  table.holdings tbody tr.date-group-hdr { cursor: default; background: transparent !important; box-shadow: none !important; }
   table.sim-holdings tbody tr.date-group-hdr td,
   table.holdings tbody tr.date-group-hdr td { padding: 14px 10px 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-3); border-bottom: 1px solid var(--line); }
-  table.sim-holdings tbody tr.selected::before { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
   table.sim-holdings tbody tr:hover .close-pos-btn,
   table.sim-holdings tbody tr:hover .delete-btn { opacity: 1; }
 
@@ -4583,8 +4572,8 @@
   </div>
 </div>
 
-<script src="data.js?v=508"></script>
-<script src="desk.js?v=508"></script>
+<script src="data.js?v=509"></script>
+<script src="desk.js?v=509"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
