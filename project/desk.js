@@ -267,12 +267,12 @@
   const BX_GRADE_META = {
     "A+":  { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "三时框架全面看涨" },
     "A":   { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "周月线强势对齐" },
-    "A-":  { color: "oklch(0.78 0.17 145/.85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
+    "A-":  { color: "oklch(0.77 0.15 158/.85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
     "B+":  { color: "var(--accent)",             action: "可以开仓", pos: "75%",  desc: "日线领先，中线中性" },
     "B":   { color: "var(--accent)",             action: "普通开仓", pos: "50%",  desc: "日线普通，周月线中等" },
     "B-":  { color: "var(--warn)",               action: "普通开仓", pos: "50%",  desc: "三时框均比较普通" },
     "C+":  { color: "var(--warn)",               action: "小仓进入", pos: "25%",  desc: "多时框整体较差" },
-    "C":   { color: "oklch(0.70 0.19 25/.85)",   action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
+    "C":   { color: "oklch(0.71 0.17 25/.85)",   action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
     "Hold":{ color: "var(--fg-2)",               action: "持有现有", pos: "—",    desc: "日线→Bull，等待日线确认" },
     "Exit":{ color: "var(--down)",               action: "回避",     pos: "不进场", desc: "看跌信号，不宜开仓" },
   };
@@ -9149,11 +9149,11 @@ function rsAdjustGrade(grade, rsResult) {
 
     // Recommendation badge style (5 tiers)
     const recStyle = {
-      strong:    { bg: "oklch(0.78 0.17 145/0.22)", border: "oklch(0.78 0.17 145/0.7)",  text: "var(--up)",     glow: "0 0 8px oklch(0.78 0.17 145/0.35)" },
-      immediate: { bg: "oklch(0.78 0.17 145/0.14)", border: "oklch(0.78 0.17 145/0.45)", text: "var(--up)" },
+      strong:    { bg: "oklch(0.77 0.15 158/0.22)", border: "oklch(0.77 0.15 158/0.7)",  text: "var(--up)",     glow: "0 0 8px oklch(0.77 0.15 158/0.35)" },
+      immediate: { bg: "oklch(0.77 0.15 158/0.14)", border: "oklch(0.77 0.15 158/0.45)", text: "var(--up)" },
       watch:     { bg: "oklch(0.78 0.12 195/0.12)", border: "oklch(0.78 0.12 195/0.4)",  text: "var(--accent)" },
       wait:      { bg: "oklch(0.80 0.15 75/0.12)",  border: "oklch(0.80 0.15 75/0.4)",   text: "var(--warn)" },
-      avoid:     { bg: "oklch(0.70 0.19 25/0.12)",  border: "oklch(0.70 0.19 25/0.4)",   text: "var(--down)" },
+      avoid:     { bg: "oklch(0.71 0.17 25/0.12)",  border: "oklch(0.71 0.17 25/0.4)",   text: "var(--down)" },
     }[recommendation?.action ?? "watch"] ?? {};
 
     // Metric formatters
