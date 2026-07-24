@@ -1679,10 +1679,19 @@ function rsAdjustGrade(grade, rsResult) {
     return cols.map((c, i) => `<col style="width:${pct(weights[i])}">`).join("") + `<col style="width:${pct(actionsWidth)}">`;
   }
 
+  // On phones the list view drops the stop/target columns (still editable in the drawer
+  // + shown on the level bar) so the remaining columns get readable widths.
+  const MOBILE_HIDE_COLS = new Set(["stop", "target"]);
+  const isMobileWidth = () => window.matchMedia("(max-width: 768px)").matches;
+  const visTableCols = (isClosed) => COLS.filter(c =>
+    c.on
+    && !(isClosed && c.closedHide)
+    && !(isMobileWidth() && MOBILE_HIDE_COLS.has(c.id)));
+
   function renderTable() {
     // header
     const thead = $("#thead-row");
-    const _visCols = COLS.filter(c => c.on && !(activeTab === "closed" && c.closedHide));
+    const _visCols = visTableCols(activeTab === "closed");
     const _cg = $("#holdings-colgroup");
     if (_cg) _cg.innerHTML = colgroupHTML(_visCols, 60);
     thead.innerHTML = _visCols.map(c => {
@@ -6589,7 +6598,7 @@ function rsAdjustGrade(grade, rsResult) {
     const data = simActiveTab === "open" ? SIM_HOLDINGS : mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS);
 
     // Header
-    const _simVisCols = COLS.filter(c => c.on && !(simActiveTab === "closed" && c.closedHide));
+    const _simVisCols = visTableCols(simActiveTab === "closed");
     const _simActionsW = simActiveTab === "open" ? 72 : 60;
     const _simCg = $("#sim-holdings-colgroup");
     if (_simCg) _simCg.innerHTML = colgroupHTML(_simVisCols, _simActionsW);
@@ -11330,6 +11339,12 @@ function rsAdjustGrade(grade, rsResult) {
   wireSimHoldingsViewToggle();
   initPullToRefresh();
   wireControls();
+  // Re-render both holdings tables when crossing the mobile breakpoint so the
+  // stop/target columns hide on phones and re-appear on desktop (visTableCols).
+  window.matchMedia("(max-width: 768px)").addEventListener("change", () => {
+    renderTable();
+    renderSimTable();
+  });
   wireTweaks();
   wireTableTabs();
   wireNewPositionModal();

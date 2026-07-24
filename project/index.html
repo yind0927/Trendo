@@ -2892,6 +2892,12 @@
     .panel-head .sim-search { order: 3; margin-left: 0; flex: 1 1 100%; }
     .panel-head .sim-search input { width: 100%; }
     .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    /* table-layout:fixed + width:100% would otherwise squeeze all columns into the
+       phone's viewport and overlap the text; a min-width wider than the viewport lets
+       the wrapper's overflow-x scroll instead, with the ticker column pinned. Stop/
+       target columns are dropped on mobile in JS (visTableCols), so this is sized for
+       the remaining ~7 columns. */
+    table.holdings, table.sim-holdings { min-width: 560px; }
     table.holdings td, table.holdings th { padding: 7px 8px; font-size: 12px; }
     table.holdings td:first-child,
     table.holdings th:first-child { padding-left: 12px; position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
@@ -4572,8 +4578,8 @@
   </div>
 </div>
 
-<script src="data.js?v=509"></script>
-<script src="desk.js?v=509"></script>
+<script src="data.js?v=510"></script>
+<script src="desk.js?v=510"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
