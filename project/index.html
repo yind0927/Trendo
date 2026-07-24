@@ -1184,37 +1184,43 @@
   .modal-backdrop.open { display: flex; }
   .modal {
     background: var(--bg-1); border: 1px solid var(--line);
-    border-radius: 12px; padding: 24px; width: 90%; max-width: 450px;
-    box-shadow: 0 20px 60px -20px oklch(0 0 0 / .8);
-    max-height: 90vh; overflow-y: auto;
+    border-radius: 14px; padding: 28px; width: 92%; max-width: 520px;
+    box-shadow: 0 24px 72px -16px oklch(0 0 0 / .85);
+    max-height: 92vh; overflow-y: auto;
   }
   .modal-header {
     display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
   }
-  .modal-header h2 { margin: 0; font-size: 18px; }
+  .modal-header h2 { margin: 0; font-size: 18px; font-weight: 800; }
+  .modal-header-sub { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 20px; }
   .modal-note { margin: -10px 0 18px; font-size: 12px; color: var(--fg-3); line-height: 1.55; }
   .modal-close {
-    all: unset; cursor: pointer; color: var(--fg-2); font-size: 24px;
-    width: 28px; height: 28px; display: grid; place-items: center;
+    all: unset; cursor: pointer; color: var(--fg-3); font-size: 20px;
+    width: 30px; height: 30px; display: grid; place-items: center;
+    border-radius: 8px; transition: background .12s, color .12s;
   }
-  .modal-close:hover { color: var(--fg-0); }
+  .modal-close:hover { color: var(--fg-0); background: var(--bg-3); }
+  .form-group-label { display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-3); margin: 18px 0 10px; }
+  .form-group-label::before { content: ""; width: 3px; height: 12px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
+  .form-group-label:first-of-type { margin-top: 0; }
   .form-row {
-    margin-bottom: 16px; display: flex; flex-direction: column; min-width: 0;
+    margin-bottom: 14px; display: flex; flex-direction: column; min-width: 0;
   }
   .form-row label {
-    font-size: 12px; color: var(--fg-2); margin-bottom: 6px;
-    text-transform: uppercase; letter-spacing: 0.05em;
+    font-size: 11px; color: var(--fg-2); margin-bottom: 5px;
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
   }
   .form-row input {
-    padding: 9px 12px; border: 1px solid var(--line);
+    padding: 10px 12px; border: 1px solid var(--line);
     background: var(--bg-2); color: var(--fg-0);
-    border-radius: 6px; font-family: var(--f-mono);
-    font-size: 14px;
+    border-radius: 8px; font-family: var(--f-mono);
+    font-size: 14px; transition: border-color .12s;
   }
-  .form-row input:focus { outline: 2px solid var(--accent); }
+  .form-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 15%, transparent); }
   .form-row-inline { display: flex; gap: 8px; align-items: flex-end; }
   .form-row-inline input { flex: 1; }
+  .form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
   /* ---- Date input — platform-consistent dark styling ---- */
   input[type="date"] {
@@ -1270,12 +1276,14 @@
   .sizer-fill-btn { all: unset; cursor: pointer; padding: 4px 12px; background: var(--accent); border-radius: 5px; font-size: 11px; font-weight: 700; color: oklch(0.14 0.012 250); white-space: nowrap; transition: opacity .12s; flex-shrink: 0; }
   .sizer-fill-btn:hover { opacity: 0.82; }
   .form-actions {
-    display: flex; gap: 10px; margin-top: 20px;
+    display: flex; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
   }
-  .form-actions .btn { flex: 1; }
-  .form-bx-toggle { all: unset; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 0 8px; cursor: pointer; box-sizing: border-box; border-top: 1px solid var(--line); margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--fg-2); user-select: none; }
+  .form-actions .btn { flex: 1; padding: 10px 12px; font-size: 13px; font-weight: 700; justify-content: center; border-radius: 10px; }
+  .form-actions .btn.primary { background: var(--accent); color: oklch(0.14 0.012 250); border-color: var(--accent); }
+  .form-actions .btn.primary:hover { opacity: 0.88; }
+  .form-bx-toggle { all: unset; display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 0 8px; cursor: pointer; box-sizing: border-box; border-top: 1px solid var(--line); margin-top: 6px; font-size: 11px; font-weight: 700; color: var(--fg-3); user-select: none; letter-spacing: 0.06em; text-transform: uppercase; }
   .form-bx-toggle:hover { color: var(--fg-0); }
-  .form-bx-hint { font-size: 10.5px; font-weight: 400; color: var(--fg-3); margin-left: 6px; }
+  .form-bx-hint { font-size: 10px; font-weight: 400; color: var(--fg-3); margin-left: 6px; text-transform: none; letter-spacing: 0; }
   .form-bx-chevron { transition: transform .2s; flex-shrink: 0; }
   .form-bx-toggle.open .form-bx-chevron { transform: rotate(180deg); }
 
@@ -2930,6 +2938,7 @@
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: contain;
     }
+    .form-2col { grid-template-columns: 1fr; gap: 0; }
 
     /* ---- Sim view ---- */
     #sim-view { padding: 12px 12px 86px; }
@@ -4194,7 +4203,9 @@
       <h2>开仓</h2>
       <button class="modal-close" id="new-pos-close">✕</button>
     </div>
+    <div class="modal-header-sub">NEW POSITION</div>
     <form id="new-position-form" autocomplete="off">
+      <div class="form-group-label">基本信息 · BASIC</div>
       <div class="form-row">
         <label>类型</label>
         <div class="seg" id="form-kind-seg" style="width:100%">
@@ -4203,13 +4214,15 @@
           <button type="button" data-kind="crypto">加密货币</button>
         </div>
       </div>
-      <div class="form-row">
-        <label>代码</label>
-        <input type="text" id="form-ticker" placeholder="AAPL" maxlength="10" required/>
-      </div>
-      <div class="form-row">
-        <label>公司名称</label>
-        <input type="text" id="form-name" placeholder="填写 Ticker 后自动获取" maxlength="60"/>
+      <div class="form-2col">
+        <div class="form-row">
+          <label>代码</label>
+          <input type="text" id="form-ticker" placeholder="AAPL" maxlength="10" required/>
+        </div>
+        <div class="form-row">
+          <label>公司名称</label>
+          <input type="text" id="form-name" placeholder="自动获取" maxlength="60"/>
+        </div>
       </div>
       <div class="form-row" id="form-order-type-row" style="display:none">
         <label>订单类型</label>
@@ -4219,9 +4232,17 @@
           <button type="button" data-order="limit">限价单</button>
         </div>
       </div>
-      <div class="form-row" id="form-entry-row">
-        <label>入场价</label>
-        <input type="number" id="form-entry" placeholder="0.00" step="0.01"/>
+
+      <div class="form-group-label">价格计划 · PRICE PLAN</div>
+      <div class="form-2col">
+        <div class="form-row" id="form-entry-row">
+          <label>入场价</label>
+          <input type="number" id="form-entry" placeholder="0.00" step="0.01"/>
+        </div>
+        <div class="form-row">
+          <label>入场日期</label>
+          <input type="date" id="form-date"/>
+        </div>
       </div>
       <div class="form-row" id="form-limit-row" style="display:none">
         <label>限价 <span style="font-weight:400;color:var(--fg-3);font-size:11px">价格触达时自动成交</span></label>
@@ -4235,17 +4256,15 @@
         <label>预估价格 <span style="font-weight:400;color:var(--fg-3);font-size:11px;text-transform:none;letter-spacing:0">仅用于仓位计算</span></label>
         <input type="number" id="form-est-entry" placeholder="0.00" step="0.01"/>
       </div>
-      <div class="form-row">
-        <label>入场日期</label>
-        <input type="date" id="form-date"/>
-      </div>
-      <div class="form-row">
-        <label>止损价</label>
-        <input type="number" id="form-stop" placeholder="0.00" step="0.01" required/>
-      </div>
-      <div class="form-row">
-        <label>目标价</label>
-        <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
+      <div class="form-2col">
+        <div class="form-row">
+          <label>止损价</label>
+          <input type="number" id="form-stop" placeholder="0.00" step="0.01" required/>
+        </div>
+        <div class="form-row">
+          <label>目标价</label>
+          <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
+        </div>
       </div>
       <div class="form-row">
         <label>财报日期 <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(可选)</span></label>
@@ -4254,12 +4273,13 @@
           <button type="button" class="fetch-btn" id="form-earnings-fetch">自动获取</button>
         </div>
       </div>
+
+      <div class="form-group-label">仓位 · SIZING</div>
       <div class="form-row">
         <label>数量（股）</label>
         <input type="number" id="form-qty" placeholder="100" step="1" required/>
       </div>
       <div id="form-sizer-hint" style="display:none" class="form-sizer-hint">
-        <!-- Grade mode: shown when BX/RS grade has been computed -->
         <div id="sizer-grade-mode" class="sizer-grade-mode" style="display:none">
           <span class="sgm-grade" id="sgm-grade-badge"></span>
           <span class="sgm-arrow">→</span>
@@ -4267,7 +4287,6 @@
           <span class="sizer-risk-tail">风险</span>
           <button type="button" class="sgm-manual-btn" id="sgm-manual-btn">手动调整</button>
         </div>
-        <!-- Manual mode: default, shown before grade is computed -->
         <div id="sizer-manual-mode" class="sizer-risk-line">
           <span class="sizer-lbl">仓位</span>
           <div class="sizer-risk-seg" id="form-risk-seg">
@@ -4289,8 +4308,9 @@
           <button type="button" class="sizer-fill-btn" id="form-sizer-fill">填入</button>
         </div>
       </div>
+
       <button type="button" id="form-bx-toggle" class="form-bx-toggle">
-        <span>综合评分信息 <span class="form-bx-hint">可选</span></span>
+        <span>综合评分 · RATING <span class="form-bx-hint">可选</span></span>
         <svg class="form-bx-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div id="form-bx-body" style="display:none;padding-bottom:4px">
@@ -4356,9 +4376,10 @@
         </div>
         <div id="entry-scorecard" class="esc-wrap" style="display:none"></div>
       </div>
+
       <div class="form-actions">
-        <button type="submit" class="btn primary">确认开仓</button>
         <button type="button" id="new-pos-cancel" class="btn">取消</button>
+        <button type="submit" class="btn primary">确认开仓</button>
       </div>
     </form>
   </div>
@@ -4587,8 +4608,8 @@
   </div>
 </div>
 
-<script src="data.js?v=512"></script>
-<script src="desk.js?v=512"></script>
+<script src="data.js?v=513"></script>
+<script src="desk.js?v=513"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
