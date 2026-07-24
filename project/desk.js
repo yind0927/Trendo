@@ -1671,7 +1671,7 @@ function rsAdjustGrade(grade, rsResult) {
   // <tbody> always share the exact same column widths — table-layout:auto lets long
   // wrapped ticker names / badges reflow the body's columns independently of the
   // header, visibly desyncing the two.
-  const COL_WEIGHT = { tk: 240, bxbars: 90, cost: 90, last: 90, qty: 65, stop: 90, target: 90, pnl: 110, progstatus: 140 };
+  const COL_WEIGHT = { tk: 240, bxbars: 90, cost: 90, last: 90, qty: 65, stop: 90, target: 90, pnl: 110, progstatus: 165 };
   function colgroupHTML(cols, actionsWidth) {
     const weights = cols.map(c => COL_WEIGHT[c.id] || 90);
     const total = weights.reduce((s, w) => s + w, 0) + actionsWidth;
@@ -1679,14 +1679,9 @@ function rsAdjustGrade(grade, rsResult) {
     return cols.map((c, i) => `<col style="width:${pct(weights[i])}">`).join("") + `<col style="width:${pct(actionsWidth)}">`;
   }
 
-  // On phones the list view drops the stop/target columns (still editable in the drawer
-  // + shown on the level bar) so the remaining columns get readable widths.
-  const MOBILE_HIDE_COLS = new Set(["stop", "target"]);
-  const isMobileWidth = () => window.matchMedia("(max-width: 768px)").matches;
-  const visTableCols = (isClosed) => COLS.filter(c =>
-    c.on
-    && !(isClosed && c.closedHide)
-    && !(isMobileWidth() && MOBILE_HIDE_COLS.has(c.id)));
+  // Visible list-view columns. stop/target default to on:false (data.js) so they're
+  // hidden on desktop + mobile — still editable in the drawer + shown on the level bar.
+  const visTableCols = (isClosed) => COLS.filter(c => c.on && !(isClosed && c.closedHide));
 
   function renderTable() {
     // header
@@ -11339,12 +11334,6 @@ function rsAdjustGrade(grade, rsResult) {
   wireSimHoldingsViewToggle();
   initPullToRefresh();
   wireControls();
-  // Re-render both holdings tables when crossing the mobile breakpoint so the
-  // stop/target columns hide on phones and re-appear on desktop (visTableCols).
-  window.matchMedia("(max-width: 768px)").addEventListener("change", () => {
-    renderTable();
-    renderSimTable();
-  });
   wireTweaks();
   wireTableTabs();
   wireNewPositionModal();

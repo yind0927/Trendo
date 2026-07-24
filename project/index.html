@@ -2894,14 +2894,18 @@
     .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     /* table-layout:fixed + width:100% would otherwise squeeze all columns into the
        phone's viewport and overlap the text; a min-width wider than the viewport lets
-       the wrapper's overflow-x scroll instead, with the ticker column pinned. Stop/
-       target columns are dropped on mobile in JS (visTableCols), so this is sized for
-       the remaining ~7 columns. */
-    table.holdings, table.sim-holdings { min-width: 560px; }
-    table.holdings td, table.holdings th { padding: 7px 8px; font-size: 12px; }
+       the wrapper's overflow-x scroll instead, with the ticker column pinned. stop/
+       target columns are hidden (data.js on:false), so this is sized for the ~7
+       remaining columns with roomy per-column padding. */
+    table.holdings, table.sim-holdings { min-width: 640px; }
+    table.holdings td, table.holdings th,
+    table.sim-holdings td, table.sim-holdings th { padding: 9px 14px; font-size: 12px; }
     table.holdings td:first-child,
-    table.holdings th:first-child { padding-left: 12px; position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
-    table.holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
+    table.holdings th:first-child,
+    table.sim-holdings td:first-child,
+    table.sim-holdings th:first-child { padding-left: 12px; position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
+    table.holdings tbody tr.selected td:first-child,
+    table.sim-holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
 
     /* ---- Drawer ---- */
     .drawer { width: 100vw; border-left: none; }
@@ -2931,9 +2935,7 @@
     #sim-view { padding: 12px 12px 86px; }
     #sim-overview { grid-template-columns: repeat(2, 1fr); }
     .panel-wrap.sim-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table.sim-holdings td:first-child,
-    table.sim-holdings th:first-child { position: sticky; left: 0; background: var(--bg-1); z-index: 1; }
-    table.sim-holdings tbody tr.selected td:first-child { background: var(--accent-dim); }
+    /* sim-holdings first-column sticky + padding handled by the shared table rule above */
 
     /* ---- Inspirations / Options ---- */
     #inspirations-view { padding: 12px 12px 86px; }
@@ -4578,8 +4580,8 @@
   </div>
 </div>
 
-<script src="data.js?v=510"></script>
-<script src="desk.js?v=510"></script>
+<script src="data.js?v=511"></script>
+<script src="desk.js?v=511"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
