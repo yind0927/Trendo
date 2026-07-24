@@ -9629,47 +9629,51 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // ============ MARKET PAGE ============
+  // Semantic colors reuse the site-wide palette (var(--up)/--down/--warn/--orange/--accent)
+  // instead of hardcoded hex, so Market matches the v506 mint/coral token refresh.
+  const mkAlpha = (color, pct) => `color-mix(in oklch, ${color} ${pct}%, transparent)`;
+  const MKT_DEEP_DOWN = "color-mix(in oklch, var(--down) 60%, black 40%)";
   // Zone thresholds mirror the three-axis model boundaries exactly.
   // VIX/VXN → 轴B risk capacity labels. FGI/RSI → 轴C sentiment labels.
   const MKT_ZONES = {
     vix: {
       label: "VIX", cap: 60,
       zones: [
-        { max: 15,  color: "#22c55e", label: "充裕 · 100%上限",  badge: "充裕 100%" },
-        { max: 20,  color: "#3b82f6", label: "正常 · 75%上限",   badge: "正常 75%" },
-        { max: 30,  color: "#f97316", label: "收缩 · 50%上限",   badge: "收缩 50%" },
-        { max: 50,  color: "#ef4444", label: "极小 · 25%上限",   badge: "极小 25%" },
-        { max: 9999,color: "#92400e", label: "恐慌 · 清仓观望",  badge: "恐慌" },
+        { max: 15,  color: "var(--up)",   label: "充裕 · 100%上限",  badge: "充裕 100%" },
+        { max: 20,  color: "var(--accent)",label: "正常 · 75%上限",   badge: "正常 75%" },
+        { max: 30,  color: "var(--orange)",label: "收缩 · 50%上限",   badge: "收缩 50%" },
+        { max: 50,  color: "var(--down)",  label: "极小 · 25%上限",   badge: "极小 25%" },
+        { max: 9999,color: MKT_DEEP_DOWN,  label: "恐慌 · 清仓观望",  badge: "恐慌" },
       ]
     },
     vxn: {
       label: "VXN (Nasdaq)", cap: 80,
       zones: [
-        { max: 20,  color: "#22c55e", label: "充裕",   badge: "充裕" },
-        { max: 27,  color: "#3b82f6", label: "正常",   badge: "正常" },
-        { max: 40,  color: "#f97316", label: "收缩",   badge: "收缩" },
-        { max: 65,  color: "#ef4444", label: "极小",   badge: "极小" },
-        { max: 9999,color: "#92400e", label: "恐慌",   badge: "恐慌" },
+        { max: 20,  color: "var(--up)",   label: "充裕",   badge: "充裕" },
+        { max: 27,  color: "var(--accent)",label: "正常",   badge: "正常" },
+        { max: 40,  color: "var(--orange)",label: "收缩",   badge: "收缩" },
+        { max: 65,  color: "var(--down)",  label: "极小",   badge: "极小" },
+        { max: 9999,color: MKT_DEEP_DOWN,  label: "恐慌",   badge: "恐慌" },
       ]
     },
     fg: {
       label: "恐惧贪婪指数", cap: 100,
       zones: [
-        { max: 25,  color: "#22c55e", label: "极端恐惧 · 分批进", badge: "极端恐惧" },
-        { max: 40,  color: "#3b82f6", label: "偏冷 · 可加仓",     badge: "偏冷" },
-        { max: 60,  color: "#eab308", label: "中性 · 正常",       badge: "中性" },
-        { max: 75,  color: "#f97316", label: "偏热 · 不追高",     badge: "偏热" },
-        { max: 9999,color: "#ef4444", label: "极端过热 · 止盈",   badge: "极端过热" },
+        { max: 25,  color: "var(--up)",    label: "极端恐惧 · 分批进", badge: "极端恐惧" },
+        { max: 40,  color: "var(--accent)", label: "偏冷 · 可加仓",     badge: "偏冷" },
+        { max: 60,  color: "var(--warn)",   label: "中性 · 正常",       badge: "中性" },
+        { max: 75,  color: "var(--orange)", label: "偏热 · 不追高",     badge: "偏热" },
+        { max: 9999,color: "var(--down)",   label: "极端过热 · 止盈",   badge: "极端过热" },
       ]
     },
     rsi: {
       label: "VOO RSI(14)", cap: 100,
       zones: [
-        { max: 38,  color: "#22c55e", label: "极弱 · 分批进",   badge: "极弱" },
-        { max: 45,  color: "#3b82f6", label: "偏弱 · 可加仓",   badge: "偏弱" },
-        { max: 65,  color: "#eab308", label: "中性 · 正常",     badge: "中性" },
-        { max: 72,  color: "#f97316", label: "偏热 · 不追高",   badge: "偏热" },
-        { max: 9999,color: "#ef4444", label: "超买 · 止盈",     badge: "超买" },
+        { max: 38,  color: "var(--up)",    label: "极弱 · 分批进",   badge: "极弱" },
+        { max: 45,  color: "var(--accent)", label: "偏弱 · 可加仓",   badge: "偏弱" },
+        { max: 65,  color: "var(--warn)",   label: "中性 · 正常",     badge: "中性" },
+        { max: 72,  color: "var(--orange)", label: "偏热 · 不追高",   badge: "偏热" },
+        { max: 9999,color: "var(--down)",   label: "超买 · 止盈",     badge: "超买" },
       ]
     }
   };
@@ -9678,7 +9682,7 @@ function rsAdjustGrade(grade, rsResult) {
     {
       id: "panic",
       regime: "🟤 抛售",
-      color: "#92400e",
+      color: MKT_DEEP_DOWN,
       condition: v => v.vix > 50,
       cond:    "VIX > 50",
       meaning: "极端抛售，市场失控",
@@ -9689,7 +9693,7 @@ function rsAdjustGrade(grade, rsResult) {
     {
       id: "defense",
       regime: "🔴 防守",
-      color: "#ef4444",
+      color: "var(--down)",
       condition: v => v.vix >= 30 || v.fg < 20,
       cond:    "VIX ≥ 30 或 FGI < 20",
       meaning: "高波动或极度恐惧",
@@ -9700,7 +9704,7 @@ function rsAdjustGrade(grade, rsResult) {
     {
       id: "caution",
       regime: "🟠 谨慎",
-      color: "#f97316",
+      color: "var(--orange)",
       condition: v => v.vix >= 20 && (v.fg < 40 || v.vixTrend === "up"),
       cond:    "VIX ≥ 20 且 (FGI < 40 或 VIX 均线上升)",
       meaning: "波动放大，方向不确定",
@@ -9711,7 +9715,7 @@ function rsAdjustGrade(grade, rsResult) {
     {
       id: "hot",
       regime: "🟡 偏热",
-      color: "#eab308",
+      color: "var(--warn)",
       condition: v => v.vix < 20 && (v.rsi > 70 || v.fg > 70),
       cond:    "VIX < 20 且 RSI > 70 或 FGI > 70",
       meaning: "低波动，但情绪过热",
@@ -9722,7 +9726,7 @@ function rsAdjustGrade(grade, rsResult) {
     {
       id: "attack",
       regime: "🟢 进攻",
-      color: "#22c55e",
+      color: "var(--up)",
       condition: v => v.vix < 12 && v.rsi >= 45 && v.rsi <= 70 && v.fg > 25,
       cond:    "VIX < 12 且 RSI 45–70 且 FGI > 25",
       meaning: "低波动，动量健康",
@@ -9733,7 +9737,7 @@ function rsAdjustGrade(grade, rsResult) {
     {
       id: "steady",
       regime: "🔵 稳健",
-      color: "#3b82f6",
+      color: "var(--accent)",
       condition: () => true,
       cond:    "VIX 12–20 · RSI / FGI 正常区间",
       meaning: "正常风险环境",
@@ -9788,22 +9792,22 @@ function rsAdjustGrade(grade, rsResult) {
   // GEX state → 5 levels matching the rules table, driven by distFlipPct.
   function gexState(distFlipPct, regime) {
     if (distFlipPct != null) {
-      if (distFlipPct > 2)     return { color: "#22c55e", label: "深度正 Gamma", mode: "波动压制",
+      if (distFlipPct > 2)     return { color: "var(--up)", label: "深度正 Gamma", mode: "波动压制",
         interp: "做市商深度净多 Gamma，波动被强力压制，倾向区间震荡。策略：区间操作可加码；Call Wall 附近受阻概率高，不追突破。" };
-      if (distFlipPct > 0.3)   return { color: "#22c55e", label: "正 Gamma", mode: "波动压制",
+      if (distFlipPct > 0.3)   return { color: "var(--up)", label: "正 Gamma", mode: "波动压制",
         interp: "做市商净多 Gamma，对冲与行情反向——买跌卖涨，波动被压制。策略：区间高抛低吸；Call Wall 附近易受阻回落，不追突破。" };
-      if (distFlipPct >= -0.3) return { color: "#eab308", label: "临界", mode: "临界翻转",
+      if (distFlipPct >= -0.3) return { color: "var(--warn)", label: "临界", mode: "临界翻转",
         interp: "价格贴近 Gamma Flip，波动性质随时切换。跌破 Flip 转负 Gamma（波动骤升），站上则转正（趋稳）。策略：轻仓、等方向确认，把 Flip 当多空分界线。" };
-      if (distFlipPct >= -2)   return { color: "#f97316", label: "负 Gamma", mode: "波动放大",
+      if (distFlipPct >= -2)   return { color: "var(--orange)", label: "负 Gamma", mode: "波动放大",
         interp: "做市商净空 Gamma，对冲与行情同向——涨追涨、跌杀跌，波动被放大。策略：顺势跟随，收紧或减仓；跌破 Put Wall 会加速下行。" };
-      return { color: "#ef4444", label: "深度负 Gamma", mode: "波动放大",
+      return { color: "var(--down)", label: "深度负 Gamma", mode: "波动放大",
         interp: "做市商深度净空 Gamma，波动剧烈放大、下跌容易加速。策略：大幅收仓、严格止损、勿抄底；跌破 Put Wall 进一步加速。" };
     }
-    if (regime === "negative") return { color: "#ef4444", label: "负 Gamma", mode: "波动放大",
+    if (regime === "negative") return { color: "var(--down)", label: "负 Gamma", mode: "波动放大",
       interp: "做市商净空 Gamma，对冲与行情同向，波动被放大。策略：顺势跟随，收紧或减仓。" };
-    if (regime === "neutral")  return { color: "#eab308", label: "临界", mode: "临界翻转",
+    if (regime === "neutral")  return { color: "var(--warn)", label: "临界", mode: "临界翻转",
       interp: "价格贴近 Gamma Flip，波动性质随时切换。策略：轻仓、等方向确认。" };
-    return { color: "#22c55e", label: "正 Gamma", mode: "波动压制",
+    return { color: "var(--up)", label: "正 Gamma", mode: "波动压制",
       interp: "做市商净多 Gamma，波动被压制。策略：区间高抛低吸；Call Wall 附近不追突破。" };
   }
 
@@ -9826,16 +9830,16 @@ function rsAdjustGrade(grade, rsResult) {
         <summary>GEX 详细规则 · 点击展开</summary>
         <div class="gx-rules-body">
           ${mkTable("状态判定 · 现价 vs Gamma Flip", ["状态", "触发条件", "含义与仓位因子"], [
-            ["深度正 Gamma", "现价高于 Flip > 2%",   "波动强压制，区间可加码 · 仓位 ×1.15", "#22c55e"],
-            ["正 Gamma",     "Flip 上方 0.3%–2%",    "正常操作 · 仓位 ×1.0", "#22c55e"],
+            ["深度正 Gamma", "现价高于 Flip > 2%",   "波动强压制，区间可加码 · 仓位 ×1.15", "var(--up)"],
+            ["正 Gamma",     "Flip 上方 0.3%–2%",    "正常操作 · 仓位 ×1.0", "var(--up)"],
             ["临界",         "Flip ±0.3% 内",        "随时翻转，轻仓等方向 · 仓位 ×0.75", "var(--warn)"],
-            ["负 Gamma",     "Flip 下方 0.3%–2%",    "波动放大，收仓+宽止损 · 仓位 ×0.6", "#f97316"],
-            ["深度负 Gamma", "现价低于 Flip > 2%",   "高危，大幅收仓、勿抄底 · 仓位 ×0.4", "#ef4444"],
+            ["负 Gamma",     "Flip 下方 0.3%–2%",    "波动放大，收仓+宽止损 · 仓位 ×0.6", "var(--orange)"],
+            ["深度负 Gamma", "现价低于 Flip > 2%",   "高危，大幅收仓、勿抄底 · 仓位 ×0.4", "var(--down)"],
           ])}
           ${mkTable("三个关键价位", ["价位", "是什么", "怎么用"], [
             ["Gamma Flip", "累计净γ过零的价位",       "多空波动分界线：跌破→转负γ、波动骤升；站上→趋稳。最重要的预警线", "var(--warn)"],
-            ["Call Wall",  "上方 call γ 最大行权价",  "阻力 + 磁吸：正γ时价格到此易受阻回落，突破难持续，不追", "#ef4444"],
-            ["Put Wall",   "下方 put γ 最大行权价",   "支撑 + 缓冲：负γ环境下跌破会加速下行，可作防守参考位", "#22c55e"],
+            ["Call Wall",  "上方 call γ 最大行权价",  "阻力 + 磁吸：正γ时价格到此易受阻回落，突破难持续，不追", "var(--down)"],
+            ["Put Wall",   "下方 put γ 最大行权价",   "支撑 + 缓冲：负γ环境下跌破会加速下行，可作防守参考位", "var(--up)"],
           ])}
           ${mkTable("读数规则", ["指标", "规则", "注意"], [
             ["Net GEX",  "SPX 每波动1%的做市商对冲金额", "看符号、分位、Flip距离；绝对值随 spot² 和持仓量膨胀，别用固定阈值刻舟求剑"],
@@ -9856,11 +9860,11 @@ function rsAdjustGrade(grade, rsResult) {
     const swing = gex.swingGexBn;
     const hero = swing != null ? swing : net;
     const heroSign = hero > 0 ? "+" : "";
-    const heroColor = hero > 0 ? "#22c55e" : hero < 0 ? "#ef4444" : "var(--fg-1)";
+    const heroColor = hero > 0 ? "var(--up)" : hero < 0 ? "var(--down)" : "var(--fg-1)";
     const netSign = net > 0 ? "+" : "";
-    const netColor = net > 0 ? "#22c55e" : net < 0 ? "#ef4444" : "var(--fg-1)";
+    const netColor = net > 0 ? "var(--up)" : net < 0 ? "var(--down)" : "var(--fg-1)";
     const factor = gex.posFactor ?? 1;
-    const facColor = factor >= 1 ? "#22c55e" : factor >= 0.7 ? "#eab308" : "#ef4444";
+    const facColor = factor >= 1 ? "var(--up)" : factor >= 0.7 ? "var(--warn)" : "var(--down)";
     const opexWarn = gex.daysToOpEx <= 3;
 
     // Price-structure bar: Put Wall (support) — Flip (pivot) — spot — Call Wall (resistance)
@@ -9877,7 +9881,7 @@ function rsAdjustGrade(grade, rsResult) {
         `<div class="gx-tick ${cls}" style="left:${pos(v)}%"><span class="gx-tick-lbl">${label}</span></div>`;
       barHTML = `
         <div class="gx-bar">
-          <div class="gx-bar-track" style="background:linear-gradient(90deg,#ef444455 0%,#ef444455 ${flipPos}%,#22c55e55 ${flipPos}%,#22c55e55 100%)"></div>
+          <div class="gx-bar-track" style="background:linear-gradient(90deg,${mkAlpha("var(--down)",33)} 0%,${mkAlpha("var(--down)",33)} ${flipPos}%,${mkAlpha("var(--up)",33)} ${flipPos}%,${mkAlpha("var(--up)",33)} 100%)"></div>
           ${tick(putWall,  "put",  "Put")}
           ${tick(callWall, "call", "Call")}
           ${flip != null ? `<div class="gx-tick flip" style="left:${flipPos}%"><span class="gx-tick-lbl">Flip</span></div>` : ""}
@@ -9890,7 +9894,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     const d = gex.dte || {};
     const dteItem = (name, val) => val == null ? "" :
-      `<span class="gx-dte-item"><span class="gx-dte-name">${name}</span><b style="color:${val >= 0 ? "#22c55e" : "#ef4444"}">${val > 0 ? "+" : ""}${val}B</b></span>`;
+      `<span class="gx-dte-item"><span class="gx-dte-name">${name}</span><b style="color:${val >= 0 ? "var(--up)" : "var(--down)"}">${val > 0 ? "+" : ""}${val}B</b></span>`;
     const dteHTML = (d.d0 != null || d.d1_7 != null || d.d8_30 != null)
       ? `<div class="gx-dte">${dteItem("0DTE", d.d0)}${dteItem("1-7D", d.d1_7)}${dteItem("8-30D", d.d8_30)}</div>` : "";
 
@@ -9899,7 +9903,7 @@ function rsAdjustGrade(grade, rsResult) {
     const chgVal = gex.swingChgBn ?? gex.netChgBn;
     if (chgVal != null) {
       const up = chgVal >= 0;
-      chgParts.push(`<span style="color:${up ? "#22c55e" : "#ef4444"}">${up ? "▲" : "▼"} ${up ? "+" : ""}${chgVal}B 较昨日</span>`);
+      chgParts.push(`<span style="color:${up ? "var(--up)" : "var(--down)"}">${up ? "▲" : "▼"} ${up ? "+" : ""}${chgVal}B 较昨日</span>`);
     }
     const pctVal = gex.swingPctile ?? gex.pctile;
     if (pctVal != null)
@@ -9915,11 +9919,11 @@ function rsAdjustGrade(grade, rsResult) {
 
     return `
       <div class="mkt-card mkt-gex-card">
-        <div class="mkt-card-label">做市商 Gamma <span class="mkt-gex-src">SPX 1-30 · CBOE</span></div>
+        <div class="mkt-card-label">做市商 Gamma · Dealer Gamma <span class="mkt-gex-src">SPX 1-30 · CBOE</span></div>
         <div class="mkt-card-row">
           <span class="mkt-card-val" style="color:${heroColor}">${heroSign}${hero}<span class="mkt-gex-unit">B</span></span>
           <span class="mkt-gex-mode" style="color:${st.color}">${st.label} · ${st.mode}</span>
-          <span class="gx-factor-tag" style="color:${facColor};border-color:${facColor}40;background:${facColor}12">×${factor}</span>
+          <span class="gx-factor-tag" style="color:${facColor};border-color:${mkAlpha(facColor,25)};background:${mkAlpha(facColor,7)}">×${factor}</span>
         </div>
         <div class="gx-hero-sub">波段口径 1-30</div>
         ${swingNote}
@@ -9951,7 +9955,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (pctChg != null || absChg != null) {
       const up   = (pctChg ?? absChg) >= 0;
       const good = invertColor ? up : !up;
-      const clr  = good ? "#22c55e" : "#ef4444";
+      const clr  = good ? "var(--up)" : "var(--down)";
       const arr  = up ? "▲" : "▼";
       const abs  = absChg != null ? `${up ? "+" : ""}${absChg.toFixed(2)}` : "";
       const pct  = pctChg != null ? `(${up ? "+" : ""}${pctChg.toFixed(2)}%)` : "";
@@ -9965,7 +9969,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${extra}
         </div>
         ${chgStr}
-        <div class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}12">
+        <div class="mkt-badge" style="color:${zone.color};border-color:${mkAlpha(zone.color,25)};background:${mkAlpha(zone.color,7)}">
           <span class="mkt-badge-dot" style="background:${zone.color}"></span>${zone.label}
         </div>
         ${mkZoneBarHTML(cfg, val)}
@@ -9978,16 +9982,16 @@ function rsAdjustGrade(grade, rsResult) {
     const ratio = (vxn / vix).toFixed(2);
     const r = parseFloat(ratio);
     let zone;
-    if      (r < 1.0)  zone = { color: "#2dd4bf", badge: "倒挂",      desc: "VIX > VXN · S&P 500风险定价高于Nasdaq，广泛市场风险占主导，极少见" };
-    else if (r < 1.15) zone = { color: "#eab308", badge: "比例压缩",  desc: "两者风险接近，常见于系统性市场冲击或科技相对稳定" };
-    else if (r < 1.30) zone = { color: "#22c55e", badge: "常态区间",  desc: "Nasdaq存在正常的结构性波动溢价，科技无特别压力" };
-    else if (r < 1.50) zone = { color: "#f97316", badge: "科技波动偏贵", desc: "市场更担忧科技、成长股或大型科技公司的风险" };
-    else               zone = { color: "#ef4444", badge: "极端溢价",  desc: "可能存在科技板块事件风险，或VIX自身处于异常低位" };
+    if      (r < 1.0)  zone = { color: "var(--accent)", badge: "倒挂",      desc: "VIX > VXN · S&P 500风险定价高于Nasdaq，广泛市场风险占主导，极少见" };
+    else if (r < 1.15) zone = { color: "var(--warn)",   badge: "比例压缩",  desc: "两者风险接近，常见于系统性市场冲击或科技相对稳定" };
+    else if (r < 1.30) zone = { color: "var(--up)",     badge: "常态区间",  desc: "Nasdaq存在正常的结构性波动溢价，科技无特别压力" };
+    else if (r < 1.50) zone = { color: "var(--orange)", badge: "科技波动偏贵", desc: "市场更担忧科技、成长股或大型科技公司的风险" };
+    else               zone = { color: "var(--down)",   badge: "极端溢价",  desc: "可能存在科技板块事件风险，或VIX自身处于异常低位" };
     return `
       <div class="mkt-vix-ratio-strip">
         <span class="mkt-vxr-key">VXN ÷ VIX</span>
         <span class="mkt-vxr-num" style="color:${zone.color}">${ratio}</span>
-        <span class="mkt-badge" style="color:${zone.color};border-color:${zone.color}40;background:${zone.color}12">
+        <span class="mkt-badge" style="color:${zone.color};border-color:${mkAlpha(zone.color,25)};background:${mkAlpha(zone.color,7)}">
           <span class="mkt-badge-dot" style="background:${zone.color}"></span>${zone.badge}
         </span>
         <span class="mkt-vxr-desc">${zone.desc}</span>
@@ -9997,22 +10001,22 @@ function rsAdjustGrade(grade, rsResult) {
   function mkPlaybookHTML() {
     // Three-axis reference handbook (replaces old 6-regime table).
     const axisA = [
-      { label: "做多", color: "#22c55e", cond: "价格 > EMA50 > EMA200", action: "有做多资格，正常布局" },
-      { label: "中性", color: "#eab308", cond: "价格在 EMA50/EMA200 之间回调", action: "少开新仓，持有已有仓位" },
-      { label: "做空", color: "#ef4444", cond: "EMA50/EMA200 死叉 或 价格 < EMA200", action: "禁止新多仓，严格执行止损" },
+      { label: "做多", color: "var(--up)", cond: "价格 > EMA50 > EMA200", action: "有做多资格，正常布局" },
+      { label: "中性", color: "var(--warn)", cond: "价格在 EMA50/EMA200 之间回调", action: "少开新仓，持有已有仓位" },
+      { label: "做空", color: "var(--down)", cond: "EMA50/EMA200 死叉 或 价格 < EMA200", action: "禁止新多仓，严格执行止损" },
     ];
     const axisB = [
-      { label: "充裕", color: "#22c55e", cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
-      { label: "正常", color: "#3b82f6", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −8%" },
-      { label: "收缩", color: "#f97316", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −5%" },
-      { label: "极小", color: "#ef4444", cond: "VIX ≥ 30",    action: "仓位上限 25%  · 止损 −5%" },
+      { label: "充裕", color: "var(--up)",     cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
+      { label: "正常", color: "var(--accent)", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −8%" },
+      { label: "收缩", color: "var(--orange)", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −5%" },
+      { label: "极小", color: "var(--down)",   cond: "VIX ≥ 30",    action: "仓位上限 25%  · 止损 −5%" },
     ];
     const axisC = [
-      { label: "极端恐惧", color: "#22c55e", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
-      { label: "偏冷",     color: "#3b82f6", cond: "FGI < 40 或 RSI < 45", action: "可小幅加仓，不追高" },
-      { label: "中性",     color: "#eab308", cond: "FGI 40–60，RSI 45–65", action: "正常操作，按计划执行" },
-      { label: "偏热",     color: "#f97316", cond: "FGI 60–75 或 RSI 65–72", action: "持仓不加码，盯紧止损" },
-      { label: "极端过热", color: "#ef4444", cond: "FGI > 75 或 RSI > 72",   action: "禁止新仓，盈利仓减仓 1/3，收紧止损" },
+      { label: "极端恐惧", color: "var(--up)", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
+      { label: "偏冷",     color: "var(--accent)", cond: "FGI < 40 或 RSI < 45", action: "可小幅加仓，不追高" },
+      { label: "中性",     color: "var(--warn)",   cond: "FGI 40–60，RSI 45–65", action: "正常操作，按计划执行" },
+      { label: "偏热",     color: "var(--orange)", cond: "FGI 60–75 或 RSI 65–72", action: "持仓不加码，盯紧止损" },
+      { label: "极端过热", color: "var(--down)", cond: "FGI > 75 或 RSI > 72",   action: "禁止新仓，盈利仓减仓 1/3，收紧止损" },
     ];
     const mkSection = (title, sub, rows) => `
       <div class="pb3-section">
@@ -10064,40 +10068,40 @@ function rsAdjustGrade(grade, rsResult) {
       return { id: "unknown", label: "未知", color: "var(--fg-3)", desc: "趋势数据不足", eligible: true };
     if (ma200 == null)
       return price > ma50
-        ? { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > EMA50，趋势偏多", eligible: true }
-        : { id: "headwind", label: "做空", color: "#ef4444", desc: "价格跌破 EMA50", eligible: false };
+        ? { id: "tailwind", label: "做多", color: "var(--up)", desc: "价格 > EMA50，趋势偏多", eligible: true }
+        : { id: "headwind", label: "做空", color: "var(--down)", desc: "价格跌破 EMA50", eligible: false };
     const deathCross = ma50 < ma200;
     if (deathCross || price < ma200)
-      return { id: "headwind", label: "做空", color: "#ef4444",
+      return { id: "headwind", label: "做空", color: "var(--down)",
         desc: deathCross ? "EMA50/EMA200 死叉，长期趋势走弱" : "价格跌破 EMA200，回避新多单", eligible: false };
     if (price > ma50 && ma50 > ma200)
-      return { id: "tailwind", label: "做多", color: "#22c55e", desc: "价格 > EMA50 > EMA200，多头结构完整", eligible: true };
-    return { id: "neutral", label: "中性", color: "#eab308", desc: "价格在均线间回调，方向待确认", eligible: true };
+      return { id: "tailwind", label: "做多", color: "var(--up)", desc: "价格 > EMA50 > EMA200，多头结构完整", eligible: true };
+    return { id: "neutral", label: "中性", color: "var(--warn)", desc: "价格在均线间回调，方向待确认", eligible: true };
   }
 
   // 轴B：风险容量（VIX）—— 仓位上限 + 止损宽度。只管"多少"，不管"买不买"。
   function getRiskAxis(vix) {
-    if (vix < 15)  return { id: "full",    label: "充裕", color: "#22c55e", posMax: 100, stop: "宽松 −10%" };
-    if (vix < 20)  return { id: "normal",  label: "正常", color: "#3b82f6", posMax: 75,  stop: "正常 −8%" };
-    if (vix < 30)  return { id: "reduced", label: "收缩", color: "#f97316", posMax: 50,  stop: "收紧 −5%" };
-    return            { id: "minimal", label: "极小", color: "#ef4444", posMax: 25,  stop: "极紧 −5%" };
+    if (vix < 15)  return { id: "full",    label: "充裕", color: "var(--up)", posMax: 100, stop: "宽松 −10%" };
+    if (vix < 20)  return { id: "normal",  label: "正常", color: "var(--accent)", posMax: 75,  stop: "正常 −8%" };
+    if (vix < 30)  return { id: "reduced", label: "收缩", color: "var(--orange)", posMax: 50,  stop: "收紧 −5%" };
+    return            { id: "minimal", label: "极小", color: "var(--down)", posMax: 25,  stop: "极紧 −5%" };
   }
 
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
   function getSentimentAxis(fg, rsi, vixTrend = "flat") {
     if (fg > 75 || rsi > 72)
-      return { id: "euphoria", label: "极端过热", color: "#ef4444", tilt: "trim",
+      return { id: "euphoria", label: "极端过热", color: "var(--down)", tilt: "trim",
         desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
     if (fg >= 60 || rsi >= 65)
-      return { id: "warm", label: "偏热", color: "#f97316", tilt: "hold",
+      return { id: "warm", label: "偏热", color: "var(--orange)", tilt: "hold",
         desc: "可持仓，不加仓，盯紧止损" };
     if (fg < 25 && rsi < 38)
-      return { id: "panic", label: "极端恐惧", color: "#22c55e", tilt: "accumulate",
+      return { id: "panic", label: "极端恐惧", color: "var(--up)", tilt: "accumulate",
         desc: vixTrend === "down" ? "分批建仓候选，VIX 已回落" : "分批建仓候选，待 VIX 回落确认" };
     if (fg < 40 || rsi < 45)
-      return { id: "cool", label: "偏冷", color: "#3b82f6", tilt: "scale",
+      return { id: "cool", label: "偏冷", color: "var(--accent)", tilt: "scale",
         desc: "可小幅分批加仓，不追高" };
-    return { id: "neutral", label: "中性", color: "#eab308", tilt: "normal", desc: "正常操作" };
+    return { id: "neutral", label: "中性", color: "var(--warn)", tilt: "normal", desc: "正常操作" };
   }
 
   // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
@@ -10110,21 +10114,21 @@ function rsAdjustGrade(grade, rsResult) {
       ? `；正Gamma但剔0DTE后转负（${gex.swingGexBn}B），缓冲仅限当日，隔夜持仓谨慎。`
       : "";
     if (!dir.eligible)
-      return { headline: "❌ 禁止新多仓", color: "#ef4444",
+      return { headline: "❌ 禁止新多仓", color: "var(--down)",
         detail: `方向轴逆风（${dir.desc}）。无论 VIX 多低都不新开多仓，优先保护现有仓位、严格执行止损。${gexWarn}` };
     if (sent.tilt === "trim")
-      return { headline: "⚠️ 止盈 / 禁新仓", color: "#f97316",
+      return { headline: "⚠️ 止盈 / 禁新仓", color: "var(--orange)",
         detail: `情绪极端过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。${gexWarn}` };
     if (sent.tilt === "accumulate")
-      return { headline: "🔄 分批建仓", color: "#22c55e",
+      return { headline: "🔄 分批建仓", color: "var(--up)",
         detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。${gexWarn}` };
     if (sent.tilt === "scale")
-      return { headline: "⏫ 小幅加仓", color: "#3b82f6",
+      return { headline: "⏫ 小幅加仓", color: "var(--accent)",
         detail: `${sent.desc}。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
     if (sent.tilt === "hold")
-      return { headline: "⏸️ 持仓观望", color: "#eab308",
+      return { headline: "⏸️ 持仓观望", color: "var(--warn)",
         detail: `情绪偏热，持有现有仓位不加码。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
-    return { headline: "✅ 正常进攻", color: "#22c55e",
+    return { headline: "✅ 正常进攻", color: "var(--up)",
       detail: `三轴健康，可正常布局。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
   }
 
@@ -10144,25 +10148,26 @@ function rsAdjustGrade(grade, rsResult) {
       : (ma50 != null ? `EMA50 ${ma50}` : "数据不足");
     return `
       <div class="mkt-axes">
-        <div class="mkt-section-label">市场模型 · 综合建议</div>
-        <div class="mkt-combine" style="border-color:${combined.color}55;background:${combined.color}12">
+        <div class="mkt-section-label"><span class="mkt-sl-zh">综合建议</span><span class="mkt-sl-en">Market Model</span></div>
+        <div class="mkt-combine" style="border-color:${mkAlpha(combined.color,33)};background:${mkAlpha(combined.color,7)}">
+          <div class="mkt-combine-eyebrow">Recommendation</div>
           <div class="mkt-combine-head" style="color:${combined.color}">${combined.headline}</div>
           <div class="mkt-combine-detail">${combined.detail}</div>
         </div>
         <div class="mkt-axis-grid">
-          <div class="mkt-axis-card" style="border-color:${dir.color}40">
+          <div class="mkt-axis-card" style="border-color:${mkAlpha(dir.color,25)}">
             <div class="mkt-axis-top"><span class="mkt-axis-name">方向 · 趋势</span><span class="mkt-axis-val" style="color:${dir.color}">${dir.label}</span></div>
             <div class="mkt-axis-meta">${price != null ? `VOO ${price}` : ""} <span class="mkt-axis-dim">${maNote}</span></div>
             <div class="mkt-axis-desc">${dir.desc}</div>
             <div class="mkt-axis-gate ${dir.eligible ? "ok" : "block"}">${dir.eligible ? "✓ 有做多资格" : "✕ 禁止新多仓"}</div>
           </div>
-          <div class="mkt-axis-card" style="border-color:${risk.color}40">
+          <div class="mkt-axis-card" style="border-color:${mkAlpha(risk.color,25)}">
             <div class="mkt-axis-top"><span class="mkt-axis-name">风险容量 · VIX</span><span class="mkt-axis-val" style="color:${risk.color}">${risk.posMax}%</span></div>
             <div class="mkt-axis-meta">VIX ${vix} <span class="mkt-axis-dim">容量 ${risk.label}</span></div>
             <div class="mkt-axis-desc">仓位上限 ${risk.posMax}% · 止损 ${risk.stop}</div>
             <div class="mkt-axis-gate dim">决定"开多少"</div>
           </div>
-          <div class="mkt-axis-card" style="border-color:${sent.color}40">
+          <div class="mkt-axis-card" style="border-color:${mkAlpha(sent.color,25)}">
             <div class="mkt-axis-top"><span class="mkt-axis-name">情绪 · FGI/RSI</span><span class="mkt-axis-val" style="color:${sent.color}">${sent.label}</span></div>
             <div class="mkt-axis-meta">FGI ${fg} · RSI ${rsi} <span class="mkt-axis-dim">${sent.tilt === "trim" ? "减仓倾斜" : sent.tilt === "accumulate" || sent.tilt === "scale" ? "加仓倾斜" : "中性"}</span></div>
             <div class="mkt-axis-desc">${sent.desc}</div>
@@ -10179,7 +10184,7 @@ function rsAdjustGrade(grade, rsResult) {
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
-      const clr = trend === "up" ? "#ef4444" : trend === "down" ? "#22c55e" : "var(--fg-3)";
+      const clr = trend === "up" ? "var(--down)" : trend === "down" ? "var(--up)" : "var(--fg-3)";
       return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">EMA10 <span style="color:${clr};font-weight:700">${ema10} ${arr}</span></span>`;
     })();
     el.innerHTML = `
@@ -10587,7 +10592,7 @@ function rsAdjustGrade(grade, rsResult) {
   // ── Drawdown analogs (历史回撤参考) ─────────────────────────────────────────
   const DRAWDOWN_LS = "trendo_drawdown_v2";
   const DD_TIER_ORDER = ["normal", "significant", "sharp", "crash"];
-  const DD_TIER_COLOR = { normal: "#eab308", significant: "#f97316", sharp: "#92400e", crash: "#ef4444" };
+  const DD_TIER_COLOR = { normal: "var(--warn)", significant: "var(--orange)", sharp: MKT_DEEP_DOWN, crash: "var(--down)" };
   const DD_TIER_RANGE = { normal: "−2~−3%", significant: "−3~−5%", sharp: "−5~−8%", crash: "≤−8%" };
 
   function _ddCell(c) {
@@ -10825,10 +10830,10 @@ function rsAdjustGrade(grade, rsResult) {
     }
     const slope = linregSlope(recent);
     let state, stateColor, stateClass;
-    if      (a20 > 0 && a60 > 0)  { state = "主升 ✅"; stateColor = "#22c55e"; stateClass = "sect-up";    }
-    else if (a20 > 0 && a60 <= 0) { state = "启动 🟠"; stateColor = "#f97316"; stateClass = "sect-start"; }
-    else if (a20 <= 0 && a60 > 0) { state = "降温 🧊"; stateColor = "#38bdf8"; stateClass = "sect-cool";  }
-    else                           { state = "弱势 ❌"; stateColor = "#ef4444"; stateClass = "sect-weak";  }
+    if      (a20 > 0 && a60 > 0)  { state = "主升 ✅"; stateColor = "var(--up)"; stateClass = "sect-up";    }
+    else if (a20 > 0 && a60 <= 0) { state = "启动 🟠"; stateColor = "var(--orange)"; stateClass = "sect-start"; }
+    else if (a20 <= 0 && a60 > 0) { state = "降温 🧊"; stateColor = "var(--accent)"; stateClass = "sect-cool";  }
+    else                           { state = "弱势 ❌"; stateColor = "var(--down)"; stateClass = "sect-weak";  }
     return {
       retF:  +(retF  * 100).toFixed(2),
       retS:  +(retS  * 100).toFixed(2),
@@ -10852,8 +10857,8 @@ function rsAdjustGrade(grade, rsResult) {
     const hot = rank <= 3 && item.stateClass === "sect-up";
     const badge = hot
       ? `<span class="sect-hot-badge">HOT</span>`
-      : `<span class="sect-state-badge" style="background:${item.stateColor}20;color:${item.stateColor}">${item.state}</span>`;
-    const gc = v => v >= 0 ? "#22c55e" : "#ef4444";
+      : `<span class="sect-state-badge" style="background:${mkAlpha(item.stateColor,12)};color:${item.stateColor}">${item.state}</span>`;
+    const gc = v => v >= 0 ? "var(--up)" : "var(--down)";
     const gs = v => v >= 0 ? "+" : "";
     return `
       <div class="sect-card ${item.stateClass}">
@@ -10872,12 +10877,12 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function sectRowHTML(item, rank) {
-    const gc = v => v >= 0 ? "#22c55e" : "#ef4444";
+    const gc = v => v >= 0 ? "var(--up)" : "var(--down)";
     const gs = v => v >= 0 ? "+" : "";
     const rankChg = item.rankPrev != null ? item.rankPrev - rank : null;
     const rankChgHTML = rankChg == null ? `<span style="color:var(--fg-3)">—</span>`
-      : rankChg > 0 ? `<span style="color:#22c55e">▲${rankChg}</span>`
-      : rankChg < 0 ? `<span style="color:#ef4444">▼${Math.abs(rankChg)}</span>`
+      : rankChg > 0 ? `<span style="color:var(--up)">▲${rankChg}</span>`
+      : rankChg < 0 ? `<span style="color:var(--down)">▼${Math.abs(rankChg)}</span>`
       : `<span style="color:var(--fg-3)">—</span>`;
     return `<tr data-sym="${item.sym}" data-zh="${item.zh}" data-en="${item.en}" style="cursor:pointer">
       <td class="sc-rank">${rank}</td>
@@ -10939,7 +10944,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.innerHTML = `
       <div class="sect-head">
         <div class="sect-title-row">
-          <div class="sect-title">板块轮动 <span style="font-size:9px;color:var(--fg-3);font-weight:400;margin-left:4px">基准 VOO · ${sorted.length} 个</span></div>
+          <div class="sect-title"><span class="mkt-sl-zh">板块轮动</span><span class="mkt-sl-en">Sector Rotation · VOO · ${sorted.length}</span></div>
           ${vooBenchHTML}
         </div>
         <div class="sect-controls">
