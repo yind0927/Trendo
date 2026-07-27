@@ -6367,12 +6367,14 @@ function rsAdjustGrade(grade, rsResult) {
     });
   }
 
-  // 月度回测 — 按自然月（本月1号起）统计未平仓相关数据；已平仓相关的全生命周期统计（不分月）
-  // 仍在 renderSimAnalytics。这里只覆盖"本月新开的仓位"（含已在本月平仓的），浮动盈亏用当前
-  // pnlDollar，已平仓用 pnlFinal，避免把上月遗留的浮盈浮亏计入本月表现，收益率统一按
-  // pnl/(cost*qty) 现算（不信任存量 pnlPct 字段，跟 renderSimAnalytics 的既有算法一致）。
-  // 最大回撤没有逐日 NAV 快照可用，改用一个轻量的"本月峰值"追踪：每次渲染都记录本月至今出现过
-  // 的最高组合盈亏，越往后回撤读数越有意义，月初几天基本是 0%。
+  // 月度回测 — 严格只统计"本月新开且仍在持仓中"的未平仓仓位（openThisMonth）。已平仓交易的
+  // 全生命周期统计（胜率/盈亏比/平均盈亏等）属于 renderSimAnalytics（分析复盘）的职责范围，
+  // 这里不再把 closedThisMonth 混进来算——之前的版本曾把两者合并成 monthItems 一起算胜率/
+  // Profit Factor/评级表现等，导致"未平仓"和"已平仓"两套口径的数字混在一起，容易看错。
+  // 浮动盈亏用当前 pnlDollar，收益率按 pnl/(cost*qty) 现算（不信任存量 pnlPct 字段，跟
+  // renderSimAnalytics 的既有算法一致）。最大回撤没有逐日 NAV 快照可用，改用一个轻量的
+  // "本月峰值"追踪：每次渲染都记录本月至今出现过的最高浮动盈亏，越往后回撤读数越有意义，
+  // 月初几天基本是 0%。
   function simMonthlyPeakDrawdown(monthKey, currentPnl) {
     let data = {};
     try { data = JSON.parse(localStorage.getItem("trendo_sim_month_peak") || "{}"); } catch (e) {}
@@ -6425,9 +6427,8 @@ function rsAdjustGrade(grade, rsResult) {
     const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
     const entryInMonth = h => h.entry && h.entry.slice(0, 10) >= monthStart;
-    const openThisMonth   = SIM_HOLDINGS.filter(entryInMonth);
-    const closedThisMonth = SIM_CLOSED.filter(entryInMonth);
-    const totalCount = openThisMonth.length + closedThisMonth.length;
+    const openThisMonth = SIM_HOLDINGS.filter(entryInMonth);
+    const closedThisMonthCount = SIM_CLOSED.filter(entryInMonth).length;
 
     if (label) label.innerHTML = `
       <span class="ssl-zh">月度回测</span>
@@ -6435,29 +6436,25 @@ function rsAdjustGrade(grade, rsResult) {
       <span class="ssl-rule"></span>
       <span class="ssl-meta">${monthLabel}</span>`;
 
-    if (!totalCount) {
+    if (!openThisMonth.length) {
       section.innerHTML = `
+        <div class="simb-note">仅统计本月新开且仍在持仓中的仓位；已平仓交易见下方「分析复盘」</div>
         <div class="sim-a-stats">
           <div class="sim-astat">
-            <div class="sim-astat-label">月内交易笔数</div>
+            <div class="sim-astat-label">月内新开持仓</div>
             <div class="sim-astat-value">0</div>
-            <div class="sim-astat-sub">本月暂无新开仓</div>
+            <div class="sim-astat-sub">${closedThisMonthCount ? `本月 ${closedThisMonthCount} 笔已平仓，见分析复盘` : "本月暂无新开仓"}</div>
           </div>
         </div>`;
       return;
     }
 
     const floatingPnl = openThisMonth.reduce((s, h) => s + (h.pnlDollar || 0), 0);
-    const realizedPnl = closedThisMonth.reduce((s, h) => s + (h.pnlFinal || 0), 0);
-    const monthPnl    = floatingPnl + realizedPnl;
-    const monthCls    = fmt.sign(monthPnl);
-    const { peak, ddPct } = simMonthlyPeakDrawdown(monthKey, monthPnl);
+    const monthCls    = fmt.sign(floatingPnl);
+    const { peak, ddPct } = simMonthlyPeakDrawdown(monthKey, floatingPnl);
 
-    // 本月新开仓位（含已平仓）合并为统一 {h, pnl, pct} 列表，供下面所有分层统计复用
-    const monthItems = [
-      ...openThisMonth.map(h => ({ h, pnl: h.pnlDollar || 0 })),
-      ...closedThisMonth.map(h => ({ h, pnl: h.pnlFinal || 0 })),
-    ];
+    // 本月新开且仍持仓中的仓位 → 统一 {h, pnl, pct} 列表，供下面所有分层统计复用
+    const monthItems = openThisMonth.map(h => ({ h, pnl: h.pnlDollar || 0 }));
     monthItems.forEach(it => {
       const basis = (it.h.cost || 0) * (it.h.qty || 0);
       it.pct = basis > 0 ? it.pnl / basis * 100 : 0;
@@ -6524,9 +6521,10 @@ function rsAdjustGrade(grade, rsResult) {
       .sort((a, b) => b.pnl - a.pnl);
 
     section.innerHTML = `
+      <div class="simb-note">仅统计本月新开且仍在持仓中的仓位；已平仓交易见下方「分析复盘」</div>
       <div class="sim-a-stats cols-3">
-        ${simTile("月内交易笔数", totalCount, "", `${openThisMonth.length} 笔持仓中 · ${closedThisMonth.length} 笔已平仓`)}
-        ${simTile("月度收益", fmt.signed(Math.round(monthPnl)), monthCls, `浮动 ${fmt.signed(Math.round(floatingPnl))} · 已实现 ${fmt.signed(Math.round(realizedPnl))}`)}
+        ${simTile("月内新开持仓", openThisMonth.length, "", closedThisMonthCount ? `另有 ${closedThisMonthCount} 笔本月已平仓，见分析复盘` : "均为持仓中")}
+        ${simTile("浮动收益", fmt.signed(Math.round(floatingPnl)), monthCls, "本月新开仓位的当前浮动盈亏")}
         ${simTile("本月回撤", peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
       </div>
 
