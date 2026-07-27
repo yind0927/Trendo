@@ -4284,7 +4284,7 @@ function rsAdjustGrade(grade, rsResult) {
         renderTape();
         renderOverview();
         renderTable();
-        if (currentPage === "sim")       { renderSimOverview();   renderSimTable();   }
+        if (currentPage === "sim")       { renderSimOverview();   renderSimTable();   renderSimMonthly(); }
         if (currentPage === "analytics") renderAnalytics();
       }
 
