@@ -3342,7 +3342,7 @@ function rsAdjustGrade(grade, rsResult) {
       resetFormBX();
       closeModal("new-position-modal");
       if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); renderSimMonthly(); }
-      else { renderTable(); renderOverview(); }
+      else { renderTable(); renderOverview(); renderDeskMonthly(); }
       newPositionContext = "desk";
       lastPriceFetch = 0;
       fetchPrices();
@@ -3580,7 +3580,7 @@ function rsAdjustGrade(grade, rsResult) {
       renderSimTable(); renderSimOverview(); renderSimAnalytics(); renderSimMonthly();
     } else {
       if (isFull && selectedSym === sym) closeDrawer();
-      renderTable(); renderOverview();
+      renderTable(); renderOverview(); renderDeskMonthly();
     }
   }
 
@@ -3637,6 +3637,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (selectedSym === sym) closeDrawer();
     renderTable();
     renderOverview();
+    renderDeskMonthly();
   }
 
   // deleteClosedPosition → permanently removes from CLOSED_POSITIONS
@@ -3663,6 +3664,7 @@ function rsAdjustGrade(grade, rsResult) {
     saveToStorage();
     if (selectedSym === sym) closeDrawer();
     renderTable();
+    renderDeskMonthly();
   }
 
   function restoreClosedPosition(sym, entry, cost) {
@@ -3683,7 +3685,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
     saveToStorage();
     if (selectedSym === sym) closeDrawer();
-    renderTable(); renderOverview();
+    renderTable(); renderOverview(); renderDeskMonthly();
   }
 
   function simRestoreClosedPosition(sym, entry, cost) {
@@ -4284,6 +4286,7 @@ function rsAdjustGrade(grade, rsResult) {
         renderTape();
         renderOverview();
         renderTable();
+        if (currentPage === "desk")      renderDeskMonthly();
         if (currentPage === "sim")       { renderSimOverview();   renderSimTable();   renderSimMonthly(); }
         if (currentPage === "analytics") renderAnalytics();
       }
@@ -4506,6 +4509,7 @@ function rsAdjustGrade(grade, rsResult) {
       fetchNews(HOLDINGS.filter(h => h.kind !== "crypto").map(h => h.sym));
       initHoldingsBriefCard();
     }
+    if (page === "desk") renderDeskMonthly();
   }
 
   // ============ JOURNAL ============
@@ -6368,19 +6372,21 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // 月度回测 — 严格只统计"本月新开且仍在持仓中"的未平仓仓位（openThisMonth）。已平仓交易的
-  // 全生命周期统计（胜率/盈亏比/平均盈亏等）属于 renderSimAnalytics（分析复盘）的职责范围，
-  // 这里不再把 closedThisMonth 混进来算——之前的版本曾把两者合并成 monthItems 一起算胜率/
-  // Profit Factor/评级表现等，导致"未平仓"和"已平仓"两套口径的数字混在一起，容易看错。
-  // 浮动盈亏用当前 pnlDollar，收益率按 pnl/(cost*qty) 现算（不信任存量 pnlPct 字段，跟
-  // renderSimAnalytics 的既有算法一致）。最大回撤没有逐日 NAV 快照可用，改用一个轻量的
-  // "本月峰值"追踪：每次渲染都记录本月至今出现过的最高浮动盈亏，越往后回撤读数越有意义，
-  // 月初几天基本是 0%。
-  function simMonthlyPeakDrawdown(monthKey, currentPnl) {
+  // 全生命周期统计（胜率/盈亏比/平均盈亏等）属于各自页面已有的已平仓模块（Sim 的分析复盘 /
+  // 真实仓的 Analytics 页）的职责范围，这里不再把 closedThisMonth 混进来算——之前的版本曾把
+  // 两者合并成 monthItems 一起算胜率/Profit Factor/评级表现等，导致"未平仓"和"已平仓"两套
+  // 口径的数字混在一起，容易看错。浮动盈亏用当前 pnlDollar，收益率按 pnl/(cost*qty) 现算
+  // （不信任存量 pnlPct 字段）。最大回撤没有逐日 NAV 快照可用，改用一个轻量的"本月峰值"追踪：
+  // 每次渲染都记录本月至今出现过的最高浮动盈亏，越往后回撤读数越有意义，月初几天基本是 0%。
+  // renderMonthlyBacktest() 是真实仓（Dashboard）和模拟仓（Sim）共用的核心实现，两边仅数据源
+  // （HOLDINGS/CLOSED_POSITIONS vs SIM_HOLDINGS/SIM_CLOSED）、DOM 挂载点、峰值追踪的 localStorage
+  // key、以及"已平仓交易去哪看"的提示文案不同。
+  function simMonthlyPeakDrawdown(storageKey, monthKey, currentPnl) {
     let data = {};
-    try { data = JSON.parse(localStorage.getItem("trendo_sim_month_peak") || "{}"); } catch (e) {}
+    try { data = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch (e) {}
     if (data.month !== monthKey) data = { month: monthKey, peak: currentPnl };
     if (currentPnl > data.peak) data.peak = currentPnl;
-    localStorage.setItem("trendo_sim_month_peak", JSON.stringify(data));
+    localStorage.setItem(storageKey, JSON.stringify(data));
     return { peak: data.peak, ddPct: data.peak > 0 ? (data.peak - currentPnl) / data.peak * 100 : 0 };
   }
   function simbBarRows(entries, labelOf, colorOf) {
@@ -6408,11 +6414,11 @@ function rsAdjustGrade(grade, rsResult) {
       ${sub ? `<div class="sim-astat-sub">${sub}</div>` : ""}
     </div>`;
   }
-  function renderSimMonthly() {
-    const label   = $("#sim-monthly-label");
-    const section = $("#sim-monthly-section");
+  function renderMonthlyBacktest({ labelSel, sectionSel, holdingsArr, closedArr, peakStorageKey, closedNote, closedNoteInline }) {
+    const label   = $(labelSel);
+    const section = $(sectionSel);
     if (!section) return;
-    const hasAny = SIM_HOLDINGS.length > 0 || SIM_CLOSED.length > 0;
+    const hasAny = holdingsArr.length > 0 || closedArr.length > 0;
     if (!hasAny) {
       section.style.display = "none";
       if (label) label.style.display = "none";
@@ -6427,8 +6433,8 @@ function rsAdjustGrade(grade, rsResult) {
     const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
     const entryInMonth = h => h.entry && h.entry.slice(0, 10) >= monthStart;
-    const openThisMonth = SIM_HOLDINGS.filter(entryInMonth);
-    const closedThisMonthCount = SIM_CLOSED.filter(entryInMonth).length;
+    const openThisMonth = holdingsArr.filter(entryInMonth);
+    const closedThisMonthCount = closedArr.filter(entryInMonth).length;
 
     if (label) label.innerHTML = `
       <span class="ssl-zh">月度回测</span>
@@ -6438,12 +6444,12 @@ function rsAdjustGrade(grade, rsResult) {
 
     if (!openThisMonth.length) {
       section.innerHTML = `
-        <div class="simb-note">仅统计本月新开且仍在持仓中的仓位；已平仓交易见下方「分析复盘」</div>
+        <div class="simb-note">${closedNote}</div>
         <div class="sim-a-stats">
           <div class="sim-astat">
             <div class="sim-astat-label">月内新开持仓</div>
             <div class="sim-astat-value">0</div>
-            <div class="sim-astat-sub">${closedThisMonthCount ? `本月 ${closedThisMonthCount} 笔已平仓，见分析复盘` : "本月暂无新开仓"}</div>
+            <div class="sim-astat-sub">${closedThisMonthCount ? `本月 ${closedThisMonthCount} 笔已平仓，${closedNoteInline}` : "本月暂无新开仓"}</div>
           </div>
         </div>`;
       return;
@@ -6451,7 +6457,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     const floatingPnl = openThisMonth.reduce((s, h) => s + (h.pnlDollar || 0), 0);
     const monthCls    = fmt.sign(floatingPnl);
-    const { peak, ddPct } = simMonthlyPeakDrawdown(monthKey, floatingPnl);
+    const { peak, ddPct } = simMonthlyPeakDrawdown(peakStorageKey, monthKey, floatingPnl);
 
     // 本月新开且仍持仓中的仓位 → 统一 {h, pnl, pct} 列表，供下面所有分层统计复用
     const monthItems = openThisMonth.map(h => ({ h, pnl: h.pnlDollar || 0 }));
@@ -6521,9 +6527,9 @@ function rsAdjustGrade(grade, rsResult) {
       .sort((a, b) => b.pnl - a.pnl);
 
     section.innerHTML = `
-      <div class="simb-note">仅统计本月新开且仍在持仓中的仓位；已平仓交易见下方「分析复盘」</div>
+      <div class="simb-note">${closedNote}</div>
       <div class="sim-a-stats cols-3">
-        ${simTile("月内新开持仓", openThisMonth.length, "", closedThisMonthCount ? `另有 ${closedThisMonthCount} 笔本月已平仓，见分析复盘` : "均为持仓中")}
+        ${simTile("月内新开持仓", openThisMonth.length, "", closedThisMonthCount ? `另有 ${closedThisMonthCount} 笔本月已平仓，${closedNoteInline}` : "均为持仓中")}
         ${simTile("浮动收益", fmt.signed(Math.round(floatingPnl)), monthCls, "本月新开仓位的当前浮动盈亏")}
         ${simTile("本月回撤", peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
       </div>
@@ -6587,6 +6593,26 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="simb-title">行业贡献</div>
         <div class="simb-table">${simbBarRows(sectorRows, r => r.label)}</div>
       </div>`;
+  }
+
+  function renderSimMonthly() {
+    renderMonthlyBacktest({
+      labelSel: "#sim-monthly-label", sectionSel: "#sim-monthly-section",
+      holdingsArr: SIM_HOLDINGS, closedArr: SIM_CLOSED,
+      peakStorageKey: "trendo_sim_month_peak",
+      closedNote: "仅统计本月新开且仍在持仓中的仓位；已平仓交易见下方「分析复盘」",
+      closedNoteInline: "见分析复盘",
+    });
+  }
+
+  function renderDeskMonthly() {
+    renderMonthlyBacktest({
+      labelSel: "#desk-monthly-label", sectionSel: "#desk-monthly-section",
+      holdingsArr: HOLDINGS, closedArr: CLOSED_POSITIONS,
+      peakStorageKey: "trendo_real_month_peak",
+      closedNote: "仅统计本月新开且仍在持仓中的仓位；已平仓交易见 Analytics 页",
+      closedNoteInline: "见 Analytics 页",
+    });
   }
 
   function renderSimAnalytics() {
@@ -11608,6 +11634,7 @@ function rsAdjustGrade(grade, rsResult) {
   wireHost();
   renderOverview();
   renderTable();
+  renderDeskMonthly();
   renderBottom();
   if (HOLDINGS.length > 0) initHoldingsBriefCard();
   wireHoldingsViewToggle();

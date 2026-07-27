@@ -3995,6 +3995,14 @@
   <!-- ============ HOLDINGS BRIEF ============ -->
   <div id="holdings-brief" class="brief-card" style="display:none;margin-top:20px;margin-bottom:20px"></div>
 
+  <!-- ============ MONTHLY BACKTEST（未平仓相关，按自然月，与 Sim 页同一套逻辑/展示） ============ -->
+  <div class="sim-section-label is-major" id="desk-monthly-label" style="display:none">
+    <span class="ssl-zh">月度回测</span>
+    <span class="ssl-en">Monthly Backtest</span>
+    <span class="ssl-rule"></span>
+  </div>
+  <div id="desk-monthly-section" style="display:none"></div>
+
   <!-- ============ NEWS ============ -->
   <div class="sim-section-label" id="news-section-label" style="display:none">
     <span class="ssl-zh">持仓动态</span>
@@ -4694,8 +4702,8 @@
   </div>
 </div>
 
-<script src="data.js?v=525"></script>
-<script src="desk.js?v=525"></script>
+<script src="data.js?v=526"></script>
+<script src="desk.js?v=526"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
