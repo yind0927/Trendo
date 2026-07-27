@@ -1996,9 +1996,16 @@
   .simb-note { font-size: 11px; color: var(--fg-3); margin-bottom: 14px; }
   .simb-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--fg-1); }
   .simb-title::before { content: ""; display: block; width: 3px; height: 13px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
-  .simb-table { display: flex; flex-direction: column; margin-top: 8px; }
-  .simb-row { display: grid; grid-template-columns: minmax(64px, max-content) 28px 1fr 84px; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-  .simb-row:last-child { border-bottom: none; }
+  /* .simb-row uses display:contents so its 4 children become direct grid items of
+     .simb-table — this makes every row share the SAME column tracks (critical for the
+     label column, which is sized to the widest label across all rows via max-content).
+     Each .simb-row being its own independent grid container, as before, computed
+     max-content per-row instead of per-table, so bars/values in different rows started
+     at different x-offsets whenever label lengths differed. */
+  .simb-table { display: grid; grid-template-columns: minmax(64px, max-content) 28px 1fr 84px; column-gap: 10px; align-items: center; margin-top: 8px; }
+  .simb-row { display: contents; }
+  .simb-label, .simb-cnt, .simb-bar-wrap, .simb-pnl { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .simb-row:last-child > * { border-bottom: none; }
   .simb-label { font-family: var(--f-sans); font-weight: 600; font-size: 12px; color: var(--fg-1); }
   .simb-cnt { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); text-align: right; }
   .simb-bar-wrap { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
@@ -4680,8 +4687,8 @@
   </div>
 </div>
 
-<script src="data.js?v=522"></script>
-<script src="desk.js?v=522"></script>
+<script src="data.js?v=523"></script>
+<script src="desk.js?v=523"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
