@@ -273,12 +273,12 @@
   const BX_GRADE_META = {
     "A+":  { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "三时框架全面看涨" },
     "A":   { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "周月线强势对齐" },
-    "A-":  { color: "color-mix(in oklch, var(--up) 85%, transparent)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
+    "A-":  { color: "oklch(0.77 0.15 158 / .85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
     "B+":  { color: "var(--accent)",             action: "可以开仓", pos: "75%",  desc: "日线领先，中线中性" },
     "B":   { color: "var(--accent)",             action: "普通开仓", pos: "50%",  desc: "日线普通，周月线中等" },
     "B-":  { color: "var(--warn)",               action: "普通开仓", pos: "50%",  desc: "三时框均比较普通" },
     "C+":  { color: "var(--warn)",               action: "小仓进入", pos: "25%",  desc: "多时框整体较差" },
-    "C":   { color: "color-mix(in oklch, var(--down) 85%, transparent)",   action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
+    "C":   { color: "oklch(0.71 0.17 25 / .85)",   action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
     "Hold":{ color: "var(--fg-2)",               action: "持有现有", pos: "—",    desc: "日线→Bull，等待日线确认" },
     "Exit":{ color: "var(--down)",               action: "回避",     pos: "不进场", desc: "看跌信号，不宜开仓" },
   };
@@ -1905,7 +1905,7 @@ function rsAdjustGrade(grade, rsResult) {
               const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
               const rs = h.bx?.entryRsResult;
               const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
-              return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:color-mix(in oklch,${meta.color} 12%,transparent)">${grade}</span>${rsLabel}`;
+              return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:${mkAlpha(meta.color, 12)}">${grade}</span>${rsLabel}`;
             })() : ""}
             <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
           </div>
@@ -2372,7 +2372,7 @@ function rsAdjustGrade(grade, rsResult) {
             <div class="mono" style="font-size:17px;font-weight:600">${h.sym}</div>
             <div class="muted" style="font-size:11.5px">${h.name} · ${kindLabel}</div>
           </div>
-          <span class="statlight" style="color:${badgeColor}; background: color-mix(in oklch, ${badgeColor} 15%, transparent);">
+          <span class="statlight" style="color:${badgeColor}; background: ${mkAlpha(badgeColor, 15)};">
             <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
           </span>
           <span id="drawer-nav-counter" class="drawer-nav-counter" style="display:none"></span>
@@ -4773,7 +4773,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (tagDef) {
           chip.style.color       = active ? tagDef.color : "";
           chip.style.borderColor = active ? tagDef.color : "";
-          chip.style.background  = active ? `color-mix(in oklch,${tagDef.color} 14%,transparent)` : "";
+          chip.style.background  = active ? mkAlpha(tagDef.color, 14) : "";
         }
         // Refresh attribution summary
         const sumEl = feed.querySelector(".jt-summary");
@@ -4854,7 +4854,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${tags.map(t => {
           const active = selectedTags.has(t.id);
           const style = active
-            ? `color:${t.color};border-color:${t.color};background:color-mix(in oklch,${t.color} 14%,transparent)`
+            ? `color:${t.color};border-color:${t.color};background:${mkAlpha(t.color, 14)}`
             : "";
           return `<button class="jc-tag-chip${active ? " active" : ""}"
             data-tag-id="${t.id}" data-sym="${h.sym}" data-entry="${h.entry}" data-cost="${h.cost}" data-from="${from}"
@@ -4890,7 +4890,7 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>
         <div class="jc-right">
-          <span class="statlight" style="color:${badgeColor};background:color-mix(in oklch,${badgeColor} 14%,transparent)"><span class="dot" style="background:${badgeColor}"></span>${badgeTxt}</span>
+          <span class="statlight" style="color:${badgeColor};background:${mkAlpha(badgeColor, 14)}"><span class="dot" style="background:${badgeColor}"></span>${badgeTxt}</span>
           ${pnlAmt != null ? `<span class="jc-pnl ${pnlSign}">${fmt.signed(pnlAmt)}</span>` : ""}
           ${isClosed && h.rMult != null ? `<span class="jc-rmult ${fmt.sign(h.rMult)}">${fmt.rMult(h.rMult)}</span>` : ""}
           ${bxChip}
@@ -7300,7 +7300,7 @@ function rsAdjustGrade(grade, rsResult) {
       { label: "< 0R",   sub: "亏损", color: "var(--down)",           check: r => r < 0 },
       { label: "0 – 1R", sub: "保本", color: "var(--fg-3)",           check: r => r >= 0 && r < 1 },
       { label: "1 – 2R", sub: "达标", color: "var(--up)",             check: r => r >= 1 && r < 2 },
-      { label: "2R +",   sub: "优秀", color: "color-mix(in oklch, var(--up) 80%, white 20%)",  check: r => r >= 2 },
+      { label: "2R +",   sub: "优秀", color: "oklch(0.85 0.13 158)",  check: r => r >= 2 },
     ];
     const rBucketData = rBucketDefs.map(b => ({ ...b, pos: closedWithR.filter(h => b.check(h.rMult)) }));
     const rMaxCnt = Math.max(1, ...rBucketData.map(b => b.pos.length));
@@ -7932,7 +7932,7 @@ function rsAdjustGrade(grade, rsResult) {
       const dimmed  = _wlGradeFilter && !isActive;
       return `<button class="wl-gs-chip${isActive ? " active" : ""}" data-wl-grade="${g}"
         title="${syms.join(", ")}"
-        style="border-color:${meta.color};color:${meta.color};background:color-mix(in oklch,${meta.color} ${isActive ? 18 : 10}%,transparent);opacity:${dimmed ? 0.4 : 1}">
+        style="border-color:${meta.color};color:${meta.color};background:${mkAlpha(meta.color, isActive ? 18 : 10)};opacity:${dimmed ? 0.4 : 1}">
         <span class="wl-gs-grade">${g}</span>
         <span class="wl-gs-cnt">${syms.length}</span>
       </button>`;
@@ -8220,7 +8220,7 @@ function rsAdjustGrade(grade, rsResult) {
     let basicSection = "";
     if (analysis) {
       const gradeChip = grade
-        ? `<span class="wl-chip-grade" style="color:${gradeColor};border-color:${gradeColor};background:color-mix(in oklch,${gradeColor} 12%,transparent)">${grade}</span>`
+        ? `<span class="wl-chip-grade" style="color:${gradeColor};border-color:${gradeColor};background:${mkAlpha(gradeColor, 12)}">${grade}</span>`
         : "";
       const scoreSpan = bxScore != null
         ? `<span style="font-family:var(--f-mono);font-size:12px;font-weight:700;color:${scoreColor}">${bxScore}<span style="font-size:9.5px;color:var(--fg-3);font-weight:400">/100</span></span>`
@@ -9635,8 +9635,26 @@ function rsAdjustGrade(grade, rsResult) {
   // ============ MARKET PAGE ============
   // Semantic colors reuse the site-wide palette (var(--up)/--down/--warn/--orange/--accent)
   // instead of hardcoded hex, so Market matches the v506 mint/coral token refresh.
-  const mkAlpha = (color, pct) => `color-mix(in oklch, ${color} ${pct}%, transparent)`;
-  const MKT_DEEP_DOWN = "color-mix(in oklch, var(--down) 60%, black 40%)";
+  // mkAlpha avoids color-mix() — some tablet/older-WebKit browsers render nested or
+  // chained color-mix() calls as blank/wrong backgrounds (plain oklch alpha and the
+  // precomputed --X-dim/--X-line tokens below are far more broadly supported and stay
+  // theme-aware since they resolve through the existing CSS custom properties).
+  const MKT_TINT_TOKEN = {
+    "var(--up)": "up", "var(--down)": "down", "var(--warn)": "warn",
+    "var(--danger)": "danger", "var(--ok)": "ok", "var(--neutral)": "neutral",
+    "var(--orange)": "orange", "var(--accent)": "accent",
+  };
+  const mkAlpha = (color, pct) => {
+    const key = MKT_TINT_TOKEN[color];
+    if (key) return `var(--${key}-${pct <= 15 ? "dim" : "line"})`;
+    const m = /^oklch\(([\d.]+) ([\d.]+) ([\w().-]+?)(?:\s*\/\s*([\d.]+))?\)$/.exec(color);
+    if (m) {
+      const baseAlpha = m[4] !== undefined ? parseFloat(m[4]) : 1;
+      return `oklch(${m[1]} ${m[2]} ${m[3]} / ${(baseAlpha * pct / 100).toFixed(3)})`;
+    }
+    return `color-mix(in oklch, ${color} ${pct}%, transparent)`;
+  };
+  const MKT_DEEP_DOWN = "oklch(0.43 0.10 25)";
   // Zone thresholds mirror the three-axis model boundaries exactly.
   // VIX/VXN → 轴B risk capacity labels. FGI/RSI → 轴C sentiment labels.
   const MKT_ZONES = {

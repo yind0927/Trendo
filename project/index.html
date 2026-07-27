@@ -41,20 +41,27 @@
     /* P&L semantics: US convention — green up, red down */
     --up:   oklch(0.77 0.15 158);
     --up-dim: oklch(0.77 0.15 158 / .14);
+    --up-line: oklch(0.77 0.15 158 / .3);
     --down: oklch(0.71 0.17 25);
     --down-dim: oklch(0.71 0.17 25 / .14);
+    --down-line: oklch(0.71 0.17 25 / .3);
 
     /* status */
     --warn: oklch(0.80 0.15 75);
     --warn-dim: oklch(0.80 0.15 75 / .14);
+    --warn-line: oklch(0.80 0.15 75 / .3);
     --danger: oklch(0.69 0.18 22);
     --danger-dim: oklch(0.69 0.18 22 / .14);
+    --danger-line: oklch(0.69 0.18 22 / .3);
     --ok: oklch(0.77 0.15 158);
     --ok-dim: oklch(0.77 0.15 158 / .14);
+    --ok-line: oklch(0.77 0.15 158 / .3);
     --neutral: oklch(0.65 0.02 250);
     --neutral-dim: oklch(0.65 0.02 250 / .14);
+    --neutral-line: oklch(0.65 0.02 250 / .3);
     --orange: oklch(0.75 0.17 50);
     --orange-dim: oklch(0.75 0.17 50 / .14);
+    --orange-line: oklch(0.75 0.17 50 / .3);
 
     /* density (set on <body>) */
     --row-h: 56px;
@@ -1071,14 +1078,19 @@
 
     --up:   oklch(0.54 0.16 158);
     --up-dim: oklch(0.54 0.16 158 / .12);
+    --up-line: oklch(0.54 0.16 158 / .3);
     --down: oklch(0.56 0.19 25);
     --down-dim: oklch(0.56 0.19 25 / .12);
+    --down-line: oklch(0.56 0.19 25 / .3);
     --warn: oklch(0.62 0.16 75);
     --warn-dim: oklch(0.62 0.16 75 / .14);
+    --warn-line: oklch(0.62 0.16 75 / .3);
     --danger: oklch(0.56 0.19 25);
     --danger-dim: oklch(0.56 0.19 25 / .12);
+    --danger-line: oklch(0.56 0.19 25 / .3);
     --ok: oklch(0.54 0.16 158);
     --ok-dim: oklch(0.54 0.16 158 / .12);
+    --ok-line: oklch(0.54 0.16 158 / .3);
   }
   body[data-theme="light"]::before{
     background:
@@ -1515,10 +1527,10 @@
   .bx-quad-row + .bx-align-row { border-top: 1px solid var(--line); }
   .bq-badge { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-family: var(--f-mono); font-weight: 600; }
   .bq-sub { font-size: 10px; font-weight: 400; font-family: var(--f-sans); opacity: 0.72; letter-spacing: 0; }
-  .bq-lead { background: color-mix(in oklch,var(--up)   12%,transparent); color: var(--up);     border: 1px solid color-mix(in oklch,var(--up)   28%,transparent); }
-  .bq-pull { background: color-mix(in oklch,var(--warn) 12%,transparent); color: var(--warn);   border: 1px solid color-mix(in oklch,var(--warn) 28%,transparent); }
-  .bq-turn { background: color-mix(in oklch,var(--accent)12%,transparent); color: var(--accent); border: 1px solid color-mix(in oklch,var(--accent)28%,transparent); }
-  .bq-lag  { background: color-mix(in oklch,var(--down) 12%,transparent); color: var(--down);   border: 1px solid color-mix(in oklch,var(--down) 28%,transparent); }
+  .bq-lead { background: var(--up-dim);     color: var(--up);     border: 1px solid var(--up-line); }
+  .bq-pull { background: var(--warn-dim);   color: var(--warn);   border: 1px solid var(--warn-line); }
+  .bq-turn { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent-line); }
+  .bq-lag  { background: var(--down-dim);   color: var(--down);   border: 1px solid var(--down-line); }
   .bq-neu  { background: var(--bg-3); color: var(--fg-3); border: 1px solid var(--line); }
 
   /* EARLY status — orange (overrides old .status.early) */
@@ -2253,8 +2265,8 @@
   .cal-cell.empty { background: transparent; border-color: transparent; }
   .cal-cell.wknd { opacity: 0.4; }
   .cal-cell.today { border-color: var(--accent-line); box-shadow: inset 0 0 0 1px var(--accent-line); }
-  .cal-cell.win { background: color-mix(in oklch, var(--up) 12%, transparent); border-color: color-mix(in oklch, var(--up) 28%, transparent); }
-  .cal-cell.loss { background: color-mix(in oklch, var(--down) 12%, transparent); border-color: color-mix(in oklch, var(--down) 28%, transparent); }
+  .cal-cell.win { background: var(--up-dim); border-color: var(--up-line); }
+  .cal-cell.loss { background: var(--down-dim); border-color: var(--down-line); }
   .cal-day-num { font-size: 11px; font-weight: 600; color: var(--fg-3); font-family: var(--f-mono); line-height: 1; }
   .cal-cell.today .cal-day-num { color: var(--accent); font-weight: 700; }
   .cal-cell.win .cal-day-num, .cal-cell.loss .cal-day-num { color: var(--fg-1); }
@@ -3273,10 +3285,10 @@
   .sect-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
   .sect-card-ret { font-size: 10.5px; font-family: var(--f-mono); }
   .sect-card-slope { font-size: 10.5px; font-family: var(--f-mono); font-weight: 600; }
-  .sect-up   { background: color-mix(in oklch, var(--up) 7%, transparent); border-color: color-mix(in oklch, var(--up) 25%, transparent); }
-  .sect-start{ background: color-mix(in oklch, var(--orange) 7%, transparent); border-color: color-mix(in oklch, var(--orange) 25%, transparent); }
-  .sect-cool { background: color-mix(in oklch, var(--accent) 7%, transparent); border-color: color-mix(in oklch, var(--accent) 25%, transparent); }
-  .sect-weak { background: color-mix(in oklch, var(--down) 7%, transparent); border-color: color-mix(in oklch, var(--down) 25%, transparent); }
+  .sect-up   { background: var(--up-dim);     border-color: var(--up-line); }
+  .sect-start{ background: var(--orange-dim); border-color: var(--orange-line); }
+  .sect-cool { background: var(--accent-dim); border-color: var(--accent-line); }
+  .sect-weak { background: var(--down-dim);   border-color: var(--down-line); }
 
   /* Table */
   .sect-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid var(--line); }
@@ -4612,8 +4624,8 @@
   </div>
 </div>
 
-<script src="data.js?v=514"></script>
-<script src="desk.js?v=514"></script>
+<script src="data.js?v=515"></script>
+<script src="desk.js?v=515"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
