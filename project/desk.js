@@ -7553,8 +7553,15 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function ametric(label, value, colorCls, sub) {
+    // Label is always "EN · 中文" — split into two fixed lines instead of relying on
+    // natural text wrap, so every card's label block is the same height regardless of
+    // how long each half is (mobile columns are narrow enough that wrap point varies
+    // card to card, which was pushing values out of alignment across a row).
+    const sepIdx = label.indexOf(" · ");
+    const labelHTML = sepIdx === -1 ? label
+      : `<span class="aml-en">${label.slice(0, sepIdx)}</span><span class="aml-zh">${label.slice(sepIdx + 3)}</span>`;
     return `<div class="analytics-metric">
-      <div class="analytics-metric-label">${label}</div>
+      <div class="analytics-metric-label">${labelHTML}</div>
       <div class="analytics-metric-value ${colorCls || "neu"}">${value}</div>
       ${sub ? `<div class="analytics-metric-sub">${sub}</div>` : ""}
     </div>`;

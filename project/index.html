@@ -2163,8 +2163,10 @@
     background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
     padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
   }
-  .analytics-metric-label { font-size: 10px; line-height: 1.35; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; min-height: 27px; }
+  .analytics-metric-label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--fg-2); font-weight: 500; }
   .analytics-metric-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
+  .analytics-metric-label .aml-en { text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .analytics-metric-label .aml-zh { font-size: 9.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .analytics-metric-value { font-size: 20px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.01em; }
   .analytics-metric-value.up { color: var(--up); }
   .analytics-metric-value.down { color: var(--down); }
@@ -4637,8 +4639,8 @@
   </div>
 </div>
 
-<script src="data.js?v=516"></script>
-<script src="desk.js?v=516"></script>
+<script src="data.js?v=517"></script>
+<script src="desk.js?v=517"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
