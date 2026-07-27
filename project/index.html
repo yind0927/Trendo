@@ -2006,6 +2006,17 @@
   .simb-pnl { font-family: var(--f-mono); font-size: 11.5px; text-align: right; font-weight: 600; }
   .simb-pnl.up { color: var(--up); }
   .simb-pnl.down { color: var(--down); }
+  .simbw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+  .simbw-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .simbw-card.up { border-left-color: var(--up); }
+  .simbw-card.down { border-left-color: var(--down); }
+  .simbw-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); font-weight: 500; }
+  .simbw-sym { font-family: var(--f-mono); font-weight: 700; font-size: 14px; display: flex; align-items: baseline; gap: 8px; }
+  .simbw-name { font-family: var(--f-sans); font-weight: 400; font-size: 11px; color: var(--fg-3); }
+  .simbw-pct { font-family: var(--f-mono); font-weight: 800; font-size: 20px; }
+  .simbw-pct.up { color: var(--up); }
+  .simbw-pct.down { color: var(--down); }
+  @media (max-width: 768px) { .simbw-row { grid-template-columns: 1fr; } }
   .sim-table-controls {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
@@ -4669,8 +4680,8 @@
   </div>
 </div>
 
-<script src="data.js?v=519"></script>
-<script src="desk.js?v=519"></script>
+<script src="data.js?v=520"></script>
+<script src="desk.js?v=520"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

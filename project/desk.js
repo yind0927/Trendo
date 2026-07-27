@@ -6367,17 +6367,12 @@ function rsAdjustGrade(grade, rsResult) {
     });
   }
 
-  // 月度回测 — 按自然月（本月1号起）统计未平仓相关数据；已平仓相关指标（胜率/盈亏比/PF/期望值等）
-  // 沿用 renderSimAnalytics 的现有全生命周期统计，暂不按月拆分。这里只覆盖"本月新开的仓位"
-  // （含已在本月平仓的），浮动盈亏用当前 pnlDollar，已平仓用 pnlFinal，避免把上月遗留的浮盈浮亏
-  // 计入本月表现。最大回撤没有逐日 NAV 快照可用，改用一个轻量的"本月峰值"追踪：每次渲染都记录
-  // 本月至今出现过的最高组合盈亏，越往后回撤读数越有意义，月初几天基本是 0%。
-  const SIM_SIZE_TIERS = [
-    { label: "≥30%",   check: s => s >= 30 },
-    { label: "20–30%", check: s => s >= 20 && s < 30 },
-    { label: "10–20%", check: s => s >= 10 && s < 20 },
-    { label: "<10%",   check: s => s < 10 },
-  ];
+  // 月度回测 — 按自然月（本月1号起）统计未平仓相关数据；已平仓相关的全生命周期统计（不分月）
+  // 仍在 renderSimAnalytics。这里只覆盖"本月新开的仓位"（含已在本月平仓的），浮动盈亏用当前
+  // pnlDollar，已平仓用 pnlFinal，避免把上月遗留的浮盈浮亏计入本月表现，收益率统一按
+  // pnl/(cost*qty) 现算（不信任存量 pnlPct 字段，跟 renderSimAnalytics 的既有算法一致）。
+  // 最大回撤没有逐日 NAV 快照可用，改用一个轻量的"本月峰值"追踪：每次渲染都记录本月至今出现过
+  // 的最高组合盈亏，越往后回撤读数越有意义，月初几天基本是 0%。
   function simMonthlyPeakDrawdown(monthKey, currentPnl) {
     let data = {};
     try { data = JSON.parse(localStorage.getItem("trendo_sim_month_peak") || "{}"); } catch (e) {}
@@ -6398,6 +6393,18 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="simb-pnl ${e.pnl >= 0 ? "up" : "down"}">${fmt.signed(Math.round(e.pnl))}</span>
       </div>`;
     }).join("");
+  }
+  function simMedian(sortedNums) {
+    const n = sortedNums.length;
+    if (!n) return null;
+    return n % 2 === 0 ? (sortedNums[n / 2 - 1] + sortedNums[n / 2]) / 2 : sortedNums[(n - 1) / 2];
+  }
+  function simTile(label, value, cls, sub) {
+    return `<div class="sim-astat">
+      <div class="sim-astat-label">${label}</div>
+      <div class="sim-astat-value ${cls || ""}">${value}</div>
+      ${sub ? `<div class="sim-astat-sub">${sub}</div>` : ""}
+    </div>`;
   }
   function renderSimMonthly() {
     const label   = $("#sim-monthly-label");
@@ -6446,13 +6453,36 @@ function rsAdjustGrade(grade, rsResult) {
     const monthCls    = fmt.sign(monthPnl);
     const { peak, ddPct } = simMonthlyPeakDrawdown(monthKey, monthPnl);
 
-    // 本月新开仓位（含已平仓）合并为统一 {h, pnl} 列表，供评级/仓位/贡献三个分层复用
+    // 本月新开仓位（含已平仓）合并为统一 {h, pnl, pct} 列表，供下面所有分层统计复用
     const monthItems = [
       ...openThisMonth.map(h => ({ h, pnl: h.pnlDollar || 0 })),
       ...closedThisMonth.map(h => ({ h, pnl: h.pnlFinal || 0 })),
     ];
+    monthItems.forEach(it => {
+      const basis = (it.h.cost || 0) * (it.h.qty || 0);
+      it.pct = basis > 0 ? it.pnl / basis * 100 : 0;
+    });
 
-    // 各评级分层收益
+    const wins   = monthItems.filter(it => it.pnl > 0);
+    const losses = monthItems.filter(it => it.pnl < 0);
+    const evens  = monthItems.filter(it => it.pnl === 0);
+    const winRatePct = monthItems.length ? wins.length / monthItems.length * 100 : null;
+
+    const pctSorted = monthItems.map(it => it.pct).sort((a, b) => a - b);
+    const avgPct    = monthItems.reduce((s, it) => s + it.pct, 0) / monthItems.length;
+    const medPct    = simMedian(pctSorted);
+    const avgWinPct  = wins.length   ? wins.reduce((s, it) => s + it.pct, 0) / wins.length     : null;
+    const avgLossPct = losses.length ? losses.reduce((s, it) => s + it.pct, 0) / losses.length : null;
+
+    const grossWin  = wins.reduce((s, it) => s + it.pnl, 0);
+    const grossLoss = Math.abs(losses.reduce((s, it) => s + it.pnl, 0));
+    const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (wins.length > 0 ? "∞" : "—");
+    const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (wins.length > 0 ? "up" : "");
+
+    const bestItem  = monthItems.reduce((a, b) => (b.pct > a.pct ? b : a));
+    const worstItem = monthItems.reduce((a, b) => (b.pct < a.pct ? b : a));
+
+    // 评级分层表现：评级 | 数量 | 平均收益率 | 中位数收益率 | 胜率 | 净盈亏 | Profit Factor
     const gradeBuckets = {};
     monthItems.forEach(it => {
       const g = it.h.bx?.entryFinalGrade || "—";
@@ -6460,19 +6490,30 @@ function rsAdjustGrade(grade, rsResult) {
     });
     const gradeOrder = [...GRADE_LADDER].reverse().filter(g => gradeBuckets[g]);
     if (gradeBuckets["—"]) gradeOrder.push("—");
-    const gradeRows = gradeOrder.map(g => {
+    const gradeStatsRows = gradeOrder.map(g => {
       const items = gradeBuckets[g];
-      const meta  = BX_GRADE_META[g] || { color: "var(--fg-3)" };
-      return { cnt: items.length, pnl: items.reduce((s, it) => s + it.pnl, 0), grade: g, color: meta.color };
-    });
+      const gWins = items.filter(it => it.pnl > 0), gLosses = items.filter(it => it.pnl < 0);
+      const gPctSorted = items.map(it => it.pct).sort((a, b) => a - b);
+      const gAvgPct = items.reduce((s, it) => s + it.pct, 0) / items.length;
+      const gMedPct = simMedian(gPctSorted);
+      const gWinRate = gWins.length / items.length * 100;
+      const gNet = items.reduce((s, it) => s + it.pnl, 0);
+      const gGrossWin  = gWins.reduce((s, it) => s + it.pnl, 0);
+      const gGrossLoss = Math.abs(gLosses.reduce((s, it) => s + it.pnl, 0));
+      const gPfStr = gGrossLoss > 0 ? (gGrossWin / gGrossLoss).toFixed(2) : (gWins.length > 0 ? "∞" : "—");
+      const meta = BX_GRADE_META[g] || { color: "var(--fg-3)" };
+      return `<tr>
+        <td style="padding:6px 8px 6px 0;font-family:var(--f-mono);font-weight:700;color:${meta.color}">${g}</td>
+        <td style="padding:6px 8px;text-align:right;color:var(--fg-3);font-family:var(--f-mono)">${items.length}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${gAvgPct >= 0 ? "var(--up)" : "var(--down)"}">${gAvgPct >= 0 ? "+" : ""}${gAvgPct.toFixed(1)}%</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${gMedPct >= 0 ? "var(--up)" : "var(--down)"}">${gMedPct >= 0 ? "+" : ""}${gMedPct.toFixed(1)}%</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono)">${gWinRate.toFixed(0)}%</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${gNet >= 0 ? "var(--up)" : "var(--down)"}">${fmt.signed(Math.round(gNet))}</td>
+        <td style="padding:6px 0 6px 8px;text-align:right;font-family:var(--f-mono)">${gPfStr}</td>
+      </tr>`;
+    }).join("");
 
-    // 各仓位档位收益（按 size 占比分层）
-    const sizeRows = SIM_SIZE_TIERS.map(tier => {
-      const items = monthItems.filter(it => tier.check(it.h.size || 0));
-      return { label: tier.label, cnt: items.length, pnl: items.reduce((s, it) => s + it.pnl, 0) };
-    }).filter(r => r.cnt > 0);
-
-    // 行业贡献（按 bx.sector.name 汇总）
+    // 行业贡献（按 bx.sector.name 汇总，从盈利到亏损排序）
     const sectorBuckets = {};
     monthItems.forEach(it => {
       const s = it.h.bx?.sector?.name || "—";
@@ -6480,47 +6521,73 @@ function rsAdjustGrade(grade, rsResult) {
     });
     const sectorRows = Object.entries(sectorBuckets)
       .map(([name, items]) => ({ label: name, cnt: items.length, pnl: items.reduce((s, it) => s + it.pnl, 0) }))
-      .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl));
-
-    // 个股贡献（本月每笔新开仓位单独一行，按盈亏绝对值排序）
-    const symbolRows = [...monthItems]
-      .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
-      .map(it => ({ label: it.h.sym, cnt: null, pnl: it.pnl }));
+      .sort((a, b) => b.pnl - a.pnl);
 
     section.innerHTML = `
       <div class="sim-a-stats cols-3">
-        <div class="sim-astat">
-          <div class="sim-astat-label">月内交易笔数</div>
-          <div class="sim-astat-value">${totalCount}</div>
-          <div class="sim-astat-sub">${openThisMonth.length} 笔持仓中 · ${closedThisMonth.length} 笔已平仓</div>
+        ${simTile("月内交易笔数", totalCount, "", `${openThisMonth.length} 笔持仓中 · ${closedThisMonth.length} 笔已平仓`)}
+        ${simTile("月度收益", fmt.signed(Math.round(monthPnl)), monthCls, `浮动 ${fmt.signed(Math.round(floatingPnl))} · 已实现 ${fmt.signed(Math.round(realizedPnl))}`)}
+        ${simTile("本月回撤", peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
+      </div>
+
+      <div class="simb-title" style="margin-top:20px">交易分布</div>
+      <div class="sim-a-stats" style="margin-top:8px">
+        ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
+        ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
+        ${simTile("持平数量", evens.length)}
+        ${simTile("总体胜率", winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—", winRatePct >= 50 ? "up" : "down")}
+      </div>
+
+      <div class="simb-title" style="margin-top:20px">收益率</div>
+      <div class="sim-a-stats" style="margin-top:8px">
+        ${simTile("平均收益率", (avgPct >= 0 ? "+" : "") + avgPct.toFixed(1) + "%", avgPct >= 0 ? "up" : "down")}
+        ${simTile("中位数收益率", (medPct >= 0 ? "+" : "") + medPct.toFixed(1) + "%", medPct >= 0 ? "up" : "down")}
+        ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—", "up")}
+        ${simTile("平均亏损收益率", avgLossPct !== null ? avgLossPct.toFixed(1) + "%" : "—", "down")}
+      </div>
+
+      <div class="simb-title" style="margin-top:20px">盈亏总额</div>
+      <div class="sim-a-stats cols-3" style="margin-top:8px">
+        ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up")}
+        ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
+        ${simTile("Profit Factor", pfStr, pfCls)}
+      </div>
+
+      <div class="simb-title" style="margin-top:20px">最佳 / 最差</div>
+      <div class="simbw-row">
+        <div class="simbw-card up">
+          <div class="simbw-label">最佳股票</div>
+          <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
+          <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
         </div>
-        <div class="sim-astat">
-          <div class="sim-astat-label">月度收益</div>
-          <div class="sim-astat-value ${monthCls}">${fmt.signed(Math.round(monthPnl))}</div>
-          <div class="sim-astat-sub">浮动 ${fmt.signed(Math.round(floatingPnl))} · 已实现 ${fmt.signed(Math.round(realizedPnl))}</div>
-        </div>
-        <div class="sim-astat">
-          <div class="sim-astat-label">本月回撤</div>
-          <div class="sim-astat-value ${ddPct > 0 ? "down" : "neu"}">${peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—"}</div>
-          <div class="sim-astat-sub">${peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值"}</div>
+        <div class="simbw-card down">
+          <div class="simbw-label">最差股票</div>
+          <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
+          <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
         </div>
       </div>
+
       <div class="simb-block">
-        <div class="simb-title">各评级分层收益</div>
-        <div class="simb-table">${simbBarRows(gradeRows, r => r.grade, r => r.color)}</div>
+        <div class="simb-title">评级分层表现</div>
+        <div style="overflow-x:auto;margin-top:8px">
+          <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:480px">
+            <thead><tr style="color:var(--fg-3);border-bottom:1px solid var(--line)">
+              <th style="text-align:left;padding:0 8px 6px 0;font-weight:500">评级</th>
+              <th style="text-align:right;padding:0 8px 6px;font-weight:500">数量</th>
+              <th style="text-align:right;padding:0 8px 6px;font-weight:500">平均收益率</th>
+              <th style="text-align:right;padding:0 8px 6px;font-weight:500">中位数收益率</th>
+              <th style="text-align:right;padding:0 8px 6px;font-weight:500">胜率</th>
+              <th style="text-align:right;padding:0 8px 6px;font-weight:500">净盈亏</th>
+              <th style="text-align:right;padding:0 0 6px 8px;font-weight:500">Profit Factor</th>
+            </tr></thead>
+            <tbody>${gradeStatsRows}</tbody>
+          </table>
+        </div>
       </div>
-      ${sizeRows.length ? `
-      <div class="simb-block">
-        <div class="simb-title">各仓位档位收益</div>
-        <div class="simb-table">${simbBarRows(sizeRows, r => r.label)}</div>
-      </div>` : ""}
+
       <div class="simb-block">
         <div class="simb-title">行业贡献</div>
         <div class="simb-table">${simbBarRows(sectorRows, r => r.label)}</div>
-      </div>
-      <div class="simb-block">
-        <div class="simb-title">个股贡献</div>
-        <div class="simb-table">${simbBarRows(symbolRows, r => r.label)}</div>
       </div>`;
   }
 
