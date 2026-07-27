@@ -6391,7 +6391,7 @@ function rsAdjustGrade(grade, rsResult) {
       return `<div class="simb-row">
         <span class="simb-label" style="${colorOf ? `color:${colorOf(e)}` : ""}">${labelOf(e)}</span>
         <span class="simb-cnt">${e.cnt ?? ""}</span>
-        <div class="simb-bar-wrap"><div class="simb-bar" style="background:${barColor};width:${barPct}%"></div></div>
+        <div class="simb-barcell"><div class="simb-bar-wrap"><div class="simb-bar" style="background:${barColor};width:${barPct}%"></div></div></div>
         <span class="simb-pnl ${e.pnl >= 0 ? "up" : "down"}">${fmt.signed(Math.round(e.pnl))}</span>
       </div>`;
     }).join("");
