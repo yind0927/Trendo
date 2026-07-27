@@ -9636,9 +9636,16 @@ function rsAdjustGrade(grade, rsResult) {
   // Semantic colors reuse the site-wide palette (var(--up)/--down/--warn/--orange/--accent)
   // instead of hardcoded hex, so Market matches the v506 mint/coral token refresh.
   // mkAlpha avoids color-mix() — some tablet/older-WebKit browsers render nested or
-  // chained color-mix() calls as blank/wrong backgrounds (plain oklch alpha and the
-  // precomputed --X-dim/--X-line tokens below are far more broadly supported and stay
-  // theme-aware since they resolve through the existing CSS custom properties).
+  // chained color-mix() calls as blank/wrong backgrounds; plain oklch(L C H / alpha) is
+  // far more broadly supported. It mirrors the exact L/C/H each token resolves to per
+  // theme (see :root / body[data-theme="light"]) so the requested pct is preserved
+  // precisely instead of being bucketed into a couple of fixed tiers.
+  const MKT_TINT_BASE = {
+    dark:  { up: "0.77 0.15 158", down: "0.71 0.17 25", warn: "0.80 0.15 75", danger: "0.69 0.18 22",
+             ok: "0.77 0.15 158", neutral: "0.65 0.02 250", orange: "0.75 0.17 50", accent: "0.78 0.12 var(--accent-h)" },
+    light: { up: "0.54 0.16 158", down: "0.56 0.19 25", warn: "0.62 0.16 75", danger: "0.56 0.19 25",
+             ok: "0.54 0.16 158", neutral: "0.65 0.02 250", orange: "0.75 0.17 50", accent: "0.55 0.14 var(--accent-h)" },
+  };
   const MKT_TINT_TOKEN = {
     "var(--up)": "up", "var(--down)": "down", "var(--warn)": "warn",
     "var(--danger)": "danger", "var(--ok)": "ok", "var(--neutral)": "neutral",
@@ -9646,7 +9653,10 @@ function rsAdjustGrade(grade, rsResult) {
   };
   const mkAlpha = (color, pct) => {
     const key = MKT_TINT_TOKEN[color];
-    if (key) return `var(--${key}-${pct <= 15 ? "dim" : "line"})`;
+    if (key) {
+      const theme = document.body.dataset.theme === "light" ? "light" : "dark";
+      return `oklch(${MKT_TINT_BASE[theme][key]} / ${pct}%)`;
+    }
     const m = /^oklch\(([\d.]+) ([\d.]+) ([\w().-]+?)(?:\s*\/\s*([\d.]+))?\)$/.exec(color);
     if (m) {
       const baseAlpha = m[4] !== undefined ? parseFloat(m[4]) : 1;

@@ -35,33 +35,41 @@
     /* accent — a cool mint/teal, distinct from the up/down greens */
     --accent-h: 195;
     --accent: oklch(0.78 0.12 var(--accent-h));
+    --accent-faint: oklch(0.78 0.12 var(--accent-h) / .07);
     --accent-dim: oklch(0.78 0.12 var(--accent-h) / .14);
     --accent-line: oklch(0.78 0.12 var(--accent-h) / .35);
 
     /* P&L semantics: US convention — green up, red down */
     --up:   oklch(0.77 0.15 158);
+    --up-faint: oklch(0.77 0.15 158 / .07);
     --up-dim: oklch(0.77 0.15 158 / .14);
-    --up-line: oklch(0.77 0.15 158 / .3);
+    --up-line: oklch(0.77 0.15 158 / .25);
     --down: oklch(0.71 0.17 25);
+    --down-faint: oklch(0.71 0.17 25 / .07);
     --down-dim: oklch(0.71 0.17 25 / .14);
-    --down-line: oklch(0.71 0.17 25 / .3);
+    --down-line: oklch(0.71 0.17 25 / .25);
 
     /* status */
     --warn: oklch(0.80 0.15 75);
+    --warn-faint: oklch(0.80 0.15 75 / .07);
     --warn-dim: oklch(0.80 0.15 75 / .14);
-    --warn-line: oklch(0.80 0.15 75 / .3);
+    --warn-line: oklch(0.80 0.15 75 / .25);
     --danger: oklch(0.69 0.18 22);
+    --danger-faint: oklch(0.69 0.18 22 / .07);
     --danger-dim: oklch(0.69 0.18 22 / .14);
-    --danger-line: oklch(0.69 0.18 22 / .3);
+    --danger-line: oklch(0.69 0.18 22 / .25);
     --ok: oklch(0.77 0.15 158);
+    --ok-faint: oklch(0.77 0.15 158 / .07);
     --ok-dim: oklch(0.77 0.15 158 / .14);
-    --ok-line: oklch(0.77 0.15 158 / .3);
+    --ok-line: oklch(0.77 0.15 158 / .25);
     --neutral: oklch(0.65 0.02 250);
+    --neutral-faint: oklch(0.65 0.02 250 / .07);
     --neutral-dim: oklch(0.65 0.02 250 / .14);
-    --neutral-line: oklch(0.65 0.02 250 / .3);
+    --neutral-line: oklch(0.65 0.02 250 / .25);
     --orange: oklch(0.75 0.17 50);
+    --orange-faint: oklch(0.75 0.17 50 / .07);
     --orange-dim: oklch(0.75 0.17 50 / .14);
-    --orange-line: oklch(0.75 0.17 50 / .3);
+    --orange-line: oklch(0.75 0.17 50 / .25);
 
     /* density (set on <body>) */
     --row-h: 56px;
@@ -1073,24 +1081,30 @@
     --fg-3: oklch(0.66 0.008 250);
 
     --accent: oklch(0.55 0.14 var(--accent-h));
+    --accent-faint: oklch(0.55 0.14 var(--accent-h) / .06);
     --accent-dim: oklch(0.55 0.14 var(--accent-h) / .12);
     --accent-line: oklch(0.55 0.14 var(--accent-h) / .35);
 
     --up:   oklch(0.54 0.16 158);
+    --up-faint: oklch(0.54 0.16 158 / .06);
     --up-dim: oklch(0.54 0.16 158 / .12);
-    --up-line: oklch(0.54 0.16 158 / .3);
+    --up-line: oklch(0.54 0.16 158 / .25);
     --down: oklch(0.56 0.19 25);
+    --down-faint: oklch(0.56 0.19 25 / .06);
     --down-dim: oklch(0.56 0.19 25 / .12);
-    --down-line: oklch(0.56 0.19 25 / .3);
+    --down-line: oklch(0.56 0.19 25 / .25);
     --warn: oklch(0.62 0.16 75);
+    --warn-faint: oklch(0.62 0.16 75 / .07);
     --warn-dim: oklch(0.62 0.16 75 / .14);
-    --warn-line: oklch(0.62 0.16 75 / .3);
+    --warn-line: oklch(0.62 0.16 75 / .25);
     --danger: oklch(0.56 0.19 25);
+    --danger-faint: oklch(0.56 0.19 25 / .06);
     --danger-dim: oklch(0.56 0.19 25 / .12);
-    --danger-line: oklch(0.56 0.19 25 / .3);
+    --danger-line: oklch(0.56 0.19 25 / .25);
     --ok: oklch(0.54 0.16 158);
+    --ok-faint: oklch(0.54 0.16 158 / .06);
     --ok-dim: oklch(0.54 0.16 158 / .12);
-    --ok-line: oklch(0.54 0.16 158 / .3);
+    --ok-line: oklch(0.54 0.16 158 / .25);
   }
   body[data-theme="light"]::before{
     background:
@@ -2143,14 +2157,13 @@
   #analytics-content {}
   .analytics-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
   .analytics-metrics {
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 18px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;
   }
-  @media (max-width: 900px) { .analytics-metrics { grid-template-columns: repeat(3, 1fr); } }
   .analytics-metric {
     background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
     padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
   }
-  .analytics-metric-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
+  .analytics-metric-label { font-size: 10px; line-height: 1.35; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; min-height: 27px; }
   .analytics-metric-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
   .analytics-metric-value { font-size: 20px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.01em; }
   .analytics-metric-value.up { color: var(--up); }
@@ -3285,10 +3298,10 @@
   .sect-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
   .sect-card-ret { font-size: 10.5px; font-family: var(--f-mono); }
   .sect-card-slope { font-size: 10.5px; font-family: var(--f-mono); font-weight: 600; }
-  .sect-up   { background: var(--up-dim);     border-color: var(--up-line); }
-  .sect-start{ background: var(--orange-dim); border-color: var(--orange-line); }
-  .sect-cool { background: var(--accent-dim); border-color: var(--accent-line); }
-  .sect-weak { background: var(--down-dim);   border-color: var(--down-line); }
+  .sect-up   { background: var(--up-faint);     border-color: var(--up-line); }
+  .sect-start{ background: var(--orange-faint); border-color: var(--orange-line); }
+  .sect-cool { background: var(--accent-faint); border-color: var(--accent-line); }
+  .sect-weak { background: var(--down-faint);   border-color: var(--down-line); }
 
   /* Table */
   .sect-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid var(--line); }
@@ -4624,8 +4637,8 @@
   </div>
 </div>
 
-<script src="data.js?v=515"></script>
-<script src="desk.js?v=515"></script>
+<script src="data.js?v=516"></script>
+<script src="desk.js?v=516"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
