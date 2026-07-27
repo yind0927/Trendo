@@ -2150,8 +2150,11 @@
     background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
     min-width: 0;
   }
-  .analytics-card-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-1); }
-  .analytics-card-sub { font-size: 10.5px; color: var(--fg-3); margin-top: 2px; font-family: var(--f-mono); }
+  .analytics-card-title { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .analytics-card-title::before { content: ""; display: block; width: 3px; height: 14px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
+  .analytics-card-title .mkt-sl-zh { font-weight: 700; color: var(--fg-1); }
+  .analytics-card-title .mkt-sl-en { font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; }
+  .analytics-card-sub { font-size: 10.5px; color: var(--fg-3); margin-top: 6px; font-family: var(--f-mono); }
   /* Grade Performance combined rows — full width */
   .gp-header, .gp-row { display: grid; grid-template-columns: 36px 32px 46px 60px 40px 1fr 84px; align-items: center; gap: 10px; padding: 5px 0; }
   .gp-header { margin-top: 12px; border-bottom: 1px solid var(--line); padding-bottom: 6px; font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); font-family: var(--f-mono); font-weight: 500; }
@@ -2179,6 +2182,7 @@
   .eq-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
   .eq-summary-card { background: var(--bg-2); border-radius: 10px; padding: 12px 14px; }
   .eq-summary-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; margin-bottom: 4px; }
+  .eq-summary-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
   .eq-summary-value { font-size: 18px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.01em; }
   .eq-summary-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 2px; }
   .eq-empty { padding: 24px 0; color: var(--fg-3); font-size: 12px; font-family: var(--f-mono); text-align: center; letter-spacing: .04em; }
@@ -2249,8 +2253,8 @@
   .cal-cell.empty { background: transparent; border-color: transparent; }
   .cal-cell.wknd { opacity: 0.4; }
   .cal-cell.today { border-color: var(--accent-line); box-shadow: inset 0 0 0 1px var(--accent-line); }
-  .cal-cell.win { background: oklch(0.55 0.17 145 / .09); border-color: oklch(0.55 0.17 145 / .24); }
-  .cal-cell.loss { background: oklch(0.60 0.19 25 / .09); border-color: oklch(0.60 0.19 25 / .24); }
+  .cal-cell.win { background: color-mix(in oklch, var(--up) 12%, transparent); border-color: color-mix(in oklch, var(--up) 28%, transparent); }
+  .cal-cell.loss { background: color-mix(in oklch, var(--down) 12%, transparent); border-color: color-mix(in oklch, var(--down) 28%, transparent); }
   .cal-day-num { font-size: 11px; font-weight: 600; color: var(--fg-3); font-family: var(--f-mono); line-height: 1; }
   .cal-cell.today .cal-day-num { color: var(--accent); font-weight: 700; }
   .cal-cell.win .cal-day-num, .cal-cell.loss .cal-day-num { color: var(--fg-1); }
@@ -4608,8 +4612,8 @@
   </div>
 </div>
 
-<script src="data.js?v=513"></script>
-<script src="desk.js?v=513"></script>
+<script src="data.js?v=514"></script>
+<script src="desk.js?v=514"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

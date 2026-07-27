@@ -273,12 +273,12 @@
   const BX_GRADE_META = {
     "A+":  { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "三时框架全面看涨" },
     "A":   { color: "var(--up)",                 action: "积极开仓", pos: "满仓",  desc: "周月线强势对齐" },
-    "A-":  { color: "oklch(0.77 0.15 158/.85)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
+    "A-":  { color: "color-mix(in oklch, var(--up) 85%, transparent)",  action: "可以开仓", pos: "75%",  desc: "日线领先，周月支持" },
     "B+":  { color: "var(--accent)",             action: "可以开仓", pos: "75%",  desc: "日线领先，中线中性" },
     "B":   { color: "var(--accent)",             action: "普通开仓", pos: "50%",  desc: "日线普通，周月线中等" },
     "B-":  { color: "var(--warn)",               action: "普通开仓", pos: "50%",  desc: "三时框均比较普通" },
     "C+":  { color: "var(--warn)",               action: "小仓进入", pos: "25%",  desc: "多时框整体较差" },
-    "C":   { color: "oklch(0.71 0.17 25/.85)",   action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
+    "C":   { color: "color-mix(in oklch, var(--down) 85%, transparent)",   action: "暂缓",     pos: "不进场", desc: "多时框架不对齐" },
     "Hold":{ color: "var(--fg-2)",               action: "持有现有", pos: "—",    desc: "日线→Bull，等待日线确认" },
     "Exit":{ color: "var(--down)",               action: "回避",     pos: "不进场", desc: "看跌信号，不宜开仓" },
   };
@@ -7300,7 +7300,7 @@ function rsAdjustGrade(grade, rsResult) {
       { label: "< 0R",   sub: "亏损", color: "var(--down)",           check: r => r < 0 },
       { label: "0 – 1R", sub: "保本", color: "var(--fg-3)",           check: r => r >= 0 && r < 1 },
       { label: "1 – 2R", sub: "达标", color: "var(--up)",             check: r => r >= 1 && r < 2 },
-      { label: "2R +",   sub: "优秀", color: "oklch(0.82 0.19 145)",  check: r => r >= 2 },
+      { label: "2R +",   sub: "优秀", color: "color-mix(in oklch, var(--up) 80%, white 20%)",  check: r => r >= 2 },
     ];
     const rBucketData = rBucketDefs.map(b => ({ ...b, pos: closedWithR.filter(h => b.check(h.rMult)) }));
     const rMaxCnt = Math.max(1, ...rBucketData.map(b => b.pos.length));
@@ -7339,12 +7339,12 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
 
       <div class="analytics-metrics">
-        ${ametric("已实现盈亏",  total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl), total ? `${total} 笔交易` : "暂无数据")}
-        ${ametric("胜率",        winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", winRate !== null ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "")}
-        ${ametric("盈亏因子",    pfStr || "—", parseFloat(pfStr) >= 1.5 ? "up" : "down", "总盈 ÷ 总亏")}
-        ${ametric("平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `+${avgWinPct}% · ${wins.length} 笔盈` : "")}
-        ${ametric("平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `−${avgLossPct}% · ${losses.length} 笔亏` : "")}
-        ${ametric("平均持仓",
+        ${ametric("REALIZED P&L · 已实现盈亏",  total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl), total ? `${total} 笔交易` : "暂无数据")}
+        ${ametric("WIN RATE · 胜率",        winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", winRate !== null ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "")}
+        ${ametric("PROFIT FACTOR · 盈亏因子",    pfStr || "—", parseFloat(pfStr) >= 1.5 ? "up" : "down", "总盈 ÷ 总亏")}
+        ${ametric("AVG WIN · 平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `+${avgWinPct}% · ${wins.length} 笔盈` : "")}
+        ${ametric("AVG LOSS · 平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `−${avgLossPct}% · ${losses.length} 笔亏` : "")}
+        ${ametric("AVG HOLD · 平均持仓",
           holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
           holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "neu" : "down") : "neu",
           avgWinDays !== null || avgLossDays !== null
@@ -7355,7 +7355,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="analytics-card" style="margin-bottom:14px">
         <div class="ec-header">
           <div>
-            <div class="analytics-card-title">总资产曲线 · Portfolio Value</div>
+            ${atitle("总资产曲线", "Portfolio Value")}
             <div class="analytics-card-sub">
               <span class="mono" style="font-size:15px;font-weight:700;color:var(--fg-0)">${fmt.usd(Math.round(currentPortfolioValue))}</span>
               <span class="mono ${fmt.sign(totalPnlDisplay)}" style="font-size:11px;margin-left:6px">${fmt.signed(Math.round(totalPnlDisplay))}</span>
@@ -7371,7 +7371,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
 
       <div class="analytics-card" style="margin-bottom:14px">
-        <div class="analytics-card-title">评级绩效 · Grade Performance</div>
+        ${atitle("评级绩效", "Grade Performance")}
         <div class="analytics-card-sub">胜率 · 盈亏分布 · 按开仓评级 · 含部分平仓（已实现），纯持仓不计入</div>
         ${(() => {
             if (aGradeEntries.length === 0) return `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`;
@@ -7448,7 +7448,7 @@ function rsAdjustGrade(grade, rsResult) {
           </div>`;
         }).join("");
         return `<div class="analytics-card" style="margin-bottom:14px">
-          <div class="analytics-card-title">入场时机绩效 · Entry Timing</div>
+          ${atitle("入场时机绩效", "Entry Timing")}
           <div class="analytics-card-sub">按开仓时日线BX趋势已持续天数分段（初期0–5d · 中期5–15d · 延续15+d）· 同上仅算已实现</div>
           <div class="gp-header" style="margin-top:10px">
             <span class="gp-grade"></span><span class="gp-cnt">笔</span>
@@ -7461,7 +7461,7 @@ function rsAdjustGrade(grade, rsResult) {
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
-          <div class="analytics-card-title">R 倍数分布 · R-Multiple</div>
+          ${atitle("R 倍数分布", "R-Multiple")}
           <div class="analytics-card-sub">出场质量 · 按区间统计</div>
           ${closedWithR.length === 0
             ? `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无 R 倍数数据</div>`
@@ -7487,14 +7487,14 @@ function rsAdjustGrade(grade, rsResult) {
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
-          <div class="analytics-card-title">已平仓交易分布</div>
+          ${atitle("已平仓交易分布", "Closed Trades")}
           <div class="analytics-card-sub">按盈亏金额排序</div>
           <div style="margin-top:12px;display:flex;flex-direction:column;gap:5px">
             ${analyticsTradeBar(closed)}
           </div>
         </div>
         <div class="analytics-card" style="flex:1">
-          <div class="analytics-card-title">当前持仓风险</div>
+          ${atitle("当前持仓风险", "Open Risk")}
           <div class="analytics-card-sub">按仓位大小排序</div>
           <div style="margin-top:12px">
             <table style="width:100%;border-collapse:collapse;font-size:11.5px">
@@ -7524,7 +7524,7 @@ function rsAdjustGrade(grade, rsResult) {
 
 
       <div class="analytics-card" style="margin-bottom:14px">
-        <div class="analytics-card-title">出场质量分析 · Exit Quality</div>
+        ${atitle("出场质量分析", "Exit Quality")}
         <div class="analytics-card-sub">峰值盈利 vs 实际出场 · 按损耗排序</div>
         <div style="margin-top:14px" id="eq-content">${exitQualityHTML()}</div>
       </div>
@@ -7558,6 +7558,10 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="analytics-metric-value ${colorCls || "neu"}">${value}</div>
       ${sub ? `<div class="analytics-metric-sub">${sub}</div>` : ""}
     </div>`;
+  }
+
+  function atitle(zh, en) {
+    return `<div class="analytics-card-title"><span class="mkt-sl-zh">${zh}</span>${en ? `<span class="mkt-sl-en">${en}</span>` : ""}</div>`;
   }
 
   function exitQualityHTML() {
@@ -7630,17 +7634,17 @@ function rsAdjustGrade(grade, rsResult) {
     const summaryHTML = `
       <div class="eq-summary">
         <div class="eq-summary-card">
-          <div class="eq-summary-label">可捕获盈利</div>
+          <div class="eq-summary-label">POTENTIAL · 可捕获盈利</div>
           <div class="eq-summary-value up">+$${Math.round(totalPeak).toLocaleString("en-US")}</div>
           <div class="eq-summary-sub">${rows.length} 笔有效记录</div>
         </div>
         <div class="eq-summary-card">
-          <div class="eq-summary-label">实际盈亏</div>
+          <div class="eq-summary-label">ACTUAL · 实际盈亏</div>
           <div class="eq-summary-value ${fmt.sign(totalActual)}">${fmt.signed(Math.round(totalActual))}</div>
           <div class="eq-summary-sub">已实现</div>
         </div>
         <div class="eq-summary-card">
-          <div class="eq-summary-label">出场效率</div>
+          <div class="eq-summary-label">EFFICIENCY · 出场效率</div>
           <div class="eq-summary-value ${effCls(overallEff) === "high" ? "up" : effCls(overallEff) === "mid" ? "neu" : "down"}">${overallEff}%</div>
           <div class="eq-summary-sub">实际 ÷ 峰值</div>
         </div>
@@ -7891,7 +7895,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="analytics-card" style="${extraStyle}">
         <div class="ec-header" style="margin-bottom:14px">
           <div>
-            <div class="analytics-card-title">盈亏日历 · P&L Calendar</div>
+            ${atitle("盈亏日历", "P&L Calendar")}
             <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
               ${mTotalHTML}${mWLHTML}
               ${histLoading ? `<span class="muted" style="font-size:10px">加载历史数据…</span>` : ""}
