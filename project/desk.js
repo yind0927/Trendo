@@ -3340,7 +3340,7 @@ function rsAdjustGrade(grade, rsResult) {
       _pendingST       = null;
       resetFormBX();
       closeModal("new-position-modal");
-      if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); }
+      if (newPositionContext === "sim") { renderSimTable(); renderSimOverview(); renderSimMonthly(); }
       else { renderTable(); renderOverview(); }
       newPositionContext = "desk";
       lastPriceFetch = 0;
@@ -3576,7 +3576,7 @@ function rsAdjustGrade(grade, rsResult) {
     saveToStorage();
     if (isSim) {
       if (isFull && simSelectedSym === sym) closeSimDrawer();
-      renderSimTable(); renderSimOverview(); renderSimAnalytics();
+      renderSimTable(); renderSimOverview(); renderSimAnalytics(); renderSimMonthly();
     } else {
       if (isFull && selectedSym === sym) closeDrawer();
       renderTable(); renderOverview();
@@ -3703,7 +3703,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
     saveToStorage();
     if (simSelectedSym === sym) closeSimDrawer();
-    renderSimOverview(); renderSimTable(); renderSimAnalytics();
+    renderSimOverview(); renderSimTable(); renderSimAnalytics(); renderSimMonthly();
   }
 
   function wireDrawerRestoreButton(h, isSim) {
@@ -4915,6 +4915,7 @@ function rsAdjustGrade(grade, rsResult) {
     renderSimPending();
     renderSimTable();
     renderSimAnalytics();
+    renderSimMonthly();
     renderSimDailySources();
   }
 
@@ -6365,6 +6366,46 @@ function rsAdjustGrade(grade, rsResult) {
     });
   }
 
+  // 月度回测 — 按自然月（本月1号起）统计未平仓相关数据；已平仓相关指标沿用 renderSimAnalytics
+  // 的现有全生命周期统计，暂不按月拆分。后续指标（浮动收益/评级分层/仓位档位/行业贡献等）在此函数扩展。
+  function renderSimMonthly() {
+    const label   = $("#sim-monthly-label");
+    const section = $("#sim-monthly-section");
+    if (!section) return;
+    const hasAny = SIM_HOLDINGS.length > 0 || SIM_CLOSED.length > 0;
+    if (!hasAny) {
+      section.style.display = "none";
+      if (label) label.style.display = "none";
+      return;
+    }
+    section.style.display = "";
+    if (label) label.style.display = "";
+
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+    const entryInMonth = h => h.entry && h.entry.slice(0, 10) >= monthStart;
+    const openThisMonth   = SIM_HOLDINGS.filter(entryInMonth);
+    const closedThisMonth = SIM_CLOSED.filter(entryInMonth);
+    const totalCount = openThisMonth.length + closedThisMonth.length;
+
+    if (label) label.innerHTML = `
+      <span class="ssl-zh">月度回测</span>
+      <span class="ssl-en">Monthly Backtest</span>
+      <span class="ssl-rule"></span>
+      <span class="ssl-meta">${monthLabel}</span>`;
+
+    section.innerHTML = `
+      <div class="sim-a-stats">
+        <div class="sim-astat">
+          <div class="sim-astat-label">月内交易笔数</div>
+          <div class="sim-astat-value">${totalCount}</div>
+          <div class="sim-astat-sub">${totalCount ? `${openThisMonth.length} 笔持仓中 · ${closedThisMonth.length} 笔已平仓` : "本月暂无新开仓"}</div>
+        </div>
+      </div>`;
+  }
+
   function renderSimAnalytics() {
     const section     = $("#sim-analytics-section");
     const overviewLbl = $("#sim-analytics-label");
@@ -6922,7 +6963,7 @@ function rsAdjustGrade(grade, rsResult) {
     SIM_HOLDINGS.splice(idx, 1);
     saveToStorage();
     if (simSelectedSym === sym) closeSimDrawer();
-    renderSimTable(); renderSimOverview();
+    renderSimTable(); renderSimOverview(); renderSimMonthly();
   }
 
   function simDeleteClosedPosition(sym, entry, cost, closedAt, merged) {
@@ -6945,7 +6986,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
     saveToStorage();
     if (simSelectedSym === sym) closeSimDrawer();
-    renderSimTable(); renderSimOverview();
+    renderSimTable(); renderSimOverview(); renderSimMonthly();
   }
 
   function wireSimControls() {

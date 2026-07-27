@@ -4143,6 +4143,14 @@
     <div id="sim-holdings-cards"></div>
   </section>
 
+  <!-- § 月度回测 Monthly Backtest（未平仓相关，按自然月） -->
+  <div class="sim-section-label is-major" id="sim-monthly-label" style="display:none">
+    <span class="ssl-zh">月度回测</span>
+    <span class="ssl-en">Monthly Backtest</span>
+    <span class="ssl-rule"></span>
+  </div>
+  <div id="sim-monthly-section" style="display:none"></div>
+
   <!-- § 分析复盘 Analytics -->
   <div class="sim-section-label is-major" id="sim-review-label" style="display:none">
     <span class="ssl-zh">分析复盘</span>
@@ -4639,8 +4647,8 @@
   </div>
 </div>
 
-<script src="data.js?v=517"></script>
-<script src="desk.js?v=517"></script>
+<script src="data.js?v=518"></script>
+<script src="desk.js?v=518"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
