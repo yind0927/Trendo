@@ -1977,7 +1977,6 @@
   .sim-a-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
   .sim-astat { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
   .sim-astat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); font-weight: 500; }
-  .sim-astat-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
   .sim-astat-value { font-size: 18px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
   .sim-astat-sub { font-size: 12px; font-family: var(--f-mono); color: var(--fg-3); }
   .sim-astat-sub.up   { color: var(--up); }
@@ -1997,9 +1996,9 @@
   .simb-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--fg-1); }
   .simb-title::before { content: ""; display: block; width: 3px; height: 13px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
   .simb-table { display: flex; flex-direction: column; margin-top: 8px; }
-  .simb-row { display: grid; grid-template-columns: 64px 28px 1fr 84px; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .simb-row { display: grid; grid-template-columns: minmax(64px, max-content) 28px 1fr 84px; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
   .simb-row:last-child { border-bottom: none; }
-  .simb-label { font-family: var(--f-mono); font-weight: 700; font-size: 12px; color: var(--fg-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .simb-label { font-family: var(--f-sans); font-weight: 600; font-size: 12px; color: var(--fg-1); }
   .simb-cnt { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); text-align: right; }
   .simb-bar-wrap { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
   .simb-bar { height: 100%; border-radius: 3px; transition: width .4s; min-width: 0; }
@@ -4680,8 +4679,8 @@
   </div>
 </div>
 
-<script src="data.js?v=520"></script>
-<script src="desk.js?v=520"></script>
+<script src="data.js?v=521"></script>
+<script src="desk.js?v=521"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
