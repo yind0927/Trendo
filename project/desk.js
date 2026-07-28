@@ -6506,7 +6506,7 @@ function rsAdjustGrade(grade, rsResult) {
     const bestItem  = monthItems.reduce((a, b) => (b.pct > a.pct ? b : a));
     const worstItem = monthItems.reduce((a, b) => (b.pct < a.pct ? b : a));
 
-    // 评级分层表现：评级 | 数量 | 平均收益率 | 中位数收益率 | 胜率 | 净盈亏 | Profit Factor
+    // 评级分层表现：评级 | 数量 | 平均收益率 | 中位数收益率 | 胜率 | 净盈亏 | 盈亏因子
     const gradeBuckets = {};
     monthItems.forEach(it => {
       const g = it.h.bx?.entryFinalGrade || "—";
@@ -6586,7 +6586,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="sim-a-stats cols-3" style="margin-top:8px">
         ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up")}
         ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
-        ${simTile("Profit Factor", pfStr, pfCls)}
+        ${simTile("盈亏因子", pfStr, pfCls)}
       </div>
 
       <div class="simb-title" style="margin-top:20px">最佳 / 最差</div>
@@ -6614,7 +6614,7 @@ function rsAdjustGrade(grade, rsResult) {
               <th style="text-align:right;padding:0 8px 6px;font-weight:500">中位数收益率</th>
               <th style="text-align:right;padding:0 8px 6px;font-weight:500">胜率</th>
               <th style="text-align:right;padding:0 8px 6px;font-weight:500">净盈亏</th>
-              <th style="text-align:right;padding:0 0 6px 8px;font-weight:500">Profit Factor</th>
+              <th style="text-align:right;padding:0 0 6px 8px;font-weight:500">盈亏因子</th>
             </tr></thead>
             <tbody>${gradeStatsRows}</tbody>
           </table>
