@@ -6421,7 +6421,10 @@ function rsAdjustGrade(grade, rsResult) {
   // 注意"平均收益率"是逐笔收益率(pnl/成本)的简单平均，不是按金额加权的组合整体涨跌幅——
   // 一笔小仓位 +50% 和一笔大仓位 +2% 在这个平均数里权重相同，不能当作"本月整体组合涨跌了多少"
   // 来读；后者需要按资金量加权（Σpnl / Σ成本），目前没有单独算出来。
-  function renderMonthlyBacktest({ labelSel, sectionSel, mode, sourceArr, otherArr, peakStorageKey, closedNote, closedNoteInline, titleZh = "月度回测", titleEn = "Monthly Backtest" }) {
+  // scopeToMonth: true — 只看本月新开的仓位（月度回测的用法）。false — 不按月过滤，看
+  // sourceArr 全部历史（分析复盘的用法：模拟仓全部已平仓交易的整体复盘，不局限于当月）。
+  // 两种模式共用下面同一套统计逻辑，peak 回撤追踪在 lifetime 模式下用固定 key（永不按月重置）。
+  function renderMonthlyBacktest({ labelSel, sectionSel, mode, sourceArr, otherArr, peakStorageKey, closedNote, closedNoteInline, titleZh = "月度回测", titleEn = "Monthly Backtest", scopeToMonth = true }) {
     const label   = $(labelSel);
     const section = $(sectionSel);
     if (!section) return;
@@ -6436,20 +6439,20 @@ function rsAdjustGrade(grade, rsResult) {
 
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-    const monthKey   = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const monthKey   = scopeToMonth ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` : "lifetime";
     const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
     const entryInMonth = h => h.entry && h.entry.slice(0, 10) >= monthStart;
-    const thisMonthItems = sourceArr.filter(entryInMonth);
-    const otherThisMonthCount = otherArr.filter(entryInMonth).length;
+    const thisMonthItems = scopeToMonth ? sourceArr.filter(entryInMonth) : sourceArr;
+    const otherThisMonthCount = scopeToMonth ? otherArr.filter(entryInMonth).length : otherArr.length;
 
     if (label) label.innerHTML = `
       <span class="ssl-zh">${titleZh}</span>
       <span class="ssl-en">${titleEn}</span>
       <span class="ssl-rule"></span>
-      <span class="ssl-meta">${monthLabel}</span>`;
+      <span class="ssl-meta">${scopeToMonth ? monthLabel : `全部历史 · ${thisMonthItems.length} 笔`}</span>`;
 
-    const countLabel = mode === "closed" ? "月内已平仓交易" : "月内新开持仓";
+    const countLabel = scopeToMonth ? (mode === "closed" ? "月内已平仓交易" : "月内新开持仓") : "已平仓交易数";
     if (!thisMonthItems.length) {
       section.innerHTML = `
         <div class="simb-note">${closedNote}</div>
@@ -6458,8 +6461,8 @@ function rsAdjustGrade(grade, rsResult) {
             <div class="sim-astat-label">${countLabel}</div>
             <div class="sim-astat-value">0</div>
             <div class="sim-astat-sub">${otherThisMonthCount
-              ? (mode === "closed" ? `另有 ${otherThisMonthCount} 笔本月仍持仓中，${closedNoteInline}` : `本月 ${otherThisMonthCount} 笔已平仓，${closedNoteInline}`)
-              : "本月暂无新开仓"}</div>
+              ? (mode === "closed" ? `${scopeToMonth ? "另有" : "有"} ${otherThisMonthCount} 笔${scopeToMonth ? "本月仍" : "仍在"}持仓中，${closedNoteInline}` : `本月 ${otherThisMonthCount} 笔已平仓，${closedNoteInline}`)
+              : (scopeToMonth ? "本月暂无新开仓" : "暂无已平仓记录")}</div>
           </div>
         </div>`;
       return;
@@ -6545,18 +6548,22 @@ function rsAdjustGrade(grade, rsResult) {
       .sort((a, b) => b.pnl - a.pnl);
 
     const countSub = mode === "closed"
-      ? (otherThisMonthCount ? `另有 ${otherThisMonthCount} 笔本月仍持仓中，${closedNoteInline}` : "均已平仓")
+      ? (otherThisMonthCount ? `${scopeToMonth ? "另有" : "有"} ${otherThisMonthCount} 笔${scopeToMonth ? "本月仍" : "仍在"}持仓中，${closedNoteInline}` : "均已平仓")
       : (otherThisMonthCount ? `另有 ${otherThisMonthCount} 笔本月已平仓，${closedNoteInline}` : "均为持仓中");
     const pnlTileLabel = mode === "closed" ? "已实现收益" : "浮动收益";
-    const pnlTileSub   = mode === "closed" ? "本月已平仓交易的已实现盈亏" : "本月新开仓位的当前浮动盈亏";
+    const pnlTileSub   = mode === "closed"
+      ? (scopeToMonth ? "本月已平仓交易的已实现盈亏" : "全部已平仓交易的已实现盈亏")
+      : "本月新开仓位的当前浮动盈亏";
+    const ddLabel = scopeToMonth ? "本月回撤" : "历史回撤";
+    const weightedSub = scopeToMonth ? "可与大盘当月涨跌幅同层对比" : "可与大盘同期涨跌幅同层对比";
 
     section.innerHTML = `
       <div class="simb-note">${closedNote}</div>
       <div class="sim-a-stats">
         ${simTile(countLabel, thisMonthItems.length, "", countSub)}
         ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
-        ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct >= 0 ? "up" : "down", "可与大盘当月涨跌幅同层对比")}
-        ${simTile("本月回撤", peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
+        ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct >= 0 ? "up" : "down", weightedSub)}
+        ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
       </div>
 
       <div class="simb-title" style="margin-top:20px">交易分布</div>
@@ -6640,17 +6647,20 @@ function rsAdjustGrade(grade, rsResult) {
     });
   }
 
-  // 分析复盘 — 已平仓侧的"月度回测"（与上方未平仓的 #sim-monthly-section 是同一套逻辑/展示，
-  // 复用 renderMonthlyBacktest，只是 mode:"closed" 读 pnlFinal、数据源换成 SIM_CLOSED）。
+  // 分析复盘 — 模拟仓全部已平仓交易的整体复盘（不按月过滤，lifetime），复用
+  // renderMonthlyBacktest 同一套统计逻辑（mode:"closed" 读 pnlFinal，数据源 SIM_CLOSED），
+  // 只是 scopeToMonth:false 关掉月份过滤。跟上方未平仓的「月度回测」（仍按月）是互补关系：
+  // 一个看全部历史已实现表现，一个看本月新开且还在场上的仓位。
   function renderSimAnalytics() {
     const overviewLbl = $("#sim-analytics-label");
     if (overviewLbl) overviewLbl.style.display = (SIM_HOLDINGS.length > 0 || SIM_CLOSED.length > 0) ? "" : "none";
     renderMonthlyBacktest({
       labelSel: "#sim-review-label", sectionSel: "#sim-analytics-section",
       mode: "closed", sourceArr: SIM_CLOSED, otherArr: SIM_HOLDINGS,
-      peakStorageKey: "trendo_sim_closed_month_peak",
+      peakStorageKey: "trendo_sim_closed_lifetime_peak",
       titleZh: "分析复盘", titleEn: "Analytics",
-      closedNote: "仅统计本月新开且已经平仓的交易；持仓中的仓位见上方「月度回测」",
+      scopeToMonth: false,
+      closedNote: "统计模拟仓全部已平仓交易的历史表现；持仓中的仓位见上方「月度回测」",
       closedNoteInline: "见上方「月度回测」",
     });
   }
