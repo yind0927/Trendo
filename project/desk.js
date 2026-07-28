@@ -6438,9 +6438,9 @@ function rsAdjustGrade(grade, rsResult) {
   }
   function groupDayBuckets(items) {
     const defs = [
-      { key: "0-5",  label: "初期 · 0–5d",  color: "var(--orange)" },
+      { key: "0-5",  label: "初期 · 0–5d",  color: "var(--up)" },
       { key: "5-15", label: "中期 · 5–15d", color: "var(--warn)" },
-      { key: "15+",  label: "延续 · 15+d",  color: "var(--accent)" },
+      { key: "15+",  label: "延续 · 15+d",  color: "var(--orange)" },
     ];
     const buckets = defs
       .map(d => ({ label: d.label, color: d.color, items: items.filter(it => it.h.bx?.dailyBars === d.key) }))
