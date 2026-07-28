@@ -2023,6 +2023,30 @@
   .simbw-pct.up { color: var(--up); }
   .simbw-pct.down { color: var(--down); }
   @media (max-width: 768px) { .simbw-row { grid-template-columns: 1fr; } }
+  /* 复盘概览卡片内部：总览用竖线分隔的"KPI 条"突出头部数字，交易分布/收益率/盈亏总额三组
+     用更轻量的无边框统计行——避免整卡全是同一种带边框小方块堆出来的"很多一样的盒子"观感。 */
+  .rhero-row { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 16px; }
+  .rhero-stat { padding: 0 18px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .rhero-stat:first-child { border-left: none; padding-left: 0; }
+  .rhero-label { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .rhero-value { font-size: 23px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.01em; line-height: 1.1; }
+  .rhero-value.up { color: var(--up); }
+  .rhero-value.down { color: var(--down); }
+  .rhero-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  @media (max-width: 768px) {
+    .rhero-row { grid-template-columns: repeat(2, 1fr); row-gap: 16px; }
+    .rhero-stat:nth-child(2n+1) { border-left: none; padding-left: 0; }
+    .rhero-stat:nth-child(n+3) { border-top: 1px solid var(--line); padding-top: 12px; }
+    .rhero-value { font-size: 19px; }
+  }
+  .rrow-group { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .rrow-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 12px; }
+  .rrow-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .rrow-label { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; }
+  .rrow-value { font-size: 15.5px; font-weight: 700; font-family: var(--f-mono); }
+  .rrow-value.up { color: var(--up); }
+  .rrow-value.down { color: var(--down); }
+  @media (max-width: 768px) { .rrow-stats { grid-template-columns: repeat(2, 1fr); gap: 14px 10px; } }
   .sim-table-controls {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
@@ -4664,8 +4688,8 @@
   </div>
 </div>
 
-<script src="data.js?v=533"></script>
-<script src="desk.js?v=533"></script>
+<script src="data.js?v=534"></script>
+<script src="desk.js?v=534"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
