@@ -6414,6 +6414,80 @@ function rsAdjustGrade(grade, rsResult) {
       ${sub ? `<div class="sim-astat-sub">${sub}</div>` : ""}
     </div>`;
   }
+  // 分层表现表格 — 评级分层表现（月度回测/分析复盘）和 Analytics 页的评级绩效/入场时机绩效
+  // 共用同一套表格：分组 | 数量 | 平均收益率 | 中位数收益率 | 胜率 | 净盈亏 | 盈亏因子。
+  // items 统一是 {h, pnl, pct} 形状；groupGradeBuckets/groupDayBuckets 负责把 items 分桶，
+  // bucketStatsTable 只管把已分好的桶渲染成表格，两边分桶逻辑不同但渲染逻辑完全一致。
+  function groupGradeBuckets(items) {
+    const buckets = {};
+    items.forEach(it => {
+      const g = it.h.bx?.entryFinalGrade || "—";
+      (buckets[g] = buckets[g] || []).push(it);
+    });
+    const order = [...GRADE_LADDER].reverse().filter(g => buckets[g]);
+    if (buckets["—"]) order.push("—");
+    return order.map(g => ({ label: g, color: (BX_GRADE_META[g] || { color: "var(--fg-3)" }).color, items: buckets[g] }));
+  }
+  function groupDayBuckets(items) {
+    const defs = [
+      { key: "0-5",  label: "初期 · 0–5d",  color: "var(--orange)" },
+      { key: "5-15", label: "中期 · 5–15d", color: "var(--warn)" },
+      { key: "15+",  label: "延续 · 15+d",  color: "var(--accent)" },
+    ];
+    const buckets = defs
+      .map(d => ({ label: d.label, color: d.color, items: items.filter(it => it.h.bx?.dailyBars === d.key) }))
+      .filter(b => b.items.length > 0);
+    const noDay = items.filter(it => !it.h.bx?.dailyBars);
+    if (noDay.length) buckets.push({ label: "未记录", color: "var(--fg-3)", items: noDay });
+    return buckets;
+  }
+  function bucketStatsTable(buckets, firstColLabel) {
+    if (!buckets.length) return `<div class="muted" style="font-size:12px;margin-top:12px;text-align:center">暂无数据</div>`;
+    const rows = buckets.map(({ label, color, items }) => {
+      const bWins = items.filter(it => it.pnl > 0), bLosses = items.filter(it => it.pnl < 0);
+      const bPctSorted = items.map(it => it.pct).sort((a, b) => a - b);
+      const bAvgPct = items.reduce((s, it) => s + it.pct, 0) / items.length;
+      const bMedPct = simMedian(bPctSorted);
+      const bWinRate = bWins.length / items.length * 100;
+      const bNet = items.reduce((s, it) => s + it.pnl, 0);
+      const bGrossWin  = bWins.reduce((s, it) => s + it.pnl, 0);
+      const bGrossLoss = Math.abs(bLosses.reduce((s, it) => s + it.pnl, 0));
+      const bPfStr = bGrossLoss > 0 ? (bGrossWin / bGrossLoss).toFixed(2) : (bWins.length > 0 ? "∞" : "—");
+      return `<tr>
+        <td style="padding:6px 8px 6px 0;font-family:var(--f-mono);font-weight:700;color:${color}">${label}</td>
+        <td style="padding:6px 8px;text-align:right;color:var(--fg-3);font-family:var(--f-mono)">${items.length}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${bAvgPct >= 0 ? "var(--up)" : "var(--down)"}">${bAvgPct >= 0 ? "+" : ""}${bAvgPct.toFixed(1)}%</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${bMedPct >= 0 ? "var(--up)" : "var(--down)"}">${bMedPct >= 0 ? "+" : ""}${bMedPct.toFixed(1)}%</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono)">${bWinRate.toFixed(0)}%</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${bNet >= 0 ? "var(--up)" : "var(--down)"}">${fmt.signed(Math.round(bNet))}</td>
+        <td style="padding:6px 0 6px 8px;text-align:right;font-family:var(--f-mono)">${bPfStr}</td>
+      </tr>`;
+    }).join("");
+    return `<div style="overflow-x:auto;margin-top:8px">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:480px">
+        <thead><tr style="color:var(--fg-3);border-bottom:1px solid var(--line)">
+          <th style="text-align:left;padding:0 8px 6px 0;font-weight:500">${firstColLabel}</th>
+          <th style="text-align:right;padding:0 8px 6px;font-weight:500">数量</th>
+          <th style="text-align:right;padding:0 8px 6px;font-weight:500">平均收益率</th>
+          <th style="text-align:right;padding:0 8px 6px;font-weight:500">中位数收益率</th>
+          <th style="text-align:right;padding:0 8px 6px;font-weight:500">胜率</th>
+          <th style="text-align:right;padding:0 8px 6px;font-weight:500">净盈亏</th>
+          <th style="text-align:right;padding:0 0 6px 8px;font-weight:500">盈亏因子</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+  function sectorContributionRows(items) {
+    const buckets = {};
+    items.forEach(it => {
+      const s = it.h.bx?.sector?.name || "—";
+      (buckets[s] = buckets[s] || []).push(it);
+    });
+    return Object.entries(buckets)
+      .map(([name, its]) => ({ label: name, cnt: its.length, pnl: its.reduce((s, it) => s + it.pnl, 0) }))
+      .sort((a, b) => b.pnl - a.pnl);
+  }
   // mode: "open" — 本月新开且仍持仓中的仓位（浮动盈亏，pnlDollar）
   //       "closed" — 本月新开且已经平仓的交易（已实现盈亏，pnlFinal）
   // 两种模式共用同一套统计口径（交易分布/收益率/盈亏总额/最佳最差/评级分层/行业贡献），
@@ -6506,46 +6580,8 @@ function rsAdjustGrade(grade, rsResult) {
     const bestItem  = monthItems.reduce((a, b) => (b.pct > a.pct ? b : a));
     const worstItem = monthItems.reduce((a, b) => (b.pct < a.pct ? b : a));
 
-    // 评级分层表现：评级 | 数量 | 平均收益率 | 中位数收益率 | 胜率 | 净盈亏 | 盈亏因子
-    const gradeBuckets = {};
-    monthItems.forEach(it => {
-      const g = it.h.bx?.entryFinalGrade || "—";
-      (gradeBuckets[g] = gradeBuckets[g] || []).push(it);
-    });
-    const gradeOrder = [...GRADE_LADDER].reverse().filter(g => gradeBuckets[g]);
-    if (gradeBuckets["—"]) gradeOrder.push("—");
-    const gradeStatsRows = gradeOrder.map(g => {
-      const items = gradeBuckets[g];
-      const gWins = items.filter(it => it.pnl > 0), gLosses = items.filter(it => it.pnl < 0);
-      const gPctSorted = items.map(it => it.pct).sort((a, b) => a - b);
-      const gAvgPct = items.reduce((s, it) => s + it.pct, 0) / items.length;
-      const gMedPct = simMedian(gPctSorted);
-      const gWinRate = gWins.length / items.length * 100;
-      const gNet = items.reduce((s, it) => s + it.pnl, 0);
-      const gGrossWin  = gWins.reduce((s, it) => s + it.pnl, 0);
-      const gGrossLoss = Math.abs(gLosses.reduce((s, it) => s + it.pnl, 0));
-      const gPfStr = gGrossLoss > 0 ? (gGrossWin / gGrossLoss).toFixed(2) : (gWins.length > 0 ? "∞" : "—");
-      const meta = BX_GRADE_META[g] || { color: "var(--fg-3)" };
-      return `<tr>
-        <td style="padding:6px 8px 6px 0;font-family:var(--f-mono);font-weight:700;color:${meta.color}">${g}</td>
-        <td style="padding:6px 8px;text-align:right;color:var(--fg-3);font-family:var(--f-mono)">${items.length}</td>
-        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${gAvgPct >= 0 ? "var(--up)" : "var(--down)"}">${gAvgPct >= 0 ? "+" : ""}${gAvgPct.toFixed(1)}%</td>
-        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${gMedPct >= 0 ? "var(--up)" : "var(--down)"}">${gMedPct >= 0 ? "+" : ""}${gMedPct.toFixed(1)}%</td>
-        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono)">${gWinRate.toFixed(0)}%</td>
-        <td style="padding:6px 8px;text-align:right;font-family:var(--f-mono);color:${gNet >= 0 ? "var(--up)" : "var(--down)"}">${fmt.signed(Math.round(gNet))}</td>
-        <td style="padding:6px 0 6px 8px;text-align:right;font-family:var(--f-mono)">${gPfStr}</td>
-      </tr>`;
-    }).join("");
-
-    // 行业贡献（按 bx.sector.name 汇总，从盈利到亏损排序）
-    const sectorBuckets = {};
-    monthItems.forEach(it => {
-      const s = it.h.bx?.sector?.name || "—";
-      (sectorBuckets[s] = sectorBuckets[s] || []).push(it);
-    });
-    const sectorRows = Object.entries(sectorBuckets)
-      .map(([name, items]) => ({ label: name, cnt: items.length, pnl: items.reduce((s, it) => s + it.pnl, 0) }))
-      .sort((a, b) => b.pnl - a.pnl);
+    const gradeTableHTML = bucketStatsTable(groupGradeBuckets(monthItems), "评级");
+    const sectorRows = sectorContributionRows(monthItems);
 
     const countSub = mode === "closed"
       ? (otherThisMonthCount ? `${scopeToMonth ? "另有" : "有"} ${otherThisMonthCount} 笔${scopeToMonth ? "本月仍" : "仍在"}持仓中，${closedNoteInline}` : "均已平仓")
@@ -6605,20 +6641,7 @@ function rsAdjustGrade(grade, rsResult) {
 
       <div class="simb-block">
         <div class="simb-title">评级分层表现</div>
-        <div style="overflow-x:auto;margin-top:8px">
-          <table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:480px">
-            <thead><tr style="color:var(--fg-3);border-bottom:1px solid var(--line)">
-              <th style="text-align:left;padding:0 8px 6px 0;font-weight:500">评级</th>
-              <th style="text-align:right;padding:0 8px 6px;font-weight:500">数量</th>
-              <th style="text-align:right;padding:0 8px 6px;font-weight:500">平均收益率</th>
-              <th style="text-align:right;padding:0 8px 6px;font-weight:500">中位数收益率</th>
-              <th style="text-align:right;padding:0 8px 6px;font-weight:500">胜率</th>
-              <th style="text-align:right;padding:0 8px 6px;font-weight:500">净盈亏</th>
-              <th style="text-align:right;padding:0 0 6px 8px;font-weight:500">盈亏因子</th>
-            </tr></thead>
-            <tbody>${gradeStatsRows}</tbody>
-          </table>
-        </div>
+        ${gradeTableHTML}
       </div>
 
       <div class="simb-block">
@@ -7500,19 +7523,11 @@ function rsAdjustGrade(grade, rsResult) {
     const totalPnlDisplay = totalPnlDollar + realizedPnlTotal;
     const curveData = generatePortfolioCurve(equityPeriod);
 
-    // Grade buckets
-    const aGradeBuckets = {};
-    GRADE_LADDER.forEach(g => { aGradeBuckets[g] = []; });
-    closed.forEach(h => {
-      const g = h.bx?.entryFinalGrade;
-      if (g && aGradeBuckets[g]) aGradeBuckets[g].push(h);
-      else if (g) aGradeBuckets[g] = [h];
-    });
-    const aNoGrade = closed.filter(h => !h.bx?.entryFinalGrade);
-    const aGradeEntries = [...GRADE_LADDER].reverse()
-      .map(g => ({ grade: g, pos: aGradeBuckets[g] || [] }))
-      .filter(e => e.pos.length > 0);
-    if (aNoGrade.length > 0) aGradeEntries.push({ grade: "—", pos: aNoGrade });
+    // realItems — 复用月度回测/分析复盘同一套 {h, pnl, pct} 形状，供 bucketStatsTable /
+    // sectorContributionRows 共用，评级绩效、入场时机绩效、行业贡献三个模块都从这里派生
+    const realItems = closed.map(t => ({ h: t, pnl: t.pnlFinal ?? 0, pct: (t.cost * t.qty) > 0 ? (t.pnlFinal ?? 0) / (t.cost * t.qty) * 100 : 0 }));
+    const realCostBasis = closed.reduce((s, t) => s + (t.cost || 0) * (t.qty || 0), 0);
+    const weightedPct = realCostBasis > 0 ? totalPnl / realCostBasis * 100 : null;
 
     // Open portfolio sorted by size
     const openSorted = [...open].sort((a, b) => b.size - a.size);
@@ -7573,6 +7588,7 @@ function rsAdjustGrade(grade, rsResult) {
           avgWinDays !== null || avgLossDays !== null
             ? `盈 ${avgWinDays ?? "—"}d · 亏 ${avgLossDays ?? "—"}d`
             : avgHold !== null ? `均 ${avgHold}d` : "")}
+        ${ametric("WEIGHTED RETURN · 资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "neu", "可与大盘同期涨跌幅同层对比")}
       </div>
 
       <div class="analytics-card" style="margin-bottom:14px">
@@ -7595,92 +7611,21 @@ function rsAdjustGrade(grade, rsResult) {
 
       <div class="analytics-card" style="margin-bottom:14px">
         ${atitle("评级绩效", "Grade Performance")}
-        <div class="analytics-card-sub">胜率 · 盈亏分布 · 按开仓评级 · 含部分平仓（已实现），纯持仓不计入</div>
-        ${(() => {
-            if (aGradeEntries.length === 0) return `<div class="muted" style="font-size:12px;margin-top:20px;text-align:center">暂无评级数据</div>`;
-            const _maxAbs = Math.max(1, ...aGradeEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
-            const rows = aGradeEntries.map(({ grade, pos }) => {
-              const cnt       = pos.length;
-              const wn        = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
-              const wr        = Math.round(wn / cnt * 100);
-              const totalG    = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
-              const avgPctG   = (pos.reduce((s, p) => s + (p.pnlPct ?? 0), 0) / cnt * 100).toFixed(1);
-              const meta      = BX_GRADE_META[grade] || { color: "var(--fg-3)" };
-              const pnlCls    = totalG >= 0 ? "up" : "down";
-              const pctCls    = parseFloat(avgPctG) >= 0 ? "up" : "down";
-              const stPos     = pos.filter(p => p.bx?.entryST === true).length;
-              const stHasData = pos.some(p => p.bx?.entryST != null);
-              const stStr     = stHasData ? Math.round(stPos / cnt * 100) + "%" : "—";
-              const barPct    = Math.round(Math.abs(totalG) / _maxAbs * 100);
-              const barColor  = totalG >= 0 ? "var(--up)" : "var(--down)";
-              return `<div class="gp-row">
-                <span class="gp-grade" style="color:${meta.color}">${grade}</span>
-                <span class="gp-cnt">${cnt}</span>
-                <span class="gp-wr ${wr >= 50 ? "up" : "down"}">${wr}%</span>
-                <span class="gp-avg ${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</span>
-                <span class="gp-st">${stStr}</span>
-                <div class="gp-bar-wrap"><div class="gp-bar" style="background:${barColor};width:${barPct}%"></div></div>
-                <span class="gp-pnl ${pnlCls}">${fmt.signed(totalG)}</span>
-              </div>`;
-            }).join("");
-            return `<div class="gp-header">
-              <span class="gp-grade"></span><span class="gp-cnt">笔</span>
-              <span class="gp-wr">胜率</span><span class="gp-avg">均%</span>
-              <span class="gp-st">ST▲</span><span class="gp-bar-wrap"></span>
-              <span class="gp-pnl">总盈亏</span>
-            </div>${rows}`;
-          })()}
+        <div class="analytics-card-sub">与月度回测/分析复盘同一套统计口径 · 按开仓评级 · 含部分平仓（已实现），纯持仓不计入</div>
+        ${bucketStatsTable(groupGradeBuckets(realItems), "评级")}
       </div>
 
-      ${(() => {
-        const bxDayDefs = [
-          { key: "0-5",  label: "初期", sub: "0–5d",  color: "var(--orange)" },
-          { key: "5-15", label: "中期", sub: "5–15d", color: "var(--warn)" },
-          { key: "15+",  label: "延续", sub: "15+d",  color: "var(--accent)" },
-        ];
-        const bxEntries = [
-          ...bxDayDefs.map(d => ({ ...d, pos: closed.filter(h => h.bx?.dailyBars === d.key) })).filter(e => e.pos.length > 0),
-        ];
-        const bxNoDay = closed.filter(h => !h.bx?.dailyBars);
-        if (bxNoDay.length > 0) bxEntries.push({ key: "—", label: "—", sub: "未记录", color: "var(--fg-3)", pos: bxNoDay });
-        if (bxEntries.every(e => e.key === "—")) return "";
-        const _bxMax = Math.max(1, ...bxEntries.map(e => Math.abs(e.pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0))));
-        const bxRows = bxEntries.map(({ label, sub, color, pos }) => {
-          const cnt  = pos.length;
-          const wn   = pos.filter(p => (p.pnlFinal ?? 0) > 0).length;
-          const evn  = pos.filter(p => (p.pnlFinal ?? 0) === 0).length;
-          const wr   = cnt > 0 ? Math.round(wn / cnt * 100) : 0;
-          const totalG  = Math.round(pos.reduce((s, p) => s + (p.pnlFinal ?? 0), 0));
-          const avgPctG = (pos.reduce((s, p) => {
-            const basis = (p.cost ?? 0) * (p.qty ?? 0);
-            return s + (basis > 0 ? (p.pnlFinal ?? 0) / basis : 0);
-          }, 0) / cnt * 100).toFixed(1);
-          const pnlCls  = totalG > 0 ? "up" : totalG < 0 ? "down" : "";
-          const pctCls  = parseFloat(avgPctG) > 0 ? "up" : parseFloat(avgPctG) < 0 ? "down" : "";
-          const barPct  = Math.round(Math.abs(totalG) / _bxMax * 100);
-          const barColor = totalG >= 0 ? "var(--up)" : "var(--down)";
-          const evnTxt  = evn > 0 ? `<span style="color:var(--neutral);font-size:9.5px">平${evn}</span>` : "";
-          return `<div class="gp-row">
-            <span class="gp-grade" style="color:${color};font-size:10px;line-height:1.3;display:flex;flex-direction:column;align-items:flex-end">${label}<span style="color:var(--fg-3);font-size:8.5px;font-weight:400">${sub}</span></span>
-            <span class="gp-cnt">${cnt}</span>
-            <span class="gp-wr ${wr >= 50 ? "up" : "down"}">${wr}%</span>
-            <span class="gp-avg ${pctCls}">${parseFloat(avgPctG) >= 0 ? "+" : ""}${avgPctG}%</span>
-            <span class="gp-st" style="display:flex;align-items:center;justify-content:center">${evnTxt}</span>
-            <div class="gp-bar-wrap"><div class="gp-bar" style="background:${barColor};width:${barPct}%"></div></div>
-            <span class="gp-pnl ${pnlCls}">${fmt.signed(totalG)}</span>
-          </div>`;
-        }).join("");
-        return `<div class="analytics-card" style="margin-bottom:14px">
-          ${atitle("入场时机绩效", "Entry Timing")}
-          <div class="analytics-card-sub">按开仓时日线BX趋势已持续天数分段（初期0–5d · 中期5–15d · 延续15+d）· 同上仅算已实现</div>
-          <div class="gp-header" style="margin-top:10px">
-            <span class="gp-grade"></span><span class="gp-cnt">笔</span>
-            <span class="gp-wr">胜率</span><span class="gp-avg">均%</span>
-            <span class="gp-st">持平</span><span class="gp-bar-wrap"></span>
-            <span class="gp-pnl">总盈亏</span>
-          </div>${bxRows}
-        </div>`;
-      })()}
+      <div class="analytics-card" style="margin-bottom:14px">
+        ${atitle("入场时机绩效", "Entry Timing")}
+        <div class="analytics-card-sub">按开仓时日线BX趋势已持续天数分段 · 同上仅算已实现</div>
+        ${bucketStatsTable(groupDayBuckets(realItems), "阶段")}
+      </div>
+
+      <div class="analytics-card" style="margin-bottom:14px">
+        ${atitle("行业贡献", "Sector Contribution")}
+        <div class="analytics-card-sub">按 bx.sector 汇总已实现盈亏 · 从盈利到亏损排序</div>
+        <div class="simb-table" style="margin-top:8px">${simbBarRows(sectorContributionRows(realItems), r => r.label)}</div>
+      </div>
 
       <div class="analytics-chart-row">
         <div class="analytics-card" style="flex:1">
