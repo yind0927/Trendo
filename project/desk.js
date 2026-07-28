@@ -7507,8 +7507,6 @@ function rsAdjustGrade(grade, rsResult) {
     const grossLoss = Math.abs(losses.reduce((s, t) => s + t.pnlFinal, 0));
     const winRate   = total > 0 ? (wins.length / total * 100).toFixed(1) : null;
     const pfStr     = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (wins.length > 0 ? "∞" : null);
-    const avgWin    = wins.length > 0 ? Math.round(grossWin / wins.length) : null;
-    const avgLoss   = losses.length > 0 ? Math.round(grossLoss / losses.length) : null;
     const avgHold   = total > 0 ? (closed.reduce((s, t) => s + (t.days || 0), 0) / total).toFixed(1) : null;
     const avgWinDays  = wins.length > 0   ? Math.round(wins.reduce((s, t) => s + (t.days || 0), 0) / wins.length) : null;
     const avgLossDays = losses.length > 0 ? Math.round(losses.reduce((s, t) => s + (t.days || 0), 0) / losses.length) : null;
@@ -7524,10 +7522,20 @@ function rsAdjustGrade(grade, rsResult) {
     const curveData = generatePortfolioCurve(equityPeriod);
 
     // realItems — 复用月度回测/分析复盘同一套 {h, pnl, pct} 形状，供 bucketStatsTable /
-    // sectorContributionRows 共用，评级绩效、入场时机绩效、行业贡献三个模块都从这里派生
+    // sectorContributionRows 共用，评级绩效、入场时机绩效、行业贡献三个模块都从这里派生。
+    // 顶部卡片区也改用跟模拟仓「分析复盘」相同的分组样式（simTile/simbw-card），而不是
+    // 独立的一套 ametric 6 宫格 —— 同样的统计口径，两边看着才是一回事。
     const realItems = closed.map(t => ({ h: t, pnl: t.pnlFinal ?? 0, pct: (t.cost * t.qty) > 0 ? (t.pnlFinal ?? 0) / (t.cost * t.qty) * 100 : 0 }));
     const realCostBasis = closed.reduce((s, t) => s + (t.cost || 0) * (t.qty || 0), 0);
     const weightedPct = realCostBasis > 0 ? totalPnl / realCostBasis * 100 : null;
+    const realPctSorted = realItems.map(it => it.pct).sort((a, b) => a - b);
+    const realAvgPct = realItems.length ? realItems.reduce((s, it) => s + it.pct, 0) / realItems.length : null;
+    const realMedPct = simMedian(realPctSorted);
+    const { peak: realPeak, ddPct: realDdPct } = total > 0
+      ? simMonthlyPeakDrawdown("trendo_real_closed_lifetime_peak", "lifetime", totalPnl)
+      : { peak: 0, ddPct: 0 };
+    const realBest  = realItems.length ? realItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
+    const realWorst = realItems.length ? realItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
 
     // Open portfolio sorted by size
     const openSorted = [...open].sort((a, b) => b.size - a.size);
@@ -7576,20 +7584,56 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="muted" style="font-size:12px;font-family:var(--f-mono)">${total} 笔已平仓 · ${open.length} 笔持仓中</div>
       </div>
 
-      <div class="analytics-metrics">
-        ${ametric("REALIZED P&L · 已实现盈亏",  total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl), total ? `${total} 笔交易` : "暂无数据")}
-        ${ametric("WIN RATE · 胜率",        winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", winRate !== null ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "")}
-        ${ametric("PROFIT FACTOR · 盈亏因子",    pfStr || "—", parseFloat(pfStr) >= 1.5 ? "up" : "down", "总盈 ÷ 总亏")}
-        ${ametric("AVG WIN · 平均盈利",    avgWin !== null ? fmt.signed(avgWin) : "—", "up", avgWin !== null ? `+${avgWinPct}% · ${wins.length} 笔盈` : "")}
-        ${ametric("AVG LOSS · 平均亏损",    avgLoss !== null ? "−$" + avgLoss.toLocaleString() : "—", "down", avgLoss !== null ? `−${avgLossPct}% · ${losses.length} 笔亏` : "")}
-        ${ametric("AVG HOLD · 平均持仓",
+      <div class="sim-a-stats">
+        ${simTile("已平仓笔数", total, "", total ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "暂无数据")}
+        ${simTile("已实现盈亏", total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl))}
+        ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "", "可与大盘同期涨跌幅同层对比")}
+        ${simTile("历史回撤", realPeak > 0 ? "−" + realDdPct.toFixed(1) + "%" : "—", realDdPct > 0 ? "down" : "", realPeak > 0 ? `峰值 ${fmt.signed(Math.round(realPeak))}` : "尚未产生正向峰值")}
+      </div>
+
+      <div class="simb-title" style="margin-top:20px">交易分布</div>
+      <div class="sim-a-stats" style="margin-top:8px">
+        ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
+        ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
+        ${simTile("持平数量", evens.length)}
+        ${simTile("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down")}
+      </div>
+
+      <div class="simb-title" style="margin-top:20px">收益率<span style="font-weight:400;color:var(--fg-3);font-size:10px;text-transform:none;letter-spacing:0;margin-left:2px">· 逐笔收益率简单平均，非按金额加权的组合整体涨跌幅</span></div>
+      <div class="sim-a-stats" style="margin-top:8px">
+        ${simTile("平均收益率", realAvgPct !== null ? (realAvgPct >= 0 ? "+" : "") + realAvgPct.toFixed(1) + "%" : "—", realAvgPct !== null ? fmt.sign(realAvgPct) : "")}
+        ${simTile("中位数收益率", realMedPct !== null ? (realMedPct >= 0 ? "+" : "") + realMedPct.toFixed(1) + "%" : "—", realMedPct !== null ? fmt.sign(realMedPct) : "")}
+        ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct + "%" : "—", "up")}
+        ${simTile("平均亏损收益率", avgLossPct !== null ? "−" + avgLossPct + "%" : "—", "down")}
+      </div>
+
+      <div class="simb-title" style="margin-top:20px">盈亏总额</div>
+      <div class="sim-a-stats" style="margin-top:8px">
+        ${simTile("总盈利", grossWin > 0 ? fmt.signed(Math.round(grossWin)) : "—", grossWin > 0 ? "up" : "")}
+        ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
+        ${simTile("盈亏因子", pfStr || "—", pfStr && parseFloat(pfStr) >= 1 ? "up" : pfStr ? "down" : "")}
+        ${simTile("平均持仓",
           holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
-          holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "neu" : "down") : "neu",
+          holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "" : "down") : "",
           avgWinDays !== null || avgLossDays !== null
             ? `盈 ${avgWinDays ?? "—"}d · 亏 ${avgLossDays ?? "—"}d`
             : avgHold !== null ? `均 ${avgHold}d` : "")}
-        ${ametric("WEIGHTED RETURN · 资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "neu", "可与大盘同期涨跌幅同层对比")}
       </div>
+
+      ${realBest && realWorst ? `
+      <div class="simb-title" style="margin-top:20px">最佳 / 最差</div>
+      <div class="simbw-row">
+        <div class="simbw-card up">
+          <div class="simbw-label">最佳股票</div>
+          <div class="simbw-sym">${realBest.h.sym}<span class="simbw-name">${realBest.h.name || ""}</span></div>
+          <div class="simbw-pct up">${realBest.pct >= 0 ? "+" : ""}${realBest.pct.toFixed(1)}%</div>
+        </div>
+        <div class="simbw-card down">
+          <div class="simbw-label">最差股票</div>
+          <div class="simbw-sym">${realWorst.h.sym}<span class="simbw-name">${realWorst.h.name || ""}</span></div>
+          <div class="simbw-pct down">${realWorst.pct >= 0 ? "+" : ""}${realWorst.pct.toFixed(1)}%</div>
+        </div>
+      </div>` : ""}
 
       <div class="analytics-card" style="margin-bottom:14px">
         <div class="ec-header">
@@ -7718,21 +7762,6 @@ function rsAdjustGrade(grade, rsResult) {
       calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
       renderAnalytics();
     });
-  }
-
-  function ametric(label, value, colorCls, sub) {
-    // Label is always "EN · 中文" — split into two fixed lines instead of relying on
-    // natural text wrap, so every card's label block is the same height regardless of
-    // how long each half is (mobile columns are narrow enough that wrap point varies
-    // card to card, which was pushing values out of alignment across a row).
-    const sepIdx = label.indexOf(" · ");
-    const labelHTML = sepIdx === -1 ? label
-      : `<span class="aml-en">${label.slice(0, sepIdx)}</span><span class="aml-zh">${label.slice(sepIdx + 3)}</span>`;
-    return `<div class="analytics-metric">
-      <div class="analytics-metric-label">${labelHTML}</div>
-      <div class="analytics-metric-value ${colorCls || "neu"}">${value}</div>
-      ${sub ? `<div class="analytics-metric-sub">${sub}</div>` : ""}
-    </div>`;
   }
 
   function atitle(zh, en) {

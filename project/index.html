@@ -2192,22 +2192,6 @@
   #analytics-view { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
   #analytics-content {}
   .analytics-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .analytics-metrics {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px;
-  }
-  .analytics-metric {
-    background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px;
-    padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
-  }
-  .analytics-metric-label { display: flex; flex-direction: column; gap: 2px; font-size: 10px; color: var(--fg-2); font-weight: 500; }
-  .analytics-metric-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
-  .analytics-metric-label .aml-en { text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .analytics-metric-label .aml-zh { font-size: 9.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .analytics-metric-value { font-size: 20px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.01em; }
-  .analytics-metric-value.up { color: var(--up); }
-  .analytics-metric-value.down { color: var(--down); }
-  .analytics-metric-value.neu { color: var(--fg-0); }
-  .analytics-metric-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
   .analytics-chart-row { display: flex; gap: 12px; margin-bottom: 14px; }
   .analytics-card {
     background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
@@ -3017,10 +3001,6 @@
 
     /* ---- Analytics ---- */
     #analytics-view { padding: 12px 12px 86px; }
-    .analytics-metrics { grid-template-columns: repeat(3, 1fr) !important; gap: 7px; margin-bottom: 12px; }
-    .analytics-metric { padding: 9px 10px; gap: 2px; }
-    .analytics-metric-value { font-size: 15px; }
-    .analytics-metric-sub { font-size: 9px; }
     .analytics-card { padding: 12px 13px; }
     .analytics-card-title { font-size: 10.5px; }
     .analytics-chart-row { flex-direction: column; gap: 8px; margin-bottom: 10px; }
@@ -4684,8 +4664,8 @@
   </div>
 </div>
 
-<script src="data.js?v=532"></script>
-<script src="desk.js?v=532"></script>
+<script src="data.js?v=533"></script>
+<script src="desk.js?v=533"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
