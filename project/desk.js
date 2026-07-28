@@ -6470,6 +6470,13 @@ function rsAdjustGrade(grade, rsResult) {
     const monthCls    = fmt.sign(monthPnl);
     const { peak, ddPct } = simMonthlyPeakDrawdown(peakStorageKey, monthKey, monthPnl);
 
+    // 资金加权收益率 — Σpnl / Σ成本，跟"平均收益率"(逐笔简单平均)不是一回事：按每笔实际
+    // 占用的资金加权，一笔 $50,000 仓位和一笔 $500 仓位不会被同等对待。这是唯一能拿去跟
+    // 大盘当月涨跌幅做同层比较的数字（严格说持仓周期跟大盘的整月区间还是不完全对齐，
+    // 但至少统计口径（资金加权）是一致的，逐笔简单平均则完全不是）。
+    const monthCostBasis = thisMonthItems.reduce((s, h) => s + (h.cost || 0) * (h.qty || 0), 0);
+    const weightedPct = monthCostBasis > 0 ? monthPnl / monthCostBasis * 100 : null;
+
     // 本月相关仓位 → 统一 {h, pnl, pct} 列表，供下面所有分层统计复用
     const monthItems = thisMonthItems.map(h => ({ h, pnl: h[pnlField] || 0 }));
     monthItems.forEach(it => {
@@ -6545,9 +6552,10 @@ function rsAdjustGrade(grade, rsResult) {
 
     section.innerHTML = `
       <div class="simb-note">${closedNote}</div>
-      <div class="sim-a-stats cols-3">
+      <div class="sim-a-stats">
         ${simTile(countLabel, thisMonthItems.length, "", countSub)}
         ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
+        ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct >= 0 ? "up" : "down", "可与大盘当月涨跌幅同层对比")}
         ${simTile("本月回撤", peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
       </div>
 
