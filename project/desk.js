@@ -6414,19 +6414,11 @@ function rsAdjustGrade(grade, rsResult) {
       ${sub ? `<div class="sim-astat-sub">${sub}</div>` : ""}
     </div>`;
   }
-  // rheroStat/rrowStat — 用在 Analytics 页的「复盘概览」卡片里：头部用竖线分隔的 KPI 条
-  // 突出关键数字，其余分组用无边框的轻量统计行，避免整卡堆成一排排一样的小方块。
+  // rheroStat — 用在 Analytics 页「复盘概览」卡片里，竖线分隔的 KPI 条统一展示头条数字。
   function rheroStat(label, value, cls, sub) {
     return `<div class="rhero-stat">
       <div class="rhero-label">${label}</div>
       <div class="rhero-value ${cls || ""}">${value}</div>
-      ${sub ? `<div class="rhero-sub">${sub}</div>` : ""}
-    </div>`;
-  }
-  function rrowStat(label, value, cls, sub) {
-    return `<div class="rrow-stat">
-      <div class="rrow-label">${label}</div>
-      <div class="rrow-value ${cls || ""}">${value}</div>
       ${sub ? `<div class="rhero-sub">${sub}</div>` : ""}
     </div>`;
   }
@@ -7609,35 +7601,34 @@ function rsAdjustGrade(grade, rsResult) {
           ${rheroStat("已实现盈亏", total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl))}
           ${rheroStat("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "", "可与大盘同期涨跌幅同层对比")}
           ${rheroStat("历史回撤", realPeak > 0 ? "−" + realDdPct.toFixed(1) + "%" : "—", realDdPct > 0 ? "down" : "", realPeak > 0 ? `峰值 ${fmt.signed(Math.round(realPeak))}` : "尚未产生正向峰值")}
+          ${rheroStat("盈利数量", wins.length, wins.length ? "up" : "")}
+          ${rheroStat("亏损数量", losses.length, losses.length ? "down" : "")}
+          ${rheroStat("持平数量", evens.length)}
+          ${rheroStat("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down")}
         </div>
+      </div>
 
-        <div class="rrow-group">
-          <div class="simb-title">交易分布</div>
-          <div class="rrow-stats">
-            ${rrowStat("盈利数量", wins.length, wins.length ? "up" : "")}
-            ${rrowStat("亏损数量", losses.length, losses.length ? "down" : "")}
-            ${rrowStat("持平数量", evens.length)}
-            ${rrowStat("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down")}
-          </div>
-        </div>
+      <div class="analytics-card" style="margin-bottom:14px">
+        ${atitle("收益与盈亏", "Returns & P&L")}
+        <div class="analytics-card-sub">收益率 · 盈亏总额 · 最佳最差个股</div>
 
         <div class="rrow-group">
           <div class="simb-title">收益率<span style="font-weight:400;color:var(--fg-3);font-size:10px;text-transform:none;letter-spacing:0;margin-left:2px">· 逐笔收益率简单平均，非按金额加权的组合整体涨跌幅</span></div>
-          <div class="rrow-stats">
-            ${rrowStat("平均收益率", realAvgPct !== null ? (realAvgPct >= 0 ? "+" : "") + realAvgPct.toFixed(1) + "%" : "—", realAvgPct !== null ? fmt.sign(realAvgPct) : "")}
-            ${rrowStat("中位数收益率", realMedPct !== null ? (realMedPct >= 0 ? "+" : "") + realMedPct.toFixed(1) + "%" : "—", realMedPct !== null ? fmt.sign(realMedPct) : "")}
-            ${rrowStat("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct + "%" : "—", "up")}
-            ${rrowStat("平均亏损收益率", avgLossPct !== null ? "−" + avgLossPct + "%" : "—", "down")}
+          <div class="sim-a-stats" style="margin-top:8px">
+            ${simTile("平均收益率", realAvgPct !== null ? (realAvgPct >= 0 ? "+" : "") + realAvgPct.toFixed(1) + "%" : "—", realAvgPct !== null ? fmt.sign(realAvgPct) : "")}
+            ${simTile("中位数收益率", realMedPct !== null ? (realMedPct >= 0 ? "+" : "") + realMedPct.toFixed(1) + "%" : "—", realMedPct !== null ? fmt.sign(realMedPct) : "")}
+            ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct + "%" : "—", "up")}
+            ${simTile("平均亏损收益率", avgLossPct !== null ? "−" + avgLossPct + "%" : "—", "down")}
           </div>
         </div>
 
         <div class="rrow-group">
           <div class="simb-title">盈亏总额</div>
-          <div class="rrow-stats">
-            ${rrowStat("总盈利", grossWin > 0 ? fmt.signed(Math.round(grossWin)) : "—", grossWin > 0 ? "up" : "")}
-            ${rrowStat("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
-            ${rrowStat("盈亏因子", pfStr || "—", pfStr && parseFloat(pfStr) >= 1 ? "up" : pfStr ? "down" : "")}
-            ${rrowStat("平均持仓",
+          <div class="sim-a-stats" style="margin-top:8px">
+            ${simTile("总盈利", grossWin > 0 ? fmt.signed(Math.round(grossWin)) : "—", grossWin > 0 ? "up" : "")}
+            ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
+            ${simTile("盈亏因子", pfStr || "—", pfStr && parseFloat(pfStr) >= 1 ? "up" : pfStr ? "down" : "")}
+            ${simTile("平均持仓",
               holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
               holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "" : "down") : "",
               avgWinDays !== null || avgLossDays !== null
