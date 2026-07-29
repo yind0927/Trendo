@@ -5897,8 +5897,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       ${_optsSettledOpen ? `<div class="opts-sym-groups">${symGroupsHTML}</div>` : ""}` : "";
 
-    const body = (pending.length || open.length || done.length)
-      ? `${_optSummaryHTML(open, done)}
+    const positionsHTML = `
          ${pending.length ? `<div class="opts-sub-label opts-sub-pending">待执行 · Pending · ${pending.length}</div>${pending.map(_optPendingCard).join("")}` : ""}
          ${open.length ? (() => {
            const oCsp = open.filter(p => p.strat === "csp");
@@ -5909,7 +5908,11 @@ function rsAdjustGrade(grade, rsResult) {
          })() : ""}
          ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}
          ${settledSection}
-         ${_optWheelStatsHTML(all)}`
+         ${_optWheelStatsHTML(all)}`;
+
+    const body = (pending.length || open.length || done.length)
+      ? `${_optSummaryHTML(open, done)}
+         <div class="opts-positions-module">${positionsHTML}</div>`
       : `<div class="opts-empty">暂无${currentOptMode === "real" ? "实盘" : "模拟"}期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
 
     inner.innerHTML = `

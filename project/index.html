@@ -1762,6 +1762,9 @@
   .opts-sub-label { font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); padding: 10px 14px 6px; font-family: var(--f-mono); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
   .opts-sub-label:first-child { border-top: none; }
   .opts-sub-pending { color: var(--warn) !important; }
+  /* Positions module — wraps pending/open/holding-stock/settled/monthly sections in one
+     bordered card, visually distinct from the Premium Ledger calculation module above. */
+  .opts-positions-module { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   /* ── Card base (all states share this) */
   .opts-pos-card { padding: 12px 14px; border-top: 1px solid var(--bg-3); display: flex; flex-direction: column; gap: 7px; }
   /* Open: strat classes own the border */
@@ -4713,8 +4716,8 @@
   </div>
 </div>
 
-<script src="data.js?v=567"></script>
-<script src="desk.js?v=567"></script>
+<script src="data.js?v=568"></script>
+<script src="desk.js?v=568"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
