@@ -10404,21 +10404,21 @@ function rsAdjustGrade(grade, rsResult) {
       : (gex && gex.regime === "positive" && gex.swingGexBn != null && gex.swingGexBn < 0) ? " · Gamma转弱"
       : "";
     if (!dir.eligible)
-      return { headline: "防守", state: `趋势逆风${gexTag}`, color: "var(--down)",
+      return { headline: "防守", emoji: "🔴", state: `趋势逆风${gexTag}`, color: "var(--down)",
         detail: "禁止新开多仓，保护已有仓位。" };
     if (sent.tilt === "trim")
-      return { headline: "止盈", state: `极端过热${gexTag}`, color: "var(--orange)",
+      return { headline: "止盈", emoji: "🟠", state: `极端过热${gexTag}`, color: "var(--orange)",
         detail: "减仓止盈，收紧保护。" };
     if (sent.tilt === "accumulate")
-      return { headline: "布局", state: `恐慌积累${gexTag}`, color: "var(--up)",
+      return { headline: "布局", emoji: "🟢", state: `恐慌积累${gexTag}`, color: "var(--up)",
         detail: "控制仓位，分批买入强势标的。" };
     if (sent.tilt === "scale")
-      return { headline: "分批参与", state: `情绪偏冷${gexTag}`, color: "var(--accent)",
+      return { headline: "分批参与", emoji: "🔵", state: `情绪偏冷${gexTag}`, color: "var(--accent)",
         detail: "小幅优选加仓，保留后续资金。" };
     if (sent.tilt === "hold")
-      return { headline: "保持持仓", state: `情绪偏热${gexTag}`, color: "var(--warn)",
+      return { headline: "保持持仓", emoji: "🟡", state: `情绪偏热${gexTag}`, color: "var(--warn)",
         detail: "持有，不新增风险。" };
-    return { headline: "正常配置", state: `趋势顺风${gexTag}`, color: "var(--up)",
+    return { headline: "正常配置", emoji: "🟢", state: `趋势顺风${gexTag}`, color: "var(--up)",
       detail: "按风险预算正常布局。" };
   }
 
@@ -10441,7 +10441,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkt-section-label"><span class="mkt-sl-zh">综合建议</span><span class="mkt-sl-en">Market Model</span></div>
         <div class="mkt-combine" style="border-color:${mkAlpha(combined.color,33)};background:${mkAlpha(combined.color,7)}">
           <div class="mkt-combine-eyebrow">Recommendation</div>
-          <div class="mkt-combine-head" style="color:${combined.color}">${combined.headline}<span class="mkt-combine-state">${combined.state}</span></div>
+          <div class="mkt-combine-head" style="color:${combined.color}"><span class="mkt-combine-emoji">${combined.emoji}</span>${combined.headline}<span class="mkt-combine-state">${combined.state}</span></div>
           <div class="mkt-combine-detail">${combined.detail}</div>
         </div>
         <div class="mkt-axis-grid">

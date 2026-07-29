@@ -725,6 +725,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v538-v539 | **Market 页综合建议文案改为状态标签型 + Inspirations 归因摘要精简 + 新增"策略失效"标签**：`combineAxes` 的 6 档 headline 从"加仓动作型"（❌禁止新多仓/⚠️止盈禁新仓/🔄分批建仓/⏫小幅加仓/⏸️持仓观望/✅正常进攻）改为纯文字状态标签（逆风区/过热区/恐慌区/偏冷区/偏热区/顺风区，后两档 v539 定稿为 `getSentimentAxis` 同名情绪标签而非另造"修复区/滞涨区"），标题只描述当前所处区间、不下达指令，颜色仍由 `combined.color` 内联样式驱动，不依赖 emoji；具体操作留在 detail 文案与三轴卡片里；优先级/GEX警示拼接逻辑不变。归因摘要 `.jts-sub` 删除"Insight ·"英文装饰前缀，只保留"N 笔已标注"。`JOURNAL_TAGS` 管理组新增 `mgmt_invalid`「策略失效」（红色 `var(--down)`）。 |
 | v560 | **综合建议 headline 改回动作词 + 新增独立状态标签**：`combineAxes` 返回值新增 `state` 字段，`headline`（防守/止盈/布局/分批参与/保持持仓/正常配置）与 `state`（趋势逆风/极端过热/恐慌积累/情绪偏冷/情绪偏热/趋势顺风）分离展示——headline 说"怎么做"，state 说"为什么"；`detail` 精简为一句话（如"禁止新开多仓，保护已有仓位"），移除仓位上限/止损宽度的重复数字（已在下方风险容量轴卡片展示），GEX 警示仍无条件追加在句尾。`mkAxesHTML` 新增 `.mkt-combine-state`（`.mkt-combine-head` 改 `flex` 布局，headline+state 同行）。AI 市场简报 `_lastMktCtx.regime` 同步改为 `"${headline} · ${state}"` 传给 Claude。 |
 | v561 | **GEX 警示从 detail 长句改为 state 短后缀**：`combineAxes` 删除拼在 `detail` 末尾的 GEX 长句（负Gamma/临界/正转负三种各一整句），改为 `gexTag` 短语（" · 负Gamma"/" · Gamma临界"/" · Gamma转弱"）直接拼进 `state`（如"趋势逆风 · 负Gamma"），与已有的状态副标题风格统一，detail 恢复成纯粹的一句话操作建议，不再有变长的风险附注。 |
+| v562 | **综合建议标题放大 + 加对应色 emoji 圆点**：`combineAxes` 每档新增 `emoji` 字段（🔴防守/🟠止盈/🟢布局/🔵分批参与/🟡保持持仓/🟢正常配置，与既有 `color` 一一对应），`mkAxesHTML` 在 headline 前插入 `.mkt-combine-emoji`；`.mkt-combine-head` 字号 22px→30px（手机端 15px→20px），新增 `.mkt-combine-emoji`（22px/手机16px）与 `.mkt-combine-state` 字号手机端同步微调（11.5px）。 |
 
 ---
 
