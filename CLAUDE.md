@@ -726,6 +726,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v560 | **综合建议 headline 改回动作词 + 新增独立状态标签**：`combineAxes` 返回值新增 `state` 字段，`headline`（防守/止盈/布局/分批参与/保持持仓/正常配置）与 `state`（趋势逆风/极端过热/恐慌积累/情绪偏冷/情绪偏热/趋势顺风）分离展示——headline 说"怎么做"，state 说"为什么"；`detail` 精简为一句话（如"禁止新开多仓，保护已有仓位"），移除仓位上限/止损宽度的重复数字（已在下方风险容量轴卡片展示），GEX 警示仍无条件追加在句尾。`mkAxesHTML` 新增 `.mkt-combine-state`（`.mkt-combine-head` 改 `flex` 布局，headline+state 同行）。AI 市场简报 `_lastMktCtx.regime` 同步改为 `"${headline} · ${state}"` 传给 Claude。 |
 | v561 | **GEX 警示从 detail 长句改为 state 短后缀**：`combineAxes` 删除拼在 `detail` 末尾的 GEX 长句（负Gamma/临界/正转负三种各一整句），改为 `gexTag` 短语（" · 负Gamma"/" · Gamma临界"/" · Gamma转弱"）直接拼进 `state`（如"趋势逆风 · 负Gamma"），与已有的状态副标题风格统一，detail 恢复成纯粹的一句话操作建议，不再有变长的风险附注。 |
 | v562 | **综合建议标题放大 + 加对应色 emoji 圆点**：`combineAxes` 每档新增 `emoji` 字段（🔴防守/🟠止盈/🟢布局/🔵分批参与/🟡保持持仓/🟢正常配置，与既有 `color` 一一对应），`mkAxesHTML` 在 headline 前插入 `.mkt-combine-emoji`；`.mkt-combine-head` 字号 22px→30px（手机端 15px→20px），新增 `.mkt-combine-emoji`（22px/手机16px）与 `.mkt-combine-state` 字号手机端同步微调（11.5px）。 |
+| v563 | 综合建议标题字号 30px→26px（手机端同步统一为 26px，此前手机端更小 20px）。 |
 
 ---
 
