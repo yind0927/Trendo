@@ -10397,30 +10397,29 @@ function rsAdjustGrade(grade, rsResult) {
 
   // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
   function combineAxes(dir, risk, sent, gex) {
-    const gexWarn = (gex && gex.regime === "negative")
-      ? `；负Gamma（${gex.netGexBn ?? gex.gexBn}B，仓位×${gex.posFactor ?? "?"}），做市商对冲放大波动、下跌易加速，止损勿松、勿抄底。`
-      : (gex && gex.regime === "neutral")
-      ? `；Gamma临界（贴近Flip $${gex.flip ?? "?"}），波动随时切换，轻仓等方向。`
-      : (gex && gex.regime === "positive" && gex.swingGexBn != null && gex.swingGexBn < 0)
-      ? `；正Gamma但剔0DTE后转负（${gex.swingGexBn}B），缓冲仅限当日，隔夜持仓谨慎。`
+    // Short subtitle suffix instead of a full warning sentence in detail — state already
+    // reads "为什么"，GEX 只是再补一个字眼，不需要展开成一句话。
+    const gexTag = (gex && gex.regime === "negative") ? " · 负Gamma"
+      : (gex && gex.regime === "neutral") ? " · Gamma临界"
+      : (gex && gex.regime === "positive" && gex.swingGexBn != null && gex.swingGexBn < 0) ? " · Gamma转弱"
       : "";
     if (!dir.eligible)
-      return { headline: "防守", state: "趋势逆风", color: "var(--down)",
-        detail: `禁止新开多仓，保护已有仓位。${gexWarn}` };
+      return { headline: "防守", state: `趋势逆风${gexTag}`, color: "var(--down)",
+        detail: "禁止新开多仓，保护已有仓位。" };
     if (sent.tilt === "trim")
-      return { headline: "止盈", state: "极端过热", color: "var(--orange)",
-        detail: `减仓止盈，收紧保护。${gexWarn}` };
+      return { headline: "止盈", state: `极端过热${gexTag}`, color: "var(--orange)",
+        detail: "减仓止盈，收紧保护。" };
     if (sent.tilt === "accumulate")
-      return { headline: "布局", state: "恐慌积累", color: "var(--up)",
-        detail: `控制仓位，分批买入强势标的。${gexWarn}` };
+      return { headline: "布局", state: `恐慌积累${gexTag}`, color: "var(--up)",
+        detail: "控制仓位，分批买入强势标的。" };
     if (sent.tilt === "scale")
-      return { headline: "分批参与", state: "情绪偏冷", color: "var(--accent)",
-        detail: `小幅优选加仓，保留后续资金。${gexWarn}` };
+      return { headline: "分批参与", state: `情绪偏冷${gexTag}`, color: "var(--accent)",
+        detail: "小幅优选加仓，保留后续资金。" };
     if (sent.tilt === "hold")
-      return { headline: "保持持仓", state: "情绪偏热", color: "var(--warn)",
-        detail: `持有，不新增风险。${gexWarn}` };
-    return { headline: "正常配置", state: "趋势顺风", color: "var(--up)",
-      detail: `按风险预算正常布局。${gexWarn}` };
+      return { headline: "保持持仓", state: `情绪偏热${gexTag}`, color: "var(--warn)",
+        detail: "持有，不新增风险。" };
+    return { headline: "正常配置", state: `趋势顺风${gexTag}`, color: "var(--up)",
+      detail: "按风险预算正常布局。" };
   }
 
   function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend, gex }) {
