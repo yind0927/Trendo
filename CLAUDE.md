@@ -734,6 +734,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v568 | **持仓模块整体包成一张卡片**：`renderOptions()` 把待执行/持仓中/持有正股/已了结/月度明细全部包进新的 `.opts-positions-module`（`border+border-radius+overflow:hidden`，和计算模块的两张卡片同一视觉语言），取代此前"计算区块 margin-bottom 拉开距离、持仓区仍是裸列表"的方案，页面现在明确分成"计算"与"持仓"两个独立卡片模块。 |
 | v569 | **权利金计算模块改用 Analytics 页同款卡片语言**：`_optSummaryHTML` 不再是"两张描边卡片"，改为套用 `.analytics-card`（Analytics 页复盘概览等模块同款：纯 `border:1px solid var(--line)`，不带颜色描边，标题用 `atitle()` 生成的小色块tick+中英文，与 Analytics 页视觉统一）——净现金流大数字、三格算式、已结算/持仓中分色小结、6格指标网格全部并入这一张卡片内部，取代 v567 的"两张独立描边卡片"方案；`.opts-ws-grid` 6格网格改为卡片内嵌的轻量分组（`border-radius:8px` 无外框），不再自带描边。持仓模块 `.opts-positions-module` 圆角同步为 12px 与 `.analytics-card` 对齐。删除死代码 `.opts-ledger-card`/`.opts-ledger-eyebrow`/`.opts-ledger-title` 相关 CSS。 |
 | v570 | **6格指标网格拆成两个3格独立小组，行间用间距不用线**：原本 6 个 stat 用同一个 `grid-template-columns:repeat(3,1fr)` 连成一体，两行之间靠 `background:var(--line)` 的 1px 网格线分隔——视觉上是"一条线"而不是"两个独立模块"。改为 `.opts-ws-rows`（`flex-direction:column;gap:12px`）包两个独立的 `.opts-ws-grid.opts-ws-grid-6`（各自 3 格、各自圆角），行与行之间是真正的空白间隔。手机端同步修正：此前 `.opts-ws-grid-6` 沿用了 6 格网格的 `repeat(2,1fr)` 两列规则，3 格内容两列布局会在第二列多出一个空白格；改为单列 `1fr` 堆叠，不再有多余空格子。 |
+| v571 | 计算模块与持仓模块之间的间隔 `.opts-summary-block` `margin-bottom` 24px→32px。两张卡片本就已各自独立描边（v568 起），但卡片底色 `--bg-1`(L .175) 与页面底色 `--bg-0`(L .14) 只差 0.035，加上描边极淡，24px 的空隙不足以让"两张卡"读出来，观感仍像"一条分隔线"；拉到 32px 后空白带够宽，模块边界才明确。 |
 
 ---
 
