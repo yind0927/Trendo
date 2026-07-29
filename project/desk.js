@@ -10405,22 +10405,22 @@ function rsAdjustGrade(grade, rsResult) {
       ? `；正Gamma但剔0DTE后转负（${gex.swingGexBn}B），缓冲仅限当日，隔夜持仓谨慎。`
       : "";
     if (!dir.eligible)
-      return { headline: "逆风区", color: "var(--down)",
-        detail: `方向轴逆风（${dir.desc}）。无论 VIX 多低都不新开多仓，优先保护现有仓位、严格执行止损。${gexWarn}` };
+      return { headline: "防守", state: "趋势逆风", color: "var(--down)",
+        detail: `禁止新开多仓，保护已有仓位。${gexWarn}` };
     if (sent.tilt === "trim")
-      return { headline: "过热区", color: "var(--orange)",
-        detail: `情绪极端过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。${gexWarn}` };
+      return { headline: "止盈", state: "极端过热", color: "var(--orange)",
+        detail: `减仓止盈，收紧保护。${gexWarn}` };
     if (sent.tilt === "accumulate")
-      return { headline: "恐慌区", color: "var(--up)",
-        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。${gexWarn}` };
+      return { headline: "布局", state: "恐慌积累", color: "var(--up)",
+        detail: `控制仓位，分批买入强势标的。${gexWarn}` };
     if (sent.tilt === "scale")
-      return { headline: "偏冷区", color: "var(--accent)",
-        detail: `${sent.desc}。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
+      return { headline: "分批参与", state: "情绪偏冷", color: "var(--accent)",
+        detail: `小幅优选加仓，保留后续资金。${gexWarn}` };
     if (sent.tilt === "hold")
-      return { headline: "偏热区", color: "var(--warn)",
-        detail: `情绪偏热，持有现有仓位不加码。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
-    return { headline: "顺风区", color: "var(--up)",
-      detail: `三轴健康，可正常布局。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
+      return { headline: "保持持仓", state: "情绪偏热", color: "var(--warn)",
+        detail: `持有，不新增风险。${gexWarn}` };
+    return { headline: "正常配置", state: "趋势顺风", color: "var(--up)",
+      detail: `按风险预算正常布局。${gexWarn}` };
   }
 
   function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend, gex }) {
@@ -10442,7 +10442,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkt-section-label"><span class="mkt-sl-zh">综合建议</span><span class="mkt-sl-en">Market Model</span></div>
         <div class="mkt-combine" style="border-color:${mkAlpha(combined.color,33)};background:${mkAlpha(combined.color,7)}">
           <div class="mkt-combine-eyebrow">Recommendation</div>
-          <div class="mkt-combine-head" style="color:${combined.color}">${combined.headline}</div>
+          <div class="mkt-combine-head" style="color:${combined.color}">${combined.headline}<span class="mkt-combine-state">${combined.state}</span></div>
           <div class="mkt-combine-detail">${combined.detail}</div>
         </div>
         <div class="mkt-axis-grid">
@@ -10617,7 +10617,7 @@ function rsAdjustGrade(grade, rsResult) {
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
-        vix, fg, rsi, regime: axes.combined.headline, vixTrend, indices,
+        vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,
         direction: axes.dir.label, posMax: axes.risk.posMax, sentiment: axes.sent.label,
         gex: gex ? { regime: gex.regime, netGexBn: gex.netGexBn, posFactor: gex.posFactor,
           flip: gex.flip, callWall: gex.callWall, putWall: gex.putWall,
