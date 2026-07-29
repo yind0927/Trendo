@@ -1739,8 +1739,14 @@
   .ssl-collapse-chevron { transition: transform .2s; display: block; }
   .ssl-collapse-btn.collapsed .ssl-collapse-chevron { transform: rotate(-90deg); }
 
-  /* ── Options module — wheel strategy (CSP / CC) ───────────── */
-  #opts-real-panel, #opts-sim-panel { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg-1); margin-top: 12px; }
+  /* ── Options module — wheel strategy (CSP / CC) ─────────────
+     Legacy panel used to be one big bg-1 box wrapping the whole page's content;
+     now that the Premium Ledger and Positions sections are each their own
+     analytics-card-style module, this outer shell must stay transparent —
+     otherwise the "gap" between the two modules just shows this same bg-1
+     backdrop instead of the page's darker background, and the separation
+     reads as a thin border line rather than genuine open space. */
+  #opts-real-panel, #opts-sim-panel { margin-top: 12px; }
   /* Controls row */
   .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 0; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
   .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
@@ -4712,8 +4718,8 @@
   </div>
 </div>
 
-<script src="data.js?v=571"></script>
-<script src="desk.js?v=571"></script>
+<script src="data.js?v=572"></script>
+<script src="desk.js?v=572"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
