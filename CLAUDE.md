@@ -736,6 +736,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v570 | **6格指标网格拆成两个3格独立小组，行间用间距不用线**：原本 6 个 stat 用同一个 `grid-template-columns:repeat(3,1fr)` 连成一体，两行之间靠 `background:var(--line)` 的 1px 网格线分隔——视觉上是"一条线"而不是"两个独立模块"。改为 `.opts-ws-rows`（`flex-direction:column;gap:12px`）包两个独立的 `.opts-ws-grid.opts-ws-grid-6`（各自 3 格、各自圆角），行与行之间是真正的空白间隔。手机端同步修正：此前 `.opts-ws-grid-6` 沿用了 6 格网格的 `repeat(2,1fr)` 两列规则，3 格内容两列布局会在第二列多出一个空白格；改为单列 `1fr` 堆叠，不再有多余空格子。 |
 | v571 | 计算模块与持仓模块之间的间隔 `.opts-summary-block` `margin-bottom` 24px→32px。两张卡片本就已各自独立描边（v568 起），但卡片底色 `--bg-1`(L .175) 与页面底色 `--bg-0`(L .14) 只差 0.035，加上描边极淡，24px 的空隙不足以让"两张卡"读出来，观感仍像"一条分隔线"；拉到 32px 后空白带够宽，模块边界才明确。 |
 | v572 | **真正根因：外层 `#opts-real-panel`/`#opts-sim-panel` 一直带着 `background:var(--bg-1)`**——这是重构前"整页一个大面板"时代的遗留样式，包住了权利金计算模块和持仓模块之间的全部间隙，导致 v571 拉宽 margin 也没用：间隙本身画的是和卡片同色的 bg-1，不是页面深色 bg-0，视觉上永远像"一条描边线"而不是"镂空的间隔"。去掉这层外壳的 `background`/`border`/`border-radius`/`overflow`（只保留 `margin-top`），让间隙露出真正的页面底色，两个模块才读成两张独立浮起的卡片。 |
+| v573 | 持仓模块与权利金计算模块顺序对调：`renderOptions()` 里 `positionsHTML` 拼在 `_optSummaryHTML(open, done)` 前面，`.opts-summary-block` 的 `margin-bottom:32px` 相应改为 `margin-top:32px`（间隙现在需要留在计算模块上方而不是下方）。 |
 
 ---
 

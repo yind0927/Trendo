@@ -5914,8 +5914,8 @@ function rsAdjustGrade(grade, rsResult) {
          ${_optWheelStatsHTML(all)}`;
 
     const body = (pending.length || open.length || done.length)
-      ? `${_optSummaryHTML(open, done)}
-         <div class="opts-positions-module">${positionsHTML}</div>`
+      ? `<div class="opts-positions-module">${positionsHTML}</div>
+         ${_optSummaryHTML(open, done)}`
       : `<div class="opts-empty">暂无${currentOptMode === "real" ? "实盘" : "模拟"}期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
 
     inner.innerHTML = `
