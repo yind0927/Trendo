@@ -1764,7 +1764,7 @@
   .opts-sub-pending { color: var(--warn) !important; }
   /* Positions module — wraps pending/open/holding-stock/settled/monthly sections in one
      bordered card, visually distinct from the Premium Ledger calculation module above. */
-  .opts-positions-module { background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .opts-positions-module { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   /* ── Card base (all states share this) */
   .opts-pos-card { padding: 12px 14px; border-top: 1px solid var(--bg-3); display: flex; flex-direction: column; gap: 7px; }
   /* Open: strat classes own the border */
@@ -1793,16 +1793,12 @@
   .opts-pnl-label { font-size: 9px; color: var(--fg-3); margin-bottom: 2px; }
   .opts-pnl-val { font-size: 13px; font-weight: 700; line-height: 1; }
   .opts-pnl-op { color: var(--fg-3); font-size: 14px; padding-bottom: 1px; flex-shrink: 0; }
-  /* ── Summary: Premium Ledger module — ledger card and 6-stat grid are two separate
-     bordered cards (not one card with an internal divider), visually distinct from
-     the position-cards module below. */
-  .opts-summary-block { margin-bottom: 24px; display: flex; flex-direction: column; gap: 12px; }
-  .opts-ledger-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 18px 20px; }
+  /* ── Summary: Premium Ledger module — matches the Analytics-page .analytics-card
+     language (plain border, no colored accent border, small tick-mark title) so the
+     whole ledger + 6-stat grid reads as ONE unified card. */
+  .opts-summary-block { margin-bottom: 24px; }
+  .opts-summary-block .analytics-card-sub { max-width: 440px; }
   .opts-ledger-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
-  .opts-ledger-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
-  .opts-ledger-eyebrow::before { content: ""; display: inline-block; width: 16px; height: 2px; background: var(--accent); border-radius: 1px; margin-right: 6px; vertical-align: middle; }
-  .opts-ledger-title { font-size: 19px; font-weight: 800; margin-bottom: 6px; letter-spacing: -.01em; }
-  .opts-ledger-sub { font-size: 11.5px; color: var(--fg-3); line-height: 1.5; max-width: 440px; }
   .opts-ledger-right { text-align: right; flex-shrink: 0; }
   .opts-ledger-cf-label { font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 6px; }
   .opts-ledger-cf-val { font-size: 28px; font-weight: 800; font-family: var(--f-mono); line-height: 1; margin-bottom: 5px; }
@@ -1947,8 +1943,8 @@
   .opts-stat-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
   /* ── Wheel stats section */
   .opts-wheel-stats { padding: 0 0 14px; border-top: 1px solid var(--line); margin-top: 6px; }
-  .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; overflow: hidden; }
-  .opts-ws-grid-6 { grid-template-columns: repeat(3, 1fr); }
+  .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-radius: 8px; overflow: hidden; }
+  .opts-ws-grid-6 { grid-template-columns: repeat(3, 1fr); margin-top: 14px; }
   .opts-ws-cell { background: var(--bg-1); padding: 11px 14px; }
   .opts-ws-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
   .opts-ws-val { font-size: 16px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
@@ -1979,10 +1975,8 @@
     .opts-stats, .opts-stats.opts-stats-5 { grid-template-columns: repeat(2, 1fr); }
     .opts-ws-grid, .opts-ws-grid-6 { grid-template-columns: repeat(2, 1fr); }
     /* Premium Ledger card: stack right-aligned cash-flow block below the title, formula row goes vertical */
-    .opts-ledger-card { padding: 14px 14px; }
     .opts-ledger-top { flex-direction: column; gap: 12px; }
     .opts-ledger-right { text-align: left; }
-    .opts-ledger-title { font-size: 17px; }
     .opts-ledger-cf-val { font-size: 24px; }
     .opts-ledger-formula { flex-direction: column; }
     .opts-ledger-fop { padding: 2px 0; justify-content: flex-start; }
@@ -4716,8 +4710,8 @@
   </div>
 </div>
 
-<script src="data.js?v=568"></script>
-<script src="desk.js?v=568"></script>
+<script src="data.js?v=569"></script>
+<script src="desk.js?v=569"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
