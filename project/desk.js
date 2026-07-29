@@ -5905,8 +5905,7 @@ function rsAdjustGrade(grade, rsResult) {
          ${open.length ? (() => {
            const oCsp = open.filter(p => p.strat === "csp");
            const oCc  = open.filter(p => p.strat === "cc");
-           return `<div class="opts-sub-label">持仓中 · Open · ${open.length}</div>` +
-             (oCsp.length ? `<div class="opts-sub-label opts-sub-strat">CSP · ${oCsp.length}</div>${oCsp.map(_optOpenPosCard).join("")}` : "") +
+           return (oCsp.length ? `<div class="opts-sub-label opts-sub-strat">CSP · ${oCsp.length}</div>${oCsp.map(_optOpenPosCard).join("")}` : "") +
              (oCc.length  ? `<div class="opts-sub-label opts-sub-strat">CC · ${oCc.length}</div>${oCc.map(_optOpenPosCard).join("")}` : "");
          })() : ""}
          ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}

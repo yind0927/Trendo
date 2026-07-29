@@ -737,6 +737,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v571 | 计算模块与持仓模块之间的间隔 `.opts-summary-block` `margin-bottom` 24px→32px。两张卡片本就已各自独立描边（v568 起），但卡片底色 `--bg-1`(L .175) 与页面底色 `--bg-0`(L .14) 只差 0.035，加上描边极淡，24px 的空隙不足以让"两张卡"读出来，观感仍像"一条分隔线"；拉到 32px 后空白带够宽，模块边界才明确。 |
 | v572 | **真正根因：外层 `#opts-real-panel`/`#opts-sim-panel` 一直带着 `background:var(--bg-1)`**——这是重构前"整页一个大面板"时代的遗留样式，包住了权利金计算模块和持仓模块之间的全部间隙，导致 v571 拉宽 margin 也没用：间隙本身画的是和卡片同色的 bg-1，不是页面深色 bg-0，视觉上永远像"一条描边线"而不是"镂空的间隔"。去掉这层外壳的 `background`/`border`/`border-radius`/`overflow`（只保留 `margin-top`），让间隙露出真正的页面底色，两个模块才读成两张独立浮起的卡片。 |
 | v573 | 持仓模块与权利金计算模块顺序对调：`renderOptions()` 里 `positionsHTML` 拼在 `_optSummaryHTML(open, done)` 前面，`.opts-summary-block` 的 `margin-bottom:32px` 相应改为 `margin-top:32px`（间隙现在需要留在计算模块上方而不是下方）。 |
+| v574 | 删除持仓模块顶部"持仓中 · Open · N"文案，直接从 CSP/CC 策略分组标签开始展示（待执行/持有正股/已了结等其他小节标签不受影响）。 |
 
 ---
 
