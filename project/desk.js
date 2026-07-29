@@ -1050,6 +1050,11 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   let sortKey = "pnl", sortDir = -1, filter = "all", closedFilter = "all", query = "", selectedSym = null;
+  // selectedEntry/selectedCost disambiguate which SPECIFIC trade is open in the drawer when
+  // a symbol has more than one closed trade (e.g. AAPL closed last month, reopened+closed
+  // again this month) — selectedSym alone can't tell those two records apart.
+  let selectedEntry = null, selectedCost = null;
+  function tradeKey(h) { return `${h.sym}|${h.entry || ""}|${h.cost ?? ""}`; }
   let activeTab = "open";
   let holdingsViewMode = localStorage.getItem("trendo_holdings_view") || "list";
   let totalNotional = 60000;
@@ -1075,6 +1080,7 @@ function rsAdjustGrade(grade, rsResult) {
   let simFilter = "all", simClosedFilter = "all", simQuery = "";
   let simHoldingsViewMode = localStorage.getItem("trendo_sim_holdings_view") || "list";
   let simSelectedSym = null;
+  let simSelectedEntry = null, simSelectedCost = null;
   let simNotional = 100000;
   // Options module state — wheel strategy (CSP / Covered Call), manual entry.
   // Only the underlying ETF spot is live (via /api/quote, same path as stock
@@ -1761,7 +1767,7 @@ function rsAdjustGrade(grade, rsResult) {
       const cols = _visCols;
       const colSpan = cols.length + 1; // +1 for actions column
       const makeHoldingRow = (h, i) => {
-        const isSel = selectedSym === h.sym ? "selected" : "";
+        const isSel = tradeKey(h) === tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost }) ? "selected" : "";
         const cells = cols.map(c => renderCell(h, c.id)).join("");
         const actions = activeTab === "open"
           ? `<td style="width:60px;padding:6px 4px"><div class="row-actions">
@@ -1772,7 +1778,7 @@ function rsAdjustGrade(grade, rsResult) {
                <button class="restore-btn" data-sym="${h.sym}" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" title="撤回至持仓"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
                <button class="delete-btn" data-sym="${h.sym}" data-from="closed" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" data-closedat="${h.closedAt || ''}" data-merged="${h._mergedCount > 1 ? 1 : 0}" title="永久删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
              </div></td>`;
-        return `<tr class="${isSel}" data-sym="${h.sym}" data-idx="${i}">${cells}${actions}</tr>`;
+        return `<tr class="${isSel}" data-sym="${h.sym}" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" data-idx="${i}">${cells}${actions}</tr>`;
       };
 
       if (activeTab === "open") {
@@ -1887,7 +1893,7 @@ function rsAdjustGrade(grade, rsResult) {
         const selectedCls = opts.selected ? " selected" : "";
     const flaggedCls  = opts.sim && h.flagged ? " sim-flagged" : "";
 
-    return `<div class="hc-card${selectedCls}${flaggedCls}" data-sym="${h.sym}">
+    return `<div class="hc-card${selectedCls}${flaggedCls}" data-sym="${h.sym}" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}">
       <div class="hc-top">
         <div class="tk">
           <div class="avatar${h.kind === "crypto" ? " crypto" : ""}">
@@ -1943,15 +1949,15 @@ function rsAdjustGrade(grade, rsResult) {
       el.innerHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
         const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
         const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
-        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h)).join("");
+        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h, { selected: tradeKey(h) === tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost }) })).join("");
       }).join("");
     } else {
-      el.innerHTML = rows.map(h => holdingCard(h)).join("");
+      el.innerHTML = rows.map(h => holdingCard(h, { selected: tradeKey(h) === tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost }) })).join("");
     }
     el.querySelectorAll(".hc-card").forEach(card => {
       card.addEventListener("click", e => {
         if (e.target.closest(".hc-action")) return;
-        const h = rows.find(r => r.sym === card.dataset.sym);
+        const h = rows.find(r => tradeKey(r) === tradeKey({ sym: card.dataset.sym, entry: card.dataset.entry, cost: card.dataset.cost }));
         if (h) openDrawer(h);
       });
     });
@@ -1976,16 +1982,16 @@ function rsAdjustGrade(grade, rsResult) {
       el.innerHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
         const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
         const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
-        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h, { sim: true, selected: simSelectedSym === h.sym })).join("");
+        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h, { sim: true, selected: tradeKey(h) === tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost }) })).join("");
       }).join("");
     } else {
-      el.innerHTML = rows.map(h => holdingCard(h, { sim: true, selected: simSelectedSym === h.sym })).join("");
+      el.innerHTML = rows.map(h => holdingCard(h, { sim: true, selected: tradeKey(h) === tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost }) })).join("");
     }
     activeTab = prevTab;
     el.querySelectorAll(".hc-card").forEach(card => {
       card.addEventListener("click", e => {
         if (e.target.closest(".hc-action")) return;
-        const h = rows.find(r => r.sym === card.dataset.sym);
+        const h = rows.find(r => tradeKey(r) === tradeKey({ sym: card.dataset.sym, entry: card.dataset.entry, cost: card.dataset.cost }));
         if (h) openSimDrawer(h, simActiveTab);
       });
     });
@@ -2112,21 +2118,23 @@ function rsAdjustGrade(grade, rsResult) {
     const trs = $$(`${tbodySel} tr[data-idx]`);
     if (trs.length) return { mode: "table", trs };
     const data = isSim
-      ? (simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED)
-      : (activeTab === "open" ? HOLDINGS : CLOSED_POSITIONS);
+      ? (simActiveTab === "open" ? SIM_HOLDINGS : mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS))
+      : (activeTab === "open" ? HOLDINGS : mergeClosedForDisplay(CLOSED_POSITIONS, HOLDINGS));
     return { mode: "data", data };
   }
 
   function updateDrawerNavCounter(isSim) {
     const counter = $("#drawer-nav-counter");
     if (!counter) return;
-    const curSym = isSim ? simSelectedSym : selectedSym;
+    const curKey = isSim
+      ? tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost })
+      : tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost });
     const nav = _drawerNavList(isSim);
     if (nav.mode === "table") {
-      const idx = nav.trs.findIndex(tr => tr.dataset.sym === curSym);
+      const idx = nav.trs.findIndex(tr => tradeKey({ sym: tr.dataset.sym, entry: tr.dataset.entry, cost: tr.dataset.cost }) === curKey);
       if (idx >= 0 && nav.trs.length > 1) { counter.textContent = `${idx + 1} / ${nav.trs.length}`; counter.style.display = ""; return; }
     } else {
-      const idx = nav.data.findIndex(h => h.sym === curSym);
+      const idx = nav.data.findIndex(h => tradeKey(h) === curKey);
       if (idx >= 0 && nav.data.length > 1) { counter.textContent = `${idx + 1} / ${nav.data.length}`; counter.style.display = ""; return; }
     }
     counter.style.display = "none";
@@ -2164,14 +2172,16 @@ function rsAdjustGrade(grade, rsResult) {
       if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
       const dir = dx < 0 ? 1 : -1;
       _drawerSwipeDir = dir > 0 ? "next" : "prev"; // swipe left → next, right → prev
-      const curSym = isSim ? simSelectedSym : selectedSym;
+      const curKey = isSim
+        ? tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost })
+        : tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost });
       const nav = _drawerNavList(isSim);
       if (nav.mode === "table") {
-        const curIdx = nav.trs.findIndex(tr => tr.dataset.sym === curSym);
+        const curIdx = nav.trs.findIndex(tr => tradeKey({ sym: tr.dataset.sym, entry: tr.dataset.entry, cost: tr.dataset.cost }) === curKey);
         const next = dir > 0 ? (curIdx + 1) % nav.trs.length : (curIdx <= 0 ? nav.trs.length - 1 : curIdx - 1);
         nav.trs[next].click();
       } else if (nav.data.length) {
-        const curIdx = nav.data.findIndex(h => h.sym === curSym);
+        const curIdx = nav.data.findIndex(h => tradeKey(h) === curKey);
         const next = dir > 0 ? (curIdx + 1) % nav.data.length : (curIdx <= 0 ? nav.data.length - 1 : curIdx - 1);
         if (isSim) openSimDrawer(nav.data[next], simActiveTab);
         else openDrawer(nav.data[next]);
@@ -2183,6 +2193,8 @@ function rsAdjustGrade(grade, rsResult) {
   function openDrawer(h) {
     if (!h) return;
     selectedSym = h.sym;
+    selectedEntry = h.entry || null;
+    selectedCost = h.cost ?? null;
     renderTable();
     $("#drawer").innerHTML = drawerHTML(h);
     wireBX(h);
@@ -2327,6 +2339,8 @@ function rsAdjustGrade(grade, rsResult) {
   }
   function closeDrawer() {
     selectedSym = null;
+    selectedEntry = null;
+    selectedCost = null;
     $("#drawer").classList.remove("open");
     $("#backdrop").classList.remove("open");
     $("#drawer").setAttribute("aria-hidden", "true");
@@ -3662,7 +3676,10 @@ function rsAdjustGrade(grade, rsResult) {
       CLOSED_POSITIONS.splice(idx, 1);
     }
     saveToStorage();
-    if (selectedSym === sym) closeDrawer();
+    const closedSelMatches = entry != null && cost != null && !isNaN(cost)
+      ? (selectedSym === sym && selectedEntry === entry && Math.abs((selectedCost ?? NaN) - cost) < 0.001)
+      : selectedSym === sym;
+    if (closedSelMatches) closeDrawer();
     renderTable();
     renderDeskMonthly();
   }
@@ -3684,7 +3701,10 @@ function rsAdjustGrade(grade, rsResult) {
       if (matches(CLOSED_POSITIONS[i])) CLOSED_POSITIONS.splice(i, 1);
     }
     saveToStorage();
-    if (selectedSym === sym) closeDrawer();
+    const restoreSelMatches = scoped
+      ? (selectedSym === sym && selectedEntry === entry && Math.abs((selectedCost ?? NaN) - cost) < 0.001)
+      : selectedSym === sym;
+    if (restoreSelMatches) closeDrawer();
     renderTable(); renderOverview(); renderDeskMonthly();
   }
 
@@ -3705,7 +3725,10 @@ function rsAdjustGrade(grade, rsResult) {
       if (matches(SIM_CLOSED[i])) SIM_CLOSED.splice(i, 1);
     }
     saveToStorage();
-    if (simSelectedSym === sym) closeSimDrawer();
+    const simRestoreSelMatches = scoped
+      ? (simSelectedSym === sym && simSelectedEntry === entry && Math.abs((simSelectedCost ?? NaN) - cost) < 0.001)
+      : simSelectedSym === sym;
+    if (simRestoreSelMatches) closeSimDrawer();
     renderSimOverview(); renderSimTable(); renderSimAnalytics(); renderSimMonthly();
   }
 
@@ -3789,6 +3812,9 @@ function rsAdjustGrade(grade, rsResult) {
           !document.activeElement.isContentEditable &&
           !document.querySelector(".modal.open")) {
         const isSim = currentPage === "sim";
+        const curKey = isSim
+          ? tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost })
+          : tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost });
         const curSym = isSim ? simSelectedSym : selectedSym;
 
         // Try list-mode rows first
@@ -3797,7 +3823,7 @@ function rsAdjustGrade(grade, rsResult) {
 
         if (trs.length) {
           e.preventDefault();
-          const curIdx = trs.findIndex(tr => tr.dataset.sym === curSym);
+          const curIdx = trs.findIndex(tr => tradeKey({ sym: tr.dataset.sym, entry: tr.dataset.entry, cost: tr.dataset.cost }) === curKey);
           const nextIdx = e.key === "ArrowDown"
             ? (curIdx + 1) % trs.length
             : (curIdx <= 0 ? trs.length - 1 : curIdx - 1);
@@ -3807,9 +3833,9 @@ function rsAdjustGrade(grade, rsResult) {
           // Card mode — navigate through the data array directly
           e.preventDefault();
           const data = isSim
-            ? (simActiveTab === "open" ? SIM_HOLDINGS : SIM_CLOSED)
-            : (activeTab === "open" ? HOLDINGS : CLOSED_POSITIONS);
-          const curIdx = data.findIndex(h => h.sym === curSym);
+            ? (simActiveTab === "open" ? SIM_HOLDINGS : mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS))
+            : (activeTab === "open" ? HOLDINGS : mergeClosedForDisplay(CLOSED_POSITIONS, HOLDINGS));
+          const curIdx = data.findIndex(h => tradeKey(h) === curKey);
           if (data.length) {
             const nextIdx = e.key === "ArrowDown"
               ? (curIdx + 1) % data.length
@@ -3817,7 +3843,8 @@ function rsAdjustGrade(grade, rsResult) {
             if (isSim) openSimDrawer(data[nextIdx], simActiveTab);
             else        openDrawer(data[nextIdx]);
             const cardSel = isSim ? "#sim-holdings-cards" : "#holdings-cards";
-            document.querySelector(`${cardSel} [data-sym="${data[nextIdx].sym}"]`)
+            const nh = data[nextIdx];
+            document.querySelector(`${cardSel} [data-sym="${nh.sym}"][data-entry="${nh.entry || ''}"][data-cost="${nh.cost ?? ''}"]`)
               ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
           }
         }
@@ -6930,7 +6957,7 @@ function rsAdjustGrade(grade, rsResult) {
     const colSpan = cols.length + 1;
 
     const makeRow = (h, idx) => {
-      const isSel = simSelectedSym === h.sym ? "selected" : "";
+      const isSel = tradeKey(h) === tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost }) ? "selected" : "";
       const cells = cols.map(c => renderCell(h, c.id)).join("");
       const flagCls = h.flagged ? "flagged" : "";
       const actions = simActiveTab === "open"
@@ -6944,7 +6971,7 @@ function rsAdjustGrade(grade, rsResult) {
              <button class="delete-btn" data-sym="${h.sym}" data-from="closed" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" data-closedat="${h.closedAt || ''}" data-merged="${h._mergedCount > 1 ? 1 : 0}" title="删除"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
            </div></td>`;
       const flaggedCls = h.flagged ? "sim-flagged" : "";
-      return `<tr class="${isSel} ${flaggedCls}" data-sym="${h.sym}" data-idx="${idx}">${cells}${actions}</tr>`;
+      return `<tr class="${isSel} ${flaggedCls}" data-sym="${h.sym}" data-entry="${h.entry || ''}" data-cost="${h.cost ?? ''}" data-idx="${idx}">${cells}${actions}</tr>`;
     };
 
     if (simActiveTab === "open") {
@@ -7096,6 +7123,8 @@ function rsAdjustGrade(grade, rsResult) {
   function openSimDrawer(h, context) {
     if (!h) return;
     simSelectedSym = h.sym;
+    simSelectedEntry = h.entry || null;
+    simSelectedCost = h.cost ?? null;
     renderSimTable();
     const isClosed = context === "closed";
     const prevTab = activeTab;
@@ -7122,6 +7151,8 @@ function rsAdjustGrade(grade, rsResult) {
 
   function closeSimDrawer() {
     simSelectedSym = null;
+    simSelectedEntry = null;
+    simSelectedCost = null;
     $("#drawer").classList.remove("open");
     $("#backdrop").classList.remove("open");
     $("#drawer").setAttribute("aria-hidden", "true");
@@ -7198,7 +7229,10 @@ function rsAdjustGrade(grade, rsResult) {
       SIM_CLOSED.splice(idx, 1);
     }
     saveToStorage();
-    if (simSelectedSym === sym) closeSimDrawer();
+    const simClosedSelMatches = entry != null && cost != null && !isNaN(cost)
+      ? (simSelectedSym === sym && simSelectedEntry === entry && Math.abs((simSelectedCost ?? NaN) - cost) < 0.001)
+      : simSelectedSym === sym;
+    if (simClosedSelMatches) closeSimDrawer();
     renderSimTable(); renderSimOverview(); renderSimMonthly();
   }
 
