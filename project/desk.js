@@ -5491,20 +5491,15 @@ function rsAdjustGrade(grade, rsResult) {
     const settledPosns  = done.filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold));
     const expiredPosns  = settledPosns.filter(p => p.status === "expired");
     const closedPosns   = settledPosns.filter(p => p.status === "closed");
-    const assignedPosns = settledPosns.filter(p => p.status === "assigned");
-    // CSP指派率：全部done里的CSP（含liveAssigned），分母=全部CSP
-    const allCspDone      = done.filter(p => p.strat === "csp");
-    const allCspAssigned  = done.filter(p => p.strat === "csp" && p.status === "assigned");
-    const cspAssignRate   = allCspDone.length > 0
-      ? (allCspAssigned.length / allCspDone.length * 100).toFixed(0) + "%"
-      : "—";
+
     const realizedPnl   = settledPosns.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
     // NET settled premium: gross for expired/assigned, minus buyback for closed
     const settledPrem   = settledPosns.reduce((s, p) => {
       if (p.status === "closed") return s + (p.premium - (p.closePremium || 0)) * 100 * p.qty;
       return s + p.premium * 100 * p.qty;
     }, 0);
-    const openPrem      = open.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
+    const settledGross  = settledPosns.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
+    const settledQty    = settledPosns.reduce((s, p) => s + p.qty, 0);
     const realCls       = realizedPnl >= 0 ? "up" : "down";
 
     // ── 期权胜率: OTM到期 + 盈利平仓；assigned 不计入胜/负
@@ -5513,44 +5508,60 @@ function rsAdjustGrade(grade, rsResult) {
     const wins        = expiredPosns.length + closedWins;
     const winRate     = winTotal > 0 ? (wins / winTotal * 100).toFixed(0) + "%" : "—";
 
-    // ── 平均年化
-    const annVals     = settledPosns.map(p => _optAnn(p)).filter(v => v !== -Infinity);
-    const avgAnn      = annVals.length ? (annVals.reduce((s,v)=>s+v,0)/annVals.length).toFixed(1) : null;
+    // ── 权利金总账：卖出总收取 − 买回总支出 = 净现金流（含仍在持仓/被指派未平的合约，现金已实际到账）
+    const allActive     = [...open, ...done];
+    const totalSoldPrem = allActive.reduce((s, p) => s + p.premium * 100 * p.qty, 0);
+    const totalBuyback  = closedPosns.reduce((s, p) => s + (p.closePremium || 0) * 100 * p.qty, 0);
+    const netCashFlow   = totalSoldPrem - totalBuyback;
+    const soldQty       = allActive.reduce((s, p) => s + p.qty, 0);
+    const netCfCls      = netCashFlow >= 0 ? "up" : "down";
 
     // ── 持仓浮盈 — 仅统计已记录 mark 的合约，无 mark 显示未记录数
-    let markFloat = null, noMarkQty = 0;
+    let markFloat = null, noMarkQty = 0, openMarkValue = 0, anyMark = false;
     let openCspSecured = 0;
     const openTotalQty  = open.reduce((s, p) => s + p.qty, 0);
-    const openCspQty    = open.filter(p => p.strat === "csp").reduce((s, p) => s + p.qty, 0);
     for (const pos of open) {
       if (pos.strat === "csp") openCspSecured += pos.strike * 100 * pos.qty;
       if (pos.manualMark != null) {
         if (markFloat === null) markFloat = 0;
         markFloat += (pos.premium - pos.manualMark) * 100 * pos.qty;
+        openMarkValue += pos.manualMark * 100 * pos.qty;
+        anyMark = true;
       } else {
         noMarkQty += pos.qty;
       }
     }
-    const floatCls   = markFloat == null ? "" : markFloat >= 0 ? "up" : "down";
-    const floatStr   = markFloat == null ? "—" : (markFloat >= 0 ? "+" : "−") + fmt.usd(Math.abs(markFloat));
-    const floatLabel = noMarkQty === 0 ? "持仓浮盈" : "持仓浮盈(已记录)";
+    const floatCls = markFloat == null ? "" : markFloat >= 0 ? "up" : "down";
+    const floatStr = markFloat == null ? "—" : (markFloat >= 0 ? "+" : "−") + fmt.usd(Math.abs(markFloat));
 
     // ── 持股浮盈 (liveAssigned)
-    let equityPnl = null, equityKnown = true;
-    const liveAssignedQty  = liveAssigned.reduce((s, p) => s + p.qty, 0);
+    let equityPnl = null;
     const liveAssignedCash = liveAssigned.reduce((s, p) => s + p.strike * 100 * p.qty, 0);
     for (const p of liveAssigned) {
       const spot = optSpot(p.sym);
-      if (!spot) { equityKnown = false; continue; }
+      if (!spot) continue;
       if (equityPnl === null) equityPnl = 0;
       equityPnl += (spot - p.strike) * p.qty * 100;
     }
-    const eqCls = equityPnl == null ? "" : equityPnl >= 0 ? "up" : "down";
     const eqStr = equityPnl == null ? "—" : (equityPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(equityPnl));
 
-    // ── 现金占用合计
+    // ── Open P&L 合计（期权浮盈 + 持股浮盈）
+    const openPnlKnown = markFloat != null || equityPnl != null;
+    const openPnlTotal = (markFloat ?? 0) + (equityPnl ?? 0);
+    const openPnlCls   = !openPnlKnown ? "" : openPnlTotal >= 0 ? "up" : "down";
+
+    // ── 现金占用合计 + 占组合比例
     const totalOccupied = openCspSecured + liveAssignedCash;
-    const hasSide       = open.length > 0 || liveAssigned.length > 0;
+    const notionalBase  = currentOptMode === "real" ? totalNotional : simNotional;
+    const occPct        = notionalBase > 0 ? totalOccupied / notionalBase * 100 : null;
+
+    // ── 平均 Delta（已完成交易，按张数加权）
+    const deltaPosns = settledPosns.filter(p => p.entryDelta != null);
+    const deltaQty   = deltaPosns.reduce((s, p) => s + p.qty, 0);
+    const avgDelta   = deltaQty > 0 ? deltaPosns.reduce((s, p) => s + p.entryDelta * p.qty, 0) / deltaQty : null;
+
+    // ── 权利金保留率（已完成交易：净收取 / 总收取）
+    const captureRate = settledGross > 0 ? settledPrem / settledGross * 100 : null;
 
     const cell = (label, val, cls = "", sub = "") => `<div class="opts-stat">
       <div class="opts-stat-label">${label}</div>
@@ -5558,43 +5569,71 @@ function rsAdjustGrade(grade, rsResult) {
       ${sub ? `<div class="opts-stat-sub">${sub}</div>` : ""}
     </div>`;
 
-    const sidePanel = !hasSide ? "" : `<div class="opts-pnl-hero-div"></div>
-      <div class="opts-pnl-hero-side">
-        ${open.length ? `
-        <div class="opts-pnl-side-item">
-          <div class="opts-pnl-side-label">${floatLabel} · ${openTotalQty}张</div>
-          <div class="opts-pnl-side-val ${floatCls}">${floatStr}</div>
-          ${noMarkQty > 0 ? `<div class="opts-pnl-side-sub">${noMarkQty}张未记录现价</div>` : ""}
-        </div>` : ""}
-        ${totalOccupied > 0 ? `
-        <div class="opts-pnl-side-item opts-pnl-item-sep">
-          <div class="opts-pnl-side-label">现金占用</div>
-          ${openCspSecured > 0 ? `<div class="opts-pnl-occ-row"><span>CSP保证金</span><span>${fmt.usd(openCspSecured)} · ${openCspQty}张</span></div>` : ""}
-          ${liveAssignedCash > 0 ? `<div class="opts-pnl-occ-row"><span>持股成本</span><span>${fmt.usd(liveAssignedCash)} · ${liveAssignedQty}张</span></div>` : ""}
-          ${openCspSecured > 0 && liveAssignedCash > 0 ? `<div class="opts-pnl-occ-row opts-pnl-occ-total"><span>合计占用</span><span>${fmt.usd(totalOccupied)}</span></div>` : ""}
-        </div>` : ""}
-        ${liveAssigned.length ? `
-        <div class="opts-pnl-side-item opts-pnl-item-sep">
-          <div class="opts-pnl-side-label">持股浮盈(估) · ${liveAssigned.map(p=>p.sym).join("/")} · ${liveAssignedQty}张</div>
-          <div class="opts-pnl-side-val ${eqCls}">${eqStr}</div>
-          ${!equityKnown ? `<div class="opts-pnl-side-sub">部分未更新</div>` : ""}
-        </div>` : ""}
-      </div>`;
+    const occSubParts = [];
+    if (occPct != null) occSubParts.push(`${occPct.toFixed(1)}% of portfolio`);
+    if (openTotalQty) occSubParts.push(`未平仓${openTotalQty}张`);
 
     return `<div class="opts-summary-block">
-      <div class="opts-pnl-hero${hasSide ? " opts-pnl-hero-split" : ""}">
-        <div class="opts-pnl-hero-main">
-          <div class="opts-pnl-hero-label">净盈亏 · 已了结</div>
-          <div class="opts-pnl-hero-val ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
-          <div class="opts-pnl-hero-sub">已收权利金 +${fmt.usd(settledPrem + openPrem)} · ${settledPosns.length}笔了结</div>
+      <div class="opts-ledger-card">
+        <div class="opts-ledger-top">
+          <div class="opts-ledger-left">
+            <div class="opts-ledger-eyebrow">PREMIUM LEDGER · 权利金总账</div>
+            <div class="opts-ledger-title">Net Premium Calculation · 净权利金计算</div>
+            <div class="opts-ledger-sub">现金流不等于最终盈利；只有已平仓、到期、行权或滚仓的记录才计入已结算。</div>
+          </div>
+          <div class="opts-ledger-right">
+            <div class="opts-ledger-cf-label">NET PREMIUM CASH FLOW · 权利金净现金流</div>
+            <div class="opts-ledger-cf-val ${netCfCls}">${netCashFlow >= 0 ? "+" : "−"}${fmt.usd(Math.abs(netCashFlow))}</div>
+            <div class="opts-ledger-cf-sub">当前实际收取减买回支出，未扣费用</div>
+          </div>
         </div>
-        ${sidePanel}
+        <div class="opts-ledger-formula">
+          <div class="opts-ledger-fcell">
+            <div class="opts-ledger-fl">01 · TOTAL SOLD PREMIUM · 卖出总收取</div>
+            <div class="opts-ledger-fv">${fmt.usd(totalSoldPrem)}</div>
+            <div class="opts-ledger-fs">${soldQty} 张合约累计收取</div>
+          </div>
+          <div class="opts-ledger-fop">−</div>
+          <div class="opts-ledger-fcell">
+            <div class="opts-ledger-fl">02 · BUYBACK PAID · 买回总支出</div>
+            <div class="opts-ledger-fv ${totalBuyback > 0 ? "down" : ""}">${fmt.usd(totalBuyback)}</div>
+            <div class="opts-ledger-fs">仅统计平仓与滚仓的实际买回</div>
+          </div>
+          <div class="opts-ledger-fop">=</div>
+          <div class="opts-ledger-fcell opts-ledger-fcell-final" style="background:${mkAlpha(netCashFlow >= 0 ? "var(--up)" : "var(--down)", 8)}">
+            <div class="opts-ledger-fl">03 · NET CASH FLOW · 净现金流</div>
+            <div class="opts-ledger-fv ${netCfCls}">${netCashFlow >= 0 ? "+" : "−"}${fmt.usd(Math.abs(netCashFlow))}</div>
+            <div class="opts-ledger-fs">包含已结算与仍在持仓中的权利金</div>
+          </div>
+        </div>
+        ${settledPosns.length ? `<div class="opts-ledger-split">
+          <div class="opts-ledger-split-item">
+            <span class="opts-ledger-dot up"></span>
+            <div>
+              <div class="opts-ledger-split-label">Settled Premium P&L · 已结算权利金盈亏</div>
+              <div class="opts-ledger-split-sub">已平仓、到期、行权及滚仓 · ${settledPosns.length}笔 · ${settledQty}张</div>
+            </div>
+          </div>
+          <div class="opts-ledger-split-val ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
+        </div>` : ""}
+        ${open.length ? `<div class="opts-ledger-split">
+          <div class="opts-ledger-split-item">
+            <span class="opts-ledger-dot warn"></span>
+            <div>
+              <div class="opts-ledger-split-label">Open Premium P&L · 持仓中权利金浮盈亏</div>
+              <div class="opts-ledger-split-sub">${anyMark ? `按最新权利金估算，尚未结算；当前买回估值 ${fmt.usd(openMarkValue)}` : "尚未记录现价"} · ${open.length}笔 · ${openTotalQty}张</div>
+            </div>
+          </div>
+          <div class="opts-ledger-split-val ${floatCls}">${floatStr}</div>
+        </div>` : ""}
       </div>
-      <div class="opts-ws-grid">
-        ${cell("期权胜率", winRate, winTotal > 0 && wins / winTotal >= 0.6 ? "up" : "down", "OTM+盈利平仓 · " + wins + "/" + winTotal + "笔")}
-        ${cell("CSP指派率", cspAssignRate, "", allCspAssigned.length + "/" + allCspDone.length + "笔CSP")}
-        ${cell("平均年化", avgAnn ? (parseFloat(avgAnn) >= 0 ? "+" : "") + avgAnn + "%" : "—", avgAnn && parseFloat(avgAnn) >= 0 ? "up" : "down", annVals.length + " 笔计算")}
-        ${cell("已收权利金", "+" + fmt.usd(settledPrem + openPrem), "up", "历史累计")}
+      <div class="opts-ws-grid opts-ws-grid-6">
+        ${cell("Realized Option P&L · 已实现期权收益", (realizedPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedPnl)), realCls, `${settledPosns.length} trades completed · 已完成 ${settledQty}张`)}
+        ${cell("Open P&L · 持仓浮盈亏", openPnlKnown ? (openPnlTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(openPnlTotal)) : "—", openPnlCls, `Options ${floatStr} · 正股 ${eqStr}`)}
+        ${cell("Average Delta · 平均 Delta", avgDelta != null ? avgDelta.toFixed(2) : "—", "", "Contract-weighted completed trades · 按已完成交易张数加权")}
+        ${cell("Win Rate · 胜率", winRate, winTotal > 0 && wins / winTotal >= 0.6 ? "up" : "down", `${wins} winning trades / ${winTotal} completed trades · 按交易笔数`)}
+        ${cell("Premium Captured · 权利金保留率", captureRate != null ? captureRate.toFixed(1) + "%" : "—", captureRate != null && captureRate >= 75 ? "up" : "", `${fmt.usd(settledGross)} completed gross credit · 已完成权利金`)}
+        ${cell("Capital at Risk · 占用资金", fmt.usd(totalOccupied), "", occSubParts.join("；"))}
       </div>
     </div>`;
   }

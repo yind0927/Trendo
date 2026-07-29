@@ -1790,23 +1790,34 @@
   .opts-pnl-label { font-size: 9px; color: var(--fg-3); margin-bottom: 2px; }
   .opts-pnl-val { font-size: 13px; font-weight: 700; line-height: 1; }
   .opts-pnl-op { color: var(--fg-3); font-size: 14px; padding-bottom: 1px; flex-shrink: 0; }
-  /* ── Summary hero P&L block */
+  /* ── Summary: Premium Ledger card */
   .opts-summary-block { margin-bottom: 10px; }
-  .opts-pnl-hero { background: var(--bg-1); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
-  .opts-pnl-hero-split { display: flex; align-items: stretch; gap: 0; }
-  .opts-pnl-hero-main { flex: 1.4; min-width: 0; }
-  .opts-pnl-hero-div { width: 1px; background: var(--line); margin: 0 16px; flex-shrink: 0; }
-  .opts-pnl-hero-side { flex: 1; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
-  .opts-pnl-hero-label { font-size: 9px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
-  .opts-pnl-hero-val { font-size: 22px; font-weight: 800; line-height: 1; font-family: var(--f-mono); margin-bottom: 4px; }
-  .opts-pnl-hero-sub { font-size: 9.5px; color: var(--fg-3); }
-  .opts-pnl-side-item { display: flex; flex-direction: column; gap: 2px; }
-  .opts-pnl-side-label { font-size: 9px; color: var(--fg-3); }
-  .opts-pnl-side-val { font-size: 14px; font-weight: 700; font-family: var(--f-mono); }
-  .opts-pnl-side-sub { font-size: 9px; color: var(--fg-3); }
-  .opts-pnl-occ-row { display: flex; justify-content: space-between; font-size: 10px; color: var(--fg-2); line-height: 1.6; gap: 8px; }
-  .opts-pnl-occ-total { font-weight: 700; color: var(--fg-1); border-top: 1px solid var(--line); margin-top: 2px; padding-top: 2px; }
-  .opts-pnl-item-sep { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
+  .opts-ledger-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 18px 20px; margin-bottom: 10px; }
+  .opts-ledger-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
+  .opts-ledger-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  .opts-ledger-eyebrow::before { content: ""; display: inline-block; width: 16px; height: 2px; background: var(--accent); border-radius: 1px; margin-right: 6px; vertical-align: middle; }
+  .opts-ledger-title { font-size: 19px; font-weight: 800; margin-bottom: 6px; letter-spacing: -.01em; }
+  .opts-ledger-sub { font-size: 11.5px; color: var(--fg-3); line-height: 1.5; max-width: 440px; }
+  .opts-ledger-right { text-align: right; flex-shrink: 0; }
+  .opts-ledger-cf-label { font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 6px; }
+  .opts-ledger-cf-val { font-size: 28px; font-weight: 800; font-family: var(--f-mono); line-height: 1; margin-bottom: 5px; }
+  .opts-ledger-cf-sub { font-size: 10.5px; color: var(--fg-3); }
+  .opts-ledger-formula { display: flex; align-items: stretch; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  .opts-ledger-fcell { flex: 1; padding: 12px 16px; min-width: 0; border-radius: 6px; }
+  .opts-ledger-fop { display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: var(--fg-3); padding: 0 4px; flex-shrink: 0; }
+  .opts-ledger-fl { font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 5px; }
+  .opts-ledger-fv { font-size: 19px; font-weight: 800; font-family: var(--f-mono); margin-bottom: 3px; }
+  .opts-ledger-fs { font-size: 10px; color: var(--fg-3); }
+  .opts-ledger-split { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .opts-ledger-split:first-of-type { border-top: none; }
+  .opts-ledger-split-item { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
+  .opts-ledger-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+  .opts-ledger-dot.up { background: var(--up); }
+  .opts-ledger-dot.down { background: var(--down); }
+  .opts-ledger-dot.warn { background: var(--warn); }
+  .opts-ledger-split-label { font-size: 12px; font-weight: 700; color: var(--fg-0); margin-bottom: 2px; }
+  .opts-ledger-split-sub { font-size: 10px; color: var(--fg-3); line-height: 1.4; }
+  .opts-ledger-split-val { font-size: 17px; font-weight: 800; font-family: var(--f-mono); flex-shrink: 0; white-space: nowrap; }
   /* ── Strategy Handbook */
   .opts-strat-ref { margin-top: 22px; padding: 0 2px; }
   .opts-strat-ref details > summary { list-style: none; }
@@ -1931,6 +1942,7 @@
   /* ── Wheel stats section */
   .opts-wheel-stats { padding: 0 0 14px; border-top: 1px solid var(--line); margin-top: 6px; }
   .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); margin-top: 4px; }
+  .opts-ws-grid-6 { grid-template-columns: repeat(3, 1fr); border-top: none; margin-top: 0; }
   .opts-ws-cell { background: var(--bg-1); padding: 11px 14px; }
   .opts-ws-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
   .opts-ws-val { font-size: 16px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
@@ -1959,7 +1971,17 @@
     #sim-new-pos-btn { flex-shrink: 0; }
     /* Options module: stat grids collapse to 2-col */
     .opts-stats, .opts-stats.opts-stats-5 { grid-template-columns: repeat(2, 1fr); }
-    .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
+    .opts-ws-grid, .opts-ws-grid-6 { grid-template-columns: repeat(2, 1fr); }
+    /* Premium Ledger card: stack right-aligned cash-flow block below the title, formula row goes vertical */
+    .opts-ledger-card { padding: 14px 14px; }
+    .opts-ledger-top { flex-direction: column; gap: 12px; }
+    .opts-ledger-right { text-align: left; }
+    .opts-ledger-title { font-size: 17px; }
+    .opts-ledger-cf-val { font-size: 24px; }
+    .opts-ledger-formula { flex-direction: column; }
+    .opts-ledger-fop { padding: 2px 0; justify-content: flex-start; }
+    .opts-ledger-split { align-items: flex-start; }
+    .opts-ledger-split-val { margin-top: 1px; }
     /* Metric grid: 2x2 on mobile */
     .opts-card-metrics { grid-template-columns: repeat(2, 1fr); }
     /* Card header: allow wrapping, push actions below */
@@ -4688,8 +4710,8 @@
   </div>
 </div>
 
-<script src="data.js?v=564"></script>
-<script src="desk.js?v=564"></script>
+<script src="data.js?v=565"></script>
+<script src="desk.js?v=565"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
