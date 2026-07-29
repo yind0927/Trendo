@@ -5065,17 +5065,14 @@ function rsAdjustGrade(grade, rsResult) {
     if (changed) saveToStorage();
   }
 
-  // Canonical "what did this position actually earn" — used by stats and done-card
+  // Canonical "what did this position actually earn" — used by stats and done-card.
+  // A CSP assignment settles the OPTION leg immediately (100% of premium kept, same as
+  // an OTM expiry) — pos.realized is set once at assignment (settleExpiredOptions) and
+  // never touched again. The resulting stock is a separate, ongoing "正股" concern
+  // (tracked via strike/assignedExitPrice directly in _optPnlBreakdown), decoupled from
+  // this option-only figure so it isn't double-counted once the stock is eventually sold.
   function _optFinalPnl(pos) {
     if (pos.status === "open") return null;
-    if (pos.strat === "csp" && pos.status === "assigned") {
-      // Still holding the assigned stock: equity P&L is unrealized — exclude from stats.
-      if (!pos.assignedStockSold) return null;
-      // Stock sold: full cycle settled = option premium + stock exit gain/loss.
-      if (pos.assignedExitPrice != null)
-        return (pos.premium + pos.assignedExitPrice - pos.strike) * 100 * pos.qty;
-      return null;
-    }
     return pos.realized ?? 0;
   }
 
@@ -5249,7 +5246,8 @@ function rsAdjustGrade(grade, rsResult) {
       ? Math.max(1, Math.round((new Date(pos.closedAt) - new Date(pos.entryDate)) / 86400000))
       : null;
     if (daysHeld != null) items.push({ l: "持仓天数", v: daysHeld + "天", cls: "" });
-    if (pos.status === "expired") {
+    if (pos.status === "expired" || pos.status === "assigned") {
+      // Assignment always keeps 100% of the option premium — same as an OTM expiry.
       items.push({ l: "权利金捕获", v: "100%", cls: "up" });
     } else if (pos.status === "closed" && pos.closePremium != null && pos.premium > 0) {
       const capRate = (1 - pos.closePremium / pos.premium) * 100;
@@ -5264,7 +5262,6 @@ function rsAdjustGrade(grade, rsResult) {
   function _optAnn(pos) {
     if (!pos.entryDate || !pos.closedAt) return -Infinity;
     if (pos.status === "open" || pos.status === "pending") return -Infinity;
-    if (pos.strat === "csp" && pos.status === "assigned" && !pos.assignedStockSold) return -Infinity;
     const days = Math.max(1, Math.round((new Date(pos.closedAt) - new Date(pos.entryDate)) / 86400000));
     const finalPnl = _optFinalPnl(pos);
     if (finalPnl == null) return -Infinity;
@@ -5308,9 +5305,9 @@ function rsAdjustGrade(grade, rsResult) {
 
       return `<div class="opts-pos-card opts-assigned-live">
         <div class="opts-card-hd">
-          ${stratBadge}
-          <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
-          <span class="opts-st-tag" style="color:var(--warn);border-color:var(--warn)">持有正股</span>
+          <span class="opts-badge opts-badge-stock">正股</span>
+          <span class="opts-card-sym">${pos.sym}</span>
+          <span class="opts-st-tag" style="color:var(--fg-3);border-color:var(--line)">CSP指派 · $${pos.strike}${typeL}</span>
           ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
           <div class="opts-card-hd-r">
             <button class="opts-mini-btn opts-sell-cc-btn" data-opt-sell-cc="${pos.id}" data-cc-sym="${pos.sym}" data-cc-qty="${pos.qty}" title="持有 ${stockShares} 股，可卖出 ${pos.qty} 张备兑 Call">+ CC</button>
@@ -5486,9 +5483,11 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function _optSummaryHTML(open, done) {
-    // ── 已了结 P&L (excluding live assigned stock — unrealized)
+    // ── 已了结 P&L — CSP 一旦被指派，期权腿立即算已平仓（100%权利金到手，与到期作废等价）；
+    // liveAssigned 仍单独跟踪，用于下面"正股"仍持有部分的现金占用/浮盈计算，
+    // 二者不再互斥：同一笔仓位可以"期权已结算 + 正股仍持有"同时成立。
     const liveAssigned  = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
-    const settledPosns  = done.filter(p => !(p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold));
+    const settledPosns  = done;
     const expiredPosns  = settledPosns.filter(p => p.status === "expired");
     const closedPosns   = settledPosns.filter(p => p.status === "closed");
 
@@ -6351,7 +6350,9 @@ function rsAdjustGrade(grade, rsResult) {
       pos.assignedStockSold = true;
       pos.assignedExitPrice = exitPrice;
       pos.assignedExitDate = new Date().toISOString().slice(0, 10);
-      pos.realized = (pos.premium + exitPrice - pos.strike) * 100 * pos.qty;
+      // pos.realized stays as the option-only premium set at assignment — the stock's
+      // own exit P&L (strike → exitPrice) is derived directly from these fields wherever
+      // it's needed (_optPnlBreakdown), not folded back into the option's settled P&L.
       saveToStorage();
       modal.style.display = "none";
       renderSimOptions();

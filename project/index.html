@@ -1790,10 +1790,11 @@
   .opts-pnl-label { font-size: 9px; color: var(--fg-3); margin-bottom: 2px; }
   .opts-pnl-val { font-size: 13px; font-weight: 700; line-height: 1; }
   .opts-pnl-op { color: var(--fg-3); font-size: 14px; padding-bottom: 1px; flex-shrink: 0; }
-  /* ── Summary: Premium Ledger module (ledger card + 6-stat grid share one enclosing card,
-     visually separated as its own module from the position-cards module below) */
-  .opts-summary-block { margin-bottom: 24px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; overflow: hidden; }
-  .opts-ledger-card { background: var(--bg-1); padding: 18px 20px; }
+  /* ── Summary: Premium Ledger module — ledger card and 6-stat grid are two separate
+     bordered cards (not one card with an internal divider), visually distinct from
+     the position-cards module below. */
+  .opts-summary-block { margin-bottom: 24px; display: flex; flex-direction: column; gap: 12px; }
+  .opts-ledger-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 18px 20px; }
   .opts-ledger-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
   .opts-ledger-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
   .opts-ledger-eyebrow::before { content: ""; display: inline-block; width: 16px; height: 2px; background: var(--accent); border-radius: 1px; margin-right: 6px; vertical-align: middle; }
@@ -1885,6 +1886,7 @@
   .opts-badge { font-size: 9px; font-weight: 800; letter-spacing: .06em; padding: 2px 7px; border-radius: 4px; font-family: var(--f-mono); flex-shrink: 0; }
   .opts-badge-csp { background: var(--accent-dim); color: var(--accent); }
   .opts-badge-cc { background: color-mix(in oklch, var(--orange) 16%, transparent); color: var(--orange); }
+  .opts-badge-stock { background: var(--bg-2); color: var(--fg-2); border: 1px solid var(--line); }
   /* Symbol + strike */
   .opts-card-sym { font-size: 13px; font-weight: 700; font-family: var(--f-mono); color: var(--fg-0); white-space: nowrap; }
   .opts-card-sym span { color: var(--fg-1); font-weight: 600; }
@@ -1942,8 +1944,8 @@
   .opts-stat-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
   /* ── Wheel stats section */
   .opts-wheel-stats { padding: 0 0 14px; border-top: 1px solid var(--line); margin-top: 6px; }
-  .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-top: 1px solid var(--line); margin-top: 4px; }
-  .opts-ws-grid-6 { grid-template-columns: repeat(3, 1fr); margin-top: 0; }
+  .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; overflow: hidden; }
+  .opts-ws-grid-6 { grid-template-columns: repeat(3, 1fr); }
   .opts-ws-cell { background: var(--bg-1); padding: 11px 14px; }
   .opts-ws-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
   .opts-ws-val { font-size: 16px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
@@ -4711,8 +4713,8 @@
   </div>
 </div>
 
-<script src="data.js?v=566"></script>
-<script src="desk.js?v=566"></script>
+<script src="data.js?v=567"></script>
+<script src="desk.js?v=567"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
