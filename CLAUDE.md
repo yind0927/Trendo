@@ -729,6 +729,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v563 | 综合建议标题字号 30px→26px（手机端同步统一为 26px，此前手机端更小 20px）。 |
 | v564 | 综合建议标题手机端字号改回 20px（桌面保持 26px）。 |
 | v565 | **期权页汇总条重设计为"权利金总账"（Premium Ledger）卡片**（实盘/模拟仓共用 `_optSummaryHTML`，两个 tab 自动同步）：替换旧版"1个净盈亏数字+可选侧栏+4格网格"，改为参考截图的两段式布局——①卡片头部左侧 PREMIUM LEDGER 标签+标题+免责说明，右侧大号"净现金流"数字（`卖出总收取Σpremium*100*qty`−`买回总支出Σ仅closed的closePremium*100*qty`，含未结算/被指派未平仓仍在手的权利金——不同于下方"已结算"口径），中间三格算式行（01卖出总收取 − 02买回总支出 = 03净现金流，第三格按盈亏色调 `mkAlpha` 浅底高亮），底部两行圆点分色小结（Settled Premium P&L=已有的 `realizedPnl`；Open Premium P&L=已有的 `manualMark` 浮盈）；②6格指标网格（`opts-ws-grid-6`，3列2行/手机2列）：已实现期权收益(=realizedPnl)、Open P&L(期权浮盈+持股浮盈合并展示+拆分子项)、平均Delta(新增，settledPosns按qty加权`entryDelta`)、胜率(复用)、权利金保留率(新增聚合版，`settledPrem/settledGross`，此前只有单笔卡片版本)、占用资金(复用`totalOccupied`+新增占组合比例`/totalNotional或simNotional`)。新增字段全部来自现有 `_optFinalPnl`/`_optAnn`/`premium`/`entryDelta` 等既有数据，无需改动 SIM_OPTIONS/REAL_OPTIONS 数据模型。CSS 删除死代码 `.opts-pnl-hero*`/`.opts-pnl-side*`/`.opts-pnl-occ*`（旧侧栏样式，新设计不再需要），新增 `.opts-ledger-*` 系列类名，手机端 `@media(max-width:640px)` 补充堆叠布局。 |
+| v566 | 占用资金去掉占组合比例（只留 `$金额` + `未平仓N张`）；`.opts-summary-block` 改为唯一的外层边框容器（`border+border-left accent+border-radius+overflow:hidden`），把 ledger 卡片和 6格网格包成一张连续卡片（内部用 `border-top` 分隔线区分两段），与下方持仓卡片列表之间 `margin-bottom` 10px→24px 拉开距离，使"计算模块"与"持仓模块"形成两个边界清晰的独立区块。 |
 
 ---
 

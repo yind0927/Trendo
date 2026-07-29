@@ -5550,10 +5550,8 @@ function rsAdjustGrade(grade, rsResult) {
     const openPnlTotal = (markFloat ?? 0) + (equityPnl ?? 0);
     const openPnlCls   = !openPnlKnown ? "" : openPnlTotal >= 0 ? "up" : "down";
 
-    // ── 现金占用合计 + 占组合比例
+    // ── 现金占用合计
     const totalOccupied = openCspSecured + liveAssignedCash;
-    const notionalBase  = currentOptMode === "real" ? totalNotional : simNotional;
-    const occPct        = notionalBase > 0 ? totalOccupied / notionalBase * 100 : null;
 
     // ── 平均 Delta（已完成交易，按张数加权）
     const deltaPosns = settledPosns.filter(p => p.entryDelta != null);
@@ -5568,10 +5566,6 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="opts-stat-val ${cls}">${val}</div>
       ${sub ? `<div class="opts-stat-sub">${sub}</div>` : ""}
     </div>`;
-
-    const occSubParts = [];
-    if (occPct != null) occSubParts.push(`${occPct.toFixed(1)}% of portfolio`);
-    if (openTotalQty) occSubParts.push(`未平仓${openTotalQty}张`);
 
     return `<div class="opts-summary-block">
       <div class="opts-ledger-card">
@@ -5633,7 +5627,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${cell("Average Delta · 平均 Delta", avgDelta != null ? avgDelta.toFixed(2) : "—", "", "Contract-weighted completed trades · 按已完成交易张数加权")}
         ${cell("Win Rate · 胜率", winRate, winTotal > 0 && wins / winTotal >= 0.6 ? "up" : "down", `${wins} winning trades / ${winTotal} completed trades · 按交易笔数`)}
         ${cell("Premium Captured · 权利金保留率", captureRate != null ? captureRate.toFixed(1) + "%" : "—", captureRate != null && captureRate >= 75 ? "up" : "", `${fmt.usd(settledGross)} completed gross credit · 已完成权利金`)}
-        ${cell("Capital at Risk · 占用资金", fmt.usd(totalOccupied), "", occSubParts.join("；"))}
+        ${cell("Capital at Risk · 占用资金", fmt.usd(totalOccupied), "", openTotalQty ? `未平仓${openTotalQty}张` : "")}
       </div>
     </div>`;
   }
