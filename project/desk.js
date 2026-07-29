@@ -5618,13 +5618,17 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
           <div class="opts-ledger-split-val ${floatCls}">${floatStr}</div>
         </div>` : ""}
-        <div class="opts-ws-grid opts-ws-grid-6">
-          ${cell("Realized Option P&L · 已实现期权收益", (realizedPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedPnl)), realCls, `${settledPosns.length} trades completed · 已完成 ${settledQty}张`)}
-          ${cell("Open P&L · 持仓浮盈亏", openPnlKnown ? (openPnlTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(openPnlTotal)) : "—", openPnlCls, `Options ${floatStr} · 正股 ${eqStr}`)}
-          ${cell("Average Delta · 平均 Delta", avgDelta != null ? avgDelta.toFixed(2) : "—", "", "Contract-weighted completed trades · 按已完成交易张数加权")}
-          ${cell("Win Rate · 胜率", winRate, winTotal > 0 && wins / winTotal >= 0.6 ? "up" : "down", `${wins} winning trades / ${winTotal} completed trades · 按交易笔数`)}
-          ${cell("Premium Captured · 权利金保留率", captureRate != null ? captureRate.toFixed(1) + "%" : "—", captureRate != null && captureRate >= 75 ? "up" : "", `${fmt.usd(settledGross)} completed gross credit · 已完成权利金`)}
-          ${cell("Capital at Risk · 占用资金", fmt.usd(totalOccupied), "", openTotalQty ? `未平仓${openTotalQty}张` : "")}
+        <div class="opts-ws-rows">
+          <div class="opts-ws-grid opts-ws-grid-6">
+            ${cell("Realized Option P&L · 已实现期权收益", (realizedPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedPnl)), realCls, `${settledPosns.length} trades completed · 已完成 ${settledQty}张`)}
+            ${cell("Open P&L · 持仓浮盈亏", openPnlKnown ? (openPnlTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(openPnlTotal)) : "—", openPnlCls, `Options ${floatStr} · 正股 ${eqStr}`)}
+            ${cell("Average Delta · 平均 Delta", avgDelta != null ? avgDelta.toFixed(2) : "—", "", "Contract-weighted completed trades · 按已完成交易张数加权")}
+          </div>
+          <div class="opts-ws-grid opts-ws-grid-6">
+            ${cell("Win Rate · 胜率", winRate, winTotal > 0 && wins / winTotal >= 0.6 ? "up" : "down", `${wins} winning trades / ${winTotal} completed trades · 按交易笔数`)}
+            ${cell("Premium Captured · 权利金保留率", captureRate != null ? captureRate.toFixed(1) + "%" : "—", captureRate != null && captureRate >= 75 ? "up" : "", `${fmt.usd(settledGross)} completed gross credit · 已完成权利金`)}
+            ${cell("Capital at Risk · 占用资金", fmt.usd(totalOccupied), "", openTotalQty ? `未平仓${openTotalQty}张` : "")}
+          </div>
         </div>
       </div>
     </div>`;

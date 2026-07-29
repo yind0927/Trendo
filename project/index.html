@@ -1943,8 +1943,9 @@
   .opts-stat-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
   /* ── Wheel stats section */
   .opts-wheel-stats { padding: 0 0 14px; border-top: 1px solid var(--line); margin-top: 6px; }
+  .opts-ws-rows { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
   .opts-ws-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-radius: 8px; overflow: hidden; }
-  .opts-ws-grid-6 { grid-template-columns: repeat(3, 1fr); margin-top: 14px; }
+  .opts-ws-grid-6 { grid-template-columns: repeat(3, 1fr); }
   .opts-ws-cell { background: var(--bg-1); padding: 11px 14px; }
   .opts-ws-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 3px; }
   .opts-ws-val { font-size: 16px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
@@ -1973,7 +1974,8 @@
     #sim-new-pos-btn { flex-shrink: 0; }
     /* Options module: stat grids collapse to 2-col */
     .opts-stats, .opts-stats.opts-stats-5 { grid-template-columns: repeat(2, 1fr); }
-    .opts-ws-grid, .opts-ws-grid-6 { grid-template-columns: repeat(2, 1fr); }
+    .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
+    .opts-ws-grid-6 { grid-template-columns: 1fr; }
     /* Premium Ledger card: stack right-aligned cash-flow block below the title, formula row goes vertical */
     .opts-ledger-top { flex-direction: column; gap: 12px; }
     .opts-ledger-right { text-align: left; }
@@ -4710,8 +4712,8 @@
   </div>
 </div>
 
-<script src="data.js?v=569"></script>
-<script src="desk.js?v=569"></script>
+<script src="data.js?v=570"></script>
+<script src="desk.js?v=570"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
