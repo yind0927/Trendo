@@ -340,6 +340,7 @@
     { id: "risk_earn",    label: "财报风险",    color: "var(--warn)",   group: "管理" },
     { id: "risk_emotion", label: "情绪交易",    color: "var(--down)",   group: "管理" },
     { id: "risk_size",    label: "仓位过重",    color: "var(--warn)",   group: "管理" },
+    { id: "mgmt_invalid", label: "策略失效",    color: "var(--down)",   group: "管理" },
   ];
 
   function stAdjustGrade(grade, stBull) {
@@ -4608,7 +4609,7 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="jt-summary">
       <div class="jts-header">
         <span class="jts-title">归因摘要</span>
-        <span class="jts-sub">Insight · ${totalTagged} 笔已标注</span>
+        <span class="jts-sub">${totalTagged} 笔已标注</span>
       </div>
       ${hasBoth ? `<div class="jts-sub-header">已平仓 · ${taggedClosed.length} 笔</div>` : ""}
       ${closedSection}
@@ -10404,21 +10405,21 @@ function rsAdjustGrade(grade, rsResult) {
       ? `；正Gamma但剔0DTE后转负（${gex.swingGexBn}B），缓冲仅限当日，隔夜持仓谨慎。`
       : "";
     if (!dir.eligible)
-      return { headline: "❌ 禁止新多仓", color: "var(--down)",
+      return { headline: "🔴 逆风区", color: "var(--down)",
         detail: `方向轴逆风（${dir.desc}）。无论 VIX 多低都不新开多仓，优先保护现有仓位、严格执行止损。${gexWarn}` };
     if (sent.tilt === "trim")
-      return { headline: "⚠️ 止盈 / 禁新仓", color: "var(--orange)",
+      return { headline: "🟠 过热区", color: "var(--orange)",
         detail: `情绪极端过热（${sent.desc}）。即使仓位容量到 ${risk.posMax}%，此时也应止盈而非加仓。${gexWarn}` };
     if (sent.tilt === "accumulate")
-      return { headline: "🔄 分批建仓", color: "var(--up)",
+      return { headline: "🔵 恐慌区", color: "var(--up)",
         detail: `${sent.desc}。仓位上限 ${risk.posMax}%，只买最强个股，分批进、不一次满仓。${gexWarn}` };
     if (sent.tilt === "scale")
-      return { headline: "⏫ 小幅加仓", color: "var(--accent)",
+      return { headline: "🟢 修复区", color: "var(--accent)",
         detail: `${sent.desc}。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
     if (sent.tilt === "hold")
-      return { headline: "⏸️ 持仓观望", color: "var(--warn)",
+      return { headline: "🟡 滞涨区", color: "var(--warn)",
         detail: `情绪偏热，持有现有仓位不加码。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
-    return { headline: "✅ 正常进攻", color: "var(--up)",
+    return { headline: "🟢 顺风区", color: "var(--up)",
       detail: `三轴健康，可正常布局。仓位上限 ${risk.posMax}%，止损 ${risk.stop}。${gexWarn}` };
   }
 
