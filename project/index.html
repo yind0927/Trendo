@@ -2018,6 +2018,9 @@
   .simb-note { font-size: 11px; color: var(--fg-3); margin-bottom: 14px; }
   .simb-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--fg-1); }
   .simb-title::before { content: ""; display: block; width: 3px; height: 13px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
+  .simb-scope-tag { font-size: 10px; font-weight: 500; padding: 1px 7px; border-radius: 99px; letter-spacing: 0; text-transform: none; }
+  .simb-scope-combined { background: var(--accent-faint, oklch(0.78 0.12 195 / .1)); color: var(--accent); border: 1px solid oklch(0.78 0.12 195 / .25); }
+  .simb-scope-closed { background: oklch(0.80 0.15 75 / .1); color: var(--warn); border: 1px solid oklch(0.80 0.15 75 / .25); }
   /* .simb-row uses display:contents so its 4 children become direct grid items of
      .simb-table — this makes every row share the SAME column tracks (critical for the
      label column, which is sized to the widest label across all rows via max-content).
@@ -4718,8 +4721,8 @@
   </div>
 </div>
 
-<script src="data.js?v=576"></script>
-<script src="desk.js?v=576"></script>
+<script src="data.js?v=577"></script>
+<script src="desk.js?v=577"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
