@@ -6701,13 +6701,20 @@ function rsAdjustGrade(grade, rsResult) {
       : "";
 
     const utilCls = utilizationPct === null ? "" : utilizationPct > 90 ? "down" : utilizationPct > 60 ? "warn" : "up";
+    const avgDays = combinedItems.length
+      ? Math.round(combinedItems.reduce((s, it) => s + (it.h.days || 0), 0) / combinedItems.length)
+      : null;
+    const tile3 = scopeToMonth
+      ? simTile("资金利用率", utilizationPct !== null ? utilizationPct.toFixed(0) + "%" : "—", utilCls,
+          utilizationPct !== null ? `模拟仓 $${Math.round(notional / 1000)}k 基准` : "")
+      : simTile("平均持仓天数", avgDays !== null ? avgDays + " 天" : "—", "", "全部已平仓交易的平均持有时长");
     section.innerHTML = `
       <div class="simb-note">${closedNote}</div>
       <div class="simb-overview-row-label">规模 · Scale</div>
       <div class="sim-a-stats cols-3" style="margin-top:6px">
         ${simTile(countLabel, combinedItems.length, "", countSub)}
-        ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", "本月所有开仓的成本×数量合计")}
-        ${simTile("资金利用率", utilizationPct !== null ? utilizationPct.toFixed(0) + "%" : "—", utilCls, utilizationPct !== null ? `模拟仓 $${Math.round(notional / 1000)}k 基准` : "")}
+        ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", scopeToMonth ? "本月所有开仓的成本×数量合计" : "全部已平仓交易的成本×数量合计")}
+        ${tile3}
       </div>
       <div class="simb-overview-row-label" style="margin-top:14px">表现 · Performance</div>
       <div class="sim-a-stats cols-3" style="margin-top:6px;margin-bottom:0">
@@ -6797,7 +6804,7 @@ function rsAdjustGrade(grade, rsResult) {
     renderMonthlyBacktest({
       labelSel: "#sim-review-label", sectionSel: "#sim-analytics-section",
       mode: "closed", sourceArr: SIM_CLOSED, otherArr: SIM_HOLDINGS,
-      peakStorageKey: "trendo_sim_closed_lifetime_peak",
+      peakStorageKey: "trendo_sim_closed_lifetime_peak", notional: simNotional,
       titleZh: "分析复盘", titleEn: "Analytics",
       scopeToMonth: false,
       closedNote: "统计模拟仓全部已平仓交易的历史表现；持仓中的仓位见上方「月度回测」",
