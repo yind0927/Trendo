@@ -6573,7 +6573,7 @@ function rsAdjustGrade(grade, rsResult) {
   // scopeToMonth: true — 只看本月新开的仓位（月度回测的用法）。false — 不按月过滤，看
   // sourceArr 全部历史（分析复盘的用法：模拟仓全部已平仓交易的整体复盘，不局限于当月）。
   // 两种模式共用下面同一套统计逻辑，peak 回撤追踪在 lifetime 模式下用固定 key（永不按月重置）。
-  function renderMonthlyBacktest({ labelSel, sectionSel, mode, sourceArr, otherArr, peakStorageKey, closedNote, closedNoteInline, titleZh = "月度回测", titleEn = "Monthly Backtest", scopeToMonth = true }) {
+  function renderMonthlyBacktest({ labelSel, sectionSel, mode, sourceArr, otherArr, peakStorageKey, closedNote, closedNoteInline, notional = 0, titleZh = "月度回测", titleEn = "Monthly Backtest", scopeToMonth = true }) {
     const label   = $(labelSel);
     const section = $(sectionSel);
     if (!section) return;
@@ -6652,6 +6652,7 @@ function rsAdjustGrade(grade, rsResult) {
     // 资金加权收益率 — 合并口径：Σpnl / Σ成本，唯一能与大盘当月涨跌幅同层比较的数字
     const monthCostBasis = combinedItems.reduce((s, it) => s + (it.h.cost || 0) * (it.h.qty || 0), 0);
     const weightedPct = monthCostBasis > 0 ? monthPnl / monthCostBasis * 100 : null;
+    const utilizationPct = notional > 0 ? monthCostBasis / notional * 100 : null;
 
     // 已平仓口径: 交易分布 / 收益率细分 / 盈亏总额 / 最佳最差
     const wins   = closedOnlyItems.filter(it => it.pnl > 0);
@@ -6699,12 +6700,19 @@ function rsAdjustGrade(grade, rsResult) {
       ? `<span class="simb-scope-tag simb-scope-${type}">${type === "combined" ? "合并口径" : "已平仓口径"}</span>`
       : "";
 
+    const utilCls = utilizationPct === null ? "" : utilizationPct > 90 ? "down" : utilizationPct > 60 ? "warn" : "up";
     section.innerHTML = `
       <div class="simb-note">${closedNote}</div>
-      <div class="sim-a-stats">
+      <div class="simb-overview-row-label">规模 · Scale</div>
+      <div class="sim-a-stats cols-3" style="margin-top:6px">
         ${simTile(countLabel, combinedItems.length, "", countSub)}
+        ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", "本月所有开仓的成本×数量合计")}
+        ${simTile("资金利用率", utilizationPct !== null ? utilizationPct.toFixed(0) + "%" : "—", utilCls, utilizationPct !== null ? `模拟仓 $${Math.round(notional / 1000)}k 基准` : "")}
+      </div>
+      <div class="simb-overview-row-label" style="margin-top:14px">表现 · Performance</div>
+      <div class="sim-a-stats cols-3" style="margin-top:6px;margin-bottom:0">
         ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
-        ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct >= 0 ? "up" : "down", weightedSub)}
+        ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", weightedSub)}
         ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
       </div>
 
@@ -6763,7 +6771,7 @@ function rsAdjustGrade(grade, rsResult) {
     renderMonthlyBacktest({
       labelSel: "#sim-monthly-label", sectionSel: "#sim-monthly-section",
       mode: "open", sourceArr: SIM_HOLDINGS, otherArr: SIM_CLOSED,
-      peakStorageKey: "trendo_sim_month_peak",
+      peakStorageKey: "trendo_sim_month_peak", notional: simNotional,
       closedNote: "统计本月所有新开仓位（持仓中 + 已平仓）；总览/评级/行业按合并口径，交易分布/最佳最差仅统计已平仓",
       closedNoteInline: "见下方「分析复盘」",
     });
@@ -6773,7 +6781,7 @@ function rsAdjustGrade(grade, rsResult) {
     renderMonthlyBacktest({
       labelSel: "#desk-monthly-label", sectionSel: "#desk-monthly-section",
       mode: "open", sourceArr: HOLDINGS, otherArr: CLOSED_POSITIONS,
-      peakStorageKey: "trendo_real_month_peak",
+      peakStorageKey: "trendo_real_month_peak", notional: totalNotional,
       closedNote: "统计本月所有新开仓位（持仓中 + 已平仓）；总览/评级/行业按合并口径，交易分布/最佳最差仅统计已平仓",
       closedNoteInline: "见 Analytics 页",
     });
