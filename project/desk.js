@@ -9969,21 +9969,21 @@ function rsAdjustGrade(grade, rsResult) {
     vix: {
       label: "VIX", cap: 60,
       zones: [
-        { max: 15,  color: "var(--up)",   label: "充裕 · 100%上限",  badge: "充裕 100%" },
-        { max: 20,  color: "var(--accent)",label: "正常 · 75%上限",   badge: "正常 75%" },
-        { max: 30,  color: "var(--orange)",label: "收缩 · 50%上限",   badge: "收缩 50%" },
-        { max: 50,  color: "var(--down)",  label: "极小 · 25%上限",   badge: "极小 25%" },
+        { max: 15,  color: "var(--up)",    label: "贪婪 · 100%上限",  badge: "贪婪 100%" },
+        { max: 20,  color: "var(--accent)",label: "中性 · 75%上限",   badge: "中性 75%" },
+        { max: 30,  color: "var(--orange)",label: "恐惧 · 50%上限",   badge: "恐惧 50%" },
+        { max: 50,  color: "var(--down)",  label: "极恐 · 25%上限",   badge: "极恐 25%" },
         { max: 9999,color: MKT_DEEP_DOWN,  label: "恐慌 · 清仓观望",  badge: "恐慌" },
       ]
     },
     vxn: {
       label: "VXN (Nasdaq)", cap: 80,
       zones: [
-        { max: 20,  color: "var(--up)",   label: "充裕",   badge: "充裕" },
-        { max: 27,  color: "var(--accent)",label: "正常",   badge: "正常" },
-        { max: 40,  color: "var(--orange)",label: "收缩",   badge: "收缩" },
-        { max: 65,  color: "var(--down)",  label: "极小",   badge: "极小" },
-        { max: 9999,color: MKT_DEEP_DOWN,  label: "恐慌",   badge: "恐慌" },
+        { max: 20,  color: "var(--up)",    label: "贪婪", badge: "贪婪" },
+        { max: 27,  color: "var(--accent)",label: "中性", badge: "中性" },
+        { max: 40,  color: "var(--orange)",label: "恐惧", badge: "恐惧" },
+        { max: 65,  color: "var(--down)",  label: "极恐", badge: "极恐" },
+        { max: 9999,color: MKT_DEEP_DOWN,  label: "恐慌", badge: "恐慌" },
       ]
     },
     fg: {
@@ -10336,10 +10336,11 @@ function rsAdjustGrade(grade, rsResult) {
       { label: "做空", color: "var(--down)", cond: "EMA50/EMA200 死叉 或 价格 < EMA200", action: "禁止新多仓，严格执行止损" },
     ];
     const axisB = [
-      { label: "充裕", color: "var(--up)",     cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
-      { label: "正常", color: "var(--accent)", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −8%" },
-      { label: "收缩", color: "var(--orange)", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −5%" },
-      { label: "极小", color: "var(--down)",   cond: "VIX ≥ 30",    action: "仓位上限 25%  · 止损 −5%" },
+      { label: "贪婪", color: "var(--up)",     cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
+      { label: "中性", color: "var(--accent)", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −8%" },
+      { label: "恐惧", color: "var(--orange)", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −5%" },
+      { label: "极恐", color: "var(--down)",   cond: "VIX 30–50",   action: "仓位上限 25%  · 止损 −5%" },
+      { label: "恐慌", color: MKT_DEEP_DOWN,   cond: "VIX ≥ 50",    action: "清仓观望，不开新仓" },
     ];
     const axisC = [
       { label: "极端恐惧", color: "var(--up)", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
@@ -10411,10 +10412,11 @@ function rsAdjustGrade(grade, rsResult) {
 
   // 轴B：风险容量（VIX）—— 仓位上限 + 止损宽度。只管"多少"，不管"买不买"。
   function getRiskAxis(vix) {
-    if (vix < 15)  return { id: "full",    label: "充裕", color: "var(--up)", posMax: 100, stop: "宽松 −10%" };
-    if (vix < 20)  return { id: "normal",  label: "正常", color: "var(--accent)", posMax: 75,  stop: "正常 −8%" };
-    if (vix < 30)  return { id: "reduced", label: "收缩", color: "var(--orange)", posMax: 50,  stop: "收紧 −5%" };
-    return            { id: "minimal", label: "极小", color: "var(--down)", posMax: 25,  stop: "极紧 −5%" };
+    if (vix < 15)  return { id: "full",    label: "贪婪", color: "var(--up)",     posMax: 100, stop: "宽松 −10%" };
+    if (vix < 20)  return { id: "normal",  label: "中性", color: "var(--accent)", posMax: 75,  stop: "正常 −8%" };
+    if (vix < 30)  return { id: "reduced", label: "恐惧", color: "var(--orange)", posMax: 50,  stop: "收紧 −5%" };
+    if (vix < 50)  return { id: "minimal", label: "极恐", color: "var(--down)",   posMax: 25,  stop: "极紧 −5%" };
+    return            { id: "panic",   label: "恐慌", color: MKT_DEEP_DOWN,   posMax: 0,   stop: "清仓观望" };
   }
 
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
