@@ -6816,68 +6816,89 @@ function rsAdjustGrade(grade, rsResult) {
       ? simTile("资金利用率", utilizationPct !== null ? utilizationPct.toFixed(0) + "%" : "—", utilCls,
           utilizationPct !== null ? `模拟仓 $${Math.round(notional / 1000)}k 基准` : "")
       : simTile("平均持仓天数", avgDays !== null ? avgDays + " 天" : "—", "", "全部已平仓交易的平均持有时长");
+    // 统一的小节标题：中英双语 + 可选口径标签 + 可选补充说明，全模块同一种写法。
+    const subTitle = (zh, en, scope, note) => `
+      <div class="simb-subtitle">
+        <span class="simb-sub-zh">${zh}</span>
+        <span class="simb-sub-en">${en}</span>
+        ${scope ? scopeTag(scope) : ""}
+        ${note ? `<span class="simb-sub-note">· ${note}</span>` : ""}
+      </div>`;
+
+    // 分区一「组合层面」三个小节口径一致，标签提到分区头上说一次即可——挂在每个小节上会
+    // 变成三个同样的胶囊竖排，是噪音。分区二口径混合（交易分布/收益率只看已平仓，其余合并），
+    // 所以标签仍逐小节标注。
+    const partHead = (zh, en, scope) => `
+      <div class="simb-part-hd">
+        <span class="simb-part-zh">${zh}</span>
+        <span class="simb-part-en">${en}</span>
+        ${scope ? scopeTag(scope) : ""}
+      </div>`;
+
     section.innerHTML = `
       <div class="simb-note">${closedNote}</div>
-      <div class="simb-overview-row-label">规模 · Scale</div>
-      <div class="sim-a-stats cols-3" style="margin-top:6px">
-        ${simTile(countLabel, combinedItems.length, "", countSub)}
-        ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", scopeToMonth ? "本月所有开仓的成本×数量合计" : "全部已平仓交易的成本×数量合计")}
-        ${tile3}
-      </div>
-      <div class="simb-overview-row-label" style="margin-top:14px">表现 · Performance</div>
-      <div class="sim-a-stats cols-3" style="margin-top:6px;margin-bottom:0">
-        ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
-        ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", weightedSub)}
-        ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
-      </div>
 
-      <div class="simb-title" style="margin-top:20px">交易分布${scopeTag("closed")}</div>
-      <div class="sim-a-stats" style="margin-top:8px">
-        ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
-        ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
-        ${simTile("持平数量", evens.length)}
-        ${simTile("总体胜率", winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—", winRatePct !== null && winRatePct >= 50 ? "up" : "down")}
-      </div>
-
-      <div class="simb-title" style="margin-top:20px">收益率${scopeTag("closed")}<span style="font-weight:400;color:var(--fg-3);font-size:10px;text-transform:none;letter-spacing:0;margin-left:2px">· 逐笔简单平均</span></div>
-      <div class="sim-a-stats" style="margin-top:8px">
-        ${closedOnlyItems.length ? `
-          ${simTile("平均收益率", (avgPct >= 0 ? "+" : "") + avgPct.toFixed(1) + "%", avgPct >= 0 ? "up" : "down")}
-          ${simTile("中位数收益率", (medPct >= 0 ? "+" : "") + medPct.toFixed(1) + "%", medPct >= 0 ? "up" : "down")}
-          ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—", "up")}
-          ${simTile("平均亏损收益率", avgLossPct !== null ? avgLossPct.toFixed(1) + "%" : "—", "down")}
-        ` : simTile("暂无已平仓交易", "—", "", "本月新开仓位尚未平仓")}
-      </div>
-
-      <div class="simb-title" style="margin-top:20px">盈亏总额${scopeTag("combined")}</div>
-      <div class="sim-a-stats cols-3" style="margin-top:8px">
-        ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up")}
-        ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
-        ${simTile("盈亏因子", pfStr, pfCls)}
-      </div>
-
-      <div class="simb-title" style="margin-top:20px">最佳 / 最差${scopeTag("combined")}</div>
-      ${bestItem && worstItem ? `
-      <div class="simbw-row">
-        <div class="simbw-card up">
-          <div class="simbw-label">最佳股票${bwState(bestItem)}</div>
-          <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
-          <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
+      <div class="simb-part">
+        ${partHead("组合层面", "Portfolio", "combined")}
+        ${subTitle("规模", "Scale")}
+        <div class="sim-a-stats cols-3">
+          ${simTile(countLabel, combinedItems.length, "", countSub)}
+          ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", scopeToMonth ? "本月所有开仓的成本×数量合计" : "全部已平仓交易的成本×数量合计")}
+          ${tile3}
         </div>
-        <div class="simbw-card down">
-          <div class="simbw-label">最差股票${bwState(worstItem)}</div>
-          <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
-          <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
+        ${subTitle("表现", "Performance")}
+        <div class="sim-a-stats cols-3">
+          ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
+          ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", weightedSub)}
+          ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
         </div>
-      </div>` : `<div class="simb-note" style="margin-top:6px">${isCombinedMode ? "本月暂无开仓记录" : "暂无已平仓交易"}</div>`}
+        ${subTitle("盈亏总额", "P&L Total")}
+        <div class="sim-a-stats cols-3">
+          ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up", `${combinedWins.length} 笔盈利仓位合计`)}
+          ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "", `${combinedLosses.length} 笔亏损仓位合计`)}
+          ${simTile("盈亏因子", pfStr, pfCls, "总盈利 ÷ 总亏损，>1 为正期望")}
+        </div>
+      </div>
 
-      <div class="simb-block">
-        <div class="simb-title">评级分层表现${scopeTag("combined")}</div>
+      <div class="simb-part">
+        ${partHead("逐笔拆解", "Breakdown")}
+        ${subTitle("交易分布", "Trade Distribution", "closed")}
+        <div class="sim-a-stats">
+          ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
+          ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
+          ${simTile("持平数量", evens.length)}
+          ${simTile("总体胜率", winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—", winRatePct !== null && winRatePct >= 50 ? "up" : "down")}
+        </div>
+
+        ${subTitle("收益率", "Returns", "closed", "逐笔简单平均")}
+        <div class="sim-a-stats">
+          ${closedOnlyItems.length ? `
+            ${simTile("平均收益率", (avgPct >= 0 ? "+" : "") + avgPct.toFixed(1) + "%", avgPct >= 0 ? "up" : "down")}
+            ${simTile("中位数收益率", (medPct >= 0 ? "+" : "") + medPct.toFixed(1) + "%", medPct >= 0 ? "up" : "down")}
+            ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—", "up")}
+            ${simTile("平均亏损收益率", avgLossPct !== null ? avgLossPct.toFixed(1) + "%" : "—", "down")}
+          ` : simTile("暂无已平仓交易", "—", "", "本月新开仓位尚未平仓")}
+        </div>
+
+        ${subTitle("最佳 / 最差", "Best / Worst", "combined")}
+        ${bestItem && worstItem ? `
+        <div class="simbw-row">
+          <div class="simbw-card up">
+            <div class="simbw-label">最佳股票${bwState(bestItem)}</div>
+            <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
+            <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
+          </div>
+          <div class="simbw-card down">
+            <div class="simbw-label">最差股票${bwState(worstItem)}</div>
+            <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
+            <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
+          </div>
+        </div>` : `<div class="simb-note">${isCombinedMode ? "本月暂无开仓记录" : "暂无已平仓交易"}</div>`}
+
+        ${subTitle("评级分层表现", "Grade Tiers", "combined")}
         ${gradeTableHTML}
-      </div>
 
-      <div class="simb-block">
-        <div class="simb-title">行业贡献${scopeTag("combined")}</div>
+        ${subTitle("行业表现", "Sector Performance", "combined")}
         <div class="simb-table">${simbBarRows(sectorRows, r => r.label)}</div>
       </div>`;
   }
@@ -6887,7 +6908,7 @@ function rsAdjustGrade(grade, rsResult) {
       labelSel: "#sim-monthly-label", sectionSel: "#sim-monthly-section",
       mode: "open", sourceArr: SIM_HOLDINGS, otherArr: SIM_CLOSED,
       peakStorageKey: "trendo_sim_month_peak", notional: simNotional,
-      closedNote: "统计本月所有新开仓位（持仓中 + 已平仓）；总览/评级/行业按合并口径，交易分布/最佳最差仅统计已平仓",
+      closedNote: "统计本月所有新开仓位（持仓中 + 已平仓）；除「交易分布」「收益率」只看已平仓外，其余均为合并口径",
       closedNoteInline: "见下方「分析复盘」",
     });
   }
@@ -6897,7 +6918,7 @@ function rsAdjustGrade(grade, rsResult) {
       labelSel: "#desk-monthly-label", sectionSel: "#desk-monthly-section",
       mode: "open", sourceArr: HOLDINGS, otherArr: CLOSED_POSITIONS,
       peakStorageKey: "trendo_real_month_peak", notional: totalNotional,
-      closedNote: "统计本月所有新开仓位（持仓中 + 已平仓）；总览/评级/行业按合并口径，交易分布/最佳最差仅统计已平仓",
+      closedNote: "统计本月所有新开仓位（持仓中 + 已平仓）；除「交易分布」「收益率」只看已平仓外，其余均为合并口径",
       closedNoteInline: "见 Analytics 页",
     });
   }
