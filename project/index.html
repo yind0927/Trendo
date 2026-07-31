@@ -2015,7 +2015,7 @@
   .sim-a-stats.cols-3 { grid-template-columns: repeat(3, 1fr); }
   @media (max-width: 768px) { .sim-a-stats.cols-3 { grid-template-columns: repeat(3, 1fr); } }
   .sim-a-stats.cols-5 { grid-template-columns: repeat(5, 1fr); }
-  @media (max-width: 768px) { .sim-a-stats.cols-5 { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 768px) { .sim-a-stats.cols-5 { grid-template-columns: repeat(2, 1fr); } }
   .simb-block { margin-top: 18px; }
   .simb-note { font-size: 11px; color: var(--fg-3); margin-bottom: 14px; }
   .simb-title { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; color: var(--fg-1); }
@@ -2065,7 +2065,6 @@
   .rhero-row { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 16px; row-gap: 20px; }
   .rhero-stat { padding: 0 18px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .rhero-stat:nth-child(4n+1) { border-left: none; padding-left: 0; }
-  .sim-a-stats.cols-5 { grid-template-columns: repeat(5, 1fr); }
   .rhero-label { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
   .rhero-value { font-size: 19px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.01em; line-height: 1.1; }
   .rhero-value.up { color: var(--up); }
@@ -4698,8 +4697,8 @@
   </div>
 </div>
 
-<script src="data.js?v=581"></script>
-<script src="desk.js?v=581"></script>
+<script src="data.js?v=582"></script>
+<script src="desk.js?v=582"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
