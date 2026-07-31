@@ -2643,6 +2643,61 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // ============ EVENTS CALENDAR ============
+  // Batch-refreshes h.earnings for every real + sim holding via /api/earnings, since the
+  // field is otherwise only ever set once (manually, at position-open time) and drifts stale
+  // the moment that quarter's earnings pass — leaving the calendar empty for old positions.
+  // Cached per-symbol for 24h (and re-checked once a cached date has already passed) so this
+  // stays a single burst of parallel requests per day, not a request per holding per reload.
+  async function fetchAllEarnings() {
+    const CACHE_KEY = "trendo_earnings_cache_v1";
+    const CACHE_TTL = 24 * 3600 * 1000;
+    let cache = {};
+    try { cache = JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch (_) {}
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const syms = [...new Set(
+      [...HOLDINGS, ...SIM_HOLDINGS].filter(h => h.kind !== "crypto").map(h => h.sym)
+    )];
+    if (!syms.length) return;
+
+    const now = Date.now();
+    const stale = syms.filter(sym => {
+      const c = cache[sym];
+      if (!c) return true;
+      if (now - new Date(c.checkedAt).getTime() > CACHE_TTL) return true;
+      if (c.date) { const d = new Date(c.date); d.setHours(0, 0, 0, 0); if (d < today) return true; }
+      return false;
+    });
+    if (!stale.length) return;
+
+    const results = await Promise.allSettled(stale.map(sym =>
+      fetch(`/api/earnings?sym=${encodeURIComponent(sym)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => ({ sym, date: d?.date || null }))
+    ));
+
+    let changed = false;
+    results.forEach(r => {
+      if (r.status !== "fulfilled" || !r.value) return;
+      const { sym, date } = r.value;
+      cache[sym] = { date, checkedAt: new Date().toISOString() };
+      if (date) {
+        [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => {
+          if (h.sym === sym && h.earnings !== date) { h.earnings = date; changed = true; }
+        });
+      }
+    });
+
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (_) {}
+
+    if (changed) {
+      saveToStorage();
+      renderTable();
+      renderSimTable();
+      renderEvents();
+    }
+  }
+
   function renderEvents() {
     const el = document.getElementById("events");
     if (!el) return;
@@ -11725,6 +11780,7 @@ function rsAdjustGrade(grade, rsResult) {
   renderTable();
   renderDeskMonthly();
   renderEvents();
+  fetchAllEarnings();
   if (HOLDINGS.length > 0) initHoldingsBriefCard();
   wireHoldingsViewToggle();
   wireSimHoldingsViewToggle();
