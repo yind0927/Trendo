@@ -6723,15 +6723,15 @@ function rsAdjustGrade(grade, rsResult) {
 
     // combinedItems: open positions (pnlDollar) + closed positions from this month (pnlFinal)
     // Used for aggregate metrics: overview tiles, 评级, 行业
-    const toItem = (h, field) => {
+    const toItem = (h, field, open) => {
       const pnl = h[field] || 0;
       const basis = (h.cost || 0) * (h.qty || 0);
-      return { h, pnl, pct: basis > 0 ? pnl / basis * 100 : 0 };
+      return { h, pnl, pct: basis > 0 ? pnl / basis * 100 : 0, open: !!open };
     };
     const combinedItems = isCombinedMode
-      ? [ ...thisMonthItems.map(h => toItem(h, "pnlDollar")),
-          ...closedThisMonthArr.map(h => toItem(h, "pnlFinal")) ]
-      : thisMonthItems.map(h => toItem(h, pnlField));
+      ? [ ...thisMonthItems.map(h => toItem(h, "pnlDollar", true)),
+          ...closedThisMonthArr.map(h => toItem(h, "pnlFinal", false)) ]
+      : thisMonthItems.map(h => toItem(h, pnlField, mode !== "closed"));
 
     // closedOnlyItems: finalized trades only — used for win/loss distribution and best/worst
     // (open positions' outcome is still floating so classifying them as win/loss is unstable)
@@ -6751,7 +6751,7 @@ function rsAdjustGrade(grade, rsResult) {
     const weightedPct = monthCostBasis > 0 ? monthPnl / monthCostBasis * 100 : null;
     const utilizationPct = notional > 0 ? monthCostBasis / notional * 100 : null;
 
-    // 已平仓口径: 交易分布 / 收益率细分 / 盈亏总额 / 最佳最差
+    // 已平仓口径: 交易分布 / 收益率细分
     const wins   = closedOnlyItems.filter(it => it.pnl > 0);
     const losses = closedOnlyItems.filter(it => it.pnl < 0);
     const evens  = closedOnlyItems.filter(it => it.pnl === 0);
@@ -6771,8 +6771,10 @@ function rsAdjustGrade(grade, rsResult) {
     const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (combinedWins.length > 0 ? "∞" : "—");
     const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (combinedWins.length > 0 ? "up" : "");
 
-    const bestItem  = closedOnlyItems.length ? closedOnlyItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
-    const worstItem = closedOnlyItems.length ? closedOnlyItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
+    // 最佳/最差同样用合并口径：只看已平仓会漏掉本月表现最极端的仓位（通常正是还拿在手上
+    // 那一只），选出的"最佳"可能远不是本月真正跑得最好的。持仓中的项标注"持仓中"以示浮动。
+    const bestItem  = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
+    const worstItem = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
 
     // 合并口径: 评级 / 行业（包含持仓中+已平仓，全面反映本月开仓质量）
     const gradeTableHTML = bucketStatsTable(groupGradeBuckets(monthItems), "评级");
@@ -6798,6 +6800,12 @@ function rsAdjustGrade(grade, rsResult) {
 
     const scopeTag = (type) => isCombinedMode
       ? `<span class="simb-scope-tag simb-scope-${type}">${type === "combined" ? "合并口径" : "已平仓口径"}</span>`
+      : "";
+
+    // 最佳/最差改用合并口径后，选出的可能是还没平仓的仓位——那个百分比是浮动的、还会变，
+    // 跟已落袋的数字不是一回事，所以在卡片标签上标出来。
+    const bwState = (it) => isCombinedMode
+      ? `<span class="simbw-state">${it.open ? "持仓中" : "已平仓"}</span>`
       : "";
 
     const utilCls = utilizationPct === null ? "" : utilizationPct > 90 ? "down" : utilizationPct > 60 ? "warn" : "up";
@@ -6848,20 +6856,20 @@ function rsAdjustGrade(grade, rsResult) {
         ${simTile("盈亏因子", pfStr, pfCls)}
       </div>
 
-      <div class="simb-title" style="margin-top:20px">最佳 / 最差${scopeTag("closed")}</div>
+      <div class="simb-title" style="margin-top:20px">最佳 / 最差${scopeTag("combined")}</div>
       ${bestItem && worstItem ? `
       <div class="simbw-row">
         <div class="simbw-card up">
-          <div class="simbw-label">最佳股票</div>
+          <div class="simbw-label">最佳股票${bwState(bestItem)}</div>
           <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
           <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
         </div>
         <div class="simbw-card down">
-          <div class="simbw-label">最差股票</div>
+          <div class="simbw-label">最差股票${bwState(worstItem)}</div>
           <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
           <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
         </div>
-      </div>` : `<div class="simb-note" style="margin-top:6px">本月暂无已平仓交易</div>`}
+      </div>` : `<div class="simb-note" style="margin-top:6px">${isCombinedMode ? "本月暂无开仓记录" : "暂无已平仓交易"}</div>`}
 
       <div class="simb-block">
         <div class="simb-title">评级分层表现${scopeTag("combined")}</div>
