@@ -7720,19 +7720,24 @@ function rsAdjustGrade(grade, rsResult) {
 
       <div class="analytics-card" style="margin-bottom:14px">
         ${atitle("复盘概览", "Overview")}
-        <div class="analytics-card-sub">与月度回测同一套统计口径 · 全部历史已平仓交易</div>
+        <div class="analytics-card-sub">全部历史已平仓交易 · 与月度回测同一套统计口径</div>
 
-        <div class="rhero-row">
-          ${rheroStat("已平仓笔数", total, "", total ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "暂无数据")}
-          ${rheroStat("已实现盈亏", total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl))}
-          ${rheroStat("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "", "可与大盘同期涨跌幅同层对比")}
-          ${rheroStat("历史回撤", realPeak > 0 ? "−" + realDdPct.toFixed(1) + "%" : "—", realDdPct > 0 ? "down" : "", realPeak > 0 ? `峰值 ${fmt.signed(Math.round(realPeak))}` : "尚未产生正向峰值")}
-          ${rheroStat("盈利数量", wins.length, wins.length ? "up" : "")}
-          ${rheroStat("亏损数量", losses.length, losses.length ? "down" : "")}
-          ${rheroStat("持平数量", evens.length)}
-          ${rheroStat("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down")}
-          ${rheroStat("总投入金额", realCostBasis > 0 ? "$" + Math.round(realCostBasis).toLocaleString("en-US") : "—", "", "全部已平仓交易的成本×数量合计")}
-          ${rheroStat("资金利用率", realUtilPct !== null ? realUtilPct.toFixed(0) + "%" : "—", realUtilPct !== null ? (realUtilPct > 90 ? "down" : realUtilPct > 60 ? "warn" : "up") : "", realUtilPct !== null ? `组合基准 $${Math.round(totalNotional / 1000)}k` : "")}
+        <div class="simb-overview-row-label" style="margin-top:16px">规模与收益 · Scale & Returns</div>
+        <div class="sim-a-stats cols-5" style="margin-top:6px">
+          ${simTile("总投入金额", realCostBasis > 0 ? "$" + Math.round(realCostBasis).toLocaleString("en-US") : "—", "", "全部已平仓交易的成本×数量合计")}
+          ${simTile("资金利用率", realUtilPct !== null ? realUtilPct.toFixed(0) + "%" : "—", realUtilPct !== null ? (realUtilPct > 90 ? "down" : realUtilPct > 60 ? "warn" : "up") : "", realUtilPct !== null ? `组合基准 $${Math.round(totalNotional / 1000)}k` : "")}
+          ${simTile("已实现盈亏", total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl))}
+          ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "", "可与大盘同期涨跌幅同层对比")}
+          ${simTile("历史回撤", realPeak > 0 ? "−" + realDdPct.toFixed(1) + "%" : "—", realDdPct > 0 ? "down" : "", realPeak > 0 ? `峰值 ${fmt.signed(Math.round(realPeak))}` : "尚未产生正向峰值")}
+        </div>
+
+        <div class="simb-overview-row-label" style="margin-top:14px">交易分布 · Trade Distribution</div>
+        <div class="sim-a-stats cols-5" style="margin-top:6px;margin-bottom:0">
+          ${simTile("已平仓笔数", total, "", total ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "暂无数据")}
+          ${simTile("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down")}
+          ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
+          ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
+          ${simTile("持平数量", evens.length)}
         </div>
       </div>
 
@@ -11719,6 +11724,7 @@ function rsAdjustGrade(grade, rsResult) {
   renderOverview();
   renderTable();
   renderDeskMonthly();
+  renderEvents();
   if (HOLDINGS.length > 0) initHoldingsBriefCard();
   wireHoldingsViewToggle();
   wireSimHoldingsViewToggle();
