@@ -1371,6 +1371,11 @@ function rsAdjustGrade(grade, rsResult) {
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
+    // Cloud sync replaces HOLDINGS/SIM_HOLDINGS wholesale, so the calendar must re-render
+    // (it previously only ever rendered once at init, from whatever localStorage held at
+    // boot) and any symbol that arrived only from the cloud still needs its earnings date.
+    renderEvents();
+    fetchAllEarnings();
     if (currentPage === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
     renderSim();
     if (currentPage === "analytics") renderAnalytics();
@@ -2648,7 +2653,12 @@ function rsAdjustGrade(grade, rsResult) {
   // the moment that quarter's earnings pass — leaving the calendar empty for old positions.
   // Cached per-symbol for 24h (and re-checked once a cached date has already passed) so this
   // stays a single burst of parallel requests per day, not a request per holding per reload.
+  let _earningsFetchInFlight = false;
   async function fetchAllEarnings() {
+    // applyCloudData can fire several times in a session (initial pull, visibilitychange
+    // pull-if-newer); without this guard each one would re-issue the whole burst.
+    if (_earningsFetchInFlight) return;
+
     const CACHE_KEY = "trendo_earnings_cache_v1";
     const CACHE_TTL = 24 * 3600 * 1000;
     let cache = {};
@@ -2665,16 +2675,24 @@ function rsAdjustGrade(grade, rsResult) {
       const c = cache[sym];
       if (!c) return true;
       if (now - new Date(c.checkedAt).getTime() > CACHE_TTL) return true;
-      if (c.date) { const d = new Date(c.date); d.setHours(0, 0, 0, 0); if (d < today) return true; }
+      // A cached date that has already passed means that quarter's report is out and the
+      // next one is not known yet — re-check rather than serving the expired date all day.
+      if (c.date && parseLocalDate(c.date) < today) return true;
       return false;
     });
     if (!stale.length) return;
 
-    const results = await Promise.allSettled(stale.map(sym =>
-      fetch(`/api/earnings?sym=${encodeURIComponent(sym)}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => ({ sym, date: d?.date || null }))
-    ));
+    _earningsFetchInFlight = true;
+    let results;
+    try {
+      results = await Promise.allSettled(stale.map(sym =>
+        fetch(`/api/earnings?sym=${encodeURIComponent(sym)}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => ({ sym, date: d?.date || null }))
+      ));
+    } finally {
+      _earningsFetchInFlight = false;
+    }
 
     let changed = false;
     results.forEach(r => {
@@ -2698,27 +2716,51 @@ function rsAdjustGrade(grade, rsResult) {
     }
   }
 
+  // "YYYY-MM-DD" must be parsed as a LOCAL date. `new Date("2026-08-05")` is spec'd as
+  // UTC midnight, so in any negative-offset zone (i.e. every US market timezone) the
+  // subsequent setHours(0,0,0,0) rolls it back to Aug 4 — every row rendered a day early,
+  // and an earnings date landing exactly on today was pushed to "yesterday" and filtered out.
+  function parseLocalDate(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ""));
+    const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(s);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
   function renderEvents() {
     const el = document.getElementById("events");
     if (!el) return;
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
-    const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() + 14);
     const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
     const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
+    // No forward cutoff. Each holding contributes at most one row, and a fixed two-week
+    // window made the whole module read "无财报事件" for most of the quarter — right after
+    // a reporting season every stored date is 2-3 months out, which is exactly when the
+    // calendar is supposed to be telling you when the next one lands.
     const entries = [];
+    const stale = [];
     const addFrom = (arr, src) => arr.forEach(h => {
       if (!h.earnings) return;
-      const d = new Date(h.earnings); d.setHours(0, 0, 0, 0);
-      if (d >= today && d <= cutoff) entries.push({ h, date: d, src });
+      const d = parseLocalDate(h.earnings);
+      if (isNaN(d)) return;
+      if (d >= today) entries.push({ h, date: d, src });
+      else stale.push(h.sym);
     });
     addFrom(HOLDINGS, "real");
     addFrom(SIM_HOLDINGS, "sim");
     entries.sort((a, b) => a.date - b.date);
 
+    // Surface already-reported dates instead of silently dropping them — an empty module
+    // otherwise looks identical whether there is genuinely nothing coming up or the stored
+    // dates simply went stale and the refresh has not landed yet.
+    const staleNote = stale.length
+      ? `<div class="events-stale">${[...new Set(stale)].length} 个持仓的财报日期已过期，正在更新…</div>`
+      : "";
+
     if (!entries.length) {
-      el.innerHTML = `<div class="events-empty">未来两周内无财报事件</div>`;
+      el.innerHTML = staleNote || `<div class="events-empty">持仓中暂无已知财报日期</div>`;
       return;
     }
 
@@ -2735,7 +2777,7 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="evt-sym-col"><span class="sym">${h.sym}</span>${srcBadge}</div>
           <div class="evt-days" style="color:${urgColor}">${daysLabel}</div>
         </div>`;
-    }).join("");
+    }).join("") + staleNote;
   }
 
   function renderBottom() {

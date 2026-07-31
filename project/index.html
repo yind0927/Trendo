@@ -607,6 +607,7 @@
   /* event calendar */
   .events{ padding: 4px 0 6px; }
   .events-empty{ padding: 24px 18px; font-size: 11px; color: var(--fg-3); text-align: center; letter-spacing: .04em; }
+  .events-stale{ padding: 10px 18px; font-size: 10.5px; color: var(--fg-3); text-align: center; letter-spacing: .04em; border-top: 1px solid var(--line); }
   .evt-sym-col{ display: flex; align-items: center; gap: 5px; }
   .evt-src{ font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; letter-spacing: .05em; }
   .evt-src.real{ background: var(--accent-dim); color: var(--accent); }
@@ -4043,7 +4044,7 @@
     <span class="ssl-zh">财报日历</span>
     <span class="ssl-en">Earnings Calendar</span>
     <span class="ssl-rule"></span>
-    <span class="ssl-meta">未来两周 · 持仓 + 模拟仓</span>
+    <span class="ssl-meta">按日期排序 · 持仓 + 模拟仓</span>
   </div>
   <div class="panel">
     <div class="events" id="events"></div>
@@ -4697,8 +4698,8 @@
   </div>
 </div>
 
-<script src="data.js?v=583"></script>
-<script src="desk.js?v=583"></script>
+<script src="data.js?v=584"></script>
+<script src="desk.js?v=584"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
