@@ -4038,25 +4038,14 @@
 
   <!-- ============ BOTTOM ============ -->
   <div class="sim-section-label">
-    <span class="ssl-zh">复盘</span>
-    <span class="ssl-en">Review</span>
+    <span class="ssl-zh">财报日历</span>
+    <span class="ssl-en">Earnings Calendar</span>
     <span class="ssl-rule"></span>
-    <span class="ssl-meta">本周 · 本月 · 所有 · 财报日历</span>
+    <span class="ssl-meta">未来两周 · 持仓 + 模拟仓</span>
   </div>
-  <section class="bottom-grid">
-    <!-- left: period review — rendered by renderBottom() -->
-    <div class="panel" id="review-panel"></div>
-
-    <!-- middle: earnings calendar — rendered by renderEvents() -->
-    <div class="panel">
-      <div class="panel-head">
-        <div class="panel-plain-title">财报日历</div>
-        <span class="muted" style="font-size:11px; margin-left:auto">未来两周 · 持仓 + 模拟仓</span>
-      </div>
-      <div class="events" id="events"></div>
-    </div>
-
-  </section>
+  <div class="panel">
+    <div class="events" id="events"></div>
+  </div>
 
   <div style="text-align:center; color:var(--fg-3); font-size:10.5px; margin-top:8px; font-family:var(--f-mono); letter-spacing:0.08em">
     SWING-DESK · 本地数据 · 报价延迟 ~15s · <span id="last-updated">更新于 13:51:43</span>
@@ -4241,22 +4230,6 @@
   </div>
   <div id="sim-trade-log"></div>
 
-  <!-- § 参考 Reference -->
-  <div id="sim-earnings-section" style="display:none">
-    <div class="sim-section-label is-major">
-      <span class="ssl-zh">参考</span>
-      <span class="ssl-en">Reference</span>
-      <span class="ssl-rule"></span>
-      <span class="ssl-meta">财报日历</span>
-    </div>
-    <div class="panel">
-      <div class="panel-head">
-        <div class="panel-plain-title">财报日历</div>
-        <span class="muted" style="font-size:11px;margin-left:auto">未来30天 · 模拟仓</span>
-      </div>
-      <div class="events" id="sim-events"></div>
-    </div>
-  </div>
 
 </div>
 
@@ -4722,8 +4695,8 @@
   </div>
 </div>
 
-<script src="data.js?v=579"></script>
-<script src="desk.js?v=579"></script>
+<script src="data.js?v=580"></script>
+<script src="desk.js?v=580"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

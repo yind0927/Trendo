@@ -6666,10 +6666,13 @@ function rsAdjustGrade(grade, rsResult) {
     const avgWinPct  = wins.length   ? wins.reduce((s, it) => s + it.pct, 0) / wins.length     : null;
     const avgLossPct = losses.length ? losses.reduce((s, it) => s + it.pct, 0) / losses.length : null;
 
-    const grossWin  = wins.reduce((s, it) => s + it.pnl, 0);
-    const grossLoss = Math.abs(losses.reduce((s, it) => s + it.pnl, 0));
-    const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (wins.length > 0 ? "∞" : "—");
-    const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (wins.length > 0 ? "up" : "");
+    // 盈亏总额用合并口径（含浮盈）；grossWin/grossLoss 从 combinedItems 派生
+    const combinedWins   = combinedItems.filter(it => it.pnl > 0);
+    const combinedLosses = combinedItems.filter(it => it.pnl < 0);
+    const grossWin  = combinedWins.reduce((s, it) => s + it.pnl, 0);
+    const grossLoss = Math.abs(combinedLosses.reduce((s, it) => s + it.pnl, 0));
+    const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (combinedWins.length > 0 ? "∞" : "—");
+    const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (combinedWins.length > 0 ? "up" : "");
 
     const bestItem  = closedOnlyItems.length ? closedOnlyItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
     const worstItem = closedOnlyItems.length ? closedOnlyItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
@@ -6741,7 +6744,7 @@ function rsAdjustGrade(grade, rsResult) {
         ` : simTile("暂无已平仓交易", "—", "", "本月新开仓位尚未平仓")}
       </div>
 
-      <div class="simb-title" style="margin-top:20px">盈亏总额${scopeTag("closed")}</div>
+      <div class="simb-title" style="margin-top:20px">盈亏总额${scopeTag("combined")}</div>
       <div class="sim-a-stats cols-3" style="margin-top:8px">
         ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up")}
         ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
@@ -6943,7 +6946,6 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function renderSimTable() {
-    renderSimEvents();
     const thead = $("#sim-thead-row");
     const tbody = $("#sim-tbody");
     if (!thead || !tbody) return;
@@ -7659,6 +7661,7 @@ function rsAdjustGrade(grade, rsResult) {
     const realItems = closed.map(t => ({ h: t, pnl: t.pnlFinal ?? 0, pct: (t.cost * t.qty) > 0 ? (t.pnlFinal ?? 0) / (t.cost * t.qty) * 100 : 0 }));
     const realCostBasis = closed.reduce((s, t) => s + (t.cost || 0) * (t.qty || 0), 0);
     const weightedPct = realCostBasis > 0 ? totalPnl / realCostBasis * 100 : null;
+    const realUtilPct = totalNotional > 0 ? realCostBasis / totalNotional * 100 : null;
     const realPctSorted = realItems.map(it => it.pct).sort((a, b) => a - b);
     const realAvgPct = realItems.length ? realItems.reduce((s, it) => s + it.pct, 0) / realItems.length : null;
     const realMedPct = simMedian(realPctSorted);
@@ -7728,6 +7731,8 @@ function rsAdjustGrade(grade, rsResult) {
           ${rheroStat("亏损数量", losses.length, losses.length ? "down" : "")}
           ${rheroStat("持平数量", evens.length)}
           ${rheroStat("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down")}
+          ${rheroStat("总投入金额", realCostBasis > 0 ? "$" + Math.round(realCostBasis).toLocaleString("en-US") : "—", "", "全部已平仓交易的成本×数量合计")}
+          ${rheroStat("资金利用率", realUtilPct !== null ? realUtilPct.toFixed(0) + "%" : "—", realUtilPct !== null ? (realUtilPct > 90 ? "down" : realUtilPct > 60 ? "warn" : "up") : "", realUtilPct !== null ? `组合基准 $${Math.round(totalNotional / 1000)}k` : "")}
         </div>
       </div>
 
@@ -11714,7 +11719,6 @@ function rsAdjustGrade(grade, rsResult) {
   renderOverview();
   renderTable();
   renderDeskMonthly();
-  renderBottom();
   if (HOLDINGS.length > 0) initHoldingsBriefCard();
   wireHoldingsViewToggle();
   wireSimHoldingsViewToggle();
