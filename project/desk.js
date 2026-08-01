@@ -7002,14 +7002,27 @@ function rsAdjustGrade(grade, rsResult) {
   async function computeFrozenMonth({ monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional }) {
     const openSyms = [...new Set(openItemsRaw.map(h => h.sym))];
     const symbols = [...openSyms, "VOO"].join(",");
-    let results;
-    try {
-      const r = await fetch(`/api/history?symbols=${encodeURIComponent(symbols)}&from=${monthStart}`);
-      if (!r.ok) throw new Error("history fetch failed");
-      ({ results } = await r.json());
-    } catch (e) { return null; }
-    const vooPrices = results && results.VOO;
-    if (!vooPrices) return null;
+
+    // 拉取失败可能是瞬时的（部署刚生效前的边缘节点还没切过来、Yahoo 偶发限流/超时），
+    // 重试一次通常就能过；两次都失败才真的放弃。客户端也补一个超时（12s，留在服务端
+    // 6s 单symbol超时 + 20s 函数上限之内），避免网络卡住时页面无限转圈。失败原因打到
+    // console，方便下次复现时直接从浏览器 devtools 里看到具体是哪一步、什么错误。
+    let results = null;
+    for (let attempt = 0; attempt < 2 && !results; attempt++) {
+      try {
+        const r = await fetch(`/api/history?symbols=${encodeURIComponent(symbols)}&from=${monthStart}`,
+          { signal: AbortSignal.timeout(12000) });
+        if (!r.ok) throw new Error(`history http ${r.status}`);
+        const data = await r.json();
+        if (!data?.results?.VOO) throw new Error(`missing VOO in response (symbols=${symbols})`);
+        results = data.results;
+      } catch (e) {
+        console.warn(`[月度回测] 历史价格拉取失败（第 ${attempt + 1}/2 次，symbols=${symbols}）:`, e);
+        if (attempt === 0) await new Promise(res => setTimeout(res, 800));
+      }
+    }
+    if (!results) return null;
+    const vooPrices = results.VOO;
 
     // 该月最后一个交易日 = VOO 价格序列里 < monthEnd 的最大日期——直接用真实行情数据当
     // 交易日历，不用额外维护假日表。
