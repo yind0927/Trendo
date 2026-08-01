@@ -18,11 +18,18 @@ export default async function handler(req, res) {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
         `?interval=1d&period1=${fromTs}&period2=${toTs}`;
+      // Without a timeout, one slow/hanging symbol blocks the whole Promise.all — the
+      // function then runs past Vercel's platform-level duration limit and the ENTIRE
+      // request fails (client sees "加载失败"), even though every other symbol already
+      // resolved fine. A per-symbol timeout lets a single straggler drop out silently
+      // (existing catch below) instead of taking the whole batch down with it — this is
+      // exactly why some months/symbol-sets fail while smaller ones succeed.
       const r = await fetch(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
           "Accept": "application/json",
-        }
+        },
+        signal: AbortSignal.timeout(6000),
       });
       if (!r.ok) return;
       const data = await r.json();

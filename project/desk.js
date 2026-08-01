@@ -6582,11 +6582,11 @@ function rsAdjustGrade(grade, rsResult) {
     if (!n) return null;
     return n % 2 === 0 ? (sortedNums[n / 2 - 1] + sortedNums[n / 2]) / 2 : sortedNums[(n - 1) / 2];
   }
-  function simTile(label, value, cls, sub, subId) {
+  function simTile(label, value, cls, sub) {
     return `<div class="sim-astat">
       <div class="sim-astat-label">${label}</div>
       <div class="sim-astat-value ${cls || ""}">${value}</div>
-      ${sub ? `<div class="sim-astat-sub"${subId ? ` id="${subId}"` : ""}>${sub}</div>` : ""}
+      ${sub ? `<div class="sim-astat-sub">${sub}</div>` : ""}
     </div>`;
   }
   // rheroStat — 用在 Analytics 页「复盘概览」卡片里，竖线分隔的 KPI 条统一展示头条数字。
@@ -6712,11 +6712,27 @@ function rsAdjustGrade(grade, rsResult) {
     });
     return den > 0 ? num / den * 100 : null;
   }
-  function alphaSubText(benchPct, alpha) {
-    const pctStr = (benchPct >= 0 ? "+" : "") + benchPct.toFixed(1) + "%";
-    const alphaCls = alpha >= 0 ? "up" : "down";
-    const alphaStr = (alpha >= 0 ? "+" : "") + alpha.toFixed(1) + "pp";
-    return `VOO同期 ${pctStr} · <span class="${alphaCls}">Alpha ${alphaStr}</span>`;
+  // 「跑赢基准」是独立的一格 tile，不是塞进"资金加权收益率"那格的 sub 文案里——早期版本
+  // 把"VOO同期 +X% · Alpha +Ypp"整段塞进一个 sub，手机端窄列（3列/2列网格）装不下会自动
+  // 折成 3-4 行，而 CSS Grid 同一行的格子会被这一格"撑高"，相邻的"综合盈亏"/"本月回撤"
+  // 跟着变成同样高度但底部大片空白，观感很怪。改成独立 tile 后 value 只放 Alpha（数字
+  // 短，跟其余格子一样一行装得下），VOO 的原始涨跌幅退到 sub 里单独一行。
+  // state: undefined/null → 分母为 0，压根不会去 fetch；{loading:true} → 请求中；
+  // {error:true} → 请求失败；{pct, alpha} → 就绪。
+  function alphaTileHTML(id, state) {
+    let value = "—", cls = "", sub = "暂无数据";
+    if (state?.loading) sub = "对比大盘中…";
+    else if (state?.error) sub = "大盘数据获取失败";
+    else if (state && state.pct != null && state.alpha != null) {
+      cls = state.alpha >= 0 ? "up" : "down";
+      value = (state.alpha >= 0 ? "+" : "") + state.alpha.toFixed(1) + "pp";
+      sub = `VOO同期 ${(state.pct >= 0 ? "+" : "") + state.pct.toFixed(1)}%`;
+    }
+    return `<div class="sim-astat"${id ? ` id="${id}"` : ""}>
+      <div class="sim-astat-label">跑赢基准</div>
+      <div class="sim-astat-value ${cls}">${value}</div>
+      <div class="sim-astat-sub">${sub}</div>
+    </div>`;
   }
   // 当月（进行中）的基准对比：不需要冻结（当月本身还没结束），只要 VOO 从各笔入场日到
   // "今天"的涨跌幅。按 sectionSel 缓存 20 分钟，避免 fetchPrices() 每 30 秒一次的价格
@@ -6821,10 +6837,13 @@ function rsAdjustGrade(grade, rsResult) {
       ${scope ? _scopeTagHTML(scope) : ""}
     </div>`;
   // 纯渲染：把 computeMonthBucket() 的结果拼成"组合层面/逐笔拆解"两分区 HTML。
-  // countLabel/countSub/scaleTile3HTML/weightedSubHTML/ddTileHTML 由调用方传入——这几项
+  // countLabel/countSub/scaleTile3HTML/alphaTileHTML/ddTileHTML 由调用方传入——这几项
   // 在"当月"和"历史月份"之间有细微差别（资金利用率 vs 只给历史月份看的固定占位、当月
   // 回撤靠滚动峰值 vs 历史月份没有逐日数据只能显示"—"），不适合内置死在这个共用函数里。
-  function monthPartsHTML(b, { countLabel, countSub, scaleTile3HTML, weightedSubHTML, weightedSubId, ddTileHTML }) {
+  // 「表现」这一排是 4 格（综合盈亏/资金加权收益率/本月回撤/跑赢基准），特意不用 cols-3
+  // 而是复用下面「交易分布」那排的 base .sim-a-stats——4 格桌面端一行、手机端自动变
+  // 2×2（跟"交易分布"排的手机布局完全一致，是模块里已经验证过的响应式模式，不用新造）。
+  function monthPartsHTML(b, { countLabel, countSub, scaleTile3HTML, alphaTileHTML: alphaTileStr, ddTileHTML }) {
     return `
       <div class="simb-part">
         ${_monthPartHeadHTML("组合层面", "Portfolio", "combined")}
@@ -6835,10 +6854,11 @@ function rsAdjustGrade(grade, rsResult) {
           ${scaleTile3HTML}
         </div>
         ${_monthSubTitleHTML("表现", "Performance")}
-        <div class="sim-a-stats cols-3">
+        <div class="sim-a-stats">
           ${simTile("综合盈亏", fmt.signed(Math.round(b.monthPnl)), b.monthCls, "持仓中浮盈 + 已平仓已实现盈亏")}
-          ${simTile("资金加权收益率", b.weightedPct !== null ? (b.weightedPct >= 0 ? "+" : "") + b.weightedPct.toFixed(1) + "%" : "—", b.weightedPct !== null ? (b.weightedPct >= 0 ? "up" : "down") : "", weightedSubHTML, weightedSubId)}
+          ${simTile("资金加权收益率", b.weightedPct !== null ? (b.weightedPct >= 0 ? "+" : "") + b.weightedPct.toFixed(1) + "%" : "—", b.weightedPct !== null ? (b.weightedPct >= 0 ? "up" : "down") : "", "按持仓成本加权")}
           ${ddTileHTML}
+          ${alphaTileStr}
         </div>
         ${_monthSubTitleHTML("盈亏总额", "P&L Total")}
         <div class="sim-a-stats cols-3">
@@ -7016,9 +7036,9 @@ function rsAdjustGrade(grade, rsResult) {
     const countSub = b.openCount && b.closedCount ? `${b.openCount} 笔持仓中 · ${b.closedCount} 笔已平仓`
       : b.openCount ? `${b.openCount} 笔持仓中，当月无平仓`
       : `${b.closedCount} 笔已平仓，当月无持仓中`;
-    const weightedSub = result.benchPct !== null && result.alpha !== null
-      ? alphaSubText(result.benchPct, result.alpha)
-      : "大盘数据不足，暂无法对比";
+    const alphaState = (result.benchPct !== null && result.alpha !== null)
+      ? { pct: result.benchPct, alpha: result.alpha }
+      : { error: true };
     const ddTileHTML = simTile("当月回撤", "—", "",
       result.monthEndKey ? `已按 ${result.monthEndKey} 月末价冻结` : "历史月份未记录逐日峰值");
     const scaleTile3HTML = simTile("资金利用率", b.utilizationPct !== null ? b.utilizationPct.toFixed(0) + "%" : "—", b.utilCls,
@@ -7026,7 +7046,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     bodyEl.innerHTML = monthPartsHTML(b, {
       countLabel: "月内开仓总数", countSub, scaleTile3HTML, ddTileHTML,
-      weightedSubHTML: weightedSub,
+      alphaTileHTML: alphaTileHTML(null, alphaState),
     });
 
     // 冻结结果算出来了，把折叠标题行的"≈预估"换成确认过的真实数字。
@@ -7301,37 +7321,37 @@ function rsAdjustGrade(grade, rsResult) {
       : b.openCount ? `${b.openCount} 笔持仓中，本月暂无平仓`
       : `${b.closedCount} 笔已平仓，本月无持仓中`;
 
-    // 资金加权收益率的 sub 文案：缓存命中就同步给真实的 VOO 对比 + Alpha，否则先给
-    // loading 占位再异步补上。wpctSubId 让 fetch 回调即便在下一次 30 秒价格轮询已经把
-    // curEl 整个换掉之后，也能靠 getElementById 找到"当前活着的那个"节点来 patch，
-    // 不会 patch 到一个已经从文档里摘掉的旧节点。
-    const wpctSubId = `mb-wpct-${sectionSel.replace(/[^a-zA-Z0-9]/g, "")}`;
+    // 「跑赢基准」tile：缓存命中就同步给真实的 VOO 对比 + Alpha，否则先给 loading 占位
+    // 再异步补上。alphaTileId 让 fetch 回调即便在下一次 30 秒价格轮询已经把 curEl 整个
+    // 换掉之后，也能靠 getElementById 找到"当前活着的那个"节点来 patch，不会 patch 到
+    // 一个已经从文档里摘掉的旧节点。
+    const alphaTileId = `mb-alpha-${sectionSel.replace(/[^a-zA-Z0-9]/g, "")}`;
     const cachedBench = _curBenchCache[sectionSel];
     const benchFresh = cachedBench && cachedBench.monthKey === monthKey && !cachedBench._inFlight
       && Date.now() - cachedBench.fetchedAt < 20 * 60 * 1000;
-    let weightedSubStr = "";
+    let alphaState = null;
     if (b.weightedPct !== null) {
-      if (benchFresh && !cachedBench.error) weightedSubStr = alphaSubText(cachedBench.pct, b.weightedPct - cachedBench.pct);
-      else if (benchFresh && cachedBench.error) weightedSubStr = "大盘数据获取失败";
-      else weightedSubStr = "对比大盘中…";
+      if (benchFresh && !cachedBench.error) alphaState = { pct: cachedBench.pct, alpha: b.weightedPct - cachedBench.pct };
+      else if (benchFresh && cachedBench.error) alphaState = { error: true };
+      else alphaState = { loading: true };
     }
 
     curEl.innerHTML = `
       <div class="simb-note">${closedNote}</div>
       ${monthPartsHTML(b, {
         countLabel, countSub, scaleTile3HTML, ddTileHTML,
-        weightedSubHTML: weightedSubStr,
-        weightedSubId: b.weightedPct !== null ? wpctSubId : undefined,
+        alphaTileHTML: alphaTileHTML(b.weightedPct !== null ? alphaTileId : null, alphaState),
       })}`;
 
     if (b.weightedPct !== null && !benchFresh) {
       const capturedWeightedPct = b.weightedPct;
       fetchCurrentMonthBenchmark(sectionSel, monthKey, b.combinedItems).then(entry => {
         if (!entry) return;
-        const el = document.getElementById(wpctSubId);
+        const el = document.getElementById(alphaTileId);
         if (!el) return;
-        if (entry.error) { el.textContent = "大盘数据获取失败"; return; }
-        el.innerHTML = alphaSubText(entry.pct, capturedWeightedPct - entry.pct);
+        el.outerHTML = entry.error
+          ? alphaTileHTML(alphaTileId, { error: true })
+          : alphaTileHTML(alphaTileId, { pct: entry.pct, alpha: capturedWeightedPct - entry.pct });
       });
     }
   }
