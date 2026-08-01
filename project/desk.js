@@ -6999,29 +6999,38 @@ function rsAdjustGrade(grade, rsResult) {
   // VOO，一次批量请求），把仍持仓中的部分冻结在月末估值；已平仓的（不管当月内平的还是
   // 后来才平的）永远用真实 pnlFinal，不冻结——那已经是定论了，冻结等于用虚构数字覆盖
   // 真实发生的结果。冻结价格拿到后顺带算出跟 VOO 的资金加权 Alpha。
+  // /api/history 只认 crypto 用 "-USD" 后缀查 Yahoo（裸 "BTC" 查不到任何 K 线数据），
+  // computeEntryRS 早就这么处理了；这里也要用同一个映射，否则仍持仓中的加密货币仓位
+  // 永远拿不到自己的月末冻结价，只能回退到实时 pnlDollar（虽不至于让整个请求失败，
+  // 但那笔仓位的"冻结"名不副实）。
+  const _histYahooSym = h => h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
+
   async function computeFrozenMonth({ monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional }) {
-    const openSyms = [...new Set(openItemsRaw.map(h => h.sym))];
+    const openSyms = [...new Set(openItemsRaw.map(_histYahooSym))];
     const symbols = [...openSyms, "VOO"].join(",");
 
     // 拉取失败可能是瞬时的（部署刚生效前的边缘节点还没切过来、Yahoo 偶发限流/超时），
     // 重试一次通常就能过；两次都失败才真的放弃。客户端也补一个超时（12s，留在服务端
-    // 6s 单symbol超时 + 20s 函数上限之内），避免网络卡住时页面无限转圈。失败原因打到
-    // console，方便下次复现时直接从浏览器 devtools 里看到具体是哪一步、什么错误。
+    // 6s 单symbol超时 + 20s 函数上限之内），避免网络卡住时页面无限转圈。失败原因除了
+    // 打到 console，也直接返回给调用方展示在卡片上——手机端开发者工具不好开，让用户
+    // 不用连电脑就能把具体报错读给我们听，比"加载失败"四个字能定位问题快得多。
     let results = null;
+    let lastError = null;
     for (let attempt = 0; attempt < 2 && !results; attempt++) {
       try {
         const r = await fetch(`/api/history?symbols=${encodeURIComponent(symbols)}&from=${monthStart}`,
           { signal: AbortSignal.timeout(12000) });
-        if (!r.ok) throw new Error(`history http ${r.status}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
-        if (!data?.results?.VOO) throw new Error(`missing VOO in response (symbols=${symbols})`);
+        if (!data?.results?.VOO) throw new Error("响应中没有 VOO 数据");
         results = data.results;
       } catch (e) {
+        lastError = (e?.name === "TimeoutError" || e?.name === "AbortError") ? "请求超时" : (e?.message || String(e));
         console.warn(`[月度回测] 历史价格拉取失败（第 ${attempt + 1}/2 次，symbols=${symbols}）:`, e);
         if (attempt === 0) await new Promise(res => setTimeout(res, 800));
       }
     }
-    if (!results) return null;
+    if (!results) return { error: lastError || "未知错误", symbols };
     const vooPrices = results.VOO;
 
     // 该月最后一个交易日 = VOO 价格序列里 < monthEnd 的最大日期——直接用真实行情数据当
@@ -7029,7 +7038,7 @@ function rsAdjustGrade(grade, rsResult) {
     const monthEndKey = Object.keys(vooPrices).filter(d => d < monthEnd).sort().pop() || null;
 
     const openItems = openItemsRaw.map(h => {
-      const stockPrices = results[h.sym];
+      const stockPrices = results[_histYahooSym(h)];
       const monthEndClose = monthEndKey ? closeOnOrBefore(stockPrices, monthEndKey) : null;
       const frozenPnl = monthEndClose != null ? (monthEndClose - h.cost) * h.qty : (h.pnlDollar || 0);
       return toCohortItem(h, frozenPnl, true);
@@ -7091,8 +7100,10 @@ function rsAdjustGrade(grade, rsResult) {
         bodyEl.innerHTML = `<div class="simb-month-loading">对比大盘加载中…</div>`;
         const result = await computeFrozenMonth(desc);
         bodyEl.dataset.loading = "0";
-        if (!result) {
-          bodyEl.innerHTML = `<div class="simb-month-loading simb-month-error">加载失败，折叠后重新展开可重试</div>`;
+        if (result.error) {
+          // 直接把报错原因和请求的 symbol 列表展示在卡片上——手机端不方便开开发者工具，
+          // 这样出问题时用户不用连电脑，读一下卡片上的文字就能把关键信息反馈回来。
+          bodyEl.innerHTML = `<div class="simb-month-loading simb-month-error">加载失败：${result.error}<br>symbols=${result.symbols}<br>折叠后重新展开可重试</div>`;
           return;
         }
         _histMonthCache[cacheKey] = result;

@@ -2070,8 +2070,8 @@
   .simb-month-body { padding: 0 14px 16px; border-top: 1px solid var(--line); }
   .simb-month-body .simb-part { margin-top: 14px; }
   .simb-month-body:empty { border-top: none; }
-  .simb-month-loading { padding: 14px 0; font-size: 11px; color: var(--fg-3); text-align: center; }
-  .simb-month-loading.simb-month-error { color: var(--down); }
+  .simb-month-loading { padding: 14px 0; font-size: 11px; color: var(--fg-3); text-align: center; line-height: 1.7; }
+  .simb-month-loading.simb-month-error { color: var(--down); word-break: break-word; }
   @media (max-width: 768px) {
     .simb-month summary { padding: 10px 12px; flex-wrap: wrap; }
     .simb-month-body { padding: 0 10px 14px; }
@@ -4753,8 +4753,8 @@
   </div>
 </div>
 
-<script src="data.js?v=590"></script>
-<script src="desk.js?v=590"></script>
+<script src="data.js?v=591"></script>
+<script src="desk.js?v=591"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
