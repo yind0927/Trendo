@@ -3,7 +3,13 @@
 // Accepts: ?symbols=AAPL,BTC-USD&from=2024-01-01
 
 export default async function handler(req, res) {
-  const syms = (req.query.symbols || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 30);
+  // Cap raised 30→50: an active trader can easily have 30+ distinct still-open positions
+  // in a single month's cohort (real case: 34 stock symbols in one month's monthly-backtest
+  // freeze query). Each symbol fetch is independent and timeout-capped at 6s running in
+  // parallel via Promise.all, so wall time stays bounded by the slowest single fetch either
+  // way — raising this doesn't change latency, just how many symbols one request can cover
+  // before silently dropping the tail.
+  const syms = (req.query.symbols || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 50);
   const from  = req.query.from || "";
 
   if (!syms.length) return res.status(400).json({ error: "no symbols" });

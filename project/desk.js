@@ -7005,40 +7005,52 @@ function rsAdjustGrade(grade, rsResult) {
   // 但那笔仓位的"冻结"名不副实）。
   const _histYahooSym = h => h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
 
-  async function computeFrozenMonth({ monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional }) {
-    const openSyms = [...new Set(openItemsRaw.map(_histYahooSym))];
-    const symbols = [...openSyms, "VOO"].join(",");
-
-    // 拉取失败可能是瞬时的（部署刚生效前的边缘节点还没切过来、Yahoo 偶发限流/超时），
-    // 重试一次通常就能过；两次都失败才真的放弃。客户端也补一个超时（12s，留在服务端
-    // 6s 单symbol超时 + 20s 函数上限之内），避免网络卡住时页面无限转圈。失败原因除了
-    // 打到 console，也直接返回给调用方展示在卡片上——手机端开发者工具不好开，让用户
-    // 不用连电脑就能把具体报错读给我们听，比"加载失败"四个字能定位问题快得多。
-    let results = null;
+  // 拉取失败可能是瞬时的（部署刚生效前的边缘节点还没切过来、Yahoo 偶发限流/超时），
+  // 重试一次通常就能过；两次都失败才真的放弃。客户端也补一个超时（12s，留在服务端
+  // 6s 单symbol超时 + 20s 函数上限之内），避免网络卡住时页面无限转圈。
+  async function _histFetchBatch(symbolsStr, monthStart) {
     let lastError = null;
-    for (let attempt = 0; attempt < 2 && !results; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const r = await fetch(`/api/history?symbols=${encodeURIComponent(symbols)}&from=${monthStart}`,
+        const r = await fetch(`/api/history?symbols=${encodeURIComponent(symbolsStr)}&from=${monthStart}`,
           { signal: AbortSignal.timeout(12000) });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
-        if (!data?.results?.VOO) throw new Error("响应中没有 VOO 数据");
-        results = data.results;
+        return { results: data?.results || {} };
       } catch (e) {
         lastError = (e?.name === "TimeoutError" || e?.name === "AbortError") ? "请求超时" : (e?.message || String(e));
-        console.warn(`[月度回测] 历史价格拉取失败（第 ${attempt + 1}/2 次，symbols=${symbols}）:`, e);
+        console.warn(`[月度回测] 历史价格拉取失败（第 ${attempt + 1}/2 次，symbols=${symbolsStr}）:`, e);
         if (attempt === 0) await new Promise(res => setTimeout(res, 800));
       }
     }
-    if (!results) return { error: lastError || "未知错误", symbols };
-    const vooPrices = results.VOO;
+    return { results: {}, error: lastError };
+  }
+
+  async function computeFrozenMonth({ monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional }) {
+    const openSyms = [...new Set(openItemsRaw.map(_histYahooSym))];
+
+    // VOO 单独一次请求，不跟仍持仓中的股票 symbol 混在同一批——/api/history 对单次请求的
+    // symbol 数有上限（服务端 slice 截断），之前 VOO 永远拼在列表最后，一旦某个月仍
+    // 持仓中的 symbol 数量超过上限，排在最后的 VOO 就被截没了，导致整个月直接判定失败
+    // （"响应中没有 VOO 数据"）——活跃交易者某个月挂着 30+ 只仍持仓的股票完全正常，
+    // 不该让基准对比这条线因为股票数量多而被误伤。拆开后：VOO 请求体积恒定为 1 个
+    // symbol，基本不会失败；股票那批就算真的超过服务端上限，最多是排到上限之外的
+    // 几个 symbol 拿不到冻结价、优雅降级为用实时价占位（已有的 fallback 分支），
+    // 不会拖累整个月份的判定。
+    const [vooBatch, stockBatch] = await Promise.all([
+      _histFetchBatch("VOO", monthStart),
+      openSyms.length ? _histFetchBatch(openSyms.join(","), monthStart) : Promise.resolve({ results: {} }),
+    ]);
+
+    const vooPrices = vooBatch.results.VOO;
+    if (!vooPrices) return { error: vooBatch.error || "响应中没有 VOO 数据", symbols: "VOO" };
 
     // 该月最后一个交易日 = VOO 价格序列里 < monthEnd 的最大日期——直接用真实行情数据当
     // 交易日历，不用额外维护假日表。
     const monthEndKey = Object.keys(vooPrices).filter(d => d < monthEnd).sort().pop() || null;
 
     const openItems = openItemsRaw.map(h => {
-      const stockPrices = results[_histYahooSym(h)];
+      const stockPrices = stockBatch.results[_histYahooSym(h)];
       const monthEndClose = monthEndKey ? closeOnOrBefore(stockPrices, monthEndKey) : null;
       const frozenPnl = monthEndClose != null ? (monthEndClose - h.cost) * h.qty : (h.pnlDollar || 0);
       return toCohortItem(h, frozenPnl, true);
