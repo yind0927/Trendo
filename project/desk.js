@@ -1076,8 +1076,10 @@ function rsAdjustGrade(grade, rsResult) {
   let histLoading = false;
 
   // 月度回测「资金加权收益率 vs VOO」基准对比的三个会话级缓存（均不持久化，标签页刷新即清空）：
-  //   _curBenchCache  — 当月（进行中）的 VOO 影子基准，按 sectionSel 缓存 20 分钟，避免
-  //                     30 秒一次的价格轮询把这个请求也跟着打一遍。
+  //   _curBenchCache  — 当月（进行中）VOO 的日历月涨跌幅，按 monthKey 缓存 20 分钟——这个
+  //                     数字纯粹是 VOO 自己的价格序列，跟具体持仓无关，desk/sim 两个
+  //                     sectionSel 共用同一份，避免 30 秒一次的价格轮询把这个请求也跟着
+  //                     打一遍，也避免两个 section 各自重复请求同一个月份。
   //   _histMonthCache — 历史月份冻结后的完整结果（含 bucket/Alpha），按 `${sectionSel}:${monthKey}`
   //                     缓存到会话结束——历史月份一旦算出来，这个会话生命周期内不会再变。
   //   _histSig        — 每个 sectionSel 最近一次用来构建历史月份列表的持仓构成签名，签名不变
@@ -6693,24 +6695,27 @@ function rsAdjustGrade(grade, rsResult) {
     }
     return best;
   }
-  // 给 cohort 里每笔仓位配一段跟它自己实际在场时间完全一致的 VOO 涨跌幅，按金额加权聚合。
-  // 已平仓的用真实入场日→真实平仓日（不管当月内平的还是后来才平的）；持仓中的用真实入场日
-  // →exitDate（由调用方决定："今天"给当月模块，"该月最后一个交易日"给冻结的历史月份）。
-  // 这是唯一能跟资金加权收益率同层比较的基准算法——直接拿"大盘整月涨跌幅"比是错的，
-  // 因为一批仓位的入场时点参差不齐，整月涨跌幅隐含"月初就全部到位"的假设站不住脚。
-  function shadowBenchmarkPct(items, vooPrices, exitDate) {
-    let num = 0, den = 0;
-    items.forEach(it => {
-      const cost = (it.h.cost || 0) * (it.h.qty || 0);
-      if (cost <= 0) return;
-      const entryClose = closeOnOrBefore(vooPrices, it.h.entry);
-      const exitStr = it.open ? exitDate : (it.h.closedAt || exitDate);
-      const exitClose = closeOnOrBefore(vooPrices, exitStr);
-      if (entryClose == null || exitClose == null) return;
-      num += cost * (exitClose - entryClose) / entryClose;
-      den += cost;
-    });
-    return den > 0 ? num / den * 100 : null;
+  // closeOnOrBefore 的镜像版本：找「dateStr 当天或之后最近一个有数据的交易日」收盘价——
+  // 用于定位"某月第一个交易日"（月初1号可能是周末/假日，要往后找而不是往前找）。
+  function closeOnOrAfter(pricesByDate, dateStr) {
+    if (!pricesByDate || !dateStr) return null;
+    let best = null, bestDate = null;
+    for (const d in pricesByDate) {
+      if (d >= dateStr && (bestDate === null || d < bestDate)) { bestDate = d; best = pricesByDate[d]; }
+    }
+    return best;
+  }
+  // VOO 日历月涨跌幅——该月第一个交易日收盘价到 endClose（月末最后交易日收盘价，或当月
+  // 进行中时传今天收盘价）的涨跌幅。这是一个跟具体仓位入场时点无关的固定单一数字，直接
+  // 对应"VOO 这个月涨了多少"——早先版本按每笔仓位自己的入场/出场日配对加权，数学上更
+  // 精确对齐，但跨月才平仓的仓位会把后续月份的涨跌也混进"这个月"的基准里，跟直觉预期
+  // 的"VOO 当月涨跌幅"对不上，也没法跟外部数据源核对。换成日历月口径是有意的取舍：
+  // 牺牲"资金加权收益率"与"VOO同期"两边输入时点完全对齐的公平性，换取一个直观、可
+  // 外部核对的月度基准数字——两者不再是学术意义上的精确配对比较，只是常规的月度参照。
+  function vooCalendarPct(vooPrices, monthStart, endClose) {
+    const startClose = closeOnOrAfter(vooPrices, monthStart);
+    if (startClose == null || endClose == null) return null;
+    return (endClose - startClose) / startClose * 100;
   }
   // 「跑赢基准」是独立的一格 tile，不是塞进"资金加权收益率"那格的 sub 文案里——早期版本
   // 把"VOO同期 +X% · Alpha +Ypp"整段塞进一个 sub，手机端窄列（3列/2列网格）装不下会自动
@@ -6734,13 +6739,14 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="sim-astat-sub">${sub}</div>
     </div>`;
   }
-  // 当月（进行中）的基准对比：不需要冻结（当月本身还没结束），只要 VOO 从各笔入场日到
-  // "今天"的涨跌幅。按 sectionSel 缓存 20 分钟，避免 fetchPrices() 每 30 秒一次的价格
-  // 轮询把这个请求也跟着打一遍；同一 sectionSel 的并发调用共享同一个 in-flight promise，
-  // 不会因为期间又触发了一次渲染就重复发请求。
-  async function fetchCurrentMonthBenchmark(sectionSel, monthKey, combinedItems) {
-    const existing = _curBenchCache[sectionSel];
-    if (existing && existing.monthKey === monthKey) {
+  // 当月（进行中）的基准对比：VOO 从当月第一个交易日到"今天"的日历月涨跌幅——纯粹是
+  // VOO 自己的价格序列，跟具体持仓无关，desk/sim 两个 sectionSel 因此共用同一份缓存
+  // （按 monthKey，不再按 sectionSel），避免同一个月份被两个 section 各自请求一次。
+  // 缓存 20 分钟，避免 fetchPrices() 每 30 秒一次的价格轮询把这个请求也跟着打一遍；
+  // 同一 monthKey 的并发调用共享同一个 in-flight promise，不会重复发请求。
+  async function fetchCurrentMonthBenchmark(monthKey) {
+    const existing = _curBenchCache[monthKey];
+    if (existing) {
       if (existing._inFlight) return existing._inFlightPromise;
       if (!existing.error && Date.now() - existing.fetchedAt < 20 * 60 * 1000) return existing;
     }
@@ -6752,18 +6758,19 @@ function rsAdjustGrade(grade, rsResult) {
         const vooPrices = results && results.VOO;
         if (!vooPrices) throw new Error("no VOO data");
         const todayStr = new Date().toISOString().slice(0, 10);
-        const pct = shadowBenchmarkPct(combinedItems, vooPrices, todayStr);
+        const endClose = closeOnOrBefore(vooPrices, todayStr);
+        const pct = vooCalendarPct(vooPrices, `${monthKey}-01`, endClose);
         if (pct === null) throw new Error("no matched prices");
         const entry = { monthKey, pct, fetchedAt: Date.now() };
-        _curBenchCache[sectionSel] = entry;
+        _curBenchCache[monthKey] = entry;
         return entry;
       } catch (e) {
         const entry = { monthKey, error: true, fetchedAt: Date.now() };
-        _curBenchCache[sectionSel] = entry;
+        _curBenchCache[monthKey] = entry;
         return entry;
       }
     })();
-    _curBenchCache[sectionSel] = { monthKey, _inFlight: true, _inFlightPromise: promise };
+    _curBenchCache[monthKey] = { monthKey, _inFlight: true, _inFlightPromise: promise };
     return promise;
   }
 
@@ -7059,8 +7066,8 @@ function rsAdjustGrade(grade, rsResult) {
 
     const bucket = computeMonthBucket(openItems, closedItems, notional);
     bucket.notional = notional;
-    const exitDate = monthEndKey || monthEnd;
-    const benchPct = shadowBenchmarkPct(bucket.combinedItems, vooPrices, exitDate);
+    const monthEndClose = monthEndKey ? vooPrices[monthEndKey] : null;
+    const benchPct = vooCalendarPct(vooPrices, monthStart, monthEndClose);
     const alpha = (bucket.weightedPct !== null && benchPct !== null) ? bucket.weightedPct - benchPct : null;
     return { bucket, benchPct, alpha, monthEndKey };
   }
@@ -7362,8 +7369,8 @@ function rsAdjustGrade(grade, rsResult) {
     // 换掉之后，也能靠 getElementById 找到"当前活着的那个"节点来 patch，不会 patch 到
     // 一个已经从文档里摘掉的旧节点。
     const alphaTileId = `mb-alpha-${sectionSel.replace(/[^a-zA-Z0-9]/g, "")}`;
-    const cachedBench = _curBenchCache[sectionSel];
-    const benchFresh = cachedBench && cachedBench.monthKey === monthKey && !cachedBench._inFlight
+    const cachedBench = _curBenchCache[monthKey];
+    const benchFresh = cachedBench && !cachedBench._inFlight
       && Date.now() - cachedBench.fetchedAt < 20 * 60 * 1000;
     let alphaState = null;
     if (b.weightedPct !== null) {
@@ -7381,7 +7388,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     if (b.weightedPct !== null && !benchFresh) {
       const capturedWeightedPct = b.weightedPct;
-      fetchCurrentMonthBenchmark(sectionSel, monthKey, b.combinedItems).then(entry => {
+      fetchCurrentMonthBenchmark(monthKey).then(entry => {
         if (!entry) return;
         const el = document.getElementById(alphaTileId);
         if (!el) return;
