@@ -1075,6 +1075,17 @@ function rsAdjustGrade(grade, rsResult) {
   let histPnlLog  = {}; // { "YYYY-MM-DD": computedDelta } — built from histCache
   let histLoading = false;
 
+  // 月度回测「资金加权收益率 vs VOO」基准对比的三个会话级缓存（均不持久化，标签页刷新即清空）：
+  //   _curBenchCache  — 当月（进行中）的 VOO 影子基准，按 sectionSel 缓存 20 分钟，避免
+  //                     30 秒一次的价格轮询把这个请求也跟着打一遍。
+  //   _histMonthCache — 历史月份冻结后的完整结果（含 bucket/Alpha），按 `${sectionSel}:${monthKey}`
+  //                     缓存到会话结束——历史月份一旦算出来，这个会话生命周期内不会再变。
+  //   _histSig        — 每个 sectionSel 最近一次用来构建历史月份列表的持仓构成签名，签名不变
+  //                     就跳过重建，从而保留用户已展开的 <details> 状态和已经算好的冻结结果。
+  const _curBenchCache = {};
+  const _histMonthCache = {};
+  const _histSig = {};
+
   // Simulation state
   let simActiveTab = "open";
   let simSortKey = "pnl", simSortDir = -1;
@@ -6571,11 +6582,11 @@ function rsAdjustGrade(grade, rsResult) {
     if (!n) return null;
     return n % 2 === 0 ? (sortedNums[n / 2 - 1] + sortedNums[n / 2]) / 2 : sortedNums[(n - 1) / 2];
   }
-  function simTile(label, value, cls, sub) {
+  function simTile(label, value, cls, sub, subId) {
     return `<div class="sim-astat">
       <div class="sim-astat-label">${label}</div>
       <div class="sim-astat-value ${cls || ""}">${value}</div>
-      ${sub ? `<div class="sim-astat-sub">${sub}</div>` : ""}
+      ${sub ? `<div class="sim-astat-sub"${subId ? ` id="${subId}"` : ""}>${sub}</div>` : ""}
     </div>`;
   }
   // rheroStat — 用在 Analytics 页「复盘概览」卡片里，竖线分隔的 KPI 条统一展示头条数字。
@@ -6670,15 +6681,239 @@ function rsAdjustGrade(grade, rsResult) {
   // scopeToMonth: true — 只看本月新开的仓位（月度回测的用法）。false — 不按月过滤，看
   // sourceArr 全部历史（分析复盘的用法：模拟仓全部已平仓交易的整体复盘，不局限于当月）。
   // 两种模式共用下面同一套统计逻辑，peak 回撤追踪在 lifetime 模式下用固定 key（永不按月重置）。
-  // 历史月份 — renderMonthlyBacktest 只统计"本月"，一进入新的自然月，上个月完整的开仓
-  // 记录就从月度回测模块里彻底消失（当月大概率还没有新开仓，模块甚至会整个显示"0"）。
-  // 这里把 sourceArr/otherArr 里出现过的每个历史月份都收进同一个模块，默认折叠只留标题行，
-  // 点开是跟当月一样完整的两分区展示。刻意不复用 renderMonthlyBacktest 内部变量/不做深度
-  // 抽象——这里的口径固定死是 mode:"open" 的合并口径（月度回测模块唯一会调用历史列表的场景），
-  // 不需要适配 renderSimAnalytics 的 lifetime/mode:"closed" 分支，独立实现更不容易牵连当月
-  // 那段已经上线验证过的渲染逻辑。
-  // 「回撤」在当月是靠 simMonthlyPeakDrawdown 每次渲染滚动记录的峰值，历史月份没有这份逐日
-  // 数据可回放（这是新功能，没法倒推过去），所以历史月份的回撤位显示"—"而不是编个数字出来。
+  // ---- 影子 VOO 基准对比的共用工具函数 ----
+  // 从 /api/history 返回的 {date: close} 字典里找「dateStr 当天或之前最近一个有数据的
+  // 交易日」收盘价——目标日期可能是周末/假日，或数据源恰好缺那一天，都要安全地映射到
+  // 真实存在的交易日。
+  function closeOnOrBefore(pricesByDate, dateStr) {
+    if (!pricesByDate || !dateStr) return null;
+    let best = null, bestDate = null;
+    for (const d in pricesByDate) {
+      if (d <= dateStr && (bestDate === null || d > bestDate)) { bestDate = d; best = pricesByDate[d]; }
+    }
+    return best;
+  }
+  // 给 cohort 里每笔仓位配一段跟它自己实际在场时间完全一致的 VOO 涨跌幅，按金额加权聚合。
+  // 已平仓的用真实入场日→真实平仓日（不管当月内平的还是后来才平的）；持仓中的用真实入场日
+  // →exitDate（由调用方决定："今天"给当月模块，"该月最后一个交易日"给冻结的历史月份）。
+  // 这是唯一能跟资金加权收益率同层比较的基准算法——直接拿"大盘整月涨跌幅"比是错的，
+  // 因为一批仓位的入场时点参差不齐，整月涨跌幅隐含"月初就全部到位"的假设站不住脚。
+  function shadowBenchmarkPct(items, vooPrices, exitDate) {
+    let num = 0, den = 0;
+    items.forEach(it => {
+      const cost = (it.h.cost || 0) * (it.h.qty || 0);
+      if (cost <= 0) return;
+      const entryClose = closeOnOrBefore(vooPrices, it.h.entry);
+      const exitStr = it.open ? exitDate : (it.h.closedAt || exitDate);
+      const exitClose = closeOnOrBefore(vooPrices, exitStr);
+      if (entryClose == null || exitClose == null) return;
+      num += cost * (exitClose - entryClose) / entryClose;
+      den += cost;
+    });
+    return den > 0 ? num / den * 100 : null;
+  }
+  function alphaSubText(benchPct, alpha) {
+    const pctStr = (benchPct >= 0 ? "+" : "") + benchPct.toFixed(1) + "%";
+    const alphaCls = alpha >= 0 ? "up" : "down";
+    const alphaStr = (alpha >= 0 ? "+" : "") + alpha.toFixed(1) + "pp";
+    return `VOO同期 ${pctStr} · <span class="${alphaCls}">Alpha ${alphaStr}</span>`;
+  }
+  // 当月（进行中）的基准对比：不需要冻结（当月本身还没结束），只要 VOO 从各笔入场日到
+  // "今天"的涨跌幅。按 sectionSel 缓存 20 分钟，避免 fetchPrices() 每 30 秒一次的价格
+  // 轮询把这个请求也跟着打一遍；同一 sectionSel 的并发调用共享同一个 in-flight promise，
+  // 不会因为期间又触发了一次渲染就重复发请求。
+  async function fetchCurrentMonthBenchmark(sectionSel, monthKey, combinedItems) {
+    const existing = _curBenchCache[sectionSel];
+    if (existing && existing.monthKey === monthKey) {
+      if (existing._inFlight) return existing._inFlightPromise;
+      if (!existing.error && Date.now() - existing.fetchedAt < 20 * 60 * 1000) return existing;
+    }
+    const promise = (async () => {
+      try {
+        const r = await fetch(`/api/history?symbols=VOO&from=${monthKey}-01`);
+        if (!r.ok) throw new Error("history fetch failed");
+        const { results } = await r.json();
+        const vooPrices = results && results.VOO;
+        if (!vooPrices) throw new Error("no VOO data");
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const pct = shadowBenchmarkPct(combinedItems, vooPrices, todayStr);
+        if (pct === null) throw new Error("no matched prices");
+        const entry = { monthKey, pct, fetchedAt: Date.now() };
+        _curBenchCache[sectionSel] = entry;
+        return entry;
+      } catch (e) {
+        const entry = { monthKey, error: true, fetchedAt: Date.now() };
+        _curBenchCache[sectionSel] = entry;
+        return entry;
+      }
+    })();
+    _curBenchCache[sectionSel] = { monthKey, _inFlight: true, _inFlightPromise: promise };
+    return promise;
+  }
+
+  // ---- 月度统计的共用计算/渲染（当月 + 历史月份两条路径都走这一套，避免各写一遍互相走样）----
+  function toCohortItem(h, pnl, open) {
+    const basis = (h.cost || 0) * (h.qty || 0);
+    return { h, pnl, pct: basis > 0 ? pnl / basis * 100 : 0, open: !!open };
+  }
+  // 纯计算：给定这个月已经解析好 pnl 的 open/closed items，算出全部要展示的统计量。
+  // 不关心 pnl 是怎么来的（当月用实时价，历史月份用冻结的月末价）——两条渲染路径共用
+  // 同一套统计口径，不会出现两边算法悄悄长歪。
+  function computeMonthBucket(openItems, closedItems, notional) {
+    const combinedItems = [...openItems, ...closedItems];
+    const closedOnlyItems = closedItems;
+    const monthPnl = combinedItems.reduce((s, it) => s + it.pnl, 0);
+    const monthCostBasis = combinedItems.reduce((s, it) => s + (it.h.cost || 0) * (it.h.qty || 0), 0);
+    const weightedPct = monthCostBasis > 0 ? monthPnl / monthCostBasis * 100 : null;
+    const utilizationPct = notional > 0 ? monthCostBasis / notional * 100 : null;
+
+    const wins   = closedOnlyItems.filter(it => it.pnl > 0);
+    const losses = closedOnlyItems.filter(it => it.pnl < 0);
+    const evens  = closedOnlyItems.filter(it => it.pnl === 0);
+    const winRatePct = closedOnlyItems.length ? wins.length / closedOnlyItems.length * 100 : null;
+    const pctSorted  = closedOnlyItems.map(it => it.pct).sort((a, b) => a - b);
+    const avgPct     = closedOnlyItems.length ? closedOnlyItems.reduce((s, it) => s + it.pct, 0) / closedOnlyItems.length : 0;
+    const medPct     = closedOnlyItems.length ? simMedian(pctSorted) : 0;
+    const avgWinPct  = wins.length   ? wins.reduce((s, it) => s + it.pct, 0) / wins.length     : null;
+    const avgLossPct = losses.length ? losses.reduce((s, it) => s + it.pct, 0) / losses.length : null;
+
+    const combinedWins   = combinedItems.filter(it => it.pnl > 0);
+    const combinedLosses = combinedItems.filter(it => it.pnl < 0);
+    const grossWin  = combinedWins.reduce((s, it) => s + it.pnl, 0);
+    const grossLoss = Math.abs(combinedLosses.reduce((s, it) => s + it.pnl, 0));
+    const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (combinedWins.length > 0 ? "∞" : "—");
+    const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (combinedWins.length > 0 ? "up" : "");
+
+    const bestItem  = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
+    const worstItem = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
+
+    const gradeTableHTML = bucketStatsTable(groupGradeBuckets(combinedItems), "评级");
+    const sectorRows = sectorContributionRows(combinedItems);
+
+    const openCount = openItems.length, closedCount = closedItems.length;
+    const utilCls = utilizationPct === null ? "" : utilizationPct > 90 ? "down" : utilizationPct > 60 ? "warn" : "up";
+    const monthCls = fmt.sign(monthPnl);
+
+    return {
+      combinedItems, closedOnlyItems, monthPnl, monthCostBasis, weightedPct, utilizationPct, utilCls, monthCls,
+      wins, losses, evens, winRatePct, avgPct, medPct, avgWinPct, avgLossPct,
+      grossWin, grossLoss, pfStr, pfCls, combinedWins, combinedLosses,
+      bestItem, worstItem, gradeTableHTML, sectorRows, openCount, closedCount,
+    };
+  }
+  const _scopeTagHTML = (type) => `<span class="simb-scope-tag simb-scope-${type}">${type === "combined" ? "合并口径" : "已平仓口径"}</span>`;
+  const _bwStateHTML  = (it)   => `<span class="simbw-state">${it.open ? "持仓中" : "已平仓"}</span>`;
+  // 统一的小节标题：中英双语 + 可选口径标签 + 可选补充说明，全模块同一种写法。
+  const _monthSubTitleHTML = (zh, en, scope, note) => `
+    <div class="simb-subtitle">
+      <span class="simb-sub-zh">${zh}</span>
+      <span class="simb-sub-en">${en}</span>
+      ${scope ? _scopeTagHTML(scope) : ""}
+      ${note ? `<span class="simb-sub-note">· ${note}</span>` : ""}
+    </div>`;
+  // 分区一「组合层面」三个小节口径一致，标签提到分区头上说一次即可——挂在每个小节上会
+  // 变成三个同样的胶囊竖排，是噪音。分区二口径混合（交易分布/收益率只看已平仓，其余合并），
+  // 所以标签仍逐小节标注。
+  const _monthPartHeadHTML = (zh, en, scope) => `
+    <div class="simb-part-hd">
+      <span class="simb-part-zh">${zh}</span>
+      <span class="simb-part-en">${en}</span>
+      ${scope ? _scopeTagHTML(scope) : ""}
+    </div>`;
+  // 纯渲染：把 computeMonthBucket() 的结果拼成"组合层面/逐笔拆解"两分区 HTML。
+  // countLabel/countSub/scaleTile3HTML/weightedSubHTML/ddTileHTML 由调用方传入——这几项
+  // 在"当月"和"历史月份"之间有细微差别（资金利用率 vs 只给历史月份看的固定占位、当月
+  // 回撤靠滚动峰值 vs 历史月份没有逐日数据只能显示"—"），不适合内置死在这个共用函数里。
+  function monthPartsHTML(b, { countLabel, countSub, scaleTile3HTML, weightedSubHTML, weightedSubId, ddTileHTML }) {
+    return `
+      <div class="simb-part">
+        ${_monthPartHeadHTML("组合层面", "Portfolio", "combined")}
+        ${_monthSubTitleHTML("规模", "Scale")}
+        <div class="sim-a-stats cols-3">
+          ${simTile(countLabel, b.combinedItems.length, "", countSub)}
+          ${simTile("总投入金额", b.monthCostBasis > 0 ? "$" + Math.round(b.monthCostBasis).toLocaleString("en-US") : "—", "", "当月所有开仓的成本×数量合计")}
+          ${scaleTile3HTML}
+        </div>
+        ${_monthSubTitleHTML("表现", "Performance")}
+        <div class="sim-a-stats cols-3">
+          ${simTile("综合盈亏", fmt.signed(Math.round(b.monthPnl)), b.monthCls, "持仓中浮盈 + 已平仓已实现盈亏")}
+          ${simTile("资金加权收益率", b.weightedPct !== null ? (b.weightedPct >= 0 ? "+" : "") + b.weightedPct.toFixed(1) + "%" : "—", b.weightedPct !== null ? (b.weightedPct >= 0 ? "up" : "down") : "", weightedSubHTML, weightedSubId)}
+          ${ddTileHTML}
+        </div>
+        ${_monthSubTitleHTML("盈亏总额", "P&L Total")}
+        <div class="sim-a-stats cols-3">
+          ${simTile("总盈利", fmt.signed(Math.round(b.grossWin)), "up", `${b.combinedWins.length} 笔盈利仓位合计`)}
+          ${simTile("总亏损", b.grossLoss > 0 ? "−$" + Math.round(b.grossLoss).toLocaleString("en-US") : "—", b.grossLoss > 0 ? "down" : "", `${b.combinedLosses.length} 笔亏损仓位合计`)}
+          ${simTile("盈亏因子", b.pfStr, b.pfCls, "总盈利 ÷ 总亏损，>1 为正期望")}
+        </div>
+      </div>
+
+      <div class="simb-part">
+        ${_monthPartHeadHTML("逐笔拆解", "Breakdown")}
+        ${_monthSubTitleHTML("交易分布", "Trade Distribution", "closed")}
+        <div class="sim-a-stats">
+          ${simTile("盈利数量", b.wins.length, b.wins.length ? "up" : "")}
+          ${simTile("亏损数量", b.losses.length, b.losses.length ? "down" : "")}
+          ${simTile("持平数量", b.evens.length)}
+          ${simTile("总体胜率", b.winRatePct !== null ? b.winRatePct.toFixed(0) + "%" : "—", b.winRatePct !== null && b.winRatePct >= 50 ? "up" : "down")}
+        </div>
+
+        ${_monthSubTitleHTML("收益率", "Returns", "closed", "逐笔简单平均")}
+        <div class="sim-a-stats">
+          ${b.closedOnlyItems.length ? `
+            ${simTile("平均收益率", (b.avgPct >= 0 ? "+" : "") + b.avgPct.toFixed(1) + "%", b.avgPct >= 0 ? "up" : "down")}
+            ${simTile("中位数收益率", (b.medPct >= 0 ? "+" : "") + b.medPct.toFixed(1) + "%", b.medPct >= 0 ? "up" : "down")}
+            ${simTile("平均盈利收益率", b.avgWinPct !== null ? "+" + b.avgWinPct.toFixed(1) + "%" : "—", "up")}
+            ${simTile("平均亏损收益率", b.avgLossPct !== null ? b.avgLossPct.toFixed(1) + "%" : "—", "down")}
+          ` : simTile("暂无已平仓交易", "—", "", "当月新开仓位尚未平仓")}
+        </div>
+
+        ${_monthSubTitleHTML("最佳 / 最差", "Best / Worst", "combined")}
+        ${b.bestItem && b.worstItem ? `
+        <div class="simbw-row">
+          <div class="simbw-card up">
+            <div class="simbw-label">最佳股票${_bwStateHTML(b.bestItem)}</div>
+            <div class="simbw-sym">${b.bestItem.h.sym}<span class="simbw-name">${b.bestItem.h.name || ""}</span></div>
+            <div class="simbw-pct up">${b.bestItem.pct >= 0 ? "+" : ""}${b.bestItem.pct.toFixed(1)}%</div>
+          </div>
+          <div class="simbw-card down">
+            <div class="simbw-label">最差股票${_bwStateHTML(b.worstItem)}</div>
+            <div class="simbw-sym">${b.worstItem.h.sym}<span class="simbw-name">${b.worstItem.h.name || ""}</span></div>
+            <div class="simbw-pct down">${b.worstItem.pct >= 0 ? "+" : ""}${b.worstItem.pct.toFixed(1)}%</div>
+          </div>
+        </div>` : `<div class="simb-note">当月暂无开仓记录</div>`}
+
+        ${_monthSubTitleHTML("评级分层表现", "Grade Tiers", "combined")}
+        ${b.gradeTableHTML}
+
+        ${_monthSubTitleHTML("行业表现", "Sector Performance", "combined")}
+        <div class="simb-table">${simbBarRows(b.sectorRows, r => r.label)}</div>
+      </div>`;
+  }
+
+  // sourceArr/otherArr 里出现过的每个持仓构成的"指纹"——用来判断历史月份区块要不要重建。
+  // 签名不变就跳过重建，从而保留用户已展开的 <details> 状态和已经算好的冻结对比结果，
+  // 不会被 fetchPrices() 每 30 秒一次的价格轮询打断（价格轮询只影响当月的实时数字，
+  // 跟历史月份是否需要重新计算完全无关）。qty 也编进签名——部分平仓会改变剩余持仓的
+  // 数量，进而改变冻结计算要用的成本基础。
+  function monthlyEntitySignature(sourceArr, otherArr) {
+    const a = sourceArr.map(h => `${h.sym}@${h.entry}@${h.qty}`).sort().join(",");
+    const b = otherArr.map(h => `${h.sym}@${h.entry}@${h.closedAt}`).sort().join(",");
+    return a + "|" + b;
+  }
+
+  // 历史月份区块：renderMonthlyBacktest 只统计"本月"，一进入新的自然月，上个月完整的
+  // 开仓记录就从模块里彻底消失（当月大概率还没有新开仓，模块甚至会整个显示"0"）。这里把
+  // sourceArr/otherArr 里出现过的每个历史月份都收进同一个模块，默认折叠只留标题行；点开
+  // 才会去异步拉取当月最后一个交易日的收盘价，把仍持仓中的部分冻结在月末估值，跟当月一样
+  // 完整展示两分区 + 与 VOO 的资金加权对比。
+  //
+  // 折叠标题行的数字是同步算出来的"实时预览"（不发请求）：已平仓部分永远是真实的 pnlFinal，
+  // 仍持仓中的部分用今天的实时价——跟展开后拿到的"冻结在月末"的数字可能对不上，所以只要
+  // 这个月还有仍持仓中的仓位，数字前面就加"≈"标出这是预估，等展开确认后会自动换成真实值。
+  //
+  // 只对 desk/sim 两个真正按月切分的「月度回测」模块生效——分析复盘本就是 lifetime 全历史
+  // 口径（scopeToMonth:false），不存在"新月份把上月数据挤掉"的问题，也不需要按月冻结。
   function historicalMonthsHTML({ sourceArr, otherArr, notional, excludeMonthKey }) {
     const monthKeyOf = d => (d && d.length >= 7) ? d.slice(0, 7) : null;
     const keys = new Set();
@@ -6686,11 +6921,12 @@ function rsAdjustGrade(grade, rsResult) {
     otherArr.forEach(h => { const k = monthKeyOf(h.entry); if (k) keys.add(k); });
     keys.delete(excludeMonthKey);
     const months = [...keys].sort((a, b) => b.localeCompare(a));
-    if (!months.length) return "";
+    if (!months.length) return { html: "", descriptors: [] };
 
     const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
     const MO_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
+    const descriptors = [];
     const blocks = months.map(key => {
       const [y, m] = key.split("-").map(Number);
       const monthStart = `${key}-01`;
@@ -6698,153 +6934,36 @@ function rsAdjustGrade(grade, rsResult) {
       const monthEnd = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}-01`;
       const inRange = h => h.entry && h.entry.slice(0, 10) >= monthStart && h.entry.slice(0, 10) < monthEnd;
 
-      const openItems = sourceArr.filter(inRange);
-      const closedItems = otherArr.filter(inRange);
-      const toItem = (h, field, open) => {
-        const pnl = h[field] || 0;
-        const basis = (h.cost || 0) * (h.qty || 0);
-        return { h, pnl, pct: basis > 0 ? pnl / basis * 100 : 0, open: !!open };
-      };
-      const combinedItems = [
-        ...openItems.map(h => toItem(h, "pnlDollar", true)),
-        ...closedItems.map(h => toItem(h, "pnlFinal", false)),
+      const openItemsRaw = sourceArr.filter(inRange);
+      const closedItemsRaw = otherArr.filter(inRange);
+      descriptors.push({ key, monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional });
+
+      const previewItems = [
+        ...openItemsRaw.map(h => toCohortItem(h, h.pnlDollar || 0, true)),
+        ...closedItemsRaw.map(h => toCohortItem(h, h.pnlFinal || 0, false)),
       ];
-      const closedOnlyItems = closedItems.map(h => toItem(h, "pnlFinal"));
-      const monthPnl = combinedItems.reduce((s, it) => s + it.pnl, 0);
-      const monthCostBasis = combinedItems.reduce((s, it) => s + (it.h.cost || 0) * (it.h.qty || 0), 0);
-      const weightedPct = monthCostBasis > 0 ? monthPnl / monthCostBasis * 100 : null;
-      const utilizationPct = notional > 0 ? monthCostBasis / notional * 100 : null;
+      const previewPnl = previewItems.reduce((s, it) => s + it.pnl, 0);
+      const pnlChipCls = previewPnl > 0 ? "up" : previewPnl < 0 ? "down" : "";
+      const approx = openItemsRaw.length > 0;
 
-      const wins = closedOnlyItems.filter(it => it.pnl > 0);
-      const losses = closedOnlyItems.filter(it => it.pnl < 0);
-      const evens = closedOnlyItems.filter(it => it.pnl === 0);
-      const winRatePct = closedOnlyItems.length ? wins.length / closedOnlyItems.length * 100 : null;
-      const pctSorted = closedOnlyItems.map(it => it.pct).sort((a, b) => a - b);
-      const avgPct = closedOnlyItems.length ? closedOnlyItems.reduce((s, it) => s + it.pct, 0) / closedOnlyItems.length : 0;
-      const medPct = closedOnlyItems.length ? simMedian(pctSorted) : 0;
-      const avgWinPct = wins.length ? wins.reduce((s, it) => s + it.pct, 0) / wins.length : null;
-      const avgLossPct = losses.length ? losses.reduce((s, it) => s + it.pct, 0) / losses.length : null;
-
-      const combinedWins = combinedItems.filter(it => it.pnl > 0);
-      const combinedLosses = combinedItems.filter(it => it.pnl < 0);
-      const grossWin = combinedWins.reduce((s, it) => s + it.pnl, 0);
-      const grossLoss = Math.abs(combinedLosses.reduce((s, it) => s + it.pnl, 0));
-      const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (combinedWins.length > 0 ? "∞" : "—");
-      const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (combinedWins.length > 0 ? "up" : "");
-
-      const bestItem  = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
-      const worstItem = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
-
-      const gradeTableHTML = bucketStatsTable(groupGradeBuckets(combinedItems), "评级");
-      const sectorRows = sectorContributionRows(combinedItems);
-
-      const openCount = openItems.length, closedCount = closedItems.length;
-      const countSub = openCount && closedCount ? `${openCount} 笔持仓中 · ${closedCount} 笔已平仓`
-        : openCount ? `${openCount} 笔持仓中，当月无平仓`
-        : `${closedCount} 笔已平仓，当月无持仓中`;
-
-      const scopeTag = (type) => `<span class="simb-scope-tag simb-scope-${type}">${type === "combined" ? "合并口径" : "已平仓口径"}</span>`;
-      const bwState = (it) => `<span class="simbw-state">${it.open ? "持仓中" : "已平仓"}</span>`;
-      const subTitle = (zh, en, scope, note) => `
-        <div class="simb-subtitle">
-          <span class="simb-sub-zh">${zh}</span>
-          <span class="simb-sub-en">${en}</span>
-          ${scope ? scopeTag(scope) : ""}
-          ${note ? `<span class="simb-sub-note">· ${note}</span>` : ""}
-        </div>`;
-      const partHead = (zh, en, scope) => `
-        <div class="simb-part-hd">
-          <span class="simb-part-zh">${zh}</span>
-          <span class="simb-part-en">${en}</span>
-          ${scope ? scopeTag(scope) : ""}
-        </div>`;
-
-      const utilCls = utilizationPct === null ? "" : utilizationPct > 90 ? "down" : utilizationPct > 60 ? "warn" : "up";
-      const monthCls = fmt.sign(monthPnl);
       const monthLabelZh = `${y}年${MO_ZH[m - 1]}`;
       const monthLabelEn = `${MO_EN[m - 1]} ${y}`;
-      const pnlChipCls = monthPnl > 0 ? "up" : monthPnl < 0 ? "down" : "";
-
-      const body = `
-        <div class="simb-part">
-          ${partHead("组合层面", "Portfolio", "combined")}
-          ${subTitle("规模", "Scale")}
-          <div class="sim-a-stats cols-3">
-            ${simTile("月内开仓总数", combinedItems.length, "", countSub)}
-            ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", "当月所有开仓的成本×数量合计")}
-            ${simTile("资金利用率", utilizationPct !== null ? utilizationPct.toFixed(0) + "%" : "—", utilCls, utilizationPct !== null ? `$${Math.round(notional / 1000)}k 基准` : "")}
-          </div>
-          ${subTitle("表现", "Performance")}
-          <div class="sim-a-stats cols-3">
-            ${simTile("综合盈亏", fmt.signed(Math.round(monthPnl)), monthCls, "持仓中浮盈 + 已平仓已实现盈亏")}
-            ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", "可与大盘当月涨跌幅同层对比")}
-            ${simTile("当月回撤", "—", "", "历史月份未记录逐日峰值")}
-          </div>
-          ${subTitle("盈亏总额", "P&L Total")}
-          <div class="sim-a-stats cols-3">
-            ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up", `${combinedWins.length} 笔盈利仓位合计`)}
-            ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "", `${combinedLosses.length} 笔亏损仓位合计`)}
-            ${simTile("盈亏因子", pfStr, pfCls, "总盈利 ÷ 总亏损，>1 为正期望")}
-          </div>
-        </div>
-
-        <div class="simb-part">
-          ${partHead("逐笔拆解", "Breakdown")}
-          ${subTitle("交易分布", "Trade Distribution", "closed")}
-          <div class="sim-a-stats">
-            ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
-            ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
-            ${simTile("持平数量", evens.length)}
-            ${simTile("总体胜率", winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—", winRatePct !== null && winRatePct >= 50 ? "up" : "down")}
-          </div>
-
-          ${subTitle("收益率", "Returns", "closed", "逐笔简单平均")}
-          <div class="sim-a-stats">
-            ${closedOnlyItems.length ? `
-              ${simTile("平均收益率", (avgPct >= 0 ? "+" : "") + avgPct.toFixed(1) + "%", avgPct >= 0 ? "up" : "down")}
-              ${simTile("中位数收益率", (medPct >= 0 ? "+" : "") + medPct.toFixed(1) + "%", medPct >= 0 ? "up" : "down")}
-              ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—", "up")}
-              ${simTile("平均亏损收益率", avgLossPct !== null ? avgLossPct.toFixed(1) + "%" : "—", "down")}
-            ` : simTile("暂无已平仓交易", "—", "", "当月新开仓位尚未平仓")}
-          </div>
-
-          ${subTitle("最佳 / 最差", "Best / Worst", "combined")}
-          ${bestItem && worstItem ? `
-          <div class="simbw-row">
-            <div class="simbw-card up">
-              <div class="simbw-label">最佳股票${bwState(bestItem)}</div>
-              <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
-              <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
-            </div>
-            <div class="simbw-card down">
-              <div class="simbw-label">最差股票${bwState(worstItem)}</div>
-              <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
-              <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
-            </div>
-          </div>` : `<div class="simb-note">当月暂无开仓记录</div>`}
-
-          ${subTitle("评级分层表现", "Grade Tiers", "combined")}
-          ${gradeTableHTML}
-
-          ${subTitle("行业表现", "Sector Performance", "combined")}
-          <div class="simb-table">${simbBarRows(sectorRows, r => r.label)}</div>
-        </div>`;
 
       return `
-        <details class="simb-month">
+        <details class="simb-month" data-hist-key="${key}">
           <summary>
             <span class="simb-month-arrow">▸</span>
             <span class="simb-month-zh">${monthLabelZh}</span>
             <span class="simb-month-en">${monthLabelEn}</span>
             <span class="simb-month-rule"></span>
-            <span class="simb-month-chip ${pnlChipCls}">${fmt.signed(Math.round(monthPnl))}</span>
-            <span class="simb-month-count">${combinedItems.length} 笔</span>
+            <span class="simb-month-chip ${pnlChipCls}">${approx ? "≈" : ""}${fmt.signed(Math.round(previewPnl))}</span>
+            <span class="simb-month-count">${previewItems.length} 笔</span>
           </summary>
-          <div class="simb-month-body">${body}</div>
+          <div class="simb-month-body"></div>
         </details>`;
     }).join("");
 
-    return `
+    const html = `
       <div class="simb-history">
         <div class="simb-history-hd">
           <span class="simb-history-zh">历史月份</span>
@@ -6853,6 +6972,100 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         ${blocks}
       </div>`;
+    return { html, descriptors };
+  }
+
+  // 点开一个历史月份才去拉它当月最后一个交易日的收盘价（该月仍持仓中的每个 symbol +
+  // VOO，一次批量请求），把仍持仓中的部分冻结在月末估值；已平仓的（不管当月内平的还是
+  // 后来才平的）永远用真实 pnlFinal，不冻结——那已经是定论了，冻结等于用虚构数字覆盖
+  // 真实发生的结果。冻结价格拿到后顺带算出跟 VOO 的资金加权 Alpha。
+  async function computeFrozenMonth({ monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional }) {
+    const openSyms = [...new Set(openItemsRaw.map(h => h.sym))];
+    const symbols = [...openSyms, "VOO"].join(",");
+    let results;
+    try {
+      const r = await fetch(`/api/history?symbols=${encodeURIComponent(symbols)}&from=${monthStart}`);
+      if (!r.ok) throw new Error("history fetch failed");
+      ({ results } = await r.json());
+    } catch (e) { return null; }
+    const vooPrices = results && results.VOO;
+    if (!vooPrices) return null;
+
+    // 该月最后一个交易日 = VOO 价格序列里 < monthEnd 的最大日期——直接用真实行情数据当
+    // 交易日历，不用额外维护假日表。
+    const monthEndKey = Object.keys(vooPrices).filter(d => d < monthEnd).sort().pop() || null;
+
+    const openItems = openItemsRaw.map(h => {
+      const stockPrices = results[h.sym];
+      const monthEndClose = monthEndKey ? closeOnOrBefore(stockPrices, monthEndKey) : null;
+      const frozenPnl = monthEndClose != null ? (monthEndClose - h.cost) * h.qty : (h.pnlDollar || 0);
+      return toCohortItem(h, frozenPnl, true);
+    });
+    const closedItems = closedItemsRaw.map(h => toCohortItem(h, h.pnlFinal || 0, false));
+
+    const bucket = computeMonthBucket(openItems, closedItems, notional);
+    bucket.notional = notional;
+    const exitDate = monthEndKey || monthEnd;
+    const benchPct = shadowBenchmarkPct(bucket.combinedItems, vooPrices, exitDate);
+    const alpha = (bucket.weightedPct !== null && benchPct !== null) ? bucket.weightedPct - benchPct : null;
+    return { bucket, benchPct, alpha, monthEndKey };
+  }
+
+  function renderFrozenMonthBody(bodyEl, det, result) {
+    const b = result.bucket;
+    const countSub = b.openCount && b.closedCount ? `${b.openCount} 笔持仓中 · ${b.closedCount} 笔已平仓`
+      : b.openCount ? `${b.openCount} 笔持仓中，当月无平仓`
+      : `${b.closedCount} 笔已平仓，当月无持仓中`;
+    const weightedSub = result.benchPct !== null && result.alpha !== null
+      ? alphaSubText(result.benchPct, result.alpha)
+      : "大盘数据不足，暂无法对比";
+    const ddTileHTML = simTile("当月回撤", "—", "",
+      result.monthEndKey ? `已按 ${result.monthEndKey} 月末价冻结` : "历史月份未记录逐日峰值");
+    const scaleTile3HTML = simTile("资金利用率", b.utilizationPct !== null ? b.utilizationPct.toFixed(0) + "%" : "—", b.utilCls,
+      b.utilizationPct !== null ? `$${Math.round((b.notional || 0) / 1000)}k 基准` : "");
+
+    bodyEl.innerHTML = monthPartsHTML(b, {
+      countLabel: "月内开仓总数", countSub, scaleTile3HTML, ddTileHTML,
+      weightedSubHTML: weightedSub,
+    });
+
+    // 冻结结果算出来了，把折叠标题行的"≈预估"换成确认过的真实数字。
+    const chip = det.querySelector(".simb-month-chip");
+    if (chip) {
+      chip.textContent = fmt.signed(Math.round(b.monthPnl));
+      chip.className = `simb-month-chip ${b.monthCls}`;
+    }
+    const countEl = det.querySelector(".simb-month-count");
+    if (countEl) countEl.textContent = `${b.combinedItems.length} 笔`;
+  }
+
+  // 历史月份默认折叠、内容为空——点开才发请求，避免"月度回测"一渲染就为每个历史月份各打
+  // 一次 /api/history。每个月份的抓取结果按 sectionSel+monthKey 缓存在 _histMonthCache 里，
+  // 同一个月份第二次点开（哪怕 <details> 节点因为持仓构成变化被整个重建过）直接用缓存，
+  // 不重新发请求——历史月份一旦算出冻结结果，在这个会话生命周期内不会再变。
+  function wireHistoryMonths(histEl, descriptors, sectionSel) {
+    histEl.querySelectorAll(".simb-month").forEach((det, i) => {
+      const desc = descriptors[i];
+      if (!desc) return;
+      det.addEventListener("toggle", async () => {
+        if (!det.open) return;
+        const bodyEl = det.querySelector(".simb-month-body");
+        const cacheKey = `${sectionSel}:${desc.key}`;
+        const cached = _histMonthCache[cacheKey];
+        if (cached) { renderFrozenMonthBody(bodyEl, det, cached); return; }
+        if (bodyEl.dataset.loading === "1") return;
+        bodyEl.dataset.loading = "1";
+        bodyEl.innerHTML = `<div class="simb-month-loading">对比大盘加载中…</div>`;
+        const result = await computeFrozenMonth(desc);
+        bodyEl.dataset.loading = "0";
+        if (!result) {
+          bodyEl.innerHTML = `<div class="simb-month-loading simb-month-error">加载失败，折叠后重新展开可重试</div>`;
+          return;
+        }
+        _histMonthCache[cacheKey] = result;
+        renderFrozenMonthBody(bodyEl, det, result);
+      });
+    });
   }
 
   function renderMonthlyBacktest({ labelSel, sectionSel, mode, sourceArr, otherArr, peakStorageKey, closedNote, closedNoteInline, notional = 0, titleZh = "月度回测", titleEn = "Monthly Backtest", scopeToMonth = true }) {
@@ -6867,6 +7080,14 @@ function rsAdjustGrade(grade, rsResult) {
     }
     section.style.display = "";
     if (label) label.style.display = "";
+
+    // curEl 每次都整块重建（要跟着实时行情/持仓变化走）；histEl 只在持仓/已平仓的实际构成
+    // 变化时才重建——避免 fetchPrices() 每 30 秒一次的价格轮询把用户刚展开的历史月份重新
+    // 收起、把已经算好的冻结对比结果也一并丢掉。两者都是懒创建、此后一直复用同一个节点。
+    let curEl  = section.querySelector(":scope > .simb-current-mount");
+    let histEl = section.querySelector(":scope > .simb-history-mount");
+    if (!curEl)  { curEl  = document.createElement("div"); curEl.className  = "simb-current-mount";  section.appendChild(curEl); }
+    if (!histEl) { histEl = document.createElement("div"); histEl.className = "simb-history-mount"; section.appendChild(histEl); }
 
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
@@ -6892,12 +7113,20 @@ function rsAdjustGrade(grade, rsResult) {
 
     // 只对 desk/sim 两个真正按月切分的「月度回测」模块附加历史月份——分析复盘本就是
     // lifetime 全历史口径（scopeToMonth:false），不存在"新月份把上月数据挤掉"的问题。
-    const historyHTML = isCombinedMode
-      ? historicalMonthsHTML({ sourceArr, otherArr, notional, excludeMonthKey: monthKey })
-      : "";
+    if (isCombinedMode) {
+      const sig = monthlyEntitySignature(sourceArr, otherArr);
+      if (_histSig[sectionSel] !== sig) {
+        _histSig[sectionSel] = sig;
+        const { html, descriptors } = historicalMonthsHTML({ sourceArr, otherArr, notional, excludeMonthKey: monthKey });
+        histEl.innerHTML = html;
+        wireHistoryMonths(histEl, descriptors, sectionSel);
+      }
+    } else {
+      histEl.innerHTML = "";
+    }
 
     if (!thisMonthItems.length && !closedThisMonthArr.length) {
-      section.innerHTML = `
+      curEl.innerHTML = `
         <div class="simb-note">${closedNote}</div>
         <div class="sim-a-stats">
           <div class="sim-astat">
@@ -6907,194 +7136,204 @@ function rsAdjustGrade(grade, rsResult) {
               ? (mode === "closed" ? `${scopeToMonth ? "另有" : "有"} ${otherThisMonthCount} 笔${scopeToMonth ? "本月仍" : "仍在"}持仓中，${closedNoteInline}` : `本月 ${otherThisMonthCount} 笔已平仓，${closedNoteInline}`)
               : (scopeToMonth ? "本月暂无新开仓" : "暂无已平仓记录")}</div>
           </div>
-        </div>
-        ${historyHTML}`;
+        </div>`;
       return;
     }
 
-    const pnlField = mode === "closed" ? "pnlFinal" : "pnlDollar";
+    if (!isCombinedMode) {
+      // lifetime / mode:"closed" 分支（分析复盘）——不接入基准对比/历史月份，逻辑与
+      // v586 完全一致，只是渲染目标从 section 改成 curEl。
+      const pnlField = mode === "closed" ? "pnlFinal" : "pnlDollar";
+      const toItem = (h, field, open) => {
+        const pnl = h[field] || 0;
+        const basis = (h.cost || 0) * (h.qty || 0);
+        return { h, pnl, pct: basis > 0 ? pnl / basis * 100 : 0, open: !!open };
+      };
+      const combinedItems = thisMonthItems.map(h => toItem(h, pnlField, mode !== "closed"));
+      const closedOnlyItems = combinedItems;
+      const monthItems = combinedItems;
 
-    // combinedItems: open positions (pnlDollar) + closed positions from this month (pnlFinal)
-    // Used for aggregate metrics: overview tiles, 评级, 行业
-    const toItem = (h, field, open) => {
-      const pnl = h[field] || 0;
-      const basis = (h.cost || 0) * (h.qty || 0);
-      return { h, pnl, pct: basis > 0 ? pnl / basis * 100 : 0, open: !!open };
-    };
-    const combinedItems = isCombinedMode
-      ? [ ...thisMonthItems.map(h => toItem(h, "pnlDollar", true)),
-          ...closedThisMonthArr.map(h => toItem(h, "pnlFinal", false)) ]
-      : thisMonthItems.map(h => toItem(h, pnlField, mode !== "closed"));
+      const monthPnl = combinedItems.reduce((s, it) => s + it.pnl, 0);
+      const monthCls = fmt.sign(monthPnl);
+      const { peak, ddPct } = simMonthlyPeakDrawdown(peakStorageKey, monthKey, monthPnl);
 
-    // closedOnlyItems: finalized trades only — used for win/loss distribution and best/worst
-    // (open positions' outcome is still floating so classifying them as win/loss is unstable)
-    const closedOnlyItems = isCombinedMode
-      ? closedThisMonthArr.map(h => toItem(h, "pnlFinal"))
-      : combinedItems;
+      const monthCostBasis = combinedItems.reduce((s, it) => s + (it.h.cost || 0) * (it.h.qty || 0), 0);
+      const weightedPct = monthCostBasis > 0 ? monthPnl / monthCostBasis * 100 : null;
+      const utilizationPct = notional > 0 ? monthCostBasis / notional * 100 : null;
 
-    // monthItems kept as the combined list for grade/sector breakdown
-    const monthItems = combinedItems;
+      const wins   = closedOnlyItems.filter(it => it.pnl > 0);
+      const losses = closedOnlyItems.filter(it => it.pnl < 0);
+      const evens  = closedOnlyItems.filter(it => it.pnl === 0);
+      const winRatePct = closedOnlyItems.length ? wins.length / closedOnlyItems.length * 100 : null;
 
-    const monthPnl = combinedItems.reduce((s, it) => s + it.pnl, 0);
-    const monthCls = fmt.sign(monthPnl);
-    const { peak, ddPct } = simMonthlyPeakDrawdown(peakStorageKey, monthKey, monthPnl);
+      const pctSorted  = closedOnlyItems.map(it => it.pct).sort((a, b) => a - b);
+      const avgPct     = closedOnlyItems.length ? closedOnlyItems.reduce((s, it) => s + it.pct, 0) / closedOnlyItems.length : 0;
+      const medPct     = closedOnlyItems.length ? simMedian(pctSorted) : 0;
+      const avgWinPct  = wins.length   ? wins.reduce((s, it) => s + it.pct, 0) / wins.length     : null;
+      const avgLossPct = losses.length ? losses.reduce((s, it) => s + it.pct, 0) / losses.length : null;
 
-    // 资金加权收益率 — 合并口径：Σpnl / Σ成本，唯一能与大盘当月涨跌幅同层比较的数字
-    const monthCostBasis = combinedItems.reduce((s, it) => s + (it.h.cost || 0) * (it.h.qty || 0), 0);
-    const weightedPct = monthCostBasis > 0 ? monthPnl / monthCostBasis * 100 : null;
-    const utilizationPct = notional > 0 ? monthCostBasis / notional * 100 : null;
+      const combinedWins   = combinedItems.filter(it => it.pnl > 0);
+      const combinedLosses = combinedItems.filter(it => it.pnl < 0);
+      const grossWin  = combinedWins.reduce((s, it) => s + it.pnl, 0);
+      const grossLoss = Math.abs(combinedLosses.reduce((s, it) => s + it.pnl, 0));
+      const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (combinedWins.length > 0 ? "∞" : "—");
+      const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (combinedWins.length > 0 ? "up" : "");
 
-    // 已平仓口径: 交易分布 / 收益率细分
-    const wins   = closedOnlyItems.filter(it => it.pnl > 0);
-    const losses = closedOnlyItems.filter(it => it.pnl < 0);
-    const evens  = closedOnlyItems.filter(it => it.pnl === 0);
-    const winRatePct = closedOnlyItems.length ? wins.length / closedOnlyItems.length * 100 : null;
+      const bestItem  = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
+      const worstItem = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
 
-    const pctSorted  = closedOnlyItems.map(it => it.pct).sort((a, b) => a - b);
-    const avgPct     = closedOnlyItems.length ? closedOnlyItems.reduce((s, it) => s + it.pct, 0) / closedOnlyItems.length : 0;
-    const medPct     = closedOnlyItems.length ? simMedian(pctSorted) : 0;
-    const avgWinPct  = wins.length   ? wins.reduce((s, it) => s + it.pct, 0) / wins.length     : null;
-    const avgLossPct = losses.length ? losses.reduce((s, it) => s + it.pct, 0) / losses.length : null;
+      const gradeTableHTML = bucketStatsTable(groupGradeBuckets(monthItems), "评级");
+      const sectorRows = sectorContributionRows(monthItems);
 
-    // 盈亏总额用合并口径（含浮盈）；grossWin/grossLoss 从 combinedItems 派生
-    const combinedWins   = combinedItems.filter(it => it.pnl > 0);
-    const combinedLosses = combinedItems.filter(it => it.pnl < 0);
-    const grossWin  = combinedWins.reduce((s, it) => s + it.pnl, 0);
-    const grossLoss = Math.abs(combinedLosses.reduce((s, it) => s + it.pnl, 0));
-    const pfStr = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (combinedWins.length > 0 ? "∞" : "—");
-    const pfCls = grossLoss > 0 ? (grossWin / grossLoss >= 1 ? "up" : "down") : (combinedWins.length > 0 ? "up" : "");
-
-    // 最佳/最差同样用合并口径：只看已平仓会漏掉本月表现最极端的仓位（通常正是还拿在手上
-    // 那一只），选出的"最佳"可能远不是本月真正跑得最好的。持仓中的项标注"持仓中"以示浮动。
-    const bestItem  = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
-    const worstItem = combinedItems.length ? combinedItems.reduce((a, b) => (b.pct < a.pct ? b : a)) : null;
-
-    // 合并口径: 评级 / 行业（包含持仓中+已平仓，全面反映本月开仓质量）
-    const gradeTableHTML = bucketStatsTable(groupGradeBuckets(monthItems), "评级");
-    const sectorRows = sectorContributionRows(monthItems);
-
-    const openCount   = thisMonthItems.length;
-    const closedCount = closedThisMonthArr.length;
-    const countSub = isCombinedMode
-      ? (openCount && closedCount ? `${openCount} 笔持仓中 · ${closedCount} 笔已平仓`
-        : openCount ? `${openCount} 笔持仓中，本月暂无平仓`
-        : `${closedCount} 笔已平仓，本月无持仓中`)
-      : mode === "closed"
+      const openCount   = thisMonthItems.length;
+      const closedCount = closedThisMonthArr.length;
+      const countSub = mode === "closed"
         ? (otherThisMonthCount ? `${scopeToMonth ? "另有" : "有"} ${otherThisMonthCount} 笔${scopeToMonth ? "本月仍" : "仍在"}持仓中，${closedNoteInline}` : "均已平仓")
         : (otherThisMonthCount ? `另有 ${otherThisMonthCount} 笔本月已平仓，${closedNoteInline}` : "均为持仓中");
-    const pnlTileLabel = isCombinedMode ? "综合盈亏" : mode === "closed" ? "已实现收益" : "浮动收益";
-    const pnlTileSub   = isCombinedMode
-      ? "持仓中浮盈 + 已平仓已实现盈亏"
-      : mode === "closed"
+      const pnlTileLabel = mode === "closed" ? "已实现收益" : "浮动收益";
+      const pnlTileSub   = mode === "closed"
         ? (scopeToMonth ? "本月已平仓交易的已实现盈亏" : "全部已平仓交易的已实现盈亏")
         : "本月新开仓位的当前浮动盈亏";
-    const ddLabel = scopeToMonth ? "本月回撤" : "历史回撤";
-    const weightedSub = scopeToMonth ? "可与大盘当月涨跌幅同层对比" : "可与大盘同期涨跌幅同层对比";
+      const ddLabel = scopeToMonth ? "本月回撤" : "历史回撤";
+      const weightedSub = scopeToMonth ? "可与大盘当月涨跌幅同层对比" : "可与大盘同期涨跌幅同层对比";
 
-    const scopeTag = (type) => isCombinedMode
-      ? `<span class="simb-scope-tag simb-scope-${type}">${type === "combined" ? "合并口径" : "已平仓口径"}</span>`
-      : "";
+      const bwState = () => "";
+      const utilCls = utilizationPct === null ? "" : utilizationPct > 90 ? "down" : utilizationPct > 60 ? "warn" : "up";
+      const avgDays = combinedItems.length
+        ? Math.round(combinedItems.reduce((s, it) => s + (it.h.days || 0), 0) / combinedItems.length)
+        : null;
+      const tile3 = scopeToMonth
+        ? simTile("资金利用率", utilizationPct !== null ? utilizationPct.toFixed(0) + "%" : "—", utilCls,
+            utilizationPct !== null ? `模拟仓 $${Math.round(notional / 1000)}k 基准` : "")
+        : simTile("平均持仓天数", avgDays !== null ? avgDays + " 天" : "—", "", "全部已平仓交易的平均持有时长");
+      const subTitle = (zh, en, scope, note) => `
+        <div class="simb-subtitle">
+          <span class="simb-sub-zh">${zh}</span>
+          <span class="simb-sub-en">${en}</span>
+          ${note ? `<span class="simb-sub-note">· ${note}</span>` : ""}
+        </div>`;
+      const partHead = (zh, en) => `
+        <div class="simb-part-hd">
+          <span class="simb-part-zh">${zh}</span>
+          <span class="simb-part-en">${en}</span>
+        </div>`;
 
-    // 最佳/最差改用合并口径后，选出的可能是还没平仓的仓位——那个百分比是浮动的、还会变，
-    // 跟已落袋的数字不是一回事，所以在卡片标签上标出来。
-    const bwState = (it) => isCombinedMode
-      ? `<span class="simbw-state">${it.open ? "持仓中" : "已平仓"}</span>`
-      : "";
+      curEl.innerHTML = `
+        <div class="simb-note">${closedNote}</div>
 
-    const utilCls = utilizationPct === null ? "" : utilizationPct > 90 ? "down" : utilizationPct > 60 ? "warn" : "up";
-    const avgDays = combinedItems.length
-      ? Math.round(combinedItems.reduce((s, it) => s + (it.h.days || 0), 0) / combinedItems.length)
-      : null;
-    const tile3 = scopeToMonth
-      ? simTile("资金利用率", utilizationPct !== null ? utilizationPct.toFixed(0) + "%" : "—", utilCls,
-          utilizationPct !== null ? `模拟仓 $${Math.round(notional / 1000)}k 基准` : "")
-      : simTile("平均持仓天数", avgDays !== null ? avgDays + " 天" : "—", "", "全部已平仓交易的平均持有时长");
-    // 统一的小节标题：中英双语 + 可选口径标签 + 可选补充说明，全模块同一种写法。
-    const subTitle = (zh, en, scope, note) => `
-      <div class="simb-subtitle">
-        <span class="simb-sub-zh">${zh}</span>
-        <span class="simb-sub-en">${en}</span>
-        ${scope ? scopeTag(scope) : ""}
-        ${note ? `<span class="simb-sub-note">· ${note}</span>` : ""}
-      </div>`;
+        <div class="simb-part">
+          ${partHead("组合层面", "Portfolio")}
+          ${subTitle("规模", "Scale")}
+          <div class="sim-a-stats cols-3">
+            ${simTile(countLabel, combinedItems.length, "", countSub)}
+            ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", scopeToMonth ? "本月所有开仓的成本×数量合计" : "全部已平仓交易的成本×数量合计")}
+            ${tile3}
+          </div>
+          ${subTitle("表现", "Performance")}
+          <div class="sim-a-stats cols-3">
+            ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
+            ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", weightedSub)}
+            ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
+          </div>
+          ${subTitle("盈亏总额", "P&L Total")}
+          <div class="sim-a-stats cols-3">
+            ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up", `${combinedWins.length} 笔盈利仓位合计`)}
+            ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "", `${combinedLosses.length} 笔亏损仓位合计`)}
+            ${simTile("盈亏因子", pfStr, pfCls, "总盈利 ÷ 总亏损，>1 为正期望")}
+          </div>
+        </div>
 
-    // 分区一「组合层面」三个小节口径一致，标签提到分区头上说一次即可——挂在每个小节上会
-    // 变成三个同样的胶囊竖排，是噪音。分区二口径混合（交易分布/收益率只看已平仓，其余合并），
-    // 所以标签仍逐小节标注。
-    const partHead = (zh, en, scope) => `
-      <div class="simb-part-hd">
-        <span class="simb-part-zh">${zh}</span>
-        <span class="simb-part-en">${en}</span>
-        ${scope ? scopeTag(scope) : ""}
-      </div>`;
+        <div class="simb-part">
+          ${partHead("逐笔拆解", "Breakdown")}
+          ${subTitle("交易分布", "Trade Distribution")}
+          <div class="sim-a-stats">
+            ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
+            ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
+            ${simTile("持平数量", evens.length)}
+            ${simTile("总体胜率", winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—", winRatePct !== null && winRatePct >= 50 ? "up" : "down")}
+          </div>
 
-    section.innerHTML = `
+          ${subTitle("收益率", "Returns", "", "逐笔简单平均")}
+          <div class="sim-a-stats">
+            ${closedOnlyItems.length ? `
+              ${simTile("平均收益率", (avgPct >= 0 ? "+" : "") + avgPct.toFixed(1) + "%", avgPct >= 0 ? "up" : "down")}
+              ${simTile("中位数收益率", (medPct >= 0 ? "+" : "") + medPct.toFixed(1) + "%", medPct >= 0 ? "up" : "down")}
+              ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—", "up")}
+              ${simTile("平均亏损收益率", avgLossPct !== null ? avgLossPct.toFixed(1) + "%" : "—", "down")}
+            ` : simTile("暂无已平仓交易", "—", "", "本月新开仓位尚未平仓")}
+          </div>
+
+          ${subTitle("最佳 / 最差", "Best / Worst")}
+          ${bestItem && worstItem ? `
+          <div class="simbw-row">
+            <div class="simbw-card up">
+              <div class="simbw-label">最佳股票${bwState()}</div>
+              <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
+              <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
+            </div>
+            <div class="simbw-card down">
+              <div class="simbw-label">最差股票${bwState()}</div>
+              <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
+              <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
+            </div>
+          </div>` : `<div class="simb-note">暂无已平仓交易</div>`}
+
+          ${subTitle("评级分层表现", "Grade Tiers")}
+          ${gradeTableHTML}
+
+          ${subTitle("行业表现", "Sector Performance")}
+          <div class="simb-table">${simbBarRows(sectorRows, r => r.label)}</div>
+        </div>`;
+      return;
+    }
+
+    // ---- isCombinedMode 分支：当月，接入影子 VOO 基准对比 ----
+    const openItems = thisMonthItems.map(h => toCohortItem(h, h.pnlDollar || 0, true));
+    const closedItems = closedThisMonthArr.map(h => toCohortItem(h, h.pnlFinal || 0, false));
+    const b = computeMonthBucket(openItems, closedItems, notional);
+
+    const { peak, ddPct } = simMonthlyPeakDrawdown(peakStorageKey, monthKey, b.monthPnl);
+    const scaleTile3HTML = simTile("资金利用率", b.utilizationPct !== null ? b.utilizationPct.toFixed(0) + "%" : "—", b.utilCls,
+      b.utilizationPct !== null ? `模拟仓 $${Math.round(notional / 1000)}k 基准` : "");
+    const ddTileHTML = simTile("本月回撤", peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "",
+      peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值");
+    const countSub = b.openCount && b.closedCount ? `${b.openCount} 笔持仓中 · ${b.closedCount} 笔已平仓`
+      : b.openCount ? `${b.openCount} 笔持仓中，本月暂无平仓`
+      : `${b.closedCount} 笔已平仓，本月无持仓中`;
+
+    // 资金加权收益率的 sub 文案：缓存命中就同步给真实的 VOO 对比 + Alpha，否则先给
+    // loading 占位再异步补上。wpctSubId 让 fetch 回调即便在下一次 30 秒价格轮询已经把
+    // curEl 整个换掉之后，也能靠 getElementById 找到"当前活着的那个"节点来 patch，
+    // 不会 patch 到一个已经从文档里摘掉的旧节点。
+    const wpctSubId = `mb-wpct-${sectionSel.replace(/[^a-zA-Z0-9]/g, "")}`;
+    const cachedBench = _curBenchCache[sectionSel];
+    const benchFresh = cachedBench && cachedBench.monthKey === monthKey && !cachedBench._inFlight
+      && Date.now() - cachedBench.fetchedAt < 20 * 60 * 1000;
+    let weightedSubStr = "";
+    if (b.weightedPct !== null) {
+      if (benchFresh && !cachedBench.error) weightedSubStr = alphaSubText(cachedBench.pct, b.weightedPct - cachedBench.pct);
+      else if (benchFresh && cachedBench.error) weightedSubStr = "大盘数据获取失败";
+      else weightedSubStr = "对比大盘中…";
+    }
+
+    curEl.innerHTML = `
       <div class="simb-note">${closedNote}</div>
+      ${monthPartsHTML(b, {
+        countLabel, countSub, scaleTile3HTML, ddTileHTML,
+        weightedSubHTML: weightedSubStr,
+        weightedSubId: b.weightedPct !== null ? wpctSubId : undefined,
+      })}`;
 
-      <div class="simb-part">
-        ${partHead("组合层面", "Portfolio", "combined")}
-        ${subTitle("规模", "Scale")}
-        <div class="sim-a-stats cols-3">
-          ${simTile(countLabel, combinedItems.length, "", countSub)}
-          ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", scopeToMonth ? "本月所有开仓的成本×数量合计" : "全部已平仓交易的成本×数量合计")}
-          ${tile3}
-        </div>
-        ${subTitle("表现", "Performance")}
-        <div class="sim-a-stats cols-3">
-          ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
-          ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", weightedSub)}
-          ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
-        </div>
-        ${subTitle("盈亏总额", "P&L Total")}
-        <div class="sim-a-stats cols-3">
-          ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up", `${combinedWins.length} 笔盈利仓位合计`)}
-          ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "", `${combinedLosses.length} 笔亏损仓位合计`)}
-          ${simTile("盈亏因子", pfStr, pfCls, "总盈利 ÷ 总亏损，>1 为正期望")}
-        </div>
-      </div>
-
-      <div class="simb-part">
-        ${partHead("逐笔拆解", "Breakdown")}
-        ${subTitle("交易分布", "Trade Distribution", "closed")}
-        <div class="sim-a-stats">
-          ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
-          ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
-          ${simTile("持平数量", evens.length)}
-          ${simTile("总体胜率", winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—", winRatePct !== null && winRatePct >= 50 ? "up" : "down")}
-        </div>
-
-        ${subTitle("收益率", "Returns", "closed", "逐笔简单平均")}
-        <div class="sim-a-stats">
-          ${closedOnlyItems.length ? `
-            ${simTile("平均收益率", (avgPct >= 0 ? "+" : "") + avgPct.toFixed(1) + "%", avgPct >= 0 ? "up" : "down")}
-            ${simTile("中位数收益率", (medPct >= 0 ? "+" : "") + medPct.toFixed(1) + "%", medPct >= 0 ? "up" : "down")}
-            ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—", "up")}
-            ${simTile("平均亏损收益率", avgLossPct !== null ? avgLossPct.toFixed(1) + "%" : "—", "down")}
-          ` : simTile("暂无已平仓交易", "—", "", "本月新开仓位尚未平仓")}
-        </div>
-
-        ${subTitle("最佳 / 最差", "Best / Worst", "combined")}
-        ${bestItem && worstItem ? `
-        <div class="simbw-row">
-          <div class="simbw-card up">
-            <div class="simbw-label">最佳股票${bwState(bestItem)}</div>
-            <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
-            <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
-          </div>
-          <div class="simbw-card down">
-            <div class="simbw-label">最差股票${bwState(worstItem)}</div>
-            <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
-            <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
-          </div>
-        </div>` : `<div class="simb-note">${isCombinedMode ? "本月暂无开仓记录" : "暂无已平仓交易"}</div>`}
-
-        ${subTitle("评级分层表现", "Grade Tiers", "combined")}
-        ${gradeTableHTML}
-
-        ${subTitle("行业表现", "Sector Performance", "combined")}
-        <div class="simb-table">${simbBarRows(sectorRows, r => r.label)}</div>
-      </div>
-      ${historyHTML}`;
+    if (b.weightedPct !== null && !benchFresh) {
+      const capturedWeightedPct = b.weightedPct;
+      fetchCurrentMonthBenchmark(sectionSel, monthKey, b.combinedItems).then(entry => {
+        if (!entry) return;
+        const el = document.getElementById(wpctSubId);
+        if (!el) return;
+        if (entry.error) { el.textContent = "大盘数据获取失败"; return; }
+        el.innerHTML = alphaSubText(entry.pct, capturedWeightedPct - entry.pct);
+      });
+    }
   }
 
   function renderSimMonthly() {
