@@ -18,12 +18,13 @@ export default async function handler(req, res) {
   const toTs   = Math.floor(Date.now() / 1000) + 86400;
 
   const results = {};
+  const adjResults = {};
   const volumeResults = {};
 
   await Promise.all(syms.map(async sym => {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}` +
-        `?interval=1d&period1=${fromTs}&period2=${toTs}`;
+        `?interval=1d&period1=${fromTs}&period2=${toTs}&events=div,split`;
       // Without a timeout, one slow/hanging symbol blocks the whole Promise.all — the
       // function then runs past Vercel's platform-level duration limit and the ENTIRE
       // request fails (client sees "加载失败"), even though every other symbol already
@@ -43,8 +44,15 @@ export default async function handler(req, res) {
       if (!chart) return;
       const timestamps = chart.timestamp || [];
       const closes     = chart.indicators?.quote?.[0]?.close || [];
+      // Split/dividend-adjusted close — needed for total-return comparisons (e.g. "VOO's
+      // monthly return") since a plain price return silently omits dividend cash flows.
+      // Raw `close` above stays authoritative for anything computing an actual position's
+      // dollar P&L (that's the real tradable price; adjclose is a retroactively-scaled
+      // construct only meaningful for return comparisons, never for a real fill price).
+      const adjCloses  = chart.indicators?.adjclose?.[0]?.adjclose || [];
       const volumes    = chart.indicators?.quote?.[0]?.volume || [];
       const prices     = {};
+      const adjPrices  = {};
       const vols       = {};
       timestamps.forEach((ts, i) => {
         if (closes[i] == null) return;
@@ -58,15 +66,17 @@ export default async function handler(req, res) {
         // monthly VOO benchmark comparison. en-CA formats as YYYY-MM-DD.
         const d = new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
         prices[d] = closes[i];
+        if (adjCloses[i] != null) adjPrices[d] = adjCloses[i];
         if (volumes[i] != null) vols[d] = volumes[i];
       });
       if (Object.keys(prices).length) {
         results[sym] = prices;
         volumeResults[sym] = vols;
+        if (Object.keys(adjPrices).length) adjResults[sym] = adjPrices;
       }
     } catch (_) {}
   }));
 
   res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
-  res.json({ results, volumeResults });
+  res.json({ results, adjResults, volumeResults });
 }

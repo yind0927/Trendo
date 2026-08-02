@@ -6754,10 +6754,14 @@ function rsAdjustGrade(grade, rsResult) {
       try {
         const r = await fetch(`/api/history?symbols=VOO&from=${monthKey}-01`);
         if (!r.ok) throw new Error("history fetch failed");
-        const { results } = await r.json();
-        const vooPrices = results && results.VOO;
+        const { results, adjResults } = await r.json();
+        // 优先用分红调整后的收盘价（Yahoo adjclose）——"VOO 这个月涨了多少"这种月度涨跌幅
+        // 大家平时看到的基本都是含分红再投资的口径，用不含分红的裸收盘价算，每次跨过
+        // 除息日就会系统性偏低，跟外部数据源核对不上。adjclose 缺失时退回裸收盘价，
+        // 不让基准这条线因为数据源某天没给 adjclose 就直接失败。
+        const vooPrices = (adjResults && adjResults.VOO) || (results && results.VOO);
         if (!vooPrices) throw new Error("no VOO data");
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
         const endClose = closeOnOrBefore(vooPrices, todayStr);
         const pct = vooCalendarPct(vooPrices, `${monthKey}-01`, endClose);
         if (pct === null) throw new Error("no matched prices");
@@ -7023,14 +7027,14 @@ function rsAdjustGrade(grade, rsResult) {
           { signal: AbortSignal.timeout(12000) });
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const data = await r.json();
-        return { results: data?.results || {} };
+        return { results: data?.results || {}, adjResults: data?.adjResults || {} };
       } catch (e) {
         lastError = (e?.name === "TimeoutError" || e?.name === "AbortError") ? "请求超时" : (e?.message || String(e));
         console.warn(`[月度回测] 历史价格拉取失败（第 ${attempt + 1}/2 次，symbols=${symbolsStr}）:`, e);
         if (attempt === 0) await new Promise(res => setTimeout(res, 800));
       }
     }
-    return { results: {}, error: lastError };
+    return { results: {}, adjResults: {}, error: lastError };
   }
 
   async function computeFrozenMonth({ monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional }) {
@@ -7049,7 +7053,9 @@ function rsAdjustGrade(grade, rsResult) {
       openSyms.length ? _histFetchBatch(openSyms.join(","), monthStart) : Promise.resolve({ results: {} }),
     ]);
 
-    const vooPrices = vooBatch.results.VOO;
+    // 分红调整后的收盘价优先——跟 fetchCurrentMonthBenchmark 同一个理由：不含分红的裸
+    // 涨跌幅每次跨过除息日都会系统性偏低，跟外部数据源核对不上。
+    const vooPrices = vooBatch.adjResults.VOO || vooBatch.results.VOO;
     if (!vooPrices) return { error: vooBatch.error || "响应中没有 VOO 数据", symbols: "VOO" };
 
     // 该月最后一个交易日 = VOO 价格序列里 < monthEnd 的最大日期——直接用真实行情数据当
