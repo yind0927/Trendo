@@ -48,7 +48,15 @@ export default async function handler(req, res) {
       const vols       = {};
       timestamps.forEach((ts, i) => {
         if (closes[i] == null) return;
-        const d = new Date(ts * 1000).toISOString().slice(0, 10);
+        // Label each bar by its trading day in the EXCHANGE's own timezone (US/Eastern for
+        // VOO and all US-listed symbols), not by naive UTC. Yahoo's daily-bar timestamps
+        // don't reliably land on the same UTC calendar date as the actual US trading day —
+        // toISOString() can shift a bar to the wrong side of a UTC midnight boundary,
+        // silently mislabeling the first/last day of a month. That's invisible for most uses
+        // (a single day off rarely matters), but it directly corrupts month-boundary lookups
+        // (first/last trading day of a calendar month), which is exactly what feeds the
+        // monthly VOO benchmark comparison. en-CA formats as YYYY-MM-DD.
+        const d = new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
         prices[d] = closes[i];
         if (volumes[i] != null) vols[d] = volumes[i];
       });
