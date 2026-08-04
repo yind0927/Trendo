@@ -7163,14 +7163,25 @@ function rsAdjustGrade(grade, rsResult) {
     const monthKey   = scopeToMonth ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` : "lifetime";
     const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
+    // 分批平仓会在 CLOSED_POSITIONS/SIM_CLOSED 里产生多条记录（同一笔交易的不同减仓事件），
+    // 必须先按 sym+entry+cost 合并成一笔交易，胜率/收益率统计才不会把同一笔交易的多次减仓
+    // 错算成好几笔独立交易——这跟 Analytics 页（renderAnalytics）用 groupTrades() 的处理
+    // 必须保持一致，模拟仓和现持仓的月度回测/分析复盘都要走同一套口径（此前模拟仓这条
+    // 路径整个没做分组，现持仓那条也只有 Analytics 页单独做了，月度回测模块两边都漏了）。
+    // mode:"closed" 时代表已平仓的是 sourceArr（renderSimAnalytics 的用法）；mode:"open"
+    // 时代表已平仓的是 otherArr（月度回测的用法）；代表"持仓中"的那个数组本身不会因为
+    // 分批平仓产生重复记录，不需要分组，原样使用。
+    const closedSourceArr = mode === "closed" ? groupTrades(sourceArr) : sourceArr;
+    const closedOtherArr  = mode === "open"   ? groupTrades(otherArr)  : otherArr;
+
     const entryInMonth = h => h.entry && h.entry.slice(0, 10) >= monthStart;
-    const thisMonthItems = scopeToMonth ? sourceArr.filter(entryInMonth) : sourceArr;
-    const otherThisMonthCount = scopeToMonth ? otherArr.filter(entryInMonth).length : otherArr.length;
+    const thisMonthItems = scopeToMonth ? closedSourceArr.filter(entryInMonth) : closedSourceArr;
+    const otherThisMonthCount = scopeToMonth ? closedOtherArr.filter(entryInMonth).length : closedOtherArr.length;
 
     // Combined mode: for open-position monthly modules, also pull in closed positions
     // opened this month so aggregate metrics (P&L, grade, sector) cover the full month picture.
     const isCombinedMode = mode === "open" && scopeToMonth;
-    const closedThisMonthArr = isCombinedMode ? otherArr.filter(entryInMonth) : [];
+    const closedThisMonthArr = isCombinedMode ? closedOtherArr.filter(entryInMonth) : [];
 
     if (label) label.innerHTML = `
       <span class="ssl-zh">${titleZh}</span>
@@ -7183,10 +7194,12 @@ function rsAdjustGrade(grade, rsResult) {
     // 只对 desk/sim 两个真正按月切分的「月度回测」模块附加历史月份——分析复盘本就是
     // lifetime 全历史口径（scopeToMonth:false），不存在"新月份把上月数据挤掉"的问题。
     if (isCombinedMode) {
+      // 签名检测特意用原始未分组的数组——分批平仓每一次减仓事件都要能触发历史月份区块
+      // 重建，用分组后的数组会让"同一笔交易又多减了一次仓"这种变化被合并掉、检测不到。
       const sig = monthlyEntitySignature(sourceArr, otherArr);
       if (_histSig[sectionSel] !== sig) {
         _histSig[sectionSel] = sig;
-        const { html, descriptors } = historicalMonthsHTML({ sourceArr, otherArr, notional, excludeMonthKey: monthKey });
+        const { html, descriptors } = historicalMonthsHTML({ sourceArr, otherArr: closedOtherArr, notional, excludeMonthKey: monthKey });
         histEl.innerHTML = html;
         wireHistoryMonths(histEl, descriptors, sectionSel);
       }
@@ -8289,7 +8302,12 @@ function rsAdjustGrade(grade, rsResult) {
     const realItems = closed.map(t => ({ h: t, pnl: t.pnlFinal ?? 0, pct: (t.cost * t.qty) > 0 ? (t.pnlFinal ?? 0) / (t.cost * t.qty) * 100 : 0 }));
     const realCostBasis = closed.reduce((s, t) => s + (t.cost || 0) * (t.qty || 0), 0);
     const weightedPct = realCostBasis > 0 ? totalPnl / realCostBasis * 100 : null;
-    const realUtilPct = totalNotional > 0 ? realCostBasis / totalNotional * 100 : null;
+    // 资金利用率要回答"现在有多少比例的资金压在场上"，基数必须是当前持仓（open）的成本，
+    // 不能用 realCostBasis——那是全部历史已平仓交易的成本累加，是个只增不减的历史总量，
+    // 会跟 Dashboard 卡片"仓位分布·已投"（同样用当前持仓算的快照）对不上，数值上也可能
+    // 轻松超过 100%（做过10笔仓位各30%的交易，累加起来就是300%）。
+    const openCostBasis = open.reduce((s, h) => s + (h.cost || 0) * (h.qty || 0), 0);
+    const realUtilPct = totalNotional > 0 ? openCostBasis / totalNotional * 100 : null;
     const realPctSorted = realItems.map(it => it.pct).sort((a, b) => a - b);
     const realAvgPct = realItems.length ? realItems.reduce((s, it) => s + it.pct, 0) / realItems.length : null;
     const realMedPct = simMedian(realPctSorted);
