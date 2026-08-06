@@ -2314,6 +2314,15 @@
   .analytics-card-title .mkt-sl-zh { font-weight: 700; color: var(--fg-1); }
   .analytics-card-title .mkt-sl-en { font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; }
   .analytics-card-sub { font-size: 10.5px; color: var(--fg-3); margin-top: 6px; font-family: var(--f-mono); }
+  /* Analytics 页上半部分（复盘概览/收益与盈亏）的 .sim-astat 卡片风格对齐「出场质量分析」
+     模块的 .eq-summary-card——描边填充卡改成纯色填充 + teal 短刻度线标签，跟页面下半部分
+     已经在用的视觉语言统一。只作用域到 #analytics-content 内部：.sim-astat 是全站共用
+     组件（Sim 页/月度回测/Options 页 Premium Ledger 等到处都在用），不能动全局样式，
+     只有 Analytics 页这两张卡片的元素/排版本身不变，只换皮肤。 */
+  #analytics-content .sim-astat { background: var(--bg-2); border: none; border-radius: 10px; gap: 0; }
+  #analytics-content .sim-astat-label { margin-bottom: 4px; }
+  #analytics-content .sim-astat-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
+  #analytics-content .sim-astat-sub { font-size: 10px; margin-top: 2px; }
   /* Watchlist grade summary + filter */
   .wl-grade-summary { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 9px 13px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; flex-wrap: wrap; }
   .wl-gs-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); flex-shrink: 0; }
@@ -4753,8 +4762,8 @@
   </div>
 </div>
 
-<script src="data.js?v=596"></script>
-<script src="desk.js?v=596"></script>
+<script src="data.js?v=597"></script>
+<script src="desk.js?v=597"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
