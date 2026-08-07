@@ -7238,13 +7238,12 @@ function rsAdjustGrade(grade, rsResult) {
       const sig = monthlyEntitySignature(sourceArr, otherArr);
       if (_histSig[sectionSel] !== sig) {
         _histSig[sectionSel] = sig;
-        // 持仓构成变了（有仓位新开/平仓/改数量）——之前缓存的冻结结果可能已经过期：比如
-        // 某个历史月份里"仍持仓中"的一笔仓位这次真的平仓了，该月正确的贡献应该从"月末价
-        // 冻结估算"切换成真实 pnlFinal，但 _histMonthCache 只按 sectionSel:monthKey 存，
-        // 不知道内容变了，会一直把旧结果传出去（点开还是过期的估算值）。签名变化时把这个
-        // sectionSel 名下所有缓存清掉，下次展开会自动重新计算——宁可多算几次也不能让用户
-        // 看到一个已经不成立的旧数字。
-        Object.keys(_histMonthCache).forEach(k => { if (k.startsWith(`${sectionSel}:`)) delete _histMonthCache[k]; });
+        // 历史月份是"该月结束时"的定格快照，不是"持续追踪最新状态"的实时视图——一笔仍
+        // 持仓中的仓位后来平仓了，它的真实结果该去综合回测/分析复盘看（那边永远用真实
+        // pnlFinal，本来就是准的），不该反过来篡改"7月"这张卡片。所以 _histMonthCache
+        // 一旦算出来就不再失效：即使这里因为持仓构成变化要重建 <details> 节点列表（下面
+        // historicalMonthsHTML 那次调用），已经缓存过的月份重新展开时仍然直接读旧缓存，
+        // 不会因为账户后续发生的事重新计算出不一样的数字。
         const { html, descriptors } = historicalMonthsHTML({ sourceArr, otherArr: closedOtherArr, notional, excludeMonthKey: monthKey });
         histEl.innerHTML = html;
         wireHistoryMonths(histEl, descriptors, sectionSel);
