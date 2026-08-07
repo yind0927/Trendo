@@ -6945,7 +6945,7 @@ function rsAdjustGrade(grade, rsResult) {
   //
   // 只对 desk/sim 两个真正按月切分的「月度回测」模块生效——分析复盘本就是 lifetime 全历史
   // 口径（scopeToMonth:false），不存在"新月份把上月数据挤掉"的问题，也不需要按月冻结。
-  function historicalMonthsHTML({ sourceArr, otherArr, notional, excludeMonthKey }) {
+  function historicalMonthsHTML({ sourceArr, otherArr, notional, excludeMonthKey, sectionSel }) {
     const monthKeyOf = d => (d && d.length >= 7) ? d.slice(0, 7) : null;
     const keys = new Set();
     sourceArr.forEach(h => { const k = monthKeyOf(h.entry); if (k) keys.add(k); });
@@ -6969,13 +6969,27 @@ function rsAdjustGrade(grade, rsResult) {
       const closedItemsRaw = otherArr.filter(inRange);
       descriptors.push({ key, monthStart, monthEnd, openItemsRaw, closedItemsRaw, notional });
 
-      const previewItems = [
-        ...openItemsRaw.map(h => toCohortItem(h, h.pnlDollar || 0, true)),
-        ...closedItemsRaw.map(h => toCohortItem(h, h.pnlFinal || 0, false)),
-      ];
-      const previewPnl = previewItems.reduce((s, it) => s + it.pnl, 0);
+      // 这个月之前已经点开过、算出并缓存过定格结果的话，标题行直接用那个缓存值——不再
+      // 用今天的实时价重新猜一遍。histEl 会因为账户里任何其他变动（跟这个月完全无关的
+      // 新开仓/平仓）而整个重建，若标题行永远现算"实时预览"，每次重建都会把已经confirm
+      // 过的月份重新显示成一个新的估算数字，折叠态和展开态又对不上——这正是"为什么点开
+      // 还是会变"的根源：不是展开时算错了，是折叠时的标题行没去问缓存，白算了一遍。
+      const cached = sectionSel ? _histMonthCache[`${sectionSel}:${key}`] : null;
+      let previewPnl, previewCount, approx;
+      if (cached) {
+        previewPnl = cached.bucket.monthPnl;
+        previewCount = cached.bucket.combinedItems.length;
+        approx = false;
+      } else {
+        const previewItems = [
+          ...openItemsRaw.map(h => toCohortItem(h, h.pnlDollar || 0, true)),
+          ...closedItemsRaw.map(h => toCohortItem(h, h.pnlFinal || 0, false)),
+        ];
+        previewPnl = previewItems.reduce((s, it) => s + it.pnl, 0);
+        previewCount = previewItems.length;
+        approx = openItemsRaw.length > 0;
+      }
       const pnlChipCls = previewPnl > 0 ? "up" : previewPnl < 0 ? "down" : "";
-      const approx = openItemsRaw.length > 0;
 
       const monthLabelZh = `${y}年${MO_ZH[m - 1]}`;
       const monthLabelEn = `${MO_EN[m - 1]} ${y}`;
@@ -6988,7 +7002,7 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="simb-month-en">${monthLabelEn}</span>
             <span class="simb-month-rule"></span>
             <span class="simb-month-chip ${pnlChipCls}">${approx ? "≈" : ""}${fmt.signed(Math.round(previewPnl))}</span>
-            <span class="simb-month-count">${previewItems.length} 笔</span>
+            <span class="simb-month-count">${previewCount} 笔</span>
           </summary>
           <div class="simb-month-body"></div>
         </details>`;
@@ -7244,7 +7258,7 @@ function rsAdjustGrade(grade, rsResult) {
         // 一旦算出来就不再失效：即使这里因为持仓构成变化要重建 <details> 节点列表（下面
         // historicalMonthsHTML 那次调用），已经缓存过的月份重新展开时仍然直接读旧缓存，
         // 不会因为账户后续发生的事重新计算出不一样的数字。
-        const { html, descriptors } = historicalMonthsHTML({ sourceArr, otherArr: closedOtherArr, notional, excludeMonthKey: monthKey });
+        const { html, descriptors } = historicalMonthsHTML({ sourceArr, otherArr: closedOtherArr, notional, excludeMonthKey: monthKey, sectionSel });
         histEl.innerHTML = html;
         wireHistoryMonths(histEl, descriptors, sectionSel);
       }
