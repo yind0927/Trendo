@@ -2055,6 +2055,9 @@
   .simb-history-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
 
   .simb-month { border: 1px solid var(--line); border-radius: 12px; margin-top: 8px; overflow: hidden; }
+  /* 当月卡片是 section 里第一个元素（历史月份列表在它下面），不需要 .simb-month 默认的
+     8px 顶部间距——那是给"上一张历史月份卡片"留的呼吸空间，当月上面没有别的卡片。 */
+  .simb-current-details { margin-top: 0; }
   .simb-month summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 12px 14px; }
   .simb-month summary::-webkit-details-marker { display: none; }
   .simb-month summary:hover { background: var(--bg-2); }
@@ -4762,8 +4765,8 @@
   </div>
 </div>
 
-<script src="data.js?v=597"></script>
-<script src="desk.js?v=597"></script>
+<script src="data.js?v=598"></script>
+<script src="desk.js?v=598"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

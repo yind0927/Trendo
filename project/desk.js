@@ -7150,18 +7150,58 @@ function rsAdjustGrade(grade, rsResult) {
     section.style.display = "";
     if (label) label.style.display = "";
 
-    // curEl 每次都整块重建（要跟着实时行情/持仓变化走）；histEl 只在持仓/已平仓的实际构成
-    // 变化时才重建——避免 fetchPrices() 每 30 秒一次的价格轮询把用户刚展开的历史月份重新
-    // 收起、把已经算好的冻结对比结果也一并丢掉。两者都是懒创建、此后一直复用同一个节点。
-    let curEl  = section.querySelector(":scope > .simb-current-mount");
-    let histEl = section.querySelector(":scope > .simb-history-mount");
-    if (!curEl)  { curEl  = document.createElement("div"); curEl.className  = "simb-current-mount";  section.appendChild(curEl); }
-    if (!histEl) { histEl = document.createElement("div"); histEl.className = "simb-history-mount"; section.appendChild(histEl); }
-
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
     const monthKey   = scopeToMonth ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` : "lifetime";
     const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    const isCombinedMode = mode === "open" && scopeToMonth;
+
+    // curEl（当月内容）每次都整块重建（要跟着实时行情/持仓变化走）；histEl（历史月份列表）
+    // 只在持仓/已平仓的实际构成变化时才重建——避免 fetchPrices() 每 30 秒一次的价格轮询
+    // 把用户刚展开的历史月份重新收起、把已经算好的冻结对比结果也一并丢掉。
+    // 当月现在也默认折叠，跟历史月份统一——用同一套 <details> 外壳，但 curEl（内容本体）
+    // 依然每次整块重建，只有外层 <details> 元素本身懒创建一次、复用，这样重建内容不会
+    // 把用户手动展开的 open 状态带没了。摘要行（月份名/净盈亏 chip/笔数）单独用
+    // updateCurSummary() 逐字段更新，避免整个 <details> innerHTML 重写导致 open 状态丢失。
+    let curDetails = null, curEl;
+    if (isCombinedMode) {
+      curDetails = section.querySelector(":scope > .simb-current-details");
+      if (!curDetails) {
+        curDetails = document.createElement("details");
+        curDetails.className = "simb-month simb-current-details";
+        curDetails.innerHTML = `
+          <summary>
+            <span class="simb-month-arrow">▸</span>
+            <span class="simb-month-zh"></span>
+            <span class="simb-month-en"></span>
+            <span class="simb-month-rule"></span>
+            <span class="simb-month-chip"></span>
+            <span class="simb-month-count"></span>
+          </summary>
+          <div class="simb-month-body simb-current-mount"></div>`;
+        section.appendChild(curDetails);
+      }
+      curEl = curDetails.querySelector(".simb-current-mount");
+    } else {
+      curEl = section.querySelector(":scope > .simb-current-mount");
+      if (!curEl) { curEl = document.createElement("div"); curEl.className = "simb-current-mount"; section.appendChild(curEl); }
+    }
+    let histEl = section.querySelector(":scope > .simb-history-mount");
+    if (!histEl) { histEl = document.createElement("div"); histEl.className = "simb-history-mount"; section.appendChild(histEl); }
+
+    const MO_ZH = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+    const MO_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const updateCurSummary = (pnl, count) => {
+      if (!curDetails) return;
+      const zhEl = curDetails.querySelector(".simb-month-zh");
+      const enEl = curDetails.querySelector(".simb-month-en");
+      const chipEl = curDetails.querySelector(".simb-month-chip");
+      const countEl = curDetails.querySelector(".simb-month-count");
+      if (zhEl) zhEl.textContent = `${now.getFullYear()}年${MO_ZH[now.getMonth()]}`;
+      if (enEl) enEl.textContent = monthLabel;
+      if (chipEl) { chipEl.textContent = fmt.signed(Math.round(pnl)); chipEl.className = `simb-month-chip ${fmt.sign(pnl)}`; }
+      if (countEl) countEl.textContent = `${count} 笔`;
+    };
 
     // 分批平仓会在 CLOSED_POSITIONS/SIM_CLOSED 里产生多条记录（同一笔交易的不同减仓事件），
     // 必须先按 sym+entry+cost 合并成一笔交易，胜率/收益率统计才不会把同一笔交易的多次减仓
@@ -7180,7 +7220,6 @@ function rsAdjustGrade(grade, rsResult) {
 
     // Combined mode: for open-position monthly modules, also pull in closed positions
     // opened this month so aggregate metrics (P&L, grade, sector) cover the full month picture.
-    const isCombinedMode = mode === "open" && scopeToMonth;
     const closedThisMonthArr = isCombinedMode ? closedOtherArr.filter(entryInMonth) : [];
 
     if (label) label.innerHTML = `
@@ -7199,6 +7238,13 @@ function rsAdjustGrade(grade, rsResult) {
       const sig = monthlyEntitySignature(sourceArr, otherArr);
       if (_histSig[sectionSel] !== sig) {
         _histSig[sectionSel] = sig;
+        // 持仓构成变了（有仓位新开/平仓/改数量）——之前缓存的冻结结果可能已经过期：比如
+        // 某个历史月份里"仍持仓中"的一笔仓位这次真的平仓了，该月正确的贡献应该从"月末价
+        // 冻结估算"切换成真实 pnlFinal，但 _histMonthCache 只按 sectionSel:monthKey 存，
+        // 不知道内容变了，会一直把旧结果传出去（点开还是过期的估算值）。签名变化时把这个
+        // sectionSel 名下所有缓存清掉，下次展开会自动重新计算——宁可多算几次也不能让用户
+        // 看到一个已经不成立的旧数字。
+        Object.keys(_histMonthCache).forEach(k => { if (k.startsWith(`${sectionSel}:`)) delete _histMonthCache[k]; });
         const { html, descriptors } = historicalMonthsHTML({ sourceArr, otherArr: closedOtherArr, notional, excludeMonthKey: monthKey });
         histEl.innerHTML = html;
         wireHistoryMonths(histEl, descriptors, sectionSel);
@@ -7208,6 +7254,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     if (!thisMonthItems.length && !closedThisMonthArr.length) {
+      updateCurSummary(0, 0);
       curEl.innerHTML = `
         <div class="simb-note">${closedNote}</div>
         <div class="sim-a-stats">
@@ -7373,6 +7420,7 @@ function rsAdjustGrade(grade, rsResult) {
     const openItems = thisMonthItems.map(h => toCohortItem(h, h.pnlDollar || 0, true));
     const closedItems = closedThisMonthArr.map(h => toCohortItem(h, h.pnlFinal || 0, false));
     const b = computeMonthBucket(openItems, closedItems, notional);
+    updateCurSummary(b.monthPnl, b.combinedItems.length);
 
     const { peak, ddPct } = simMonthlyPeakDrawdown(peakStorageKey, monthKey, b.monthPnl);
     const scaleTile3HTML = simTile("资金利用率", b.utilizationPct !== null ? b.utilizationPct.toFixed(0) + "%" : "—", b.utilCls,
