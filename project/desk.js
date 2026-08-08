@@ -5286,6 +5286,20 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     const cushionPct = spot ? (isCSP ? (spot - pos.strike) : (pos.strike - spot)) / spot * 100 : null;
+
+    // Underlying-stock floating P&L for standalone CC positions — the user holds the shares
+    // directly (not via a CSP assignment; that case already has its own "正股" card using the
+    // CSP strike as the true cost basis, so skip here to avoid a duplicate/conflicting number).
+    // underlyingAtEntry (spot price captured when the CC was written) is the best available
+    // cost-basis proxy in this manual-record model — there's no separate stock-position ledger.
+    let stockRow = "";
+    if (!isCSP && !pos.linkedCspId && pos.underlyingAtEntry) {
+      const stockShares = pos.qty * 100;
+      const stockPnl = spot != null ? (spot - pos.underlyingAtEntry) * stockShares : null;
+      const stockCls = stockPnl == null ? "" : stockPnl >= 0 ? "up" : "down";
+      stockRow = `<span class="opts-stock-tag" title="开仓时现价 $${pos.underlyingAtEntry.toFixed(2)} 估算成本，非真实持股成本">正股浮盈(估)</span>
+        <b class="${stockCls}">${stockPnl == null ? "—" : (stockPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(stockPnl))}</b>`;
+    }
     return `<div class="opts-pos-card opts-card-open ${isCSP ? "opts-strat-csp" : "opts-strat-cc"}">
       <div class="opts-card-hd">
         <span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>
@@ -5309,6 +5323,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="opts-prog-wrap" title="时间损耗 ${elapsed}/${totalDays} 天"><div class="opts-prog-fill" style="width:${timePct.toFixed(0)}%"></div></div>
       <div class="opts-card-foot">
         ${estRow ? `<div>${estRow}</div>` : ""}
+        ${stockRow ? `<div class="opts-mark-row">${stockRow}</div>` : ""}
         <div class="opts-mark-row">${markRow}</div>
       </div>
     </div>`;
