@@ -5121,6 +5121,33 @@ function rsAdjustGrade(grade, rsResult) {
           if (csp) cc.linkedCspId = csp.id;
         });
     });
+    // Repair stale `realized` on already-settled positions (v604).
+    // `realized` is a CACHED DERIVED value — every branch that writes it derives it purely
+    // from premium/qty/closePremium, so it can always be recomputed. That matters because
+    // the v602/v603 formula fixes only ran at settlement time: anything settled under the
+    // old buggy formulas (CC assignment used to bake in the stock gain AND subtract the
+    // ITM intrinsic) kept its wrong number in localStorage/Redis forever, silently skewing
+    // 已结算权利金盈亏 and every aggregate built on it. Recomputing here is idempotent, so
+    // it self-heals once and then costs nothing.
+    let repaired = false;
+    [...SIM_OPTIONS, ...REAL_OPTIONS].forEach(p => {
+      if (p.status !== "expired" && p.status !== "closed" && p.status !== "assigned") return;
+      if (!(p.premium > 0) || !(p.qty > 0)) return;
+      let want;
+      if (p.status === "closed") {
+        if (p.closePremium == null) return;      // nothing to derive from — leave as-is
+        want = (p.premium - p.closePremium) * 100 * p.qty;
+      } else {
+        // expired OTM and BOTH assignment types keep 100% of the premium; the stock leg
+        // lives in _optStockPnl, never inside `realized`.
+        want = p.premium * 100 * p.qty;
+      }
+      if (p.realized == null || Math.abs(p.realized - want) > 0.005) {
+        p.realized = want;
+        repaired = true;
+      }
+    });
+    if (repaired) saveToStorage();
   }
 
   function _optIntrinsic(pos, spot) {
