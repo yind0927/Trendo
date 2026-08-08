@@ -5196,6 +5196,42 @@ function rsAdjustGrade(grade, rsResult) {
     return pos.realized ?? 0;
   }
 
+  // Canonical REALIZED STOCK-leg P&L attributable to this position.
+  // Single-ownership rule — in a full wheel (CSP assigned → shares → CC exercised) the very
+  // same 100 shares are referenced by two records, so exactly one of them may claim the
+  // stock move or every aggregate double-counts it:
+  //   • CSP assigned + shares sold → the CSP owns it: (assignedExitPrice − strike).
+  //     When a linked CC gets exercised, settleExpiredOptions writes that CC's strike into
+  //     the parent's assignedExitPrice, so this one term already covers the whole round trip.
+  //   • CC exercised WITHOUT a live parent CSP (standalone CC over shares the user already
+  //     held) → the CC owns it: (strike − underlyingAtEntry), the only basis available here.
+  //   • CC exercised WITH a parent CSP that is carrying the stock leg → 0, parent owns it.
+  // Anything else (OTM expiry, bought-to-close, still-held shares) has no realized stock leg.
+  function _optOwnsStockLeg(pos) {
+    if (pos.status !== "assigned") return false;
+    if (pos.strat === "csp") return !!(pos.assignedStockSold && pos.assignedExitPrice != null);
+    if (pos.linkedCspId) {
+      const parent = [...SIM_OPTIONS, ...REAL_OPTIONS].find(p => p.id === pos.linkedCspId);
+      // Only cede the stock leg if the parent is actually carrying it; if the parent was
+      // deleted (or never recorded an exit) keep it so the move isn't silently lost.
+      if (parent && parent.assignedStockSold && parent.assignedExitPrice != null) return false;
+    }
+    return pos.underlyingAtEntry != null;
+  }
+
+  function _optStockPnl(pos) {
+    if (!_optOwnsStockLeg(pos)) return 0;
+    return pos.strat === "csp"
+      ? (pos.assignedExitPrice - pos.strike) * 100 * pos.qty
+      : (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty;
+  }
+
+  // Full realized P&L of a position: option leg + whatever stock leg it owns.
+  function _optTotalPnl(pos) {
+    const opt = _optFinalPnl(pos);
+    return opt == null ? null : opt + _optStockPnl(pos);
+  }
+
   // Returns { income, cost, net, incomeLabel, costLabel, costOp } for any settled position
   function _optPnlBreakdown(pos) {
     if (pos.status === "expired") {
@@ -5207,20 +5243,17 @@ function rsAdjustGrade(grade, rsResult) {
       const cost   = (pos.closePremium || 0) * 100 * pos.qty;
       return { income, cost, net: income - cost, incomeLabel: "权利金收入", costLabel: "买回成本", costOp: "sub" };
     }
-    if (pos.status === "assigned" && pos.strat === "csp" && pos.assignedStockSold && pos.assignedExitPrice != null) {
-      const income   = pos.premium * 100 * pos.qty;
-      const stockPnl = (pos.assignedExitPrice - pos.strike) * pos.qty * 100;
+    if (pos.status === "assigned") {
+      // Option leg keeps 100% of the premium (pos.realized, set once in settleExpiredOptions);
+      // the stock leg comes from _optStockPnl, which decides who owns it. A CC covering
+      // CSP-assigned shares owns no stock leg — the parent CSP card shows the full round
+      // trip — so it renders as premium-only rather than repeating the same shares' move.
+      const income = _optFinalPnl(pos) ?? 0;
+      if (!_optOwnsStockLeg(pos)) {
+        return { income, cost: 0, net: income, incomeLabel: "期权收入", costLabel: null, costOp: null };
+      }
+      const stockPnl = _optStockPnl(pos);
       return { income, cost: stockPnl, net: income + stockPnl, incomeLabel: "期权收入", costLabel: "正股盈亏", costOp: "add" };
-    }
-    if (pos.status === "assigned" && pos.strat === "cc") {
-      // Mirrors the CSP-assigned-and-sold branch above: option leg keeps 100% of premium
-      // (pos.realized, set in settleExpiredOptions), stock leg is the strike vs. the price
-      // captured when the CC was written (underlyingAtEntry — the only cost-basis proxy
-      // available in this manual-record model).
-      const optIncome = pos.realized ?? 0;
-      const stockGain = pos.underlyingAtEntry != null ? (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty : null;
-      const net       = stockGain != null ? optIncome + stockGain : optIncome;
-      return { income: optIncome, cost: stockGain, net, incomeLabel: "期权收入", costLabel: stockGain != null ? "正股盈亏" : null, costOp: stockGain != null ? "add" : null };
     }
     return null;
   }
@@ -5402,7 +5435,9 @@ function rsAdjustGrade(grade, rsResult) {
     if (!pos.entryDate || !pos.closedAt) return -Infinity;
     if (pos.status === "open" || pos.status === "pending") return -Infinity;
     const days = Math.max(1, Math.round((new Date(pos.closedAt) - new Date(pos.entryDate)) / 86400000));
-    const finalPnl = _optFinalPnl(pos);
+    // Total (option + owned stock leg) — for an assigned position the stock move IS the
+    // bulk of the outcome, so a premium-only return would badly misstate the trade.
+    const finalPnl = _optTotalPnl(pos);
     if (finalPnl == null) return -Infinity;
     const capitalBase = pos.strat === "csp"
       ? pos.strike * 100 * pos.qty
@@ -5540,7 +5575,12 @@ function rsAdjustGrade(grade, rsResult) {
     const shares     = csp.qty * 100;
     const cspPrem    = csp.premium * 100 * csp.qty;
     const ccPnl      = cc.realized ?? ((cc.premium - (cc.closePremium || 0)) * 100 * cc.qty);
-    const stockPnl   = (cc.strike - csp.strike) * shares;
+    // Built from the same canonical helpers the individual cards use, so the group total
+    // ("合看") is always exactly the sum of its two sub-cards ("分看"). _optStockPnl's
+    // ownership rule guarantees the shares are counted once across the pair — normally by
+    // the CSP, via the exit price settleExpiredOptions wrote when the CC was exercised.
+    const stockPnl   = _optStockPnl(csp) + _optStockPnl(cc);
+    const exitPx     = csp.assignedExitPrice ?? cc.strike;
     const totalPnl   = cspPrem + ccPnl + stockPnl;
     const totalCls   = totalPnl >= 0 ? "up" : "down";
     const startDate  = csp.entryDate || "";
@@ -5581,7 +5621,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="opts-wt-step">
         <div class="opts-wt-tag">④ ${ccEndLabel}</div>
         <div class="opts-wt-val ${stockPnl >= 0 ? "up" : "down"}">${stockPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(stockPnl))}</div>
-        <div class="opts-wt-desc">@$${cc.strike} · 正股盈亏</div>
+        <div class="opts-wt-desc">@$${exitPx} · 正股盈亏</div>
         ${endDate ? `<div class="opts-wt-date">${endDate}</div>` : ""}
       </div>
     </div>`;
@@ -5631,6 +5671,14 @@ function rsAdjustGrade(grade, rsResult) {
     const closedPosns   = settledPosns.filter(p => p.status === "closed");
 
     const realizedPnl   = settledPosns.reduce((s, p) => s + (_optFinalPnl(p) ?? 0), 0);
+    // Realized STOCK leg of completed assignments (CSP shares sold, CC shares called away).
+    // Kept separate from the premium figures above — both legs are real money and the wheel's
+    // true outcome is their sum, but mixing them into "权利金" would misreport the ledger.
+    const realizedStock = settledPosns.reduce((s, p) => s + _optStockPnl(p), 0);
+    const realizedTotal = realizedPnl + realizedStock;
+    const stockCls      = realizedStock >= 0 ? "up" : "down";
+    const totalCls      = realizedTotal >= 0 ? "up" : "down";
+    const stockPosns    = settledPosns.filter(p => _optOwnsStockLeg(p));
     // NET settled premium: gross for expired/assigned, minus buyback for closed
     const settledPrem   = settledPosns.reduce((s, p) => {
       if (p.status === "closed") return s + (p.premium - (p.closePremium || 0)) * 100 * p.qty;
@@ -5747,6 +5795,16 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
           <div class="opts-ledger-split-val ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
         </div>` : ""}
+        ${stockPosns.length ? `<div class="opts-ledger-split">
+          <div class="opts-ledger-split-item">
+            <span class="opts-ledger-dot" style="background:var(--accent)"></span>
+            <div>
+              <div class="opts-ledger-split-label">Settled Stock P&L · 已结算正股盈亏</div>
+              <div class="opts-ledger-split-sub">指派后正股易手已确定的盈亏 · ${stockPosns.length}笔</div>
+            </div>
+          </div>
+          <div class="opts-ledger-split-val ${stockCls}">${realizedStock >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedStock))}</div>
+        </div>` : ""}
         ${open.length ? `<div class="opts-ledger-split">
           <div class="opts-ledger-split-item">
             <span class="opts-ledger-dot warn"></span>
@@ -5759,7 +5817,8 @@ function rsAdjustGrade(grade, rsResult) {
         </div>` : ""}
         <div class="opts-ws-rows">
           <div class="opts-ws-grid opts-ws-grid-6">
-            ${cell("Realized Option P&L · 已实现期权收益", (realizedPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedPnl)), realCls, `${settledPosns.length} trades completed · 已完成 ${settledQty}张`)}
+            ${cell("Realized P&L · 已实现总盈亏", (realizedTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedTotal)), totalCls,
+              `期权 ${(realizedPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedPnl))} · 正股 ${realizedStock === 0 ? "—" : (realizedStock >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedStock))} · 已完成 ${settledQty}张`)}
             ${cell("Open P&L · 持仓浮盈亏", openPnlKnown ? (openPnlTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(openPnlTotal)) : "—", openPnlCls, `Options ${floatStr} · 正股 ${eqStr}`)}
             ${cell("Average Delta · 平均 Delta", avgDelta != null ? avgDelta.toFixed(2) : "—", "", "Contract-weighted completed trades · 按已完成交易张数加权")}
           </div>
@@ -5783,7 +5842,9 @@ function rsAdjustGrade(grade, rsResult) {
       const key = (p.closedAt || p.expiry || "").slice(0, 7);
       if (!key) continue;
       if (!byMonth[key]) byMonth[key] = { pnl: 0, count: 0, wins: 0, prem: 0 };
-      const pnl = _optFinalPnl(p) ?? 0;
+      // Total (option + stock) so an exercised wheel's month reflects the real outcome;
+      // the 权利金 column beside it stays premium-only.
+      const pnl = _optTotalPnl(p) ?? 0;
       byMonth[key].pnl   += pnl;
       byMonth[key].prem  += p.premium * 100 * p.qty;
       byMonth[key].count += 1;
@@ -5995,7 +6056,7 @@ function rsAdjustGrade(grade, rsResult) {
     });
     const _symGroups = [..._symGroupMap.entries()].map(([sym, trades]) => {
       const latestDate = trades.reduce((d, t) => ((t.closedAt || t.expiry || "") > d ? (t.closedAt || t.expiry || "") : d), "");
-      const totalNet   = trades.reduce((s, t) => s + (_optFinalPnl(t) ?? 0), 0);
+      const totalNet   = trades.reduce((s, t) => s + (_optTotalPnl(t) ?? 0), 0);
       const annVals    = trades.map(t => _optAnn(t)).filter(v => v !== -Infinity);
       const avgAnn     = annVals.length ? annVals.reduce((a, b) => a + b, 0) / annVals.length : null;
       const cspCnt     = trades.filter(t => t.strat === "csp").length;
