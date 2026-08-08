@@ -5130,7 +5130,12 @@ function rsAdjustGrade(grade, rsResult) {
   // Auto-settle open positions past expiry using the live ETF price:
   // OTM → expire worthless (keep premium); ITM → assigned (premium − intrinsic)
   // CSP assigned: stock held at strike, equity P&L tracked until user records exit.
-  // CC assigned: stock called away; equity gain = (strike − underlyingAtEntry) × qty × 100.
+  // CC assigned: stock called away — pos.realized stays the PURE option leg (mirrors the
+  // CSP branch below); the stock's own gain/loss is computed separately wherever it's
+  // displayed (_optPnlBreakdown, _optWheelGroupCard), each using the cost basis appropriate
+  // to that view (underlyingAtEntry for a standalone CC, the linked CSP's strike for a full
+  // wheel cycle). Baking it into pos.realized here would double-count it once those callers
+  // add their own stock component on top.
   function settleExpiredOptions() {
     let changed = false;
     const today = new Date().toISOString().slice(0, 10);
@@ -5153,9 +5158,9 @@ function rsAdjustGrade(grade, rsResult) {
             pos.assignedExitDate = null;
           }
         } else {
-          // CC: stock called away at strike — capture both components now
-          const stockGain = pos.underlyingAtEntry ? (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty : 0;
-          pos.realized = (pos.premium - intrinsic) * 100 * pos.qty + stockGain;
+          // CC: stock called away at strike — option leg only; stock gain/loss is added
+          // separately by callers (see comment above).
+          pos.realized = (pos.premium - intrinsic) * 100 * pos.qty;
           // Auto-complete Wheel: linked CSP's stock was called away at this strike
           if (pos.linkedCspId) {
             const parentCsp = [...SIM_OPTIONS, ...REAL_OPTIONS].find(p => p.id === pos.linkedCspId);
@@ -5176,11 +5181,11 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // Canonical "what did this position actually earn" — used by stats and done-card.
-  // A CSP assignment settles the OPTION leg immediately (100% of premium kept, same as
+  // Both CSP and CC assignments settle the OPTION leg only (100% of premium kept, same as
   // an OTM expiry) — pos.realized is set once at assignment (settleExpiredOptions) and
-  // never touched again. The resulting stock is a separate, ongoing "正股" concern
-  // (tracked via strike/assignedExitPrice directly in _optPnlBreakdown), decoupled from
-  // this option-only figure so it isn't double-counted once the stock is eventually sold.
+  // never touched again. The resulting stock move (held after a CSP assignment, or called
+  // away by a CC assignment) is a separate "正股" concern computed in _optPnlBreakdown /
+  // _optWheelGroupCard, decoupled from this option-only figure so it isn't double-counted.
   function _optFinalPnl(pos) {
     if (pos.status === "open") return null;
     return pos.realized ?? 0;
