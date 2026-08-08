@@ -5128,7 +5128,10 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // Auto-settle open positions past expiry using the live ETF price:
-  // OTM → expire worthless (keep premium); ITM → assigned (premium − intrinsic)
+  // OTM → expire worthless (keep 100% premium); ITM → assigned (ALSO keep 100% premium —
+  // physical assignment never claws back cash from the option leg; being ITM only means the
+  // stock changes hands at the strike instead of at market, which is a separate stock-leg
+  // effect handled below, not a deduction from the option premium itself).
   // CSP assigned: stock held at strike, equity P&L tracked until user records exit.
   // CC assigned: stock called away — pos.realized stays the PURE option leg (mirrors the
   // CSP branch below); the stock's own gain/loss is computed separately wherever it's
@@ -5158,9 +5161,11 @@ function rsAdjustGrade(grade, rsResult) {
             pos.assignedExitDate = null;
           }
         } else {
-          // CC: stock called away at strike — option leg only; stock gain/loss is added
+          // CC: stock called away at strike — keep the FULL premium (no intrinsic deduction;
+          // that would double-subtract the same spot-vs-strike gap that the stock leg below
+          // already captures via underlyingAtEntry→strike). Stock gain/loss is added
           // separately by callers (see comment above).
-          pos.realized = (pos.premium - intrinsic) * 100 * pos.qty;
+          pos.realized = pos.premium * 100 * pos.qty;
           // Auto-complete Wheel: linked CSP's stock was called away at this strike
           if (pos.linkedCspId) {
             const parentCsp = [...SIM_OPTIONS, ...REAL_OPTIONS].find(p => p.id === pos.linkedCspId);
@@ -5208,10 +5213,14 @@ function rsAdjustGrade(grade, rsResult) {
       return { income, cost: stockPnl, net: income + stockPnl, incomeLabel: "期权收入", costLabel: "正股盈亏", costOp: "add" };
     }
     if (pos.status === "assigned" && pos.strat === "cc") {
-      const optPnl    = pos.realized ?? 0;
+      // Mirrors the CSP-assigned-and-sold branch above: option leg keeps 100% of premium
+      // (pos.realized, set in settleExpiredOptions), stock leg is the strike vs. the price
+      // captured when the CC was written (underlyingAtEntry — the only cost-basis proxy
+      // available in this manual-record model).
+      const optIncome = pos.realized ?? 0;
       const stockGain = pos.underlyingAtEntry != null ? (pos.strike - pos.underlyingAtEntry) * 100 * pos.qty : null;
-      const net       = stockGain != null ? optPnl + stockGain : optPnl;
-      return { income: optPnl, cost: stockGain, net, incomeLabel: "期权盈亏", costLabel: stockGain != null ? "正股增益" : null, costOp: stockGain != null ? "add" : null };
+      const net       = stockGain != null ? optIncome + stockGain : optIncome;
+      return { income: optIncome, cost: stockGain, net, incomeLabel: "期权收入", costLabel: stockGain != null ? "正股盈亏" : null, costOp: stockGain != null ? "add" : null };
     }
     return null;
   }
