@@ -1810,14 +1810,29 @@
   .opts-ledger-cf-label { font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 6px; }
   .opts-ledger-cf-val { font-size: 28px; font-weight: 800; font-family: var(--f-mono); line-height: 1; margin-bottom: 5px; }
   .opts-ledger-cf-sub { font-size: 10.5px; color: var(--fg-3); }
-  .opts-ledger-formula { display: flex; align-items: stretch; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 6px; }
-  .opts-ledger-fcell { flex: 1; padding: 12px 16px; min-width: 0; border-radius: 6px; }
-  .opts-ledger-fop { display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: var(--fg-3); padding: 0 4px; flex-shrink: 0; }
-  .opts-ledger-fl { font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 5px; }
-  .opts-ledger-fv { font-size: 19px; font-weight: 800; font-family: var(--f-mono); margin-bottom: 3px; }
-  .opts-ledger-fs { font-size: 10px; color: var(--fg-3); }
-  .opts-ledger-subhead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 10.5px; font-weight: 700; color: var(--fg-2); margin: 14px 0 6px; }
-  .opts-ledger-subhead span { font-weight: 400; font-size: 9.5px; color: var(--fg-3); }
+  /* ── 收益构成：两项来源 + 占比条 */
+  .opts-comp { border-top: 1px solid var(--line); padding-top: 14px; margin-bottom: 14px; }
+  .opts-comp-hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 11px; font-weight: 700; color: var(--fg-1); margin-bottom: 11px; }
+  .opts-comp-hd span { font-weight: 400; font-size: 9.5px; color: var(--fg-3); }
+  .opts-comp-cells { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .opts-comp-cell { background: var(--bg-2); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .opts-comp-l { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--fg-2); margin-bottom: 6px; }
+  .opts-comp-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .opts-comp-v { font-size: 22px; font-weight: 800; font-family: var(--f-mono); line-height: 1.1; margin-bottom: 5px; }
+  .opts-comp-v.dim { color: var(--fg-3); }
+  .opts-comp-s { font-size: 9.5px; color: var(--fg-3); line-height: 1.45; }
+  .opts-comp-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 12px; background: var(--bg-3); }
+  .opts-comp-seg { height: 100%; }
+  .opts-comp-legend { display: flex; gap: 14px; font-size: 9.5px; color: var(--fg-3); margin-top: 6px; font-family: var(--f-mono); }
+  .opts-comp-legend-note { font-family: inherit; margin-top: 10px; }
+  /* ── 权利金现金流：压缩成单行，与上方已实现口径区分 */
+  .opts-cf-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 13px; border-radius: 10px;
+    background: var(--bg-2); font-size: 11px; color: var(--fg-2); font-family: var(--f-mono); }
+  .opts-cf-tag { font-family: var(--f-sans); font-size: 9.5px; font-weight: 700; letter-spacing: .04em; color: var(--fg-3);
+    border: 1px solid var(--line); border-radius: 20px; padding: 2px 9px; flex-shrink: 0; }
+  .opts-cf-item b { font-weight: 800; color: var(--fg-0); margin-left: 3px; }
+  .opts-cf-op { color: var(--fg-3); }
+  .opts-cf-note { font-family: var(--f-sans); font-size: 9.5px; color: var(--fg-3); margin-left: auto; }
   .opts-ledger-split { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
   .opts-ledger-split:first-of-type { border-top: none; }
   .opts-ledger-split-item { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
@@ -1986,12 +2001,14 @@
     .opts-stats, .opts-stats.opts-stats-5 { grid-template-columns: repeat(2, 1fr); }
     .opts-ws-grid { grid-template-columns: repeat(2, 1fr); }
     .opts-ws-grid-6 { grid-template-columns: 1fr; }
-    /* Premium Ledger card: stack right-aligned cash-flow block below the title, formula row goes vertical */
+    /* P&L Overview card: stack the hero number below the title; composition cells go single-column
+       and the cash-flow line wraps its trailing note onto its own row instead of squeezing. */
     .opts-ledger-top { flex-direction: column; gap: 12px; }
     .opts-ledger-right { text-align: left; }
     .opts-ledger-cf-val { font-size: 24px; }
-    .opts-ledger-formula { flex-direction: column; }
-    .opts-ledger-fop { padding: 2px 0; justify-content: flex-start; }
+    .opts-comp-cells { grid-template-columns: 1fr; }
+    .opts-comp-v { font-size: 20px; }
+    .opts-cf-note { margin-left: 0; width: 100%; }
     .opts-ledger-split { align-items: flex-start; }
     .opts-ledger-split-val { margin-top: 1px; }
     /* Metric grid: 2x2 on mobile */
@@ -4768,8 +4785,8 @@
   </div>
 </div>
 
-<script src="data.js?v=606"></script>
-<script src="desk.js?v=606"></script>
+<script src="data.js?v=607"></script>
+<script src="desk.js?v=607"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

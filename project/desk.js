@@ -5689,7 +5689,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function _optSummaryHTML(open, done) {
-    // ── 已了结 P&L — CSP 一旦被指派，期权腿立即算已平仓（100%权利金到手，与到期作废等价）；
+    // ── 已了结 P&L — CSP 一旦被指派，期权部分立即算已平仓（100%权利金到手，与到期作废等价）；
     // liveAssigned 仍单独跟踪，用于下面"正股"仍持有部分的现金占用/浮盈计算，
     // 二者不再互斥：同一笔仓位可以"期权已结算 + 正股仍持有"同时成立。
     const liveAssigned  = done.filter(p => p.status === "assigned" && p.strat === "csp" && !p.assignedStockSold);
@@ -5763,7 +5763,7 @@ function rsAdjustGrade(grade, rsResult) {
     const openPnlTotal = (markFloat ?? 0) + (equityPnl ?? 0);
     const openPnlCls   = !openPnlKnown ? "" : openPnlTotal >= 0 ? "up" : "down";
 
-    // ── 综合总收益（已实现两条腿 + 仍在浮动的两条腿）
+    // ── 综合总收益（已实现的两项来源 + 仍在浮动的两项来源）
     const grandTotal = realizedTotal + openPnlTotal;
     const grandCls   = grandTotal >= 0 ? "up" : "down";
 
@@ -5778,6 +5778,22 @@ function rsAdjustGrade(grade, rsResult) {
     // ── 权利金保留率（已完成交易：净收取 / 总收取）
     const captureRate = settledGross > 0 ? settledPrem / settledGross * 100 : null;
 
+    // ── 收益构成占比条：只在两项来源同为正、且合计为正时才画。
+    // 一正一负时"占比"没有意义（谁占 120%？），此时只展示两个数字，不硬套一根条。
+    let compBarHTML = "";
+    if (realizedPnl > 0 && realizedStock > 0) {
+      const pctOpt = realizedPnl / realizedTotal * 100;
+      compBarHTML = `<div class="opts-comp-bar">
+          <div class="opts-comp-seg" style="width:${pctOpt.toFixed(1)}%;background:var(--up)"></div>
+          <div class="opts-comp-seg" style="width:${(100 - pctOpt).toFixed(1)}%;background:var(--accent)"></div>
+        </div>
+        <div class="opts-comp-legend"><span>期权 ${pctOpt.toFixed(0)}%</span><span>正股 ${(100 - pctOpt).toFixed(0)}%</span></div>`;
+    } else if (realizedStock !== 0 || realizedPnl !== 0) {
+      const mixed = (realizedPnl < 0) !== (realizedStock < 0) && realizedPnl !== 0 && realizedStock !== 0;
+      compBarHTML = `<div class="opts-comp-legend opts-comp-legend-note">${
+        mixed ? "两项来源一盈一亏，不适合按占比展示" : "暂不足以计算占比"}</div>`;
+    }
+
     const cell = (label, val, cls = "", sub = "") => `<div class="opts-stat">
       <div class="opts-stat-label">${label}</div>
       <div class="opts-stat-val ${cls}">${val}</div>
@@ -5789,52 +5805,38 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="opts-ledger-top">
           <div class="opts-ledger-left">
             ${atitle("收益总览", "P&L Overview")}
-            <div class="analytics-card-sub">综合收益 = 期权权利金 + 正股结算，两条腿各自的贡献列在下方。只有已平仓、到期、行权或滚仓的记录才计入已结算。</div>
+            <div class="analytics-card-sub">综合收益 = 期权权利金 + 正股结算，两项来源各自的贡献列在下方。只有已平仓、到期、行权或滚仓的记录才计入已实现。</div>
           </div>
           <div class="opts-ledger-right">
             <div class="opts-ledger-cf-label">TOTAL REALIZED P&L · 综合已实现收益</div>
             <div class="opts-ledger-cf-val ${totalCls}">${realizedTotal >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedTotal))}</div>
-            <div class="opts-ledger-cf-sub">期权与正股两条腿合计，未扣费用</div>
+            <div class="opts-ledger-cf-sub">期权与正股两项来源合计，未扣手续费</div>
           </div>
         </div>
-        <div class="opts-ledger-formula">
-          <div class="opts-ledger-fcell">
-            <div class="opts-ledger-fl">01 · OPTION PREMIUM P&L · 期权权利金收益</div>
-            <div class="opts-ledger-fv ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
-            <div class="opts-ledger-fs">已结算 ${settledPosns.length}笔 · ${settledQty}张 · 含买回支出</div>
+        <div class="opts-comp">
+          <div class="opts-comp-hd">收益构成 · Composition<span>上方数字由这两项来源相加而成</span></div>
+          <div class="opts-comp-cells">
+            <div class="opts-comp-cell">
+              <div class="opts-comp-l"><span class="opts-comp-dot" style="background:var(--up)"></span>期权权利金收益</div>
+              <div class="opts-comp-v ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
+              <div class="opts-comp-s">卖出收取扣掉买回支出 · 已实现 ${settledPosns.length}笔 · ${settledQty}张</div>
+            </div>
+            <div class="opts-comp-cell">
+              <div class="opts-comp-l"><span class="opts-comp-dot" style="background:var(--accent)"></span>正股结算收益</div>
+              <div class="opts-comp-v ${realizedStock === 0 ? "dim" : stockCls}">${realizedStock === 0 ? "—" : (realizedStock >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedStock))}</div>
+              <div class="opts-comp-s">${stockPosns.length ? `被指派后正股易手已确定 · ${stockPosns.length}笔` : "暂无已易手的正股"}</div>
+            </div>
           </div>
-          <div class="opts-ledger-fop">+</div>
-          <div class="opts-ledger-fcell">
-            <div class="opts-ledger-fl">02 · STOCK P&L · 正股结算收益</div>
-            <div class="opts-ledger-fv ${realizedStock === 0 ? "" : stockCls}">${realizedStock === 0 ? "—" : (realizedStock >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedStock))}</div>
-            <div class="opts-ledger-fs">${stockPosns.length ? `指派后正股易手 · ${stockPosns.length}笔` : "暂无已易手的正股"}</div>
-          </div>
-          <div class="opts-ledger-fop">=</div>
-          <div class="opts-ledger-fcell opts-ledger-fcell-final" style="background:${mkAlpha(realizedTotal >= 0 ? "var(--up)" : "var(--down)", 8)}">
-            <div class="opts-ledger-fl">03 · TOTAL REALIZED · 综合已实现</div>
-            <div class="opts-ledger-fv ${totalCls}">${realizedTotal >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedTotal))}</div>
-            <div class="opts-ledger-fs">这笔生意到目前真正落袋的钱</div>
-          </div>
+          ${compBarHTML}
         </div>
-        <div class="opts-ledger-subhead">权利金现金流 · Premium Cash Flow<span>含仍在持仓中的合约，与上方已实现口径不同</span></div>
-        <div class="opts-ledger-formula">
-          <div class="opts-ledger-fcell">
-            <div class="opts-ledger-fl">TOTAL SOLD PREMIUM · 卖出总收取</div>
-            <div class="opts-ledger-fv">${fmt.usd(totalSoldPrem)}</div>
-            <div class="opts-ledger-fs">${soldQty} 张合约累计收取</div>
-          </div>
-          <div class="opts-ledger-fop">−</div>
-          <div class="opts-ledger-fcell">
-            <div class="opts-ledger-fl">BUYBACK PAID · 买回总支出</div>
-            <div class="opts-ledger-fv ${totalBuyback > 0 ? "down" : ""}">${fmt.usd(totalBuyback)}</div>
-            <div class="opts-ledger-fs">仅统计平仓与滚仓的实际买回</div>
-          </div>
-          <div class="opts-ledger-fop">=</div>
-          <div class="opts-ledger-fcell">
-            <div class="opts-ledger-fl">NET CASH FLOW · 净现金流</div>
-            <div class="opts-ledger-fv ${netCfCls}">${netCashFlow >= 0 ? "+" : "−"}${fmt.usd(Math.abs(netCashFlow))}</div>
-            <div class="opts-ledger-fs">包含已结算与仍在持仓中的权利金</div>
-          </div>
+        <div class="opts-cf-line">
+          <span class="opts-cf-tag">权利金现金流</span>
+          <span class="opts-cf-item">卖出总收取 <b>${fmt.usd(totalSoldPrem)}</b></span>
+          <span class="opts-cf-op">−</span>
+          <span class="opts-cf-item">买回总支出 <b class="${totalBuyback > 0 ? "down" : ""}">${fmt.usd(totalBuyback)}</b></span>
+          <span class="opts-cf-op">=</span>
+          <span class="opts-cf-item">净现金流 <b class="${netCfCls}">${netCashFlow >= 0 ? "+" : "−"}${fmt.usd(Math.abs(netCashFlow))}</b></span>
+          <span class="opts-cf-note">${soldQty}张累计 · 含仍在持仓中的合约，与上方已实现口径不同</span>
         </div>
         ${open.length ? `<div class="opts-ledger-split">
           <div class="opts-ledger-split-item">
