@@ -5763,6 +5763,10 @@ function rsAdjustGrade(grade, rsResult) {
     const openPnlTotal = (markFloat ?? 0) + (equityPnl ?? 0);
     const openPnlCls   = !openPnlKnown ? "" : openPnlTotal >= 0 ? "up" : "down";
 
+    // ── 综合总收益（已实现两条腿 + 仍在浮动的两条腿）
+    const grandTotal = realizedTotal + openPnlTotal;
+    const grandCls   = grandTotal >= 0 ? "up" : "down";
+
     // ── 现金占用合计
     const totalOccupied = openCspSecured + liveAssignedCash;
 
@@ -5784,54 +5788,54 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="analytics-card">
         <div class="opts-ledger-top">
           <div class="opts-ledger-left">
-            ${atitle("权利金总账", "Premium Ledger")}
-            <div class="analytics-card-sub">现金流不等于最终盈利；只有已平仓、到期、行权或滚仓的记录才计入已结算。</div>
+            ${atitle("收益总览", "P&L Overview")}
+            <div class="analytics-card-sub">综合收益 = 期权权利金 + 正股结算，两条腿各自的贡献列在下方。只有已平仓、到期、行权或滚仓的记录才计入已结算。</div>
           </div>
           <div class="opts-ledger-right">
-            <div class="opts-ledger-cf-label">NET PREMIUM CASH FLOW · 权利金净现金流</div>
-            <div class="opts-ledger-cf-val ${netCfCls}">${netCashFlow >= 0 ? "+" : "−"}${fmt.usd(Math.abs(netCashFlow))}</div>
-            <div class="opts-ledger-cf-sub">当前实际收取减买回支出，未扣费用</div>
+            <div class="opts-ledger-cf-label">TOTAL REALIZED P&L · 综合已实现收益</div>
+            <div class="opts-ledger-cf-val ${totalCls}">${realizedTotal >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedTotal))}</div>
+            <div class="opts-ledger-cf-sub">期权与正股两条腿合计，未扣费用</div>
           </div>
         </div>
         <div class="opts-ledger-formula">
           <div class="opts-ledger-fcell">
-            <div class="opts-ledger-fl">01 · TOTAL SOLD PREMIUM · 卖出总收取</div>
+            <div class="opts-ledger-fl">01 · OPTION PREMIUM P&L · 期权权利金收益</div>
+            <div class="opts-ledger-fv ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
+            <div class="opts-ledger-fs">已结算 ${settledPosns.length}笔 · ${settledQty}张 · 含买回支出</div>
+          </div>
+          <div class="opts-ledger-fop">+</div>
+          <div class="opts-ledger-fcell">
+            <div class="opts-ledger-fl">02 · STOCK P&L · 正股结算收益</div>
+            <div class="opts-ledger-fv ${realizedStock === 0 ? "" : stockCls}">${realizedStock === 0 ? "—" : (realizedStock >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedStock))}</div>
+            <div class="opts-ledger-fs">${stockPosns.length ? `指派后正股易手 · ${stockPosns.length}笔` : "暂无已易手的正股"}</div>
+          </div>
+          <div class="opts-ledger-fop">=</div>
+          <div class="opts-ledger-fcell opts-ledger-fcell-final" style="background:${mkAlpha(realizedTotal >= 0 ? "var(--up)" : "var(--down)", 8)}">
+            <div class="opts-ledger-fl">03 · TOTAL REALIZED · 综合已实现</div>
+            <div class="opts-ledger-fv ${totalCls}">${realizedTotal >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedTotal))}</div>
+            <div class="opts-ledger-fs">这笔生意到目前真正落袋的钱</div>
+          </div>
+        </div>
+        <div class="opts-ledger-subhead">权利金现金流 · Premium Cash Flow<span>含仍在持仓中的合约，与上方已实现口径不同</span></div>
+        <div class="opts-ledger-formula">
+          <div class="opts-ledger-fcell">
+            <div class="opts-ledger-fl">TOTAL SOLD PREMIUM · 卖出总收取</div>
             <div class="opts-ledger-fv">${fmt.usd(totalSoldPrem)}</div>
             <div class="opts-ledger-fs">${soldQty} 张合约累计收取</div>
           </div>
           <div class="opts-ledger-fop">−</div>
           <div class="opts-ledger-fcell">
-            <div class="opts-ledger-fl">02 · BUYBACK PAID · 买回总支出</div>
+            <div class="opts-ledger-fl">BUYBACK PAID · 买回总支出</div>
             <div class="opts-ledger-fv ${totalBuyback > 0 ? "down" : ""}">${fmt.usd(totalBuyback)}</div>
             <div class="opts-ledger-fs">仅统计平仓与滚仓的实际买回</div>
           </div>
           <div class="opts-ledger-fop">=</div>
-          <div class="opts-ledger-fcell opts-ledger-fcell-final" style="background:${mkAlpha(netCashFlow >= 0 ? "var(--up)" : "var(--down)", 8)}">
-            <div class="opts-ledger-fl">03 · NET CASH FLOW · 净现金流</div>
+          <div class="opts-ledger-fcell">
+            <div class="opts-ledger-fl">NET CASH FLOW · 净现金流</div>
             <div class="opts-ledger-fv ${netCfCls}">${netCashFlow >= 0 ? "+" : "−"}${fmt.usd(Math.abs(netCashFlow))}</div>
             <div class="opts-ledger-fs">包含已结算与仍在持仓中的权利金</div>
           </div>
         </div>
-        ${settledPosns.length ? `<div class="opts-ledger-split">
-          <div class="opts-ledger-split-item">
-            <span class="opts-ledger-dot up"></span>
-            <div>
-              <div class="opts-ledger-split-label">Settled Premium P&L · 已结算权利金盈亏</div>
-              <div class="opts-ledger-split-sub">已平仓、到期、行权及滚仓 · ${settledPosns.length}笔 · ${settledQty}张</div>
-            </div>
-          </div>
-          <div class="opts-ledger-split-val ${realCls}">${realizedPnl >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedPnl))}</div>
-        </div>` : ""}
-        ${stockPosns.length ? `<div class="opts-ledger-split">
-          <div class="opts-ledger-split-item">
-            <span class="opts-ledger-dot" style="background:var(--accent)"></span>
-            <div>
-              <div class="opts-ledger-split-label">Settled Stock P&L · 已结算正股盈亏</div>
-              <div class="opts-ledger-split-sub">指派后正股易手已确定的盈亏 · ${stockPosns.length}笔</div>
-            </div>
-          </div>
-          <div class="opts-ledger-split-val ${stockCls}">${realizedStock >= 0 ? "+" : "−"}${fmt.usd(Math.abs(realizedStock))}</div>
-        </div>` : ""}
         ${open.length ? `<div class="opts-ledger-split">
           <div class="opts-ledger-split-item">
             <span class="opts-ledger-dot warn"></span>
@@ -5844,8 +5848,8 @@ function rsAdjustGrade(grade, rsResult) {
         </div>` : ""}
         <div class="opts-ws-rows">
           <div class="opts-ws-grid opts-ws-grid-6">
-            ${cell("Realized P&L · 已实现总盈亏", (realizedTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedTotal)), totalCls,
-              `期权 ${(realizedPnl >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedPnl))} · 正股 ${realizedStock === 0 ? "—" : (realizedStock >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedStock))} · 已完成 ${settledQty}张`)}
+            ${cell("Total P&L · 综合总收益", (grandTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(grandTotal)), grandCls,
+              `已实现 ${(realizedTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(realizedTotal))} · 浮动 ${openPnlKnown ? (openPnlTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(openPnlTotal)) : "—"}`)}
             ${cell("Open P&L · 持仓浮盈亏", openPnlKnown ? (openPnlTotal >= 0 ? "+" : "−") + fmt.usd(Math.abs(openPnlTotal)) : "—", openPnlCls, `Options ${floatStr} · 正股 ${eqStr}`)}
             ${cell("Average Delta · 平均 Delta", avgDelta != null ? avgDelta.toFixed(2) : "—", "", "Contract-weighted completed trades · 按已完成交易张数加权")}
           </div>
