@@ -8917,6 +8917,42 @@ function rsAdjustGrade(grade, rsResult) {
     }).join("");
   }
 
+  // 当月至今浮盈亏（现持仓，实时）——从"当月开始"到"最新价"这一段区间内，
+  // 现在还拿在手上的仓位一共浮盈/浮亏了多少。
+  //   · 本月之前就持有的 → 基准是上月最后一个交易日的收盘价（histCache 里取），
+  //     这样只统计本月产生的那一段，不把之前几个月的浮盈混进来；
+  //   · 本月内新开的     → 基准是入场价，区间天然就是"入场到现在"。
+  // 用 h.last 直接算，所以每次价格轮询（30秒）重渲染时都会跟着动，是真正的实时值。
+  // 与日历格子里的数字口径不同：格子是"整个组合当天的涨跌"（含当时还持有、现已平仓
+  // 的仓位），这里只看现持仓，且是区间累计而非单日。
+  function monthToDateFloat(year, month) {
+    if (!HOLDINGS.length) return null;
+    const monthStart = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    let pnl = 0, counted = 0, missing = 0;
+    HOLDINGS.forEach(h => {
+      const qty = h.qty || 0;
+      if (!(h.last > 0) || !qty) return;
+      const entry = h.entry?.slice(0, 10);
+      let baseline;
+      if (entry && entry >= monthStart) {
+        baseline = h.cost;                       // 本月开的仓，从入场价起算
+      } else {
+        const ySym   = h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
+        const prices = histCache[ySym];
+        if (!prices) { missing++; return; }
+        // 上月最后一个有价格的交易日
+        const before = Object.keys(prices).filter(d => d < monthStart).sort();
+        if (!before.length) { missing++; return; }
+        baseline = prices[before[before.length - 1]];
+      }
+      if (!(baseline > 0)) { missing++; return; }
+      pnl += (h.last - baseline) * qty;
+      counted++;
+    });
+    if (!counted && !missing) return null;
+    return { pnl, counted, missing };
+  }
+
   function pnlCalendarHTML(year, month, extraStyle = "margin-bottom:14px") {
     const today    = new Date();
     const todayStr = today.toISOString().slice(0, 10);
@@ -8987,11 +9023,26 @@ function rsAdjustGrade(grade, rsResult) {
 
     const monthLabel = new Date(year, month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
     const mSign = mPortfolio >= 0 ? "up" : "down";
-    const mTotalHTML = mHasHist
-      ? `<span class="mono ${mSign}" style="font-size:14px;font-weight:700">${fmt.signed(Math.round(mPortfolio))}</span>`
-      : `<span class="muted" style="font-size:12px">暂无数据</span>`;
     const mWLHTML = (mTradeWins + mTradeLosses) > 0
       ? `<span class="muted" style="font-size:10.5px">${mTradeWins}W · ${mTradeLosses}L</span>` : "";
+
+    // 当月：主数字改为现持仓的"当月至今浮盈亏"（实时，跟着价格轮询走）。
+    // 历史月份没有"现持仓的当月区间"这回事，仍用原来的每日组合涨跌累计。
+    const mtd = isCurrentMonth ? monthToDateFloat(year, month) : null;
+    let mTotalHTML;
+    if (mtd) {
+      const cls  = mtd.pnl >= 0 ? "up" : "down";
+      const note = `当月至今浮盈亏 · 现持仓 ${mtd.counted} 只${mtd.missing ? ` · ${mtd.missing} 只缺月初价` : ""}`;
+      mTotalHTML = `<span class="mono ${cls}" style="font-size:14px;font-weight:700">${fmt.signed(Math.round(mtd.pnl))}</span>
+        <span class="muted" style="font-size:10px">${note}</span>`;
+    } else if (isCurrentMonth) {
+      mTotalHTML = `<span class="muted" style="font-size:12px">暂无持仓</span>`;
+    } else {
+      mTotalHTML = mHasHist
+        ? `<span class="mono ${mSign}" style="font-size:14px;font-weight:700">${fmt.signed(Math.round(mPortfolio))}</span>
+           <span class="muted" style="font-size:10px">当月每日组合涨跌累计</span>`
+        : `<span class="muted" style="font-size:12px">暂无数据</span>`;
+    }
 
     const isNextDis = year > today.getFullYear() || (year === today.getFullYear() && month >= today.getMonth());
     const firstDow  = new Date(year, month, 1).getDay();
