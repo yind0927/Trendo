@@ -8960,11 +8960,14 @@ function rsAdjustGrade(grade, rsResult) {
   function weekdayStatsHTML() {
     const merged = { ...dailyPnlLog, ...histPnlLog };   // 与日历格子同源（histPnlLog 优先）
     const buckets = [[], [], [], [], []];               // Mon..Fri
+    let firstDate = null, lastDate = null;
     Object.entries(merged).forEach(([d, v]) => {
       if (v == null || !isFinite(v)) return;
       const dow = parseLocalDate(d).getDay();           // 0=Sun … 6=Sat
       if (dow === 0 || dow === 6) return;
       buckets[dow - 1].push(v);
+      if (!firstDate || d < firstDate) firstDate = d;
+      if (!lastDate  || d > lastDate)  lastDate  = d;
     });
     const rows = buckets.map(vals => {
       const n    = vals.length;
@@ -8997,8 +9000,14 @@ function rsAdjustGrade(grade, rsResult) {
 
     // 样本量诚实提示：每档 <20 天时，两位数的胜率差异基本落在随机波动范围内。
     const weak = minN < 20;
+    // 范围必须写死在标题里：这个模块挂在一张按月切换的卡片里，但统计的是全部历史、
+    // 不随上方 ‹ › 变化——不明说的话会被读成"当月"。
+    const rangeTxt = firstDate && lastDate
+      ? `${firstDate} → ${lastDate}` : "";
     return `<div class="cal-dow-wrap">
-      <div class="cal-dow-hd">周几分布 · By Weekday<span>每格为该星期几的<b>日均</b>组合盈亏，累计与胜率见下方</span></div>
+      <div class="cal-dow-hd">周几分布 · By Weekday
+        <span class="cal-dow-scope">全部历史 · 共 ${totalN} 个交易日${rangeTxt ? ` · ${rangeTxt}` : ""} · 不随上方月份切换</span></div>
+      <div class="cal-dow-hd2">每格为该星期几的<b>日均</b>组合盈亏，累计与胜率见下方</div>
       <div class="cal-dow-grid">${cells}</div>
       <div class="cal-dow-note">${weak
         ? `样本偏少（最少的一档只有 ${minN} 天），各档差异大多是随机波动，不足以当作规律——单日组合盈亏主要由当时持有什么决定，不是由星期几决定。`

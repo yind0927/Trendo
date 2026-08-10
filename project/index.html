@@ -2423,9 +2423,11 @@
   .cal-month-lbl { font-size: 12px; font-weight: 600; color: var(--fg-0); font-family: var(--f-mono); min-width: 108px; text-align: center; }
   /* ── 周几盈亏分布（日历卡片底部） */
   .cal-dow-wrap { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-  .cal-dow-hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 11px; font-weight: 700; color: var(--fg-1); margin-bottom: 10px; }
-  .cal-dow-hd span { font-weight: 400; font-size: 9.5px; color: var(--fg-3); }
-  .cal-dow-hd b { font-weight: 700; color: var(--fg-2); }
+  .cal-dow-hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 11px; font-weight: 700; color: var(--fg-1); margin-bottom: 3px; }
+  .cal-dow-scope { font-weight: 600; font-size: 9px; color: var(--fg-3); font-family: var(--f-mono);
+    border: 1px solid var(--line); border-radius: 20px; padding: 1.5px 8px; }
+  .cal-dow-hd2 { font-size: 9.5px; color: var(--fg-3); margin-bottom: 10px; }
+  .cal-dow-hd2 b { font-weight: 700; color: var(--fg-2); }
   .cal-dow-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
   .cal-dow-cell { background: var(--bg-2); border-radius: 9px; padding: 9px 11px; min-width: 0; }
   .cal-dow-h { display: flex; align-items: baseline; gap: 5px; margin-bottom: 5px; }
@@ -4807,8 +4809,8 @@
   </div>
 </div>
 
-<script src="data.js?v=609"></script>
-<script src="desk.js?v=609"></script>
+<script src="data.js?v=610"></script>
+<script src="desk.js?v=610"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
