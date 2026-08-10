@@ -8953,6 +8953,59 @@ function rsAdjustGrade(grade, rsResult) {
     return { pnl, counted, missing };
   }
 
+  // 周几盈亏分布 — 用**全部**历史日志（不只当前显示的月份）来最大化样本量。
+  // 这是一个描述性统计：它回答"我历史上周几赚得多"，不回答"下周几会赚"。
+  // 单日组合盈亏主要由"当时持有什么"决定，不是由星期几决定，所以样本少时几乎全是噪声——
+  // 因此这里把 N 和"每档样本是否够"直接摆在明面上，而不是只给一个漂亮的胜率。
+  function weekdayStatsHTML() {
+    const merged = { ...dailyPnlLog, ...histPnlLog };   // 与日历格子同源（histPnlLog 优先）
+    const buckets = [[], [], [], [], []];               // Mon..Fri
+    Object.entries(merged).forEach(([d, v]) => {
+      if (v == null || !isFinite(v)) return;
+      const dow = parseLocalDate(d).getDay();           // 0=Sun … 6=Sat
+      if (dow === 0 || dow === 6) return;
+      buckets[dow - 1].push(v);
+    });
+    const rows = buckets.map(vals => {
+      const n    = vals.length;
+      const sum  = vals.reduce((s, v) => s + v, 0);
+      const wins = vals.filter(v => v > 0).length;
+      const dec  = vals.filter(v => v < 0).length;
+      return { n, sum, avg: n ? sum / n : 0, wins, winRate: (wins + dec) ? wins / (wins + dec) * 100 : null };
+    });
+    const totalN = rows.reduce((s, r) => s + r.n, 0);
+    if (totalN < 5) return "";
+
+    const maxAbsAvg = Math.max(...rows.map(r => Math.abs(r.avg)), 1);
+    const minN      = Math.min(...rows.filter(r => r.n > 0).map(r => r.n));
+    const DOW_ZH    = ["周一", "周二", "周三", "周四", "周五"];
+    const DOW_EN    = ["MON", "TUE", "WED", "THU", "FRI"];
+
+    const cells = rows.map((r, i) => {
+      if (!r.n) return `<div class="cal-dow-cell"><div class="cal-dow-h"><b>${DOW_ZH[i]}</b><span>${DOW_EN[i]}</span></div>
+        <div class="cal-dow-v muted">—</div><div class="cal-dow-s">无数据</div></div>`;
+      const cls = r.avg >= 0 ? "up" : "down";
+      const pct = Math.abs(r.avg) / maxAbsAvg * 100;
+      return `<div class="cal-dow-cell">
+        <div class="cal-dow-h"><b>${DOW_ZH[i]}</b><span>${DOW_EN[i]}</span></div>
+        <div class="cal-dow-v ${cls}">${fmt.signed(Math.round(r.avg))}</div>
+        <div class="cal-dow-bar"><div class="cal-dow-fill ${cls}" style="width:${pct.toFixed(0)}%"></div></div>
+        <div class="cal-dow-s">胜率 ${r.winRate == null ? "—" : r.winRate.toFixed(0) + "%"} · ${r.n}天</div>
+        <div class="cal-dow-s2">累计 ${fmt.signed(Math.round(r.sum))}</div>
+      </div>`;
+    }).join("");
+
+    // 样本量诚实提示：每档 <20 天时，两位数的胜率差异基本落在随机波动范围内。
+    const weak = minN < 20;
+    return `<div class="cal-dow-wrap">
+      <div class="cal-dow-hd">周几分布 · By Weekday<span>每格为该星期几的<b>日均</b>组合盈亏，累计与胜率见下方</span></div>
+      <div class="cal-dow-grid">${cells}</div>
+      <div class="cal-dow-note">${weak
+        ? `样本偏少（最少的一档只有 ${minN} 天），各档差异大多是随机波动，不足以当作规律——单日组合盈亏主要由当时持有什么决定，不是由星期几决定。`
+        : `仅为历史描述统计。单日组合盈亏主要由当时持有什么决定，星期几本身不构成可交易的规律。`}</div>
+    </div>`;
+  }
+
   function pnlCalendarHTML(year, month, extraStyle = "margin-bottom:14px") {
     const today    = new Date();
     const todayStr = today.toISOString().slice(0, 10);
@@ -9146,6 +9199,7 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>
         <div class="cal-grid">${hdrCells}${dayCells}</div>
+        ${weekdayStatsHTML()}
       </div>`;
   }
 
