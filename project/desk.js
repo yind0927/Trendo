@@ -5339,10 +5339,38 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="muted" style="font-size:9px">${intrinsic > 0.005 ? "将被指派" : "OTM作废"}</span>${itmWarn}</span>`;
     }
 
-    // Time decay progress (theta works for the seller as days elapse)
-    const totalDays = Math.max(1, Math.round((new Date(pos.expiry) - new Date(pos.entryDate)) / 86400000));
-    const elapsed = Math.min(totalDays, Math.max(0, Math.round((Date.now() - new Date(pos.entryDate).getTime()) / 86400000)));
-    const timePct = elapsed / totalDays * 100;
+    // Underlying price track: 入场价 (center) → 现价 (fill), with the strike marked on the
+    // same axis. Replaces the old time-decay bar — how far the underlying has moved, and
+    // whether it's heading toward the strike, is what actually decides this position's
+    // outcome; days elapsed is already shown as the DTE tag in the header.
+    const entryPx = pos.underlyingAtEntry;
+    let pxBar = "";
+    if (entryPx > 0 && spot != null) {
+      const movePct   = (spot - entryPx) / entryPx * 100;
+      const strikePct = (pos.strike - entryPx) / entryPx * 100;
+      // Scale so both the current move and the strike stay on-axis, min ±10%.
+      const cap  = Math.max(10, Math.abs(movePct) * 1.25, Math.abs(strikePct) * 1.15);
+      const half = w => Math.min(50, Math.abs(w) / cap * 50);
+      const mv   = half(movePct);
+      const cls  = movePct >= 0 ? "up" : "down";
+      const strikeLeft = Math.max(0, Math.min(100, 50 + strikePct / cap * 50));
+      const moveStr = `${movePct >= 0 ? "+" : "−"}${Math.abs(movePct).toFixed(1)}%`;
+      pxBar = `<div class="opts-px-wrap" title="入场时现价 $${entryPx.toFixed(2)} → 当前 $${spot.toFixed(2)}（${moveStr}）· 行权价 $${pos.strike}">
+        <div class="opts-px-track">
+          <div class="opts-px-mid"></div>
+          <div class="opts-px-fill ${cls}" style="left:${(movePct >= 0 ? 50 : 50 - mv).toFixed(1)}%;width:${mv.toFixed(1)}%"></div>
+          <div class="opts-px-strike" style="left:${strikeLeft.toFixed(1)}%" title="行权价 $${pos.strike}"></div>
+        </div>
+        <div class="opts-px-lbl">
+          <span>入场 $${entryPx.toFixed(2)}</span>
+          <b class="${cls}">${moveStr}</b>
+          <span>现价 $${spot.toFixed(2)}</span>
+        </div>
+      </div>`;
+    } else if (spot != null) {
+      pxBar = `<div class="opts-px-wrap"><div class="opts-px-lbl opts-px-none">
+        <span>入场时现价未记录</span><span>现价 $${spot.toFixed(2)}</span></div></div>`;
+    }
 
     // Floating P&L via manually recorded current option price (broker's mark/mid)
     let markRow;
@@ -5394,7 +5422,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="opts-card-m"><div class="opts-card-ml">最大盈利</div><div class="opts-card-mv up" title="OTM到期时全额获得">+$${premTotal.toFixed(0)}</div></div>
         <div class="opts-card-m"><div class="opts-card-ml">${isCSP ? "安全垫" : "溢价距"}</div><div class="opts-card-mv ${cushionPct == null ? "dim" : cushionPct >= 0 ? "up" : "warn"}">${cushionPct == null ? "—" : (cushionPct >= 0 ? "+" : "") + cushionPct.toFixed(1) + "%"}</div></div>
       </div>
-      <div class="opts-prog-wrap" title="时间损耗 ${elapsed}/${totalDays} 天"><div class="opts-prog-fill" style="width:${timePct.toFixed(0)}%"></div></div>
+      ${pxBar}
       <div class="opts-card-foot">
         ${estRow ? `<div>${estRow}</div>` : ""}
         ${stockRow ? `<div class="opts-mark-row">${stockRow}</div>` : ""}
@@ -11148,162 +11176,6 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
   }
 
-  // GEX state → 5 levels matching the rules table, driven by distFlipPct.
-  function gexState(distFlipPct, regime) {
-    if (distFlipPct != null) {
-      if (distFlipPct > 2)     return { color: "var(--up)", label: "深度正 Gamma", mode: "波动压制",
-        interp: "做市商深度净多 Gamma，波动被强力压制，倾向区间震荡。策略：区间操作可加码；Call Wall 附近受阻概率高，不追突破。" };
-      if (distFlipPct > 0.3)   return { color: "var(--up)", label: "正 Gamma", mode: "波动压制",
-        interp: "做市商净多 Gamma，对冲与行情反向——买跌卖涨，波动被压制。策略：区间高抛低吸；Call Wall 附近易受阻回落，不追突破。" };
-      if (distFlipPct >= -0.3) return { color: "var(--warn)", label: "临界", mode: "临界翻转",
-        interp: "价格贴近 Gamma Flip，波动性质随时切换。跌破 Flip 转负 Gamma（波动骤升），站上则转正（趋稳）。策略：轻仓、等方向确认，把 Flip 当多空分界线。" };
-      if (distFlipPct >= -2)   return { color: "var(--orange)", label: "负 Gamma", mode: "波动放大",
-        interp: "做市商净空 Gamma，对冲与行情同向——涨追涨、跌杀跌，波动被放大。策略：顺势跟随，收紧或减仓；跌破 Put Wall 会加速下行。" };
-      return { color: "var(--down)", label: "深度负 Gamma", mode: "波动放大",
-        interp: "做市商深度净空 Gamma，波动剧烈放大、下跌容易加速。策略：大幅收仓、严格止损、勿抄底；跌破 Put Wall 进一步加速。" };
-    }
-    if (regime === "negative") return { color: "var(--down)", label: "负 Gamma", mode: "波动放大",
-      interp: "做市商净空 Gamma，对冲与行情同向，波动被放大。策略：顺势跟随，收紧或减仓。" };
-    if (regime === "neutral")  return { color: "var(--warn)", label: "临界", mode: "临界翻转",
-      interp: "价格贴近 Gamma Flip，波动性质随时切换。策略：轻仓、等方向确认。" };
-    return { color: "var(--up)", label: "正 Gamma", mode: "波动压制",
-      interp: "做市商净多 Gamma，波动被压制。策略：区间高抛低吸；Call Wall 附近不追突破。" };
-  }
-
-  // Collapsible rulebook at the bottom of the GEX card (same pattern as 市场模型详情)
-  function gxRulesHTML() {
-    const mkTable = (title, head, rows) => `
-      <div class="pb3-section">
-        <div class="pb3-section-head">${title}</div>
-        <table class="mkt-pb-table">
-          <thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead>
-          <tbody>${rows.map(r => `<tr>
-            <td style="color:${r[3] || "var(--fg-1)"};font-weight:700;white-space:nowrap">${r[0]}</td>
-            <td style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${r[1]}</td>
-            <td style="font-size:12px">${r[2]}</td>
-          </tr>`).join("")}</tbody>
-        </table>
-      </div>`;
-    return `
-      <details class="gx-rules">
-        <summary>GEX 详细规则 · 点击展开</summary>
-        <div class="gx-rules-body">
-          ${mkTable("状态判定 · 现价 vs Gamma Flip", ["状态", "触发条件", "含义与仓位因子"], [
-            ["深度正 Gamma", "现价高于 Flip > 2%",   "波动强压制，区间可加码 · 仓位 ×1.15", "var(--up)"],
-            ["正 Gamma",     "Flip 上方 0.3%–2%",    "正常操作 · 仓位 ×1.0", "var(--up)"],
-            ["临界",         "Flip ±0.3% 内",        "随时翻转，轻仓等方向 · 仓位 ×0.75", "var(--warn)"],
-            ["负 Gamma",     "Flip 下方 0.3%–2%",    "波动放大，收仓+宽止损 · 仓位 ×0.6", "var(--orange)"],
-            ["深度负 Gamma", "现价低于 Flip > 2%",   "高危，大幅收仓、勿抄底 · 仓位 ×0.4", "var(--down)"],
-          ])}
-          ${mkTable("三个关键价位", ["价位", "是什么", "怎么用"], [
-            ["Gamma Flip", "累计净γ过零的价位",       "多空波动分界线：跌破→转负γ、波动骤升；站上→趋稳。最重要的预警线", "var(--warn)"],
-            ["Call Wall",  "上方 call γ 最大行权价",  "阻力 + 磁吸：正γ时价格到此易受阻回落，突破难持续，不追", "var(--down)"],
-            ["Put Wall",   "下方 put γ 最大行权价",   "支撑 + 缓冲：负γ环境下跌破会加速下行，可作防守参考位", "var(--up)"],
-          ])}
-          ${mkTable("读数规则", ["指标", "规则", "注意"], [
-            ["Net GEX",  "SPX 每波动1%的做市商对冲金额", "看符号、分位、Flip距离；绝对值随 spot² 和持仓量膨胀，别用固定阈值刻舟求剑"],
-            ["波段口径", "净值剔除 0DTE 后的部分",       "0DTE 收盘即清零；正转负 = 隔夜无缓冲，持仓过夜要谨慎"],
-            ["分位数",   "当前净值在近 N 天（至多120）的排位", "≥80% 缓冲垫厚 · ≤20% 偏薄；样本不足5天不显示"],
-            ["OpEx",     "每月第三个周五月度到期",       "到期后大量 γ 清零，随后一周方向性移动概率增大"],
-          ])}
-          <div class="pb3-tip">与三轴模型的配合：建议仓位 = 轴B（VIX）仓位上限 × GEX 仓位因子。方向轴逆风时照旧禁新仓，GEX 不改变闸门。</div>
-          <div class="gx-rules-note">数据：CBOE 延迟15分钟报价（SPX+SPXW 0DTE）· 范围 0-30DTE、行权价 ±15% · 公式 Σ γ×OI×100×spot²×1%（call 正 / put 负）· 1小时缓存 · 与外部 GEX 面板绝对值不同属正常（口径差异），以趋势和相对位置为准</div>
-        </div>
-      </details>`;
-  }
-
-  function mkGexCardHTML(gex) {
-    const net = gex?.netGexBn ?? gex?.gexBn;
-    if (!gex || net == null) return "";
-    const st   = gexState(gex.distFlipPct, gex.regime);
-    const swing = gex.swingGexBn;
-    const hero = swing != null ? swing : net;
-    const heroSign = hero > 0 ? "+" : "";
-    const heroColor = hero > 0 ? "var(--up)" : hero < 0 ? "var(--down)" : "var(--fg-1)";
-    const netSign = net > 0 ? "+" : "";
-    const netColor = net > 0 ? "var(--up)" : net < 0 ? "var(--down)" : "var(--fg-1)";
-    const factor = gex.posFactor ?? 1;
-    const facColor = factor >= 1 ? "var(--up)" : factor >= 0.7 ? "var(--warn)" : "var(--down)";
-    const opexWarn = gex.daysToOpEx <= 3;
-
-    // Price-structure bar: Put Wall (support) — Flip (pivot) — spot — Call Wall (resistance)
-    const { spot, flip, callWall, putWall } = gex;
-    const lv = [putWall, flip, spot, callWall].filter(v => v != null);
-    let barHTML = "";
-    if (spot != null && lv.length >= 2) {
-      let min = Math.min(...lv), max = Math.max(...lv);
-      const pad = (max - min) * 0.10 || spot * 0.01;
-      min -= pad; max += pad;
-      const pos = v => Math.max(1, Math.min(99, (v - min) / (max - min) * 100));
-      const flipPos = flip != null ? pos(flip) : 50;
-      const tick = (v, cls, label) => v == null ? "" :
-        `<div class="gx-tick ${cls}" style="left:${pos(v)}%"><span class="gx-tick-lbl">${label}</span></div>`;
-      barHTML = `
-        <div class="gx-bar">
-          <div class="gx-bar-track" style="background:linear-gradient(90deg,${mkAlpha("var(--down)",33)} 0%,${mkAlpha("var(--down)",33)} ${flipPos}%,${mkAlpha("var(--up)",33)} ${flipPos}%,${mkAlpha("var(--up)",33)} 100%)"></div>
-          ${tick(putWall,  "put",  "Put")}
-          ${tick(callWall, "call", "Call")}
-          ${flip != null ? `<div class="gx-tick flip" style="left:${flipPos}%"><span class="gx-tick-lbl">Flip</span></div>` : ""}
-          <div class="gx-spot" style="left:${pos(spot)}%;border-color:${st.color}"></div>
-        </div>`;
-    }
-
-    const distPill = (label, pct, level, cls) => level == null ? "" :
-      `<div class="gx-lvl ${cls}"><span class="gx-lvl-name">${label}</span><span class="gx-lvl-val">${level}</span>${pct != null ? `<span class="gx-lvl-dist">${pct > 0 ? "+" : ""}${pct}%</span>` : ""}</div>`;
-
-    const d = gex.dte || {};
-    const dteItem = (name, val) => val == null ? "" :
-      `<span class="gx-dte-item"><span class="gx-dte-name">${name}</span><b style="color:${val >= 0 ? "var(--up)" : "var(--down)"}">${val > 0 ? "+" : ""}${val}B</b></span>`;
-    const dteHTML = (d.d0 != null || d.d1_7 != null || d.d8_30 != null)
-      ? `<div class="gx-dte">${dteItem("0DTE", d.d0)}${dteItem("1-7D", d.d1_7)}${dteItem("8-30D", d.d8_30)}</div>` : "";
-
-    // Day-over-day change + percentile — prefer swing metrics, fallback to net
-    const chgParts = [];
-    const chgVal = gex.swingChgBn ?? gex.netChgBn;
-    if (chgVal != null) {
-      const up = chgVal >= 0;
-      chgParts.push(`<span style="color:${up ? "var(--up)" : "var(--down)"}">${up ? "▲" : "▼"} ${up ? "+" : ""}${chgVal}B 较昨日</span>`);
-    }
-    const pctVal = gex.swingPctile ?? gex.pctile;
-    if (pctVal != null)
-      chgParts.push(`<span>近${gex.histDays}天分位 <b>${pctVal}%</b></span>`);
-    const chgRow = chgParts.length ? `<div class="gx-chgrow">${chgParts.join(`<span class="gx-dot">·</span>`)}</div>` : "";
-
-    // Swing divergence warning
-    let swingNote = "";
-    if (swing != null && net > 0 && swing < 0)
-      swingNote = `<div class="gx-swing-warn">Net GEX 为正但剔0DTE后转负——缓冲全靠当日期权，隔夜持仓无保护</div>`;
-    else if (swing != null && net > 0 && swing < net * 0.5)
-      swingNote = `<div class="gx-swing-warn mild">0DTE占比高，缓冲的隔日延续性偏弱</div>`;
-
-    return `
-      <div class="mkt-card mkt-gex-card">
-        <div class="mkt-card-label">做市商 Gamma · Dealer Gamma <span class="mkt-gex-src">SPX 1-30 · CBOE</span></div>
-        <div class="mkt-card-row">
-          <span class="mkt-card-val" style="color:${heroColor}">${heroSign}${hero}<span class="mkt-gex-unit">B</span></span>
-          <span class="mkt-gex-mode" style="color:${st.color}">${st.label} · ${st.mode}</span>
-          <span class="gx-factor-tag" style="color:${facColor};border-color:${mkAlpha(facColor,25)};background:${mkAlpha(facColor,7)}">×${factor}</span>
-        </div>
-        <div class="gx-hero-sub">波段口径 1-30</div>
-        ${swingNote}
-        ${chgRow}
-        <div class="gx-net-ref">Net GEX<span class="gx-net-ref-tag">0-30</span> <b style="color:${netColor}">${netSign}${net}B</b></div>
-        ${barHTML}
-        <div class="gx-levels">
-          ${distPill("Put Wall", gex.distPutPct, putWall, "put")}
-          ${distPill("Gamma Flip", gex.distFlipPct, flip, "flip")}
-          ${distPill("现价", null, spot, "spot")}
-          ${distPill("Call Wall", gex.distCallPct, callWall, "call")}
-        </div>
-        <div class="mkt-gex-interp">${st.interp}</div>
-        ${dteHTML}
-        <div class="mkt-gex-metarow">
-          <span>建议仓位 = 轴B上限 × <b style="color:${facColor}">${factor}</b></span>
-          <span class="${opexWarn ? "warn" : ""}">月度OpEx <b>${gex.daysToOpEx}天</b>${opexWarn ? " · Gamma清零，方向性放大" : ""}</span>
-        </div>
-        ${gxRulesHTML()}
-      </div>`;
-  }
 
   function mkIndicatorHTML(key, val, pctChg, absChg, extra = "") {
     const cfg = MKT_ZONES[key];
@@ -11466,38 +11338,32 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
-  function combineAxes(dir, risk, sent, gex) {
-    // Short subtitle suffix instead of a full warning sentence in detail — state already
-    // reads "为什么"，GEX 只是再补一个字眼，不需要展开成一句话。
-    const gexTag = (gex && gex.regime === "negative") ? " · 负Gamma"
-      : (gex && gex.regime === "neutral") ? " · Gamma临界"
-      : (gex && gex.regime === "positive" && gex.swingGexBn != null && gex.swingGexBn < 0) ? " · Gamma转弱"
-      : "";
+  function combineAxes(dir, risk, sent) {
     if (!dir.eligible)
-      return { headline: "防守", emoji: "🔴", state: `趋势逆风${gexTag}`, color: "var(--down)",
+      return { headline: "防守", emoji: "🔴", state: `趋势逆风`, color: "var(--down)",
         detail: "禁止新开多仓，保护已有仓位。" };
     if (sent.tilt === "trim")
-      return { headline: "止盈", emoji: "🟠", state: `极端过热${gexTag}`, color: "var(--orange)",
+      return { headline: "止盈", emoji: "🟠", state: `极端过热`, color: "var(--orange)",
         detail: "减仓止盈，收紧保护。" };
     if (sent.tilt === "accumulate")
-      return { headline: "布局", emoji: "🟢", state: `恐慌积累${gexTag}`, color: "var(--up)",
+      return { headline: "布局", emoji: "🟢", state: `恐慌积累`, color: "var(--up)",
         detail: "控制仓位，分批买入强势标的。" };
     if (sent.tilt === "scale")
-      return { headline: "分批参与", emoji: "🔵", state: `情绪偏冷${gexTag}`, color: "var(--accent)",
+      return { headline: "分批参与", emoji: "🔵", state: `情绪偏冷`, color: "var(--accent)",
         detail: "小幅优选加仓，保留后续资金。" };
     if (sent.tilt === "hold")
-      return { headline: "保持持仓", emoji: "🟡", state: `情绪偏热${gexTag}`, color: "var(--warn)",
+      return { headline: "保持持仓", emoji: "🟡", state: `情绪偏热`, color: "var(--warn)",
         detail: "持有，不新增风险。" };
-    return { headline: "正常配置", emoji: "🟢", state: `趋势顺风${gexTag}`, color: "var(--up)",
+    return { headline: "正常配置", emoji: "🟢", state: `趋势顺风`, color: "var(--up)",
       detail: "按风险预算正常布局。" };
   }
 
-  function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend, gex }) {
+  function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend }) {
     const dir  = getDirectionAxis(price, ma50, ma200);
     const risk = getRiskAxis(vix);
     const sent = getSentimentAxis(fg, rsi, vixTrend);
-    const combined = combineAxes(dir, risk, sent, gex);
-    return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200, gex };
+    const combined = combineAxes(dir, risk, sent);
+    return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 };
   }
 
   function mkAxesHTML(axes) {
@@ -11569,7 +11435,6 @@ function rsAdjustGrade(grade, rsResult) {
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
-      ${axes?.gex ? `<div class="mkt-row mkt-row-full">${mkGexCardHTML(axes.gex)}</div>` : ""}
       <div class="mkt-playbook-ref">
         <details>
           <summary>市场模型详情 · 点击展开</summary>
@@ -11591,7 +11456,7 @@ function rsAdjustGrade(grade, rsResult) {
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
-        fetch("/api/feargreed?gex=1").then(r => r.json()),
+        fetch("/api/feargreed").then(r => r.json()),
       ]);
 
       // VIX / VXN
@@ -11679,19 +11544,12 @@ function rsAdjustGrade(grade, rsResult) {
         }
       }
 
-      let gex = null;
-      if (fgRes.status === "fulfilled" && fgRes.value?.gex?.gexBn != null) gex = fgRes.value.gex;
-
-      const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend, gex });
+      const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend });
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,
         direction: axes.dir.label, posMax: axes.risk.posMax, sentiment: axes.sent.label,
-        gex: gex ? { regime: gex.regime, netGexBn: gex.netGexBn, posFactor: gex.posFactor,
-          flip: gex.flip, callWall: gex.callWall, putWall: gex.putWall,
-          distFlipPct: gex.distFlipPct, daysToOpEx: gex.daysToOpEx,
-          swingGexBn: gex.swingGexBn, pctile: gex.pctile } : null,
       };
       _lastMktCtx = mktCtx;
       initDrawdownCard();
@@ -11923,10 +11781,6 @@ function rsAdjustGrade(grade, rsResult) {
           .sort((a, b) => b.score - a.score)
           .map(s => `${s.sym}|${s.zh}:${s.score}:${s.dailyChg ?? ""}`)
           .join(","));
-      if (mktCtx?.gex?.regime)
-        params.set("gex", [mktCtx.gex.regime, mktCtx.gex.netGexBn, mktCtx.gex.posFactor,
-          mktCtx.gex.distFlipPct, mktCtx.gex.daysToOpEx,
-          mktCtx.gex.swingGexBn ?? "", mktCtx.gex.pctile ?? ""].join(":"));
 
       const res = await fetch("/api/market-summary?" + params.toString(), { signal: AbortSignal.timeout(25000) });
       if (!res.ok) {

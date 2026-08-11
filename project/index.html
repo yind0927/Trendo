@@ -1939,8 +1939,19 @@
   /* ── Sub info row */
   .opts-card-meta { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
   /* ── Progress bar (theta decay) */
-  .opts-prog-wrap { height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
-  .opts-prog-fill { height: 100%; background: var(--up); border-radius: 2px; transition: width .3s; }
+  /* Underlying price track: entry (center) → current (fill), strike marked on the axis */
+  .opts-px-wrap { display: flex; flex-direction: column; gap: 4px; }
+  .opts-px-track { position: relative; height: 6px; background: var(--bg-3); border-radius: 3px; }
+  .opts-px-mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--fg-3); opacity: .5; }
+  .opts-px-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; transition: width .3s, left .3s; }
+  .opts-px-fill.up { background: var(--up); }
+  .opts-px-fill.down { background: var(--down); }
+  .opts-px-strike { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--warn);
+    border-radius: 1px; transform: translateX(-50%); box-shadow: 0 0 0 1px var(--bg-1); }
+  .opts-px-lbl { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
+  .opts-px-lbl b { font-weight: 700; letter-spacing: -.02em; }
+  .opts-px-none { justify-content: space-between; opacity: .8; }
   /* ── Footer rows (mark + est) */
   .opts-card-foot { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--fg-2); font-family: var(--f-mono); }
   .opts-mark-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -2421,6 +2432,20 @@
   .cal-nav-btn:hover:not(:disabled) { background: var(--bg-3); color: var(--fg-0); }
   .cal-nav-btn:disabled { opacity: 0.28; cursor: default; }
   .cal-month-lbl { font-size: 12px; font-weight: 600; color: var(--fg-0); font-family: var(--f-mono); min-width: 108px; text-align: center; }
+  /* ── End-of-page marker (last child of every view) */
+  .page-end { display: flex; align-items: center; gap: 14px; width: 100%;
+    max-width: 1180px; margin: 0 auto; padding: 30px 20px 46px; box-sizing: border-box; }
+  .page-end-rule { flex: 1; height: 1px; min-width: 0;
+    background: linear-gradient(to right, transparent, var(--line), transparent); }
+  .page-end-txt { flex-shrink: 0; font-size: 9.5px; font-weight: 600; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--fg-3); white-space: nowrap; opacity: .75; }
+  /* Mobile: the navbar becomes a fixed bottom tab bar at 768px, so the marker needs
+     clearance or it sits underneath it and never reads as "the end". */
+  @media (max-width: 768px) {
+    .page-end { padding: 24px 16px calc(96px + env(safe-area-inset-bottom)); gap: 10px; }
+    .page-end-txt { font-size: 9px; letter-spacing: .12em; }
+  }
+
   /* ── 周几盈亏分布（日历卡片底部） */
   .cal-dow-wrap { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
   .cal-dow-hd { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; font-size: 13px; font-weight: 700; color: var(--fg-1); margin-bottom: 5px; }
@@ -3296,62 +3321,6 @@
   .mkt-axis-gate.ok { color: var(--up); }
   .mkt-axis-gate.block { color: var(--down); }
   .mkt-axis-gate.dim { color: var(--fg-3); }
-  /* GEX big card */
-  .mkt-row.mkt-row-full { grid-template-columns: 1fr; }
-  .mkt-gex-card { gap: 10px; }
-  .mkt-gex-src { font-weight: 600; letter-spacing: 0.04em; color: var(--fg-3); margin-left: 6px; font-size: 9px; }
-  .mkt-gex-unit { font-size: 20px; font-weight: 700; margin-left: 2px; }
-  .mkt-gex-mode { font-size: 13px; font-weight: 700; }
-  .gx-factor-tag { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 4px; border: 1px solid; font-size: 11px; font-weight: 700; font-family: var(--f-mono); letter-spacing: 0.02em; margin-left: 6px; }
-  /* price-structure bar */
-  .gx-bar { position: relative; height: 22px; margin: 8px 0 4px; }
-  .gx-bar-track { position: absolute; left: 0; right: 0; top: 7px; height: 8px; border-radius: 4px; opacity: 0.6; }
-  .gx-tick { position: absolute; top: 1px; width: 0; transform: translateX(-50%); }
-  .gx-tick::before { content: ""; display: block; width: 2px; height: 20px; margin: 0 auto; border-radius: 1px; }
-  .gx-tick.put::before  { background: var(--up); }
-  .gx-tick.call::before { background: var(--down); }
-  .gx-tick.flip::before { background: var(--warn); box-shadow: 0 0 0 1px var(--bg-1); }
-  .gx-tick-lbl { display: none; }  /* labels redundant with the level pills below */
-  .gx-spot { position: absolute; top: 4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-50%); background: var(--bg-0); border: 3px solid; box-shadow: 0 1px 4px rgba(0,0,0,.4); z-index: 2; }
-  /* level pills */
-  .gx-levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .gx-lvl { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: 8px; background: var(--bg-2); border: 1px solid var(--line); border-left: 3px solid var(--line); }
-  .gx-lvl-name { font-size: 9.5px; color: var(--fg-3); letter-spacing: 0.02em; }
-  .gx-lvl-val { font-size: 14px; font-weight: 700; font-family: var(--f-mono); color: var(--fg-0); }
-  .gx-lvl-dist { font-size: 10px; font-family: var(--f-mono); color: var(--fg-2); }
-  .gx-lvl.put  { border-left-color: var(--up); }
-  .gx-lvl.flip { border-left-color: var(--warn); }
-  .gx-lvl.spot { border-left-color: var(--accent); }
-  .gx-lvl.call { border-left-color: var(--down); }
-  /* day change + percentile row */
-  .gx-chgrow { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12px; font-family: var(--f-mono); font-weight: 600; margin-top: -4px; color: var(--fg-2); }
-  .gx-chgrow b { color: var(--fg-0); }
-  .gx-dot { color: var(--fg-3); }
-  /* swing headline subtitle + net reference */
-  .gx-hero-sub { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--fg-3); text-transform: uppercase; margin-top: -6px; }
-  .gx-net-ref { font-size: 12px; color: var(--fg-3); font-family: var(--f-mono); }
-  .gx-net-ref b { font-size: 13px; font-weight: 700; margin-left: 4px; }
-  .gx-net-ref-tag { font-size: 9px; color: var(--fg-3); margin-left: 4px; padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; }
-  .gx-swing-warn { font-size: 11px; line-height: 1.45; color: var(--warn); font-weight: 600; padding: 5px 9px; background: color-mix(in oklch, var(--warn) 8%, transparent); border: 1px solid color-mix(in oklch, var(--warn) 25%, transparent); border-radius: 6px; }
-  .gx-swing-warn.mild { color: var(--fg-2); font-weight: 400; background: var(--bg-2); border-color: var(--line); }
-  /* DTE breakdown */
-  .gx-dte { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 10px; background: var(--bg-2); border-radius: 8px; font-family: var(--f-mono); }
-  .gx-dte-item { display: flex; align-items: baseline; gap: 5px; font-size: 12px; }
-  .gx-dte-name { font-size: 9.5px; color: var(--fg-3); letter-spacing: 0.02em; }
-  .mkt-gex-interp { font-size: 12.5px; line-height: 1.55; color: var(--fg-1); }
-  .mkt-gex-metarow { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 11px; font-family: var(--f-mono); color: var(--fg-3); padding-top: 6px; border-top: 1px solid color-mix(in oklch, var(--line) 60%, transparent); }
-  .mkt-gex-metarow b { color: var(--fg-1); font-weight: 700; }
-  .mkt-gex-metarow .warn { color: var(--warn); }
-  .mkt-gex-metarow .warn b { color: var(--warn); }
-  /* collapsible GEX rulebook */
-  .gx-rules { margin-top: -2px; }
-  .gx-rules summary { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 6px 0 2px; list-style: revert; }
-  .gx-rules summary:hover { color: var(--fg-2); }
-  .gx-rules-body { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
-  .gx-rules .mkt-pb-table { table-layout: auto; }
-  .gx-rules .mkt-pb-table td:first-child { white-space: normal; min-width: 72px; }
-  .gx-rules-note { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); line-height: 1.55; padding-top: 6px; border-top: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
-  @media (max-width: 768px) { .gx-levels { grid-template-columns: repeat(2, 1fr); } }
   .mkt-playbook-ref { margin-top: 16px; }
   .mkt-playbook-ref summary { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 8px 0; list-style: revert; }
   .mkt-playbook-ref summary:hover { color: var(--fg-2); }
@@ -3440,23 +3409,6 @@
     .mkt-combine-emoji { font-size: 16px; }
     .mkt-combine-state { font-size: 11.5px; }
     .mkt-pb-table td:last-child { font-size: 11px; }
-    /* GEX card — mobile */
-    .mkt-gex-card { gap: 9px; }
-    .mkt-gex-card .mkt-card-row { flex-wrap: wrap; align-items: baseline; }
-    .mkt-gex-card .mkt-card-val { font-size: 27px; }
-    .mkt-gex-unit { font-size: 15px; }
-    .mkt-gex-mode { font-size: 12px; margin-top: 1px; }
-    .gx-factor-tag { font-size: 10px; padding: 1px 5px; margin-left: 4px; }
-    .gx-lvl { padding: 5px 7px; }
-    .gx-lvl-name { font-size: 9px; }
-    .gx-lvl-val { font-size: 13px; }
-    .gx-lvl-dist { font-size: 9.5px; }
-    .gx-dte { gap: 8px 12px; padding: 7px 9px; justify-content: space-between; }
-    .gx-dte-item { font-size: 11px; }
-    .gx-chgrow { font-size: 11px; }
-    .gx-swing-warn { font-size: 10.5px; }
-    .mkt-gex-interp { font-size: 12px; line-height: 1.5; }
-    .mkt-gex-metarow { flex-direction: column; gap: 4px; }
   }
 
   /* ============ SECTOR ROTATION ============ */
@@ -4183,6 +4135,7 @@
     SWING-DESK · 本地数据 · 报价延迟 ~15s · <span id="last-updated">更新于 13:51:43</span>
   </div>
 </main>
+<div class="page-end"><span class="page-end-rule"></span><span class="page-end-txt">已到底部 · END OF PAGE</span><span class="page-end-rule"></span></div>
 </div><!-- #desk-view -->
 
 <!-- ============ INSPIRATIONS VIEW ============ -->
@@ -4249,6 +4202,7 @@
     <!-- Watchlist Cards -->
     <div id="watchlist-content" class="watchlist-content" style="max-width:960px;margin:0 auto;padding:8px 20px 60px"></div>
   </div>
+  <div class="page-end"><span class="page-end-rule"></span><span class="page-end-txt">已到底部 · END OF PAGE</span><span class="page-end-rule"></span></div>
 </div>
 
 <!-- ============ SIMULATION VIEW ============ -->
@@ -4361,13 +4315,13 @@
     </button>
   </div>
   <div id="sim-trade-log"></div>
-
-
+  <div class="page-end"><span class="page-end-rule"></span><span class="page-end-txt">已到底部 · END OF PAGE</span><span class="page-end-rule"></span></div>
 </div>
 
 <!-- ============ ANALYTICS VIEW ============ -->
 <div id="analytics-view" style="display:none">
   <div id="analytics-content"></div>
+  <div class="page-end"><span class="page-end-rule"></span><span class="page-end-txt">已到底部 · END OF PAGE</span><span class="page-end-rule"></span></div>
 </div>
 
 <!-- ============ OPTIONS VIEW ============ -->
@@ -4390,10 +4344,12 @@
   <div id="opts-sim-panel" style="display:none">
     <div id="sim-opts-inner"></div>
   </div>
+  <div class="page-end"><span class="page-end-rule"></span><span class="page-end-txt">已到底部 · END OF PAGE</span><span class="page-end-rule"></span></div>
 </div>
 <!-- ============ MARKET VIEW ============ -->
 <div id="market-view" style="display:none">
   <div id="market-content"></div>
+  <div class="page-end"><span class="page-end-rule"></span><span class="page-end-txt">已到底部 · END OF PAGE</span><span class="page-end-rule"></span></div>
 </div>
 
 <!-- Mobile FAB -->
@@ -4827,8 +4783,8 @@
   </div>
 </div>
 
-<script src="data.js?v=612"></script>
-<script src="desk.js?v=612"></script>
+<script src="data.js?v=613"></script>
+<script src="desk.js?v=613"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
