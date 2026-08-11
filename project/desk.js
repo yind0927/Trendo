@@ -54,6 +54,39 @@
 
     const opc = $("#open-pos-count"); if (opc) opc.textContent = HOLDINGS.length;
 
+    // ── Total Risk — Σ(cost − stop) × qty across current holdings: the dollar loss if
+    // every stop got hit at once. A risk-discipline metric, distinct from both P&L (how
+    // you're doing) and allocation (where the money is) — nothing else on this page shows it.
+    // Holdings without a valid stop (missing, or stop ≥ cost) contribute no defined risk and
+    // are called out separately rather than silently treated as zero-risk.
+    const riskedPosns  = HOLDINGS.filter(h => h.stop != null && h.stop < h.cost && h.qty > 0);
+    const totalRiskAmt = riskedPosns.reduce((s, h) => s + (h.cost - h.stop) * h.qty, 0);
+    const noStopCount  = HOLDINGS.length - riskedPosns.length;
+    const totalRiskPct = totalNotional > 0 && HOLDINGS.length ? totalRiskAmt / totalNotional * 100 : null;
+    const riskCard = HOLDINGS.length ? card({
+      label: "TOTAL RISK · 总风险敞口", info: false,
+      value: `<span class="down">−${fmt.usd(totalRiskAmt)}</span>`,
+      sub: `<span class="muted">${totalRiskPct != null ? totalRiskPct.toFixed(1) + "% of NAV · " : ""}${riskedPosns.length}笔止损中${noStopCount ? ` · ${noStopCount}笔无止损` : ""}</span>`,
+      spark: ""
+    }) : card({ label: "TOTAL RISK · 总风险敞口", info: false, value: `<span class="muted">—</span>`, sub: `<span class="muted">暂无持仓</span>`, spark: "" });
+
+    // ── Best / Worst — the two current holdings furthest apart on % P&L. Points at "what
+    // should I look at" more directly than the sector breakdown does; clicking either row
+    // opens that holding's drawer via the same openDrawer() used by the table/cards.
+    const byPct = [...HOLDINGS].filter(h => h.cost > 0).sort((a, b) => (b.pnlPct || 0) - (a.pnlPct || 0));
+    const best  = byPct[0] || null;
+    const worst = byPct.length > 1 ? byPct[byPct.length - 1] : null;
+    const bwRow = (h, isBest) => h ? `<div class="ov-bw-row" data-ov-sym="${h.sym}" data-ov-entry="${h.entry || ""}" data-ov-cost="${h.cost}">
+        <span class="ov-bw-dot ${isBest ? "up" : "down"}"></span>
+        <span class="ov-bw-sym">${h.sym}</span>
+        <b class="ov-bw-pct ${fmt.sign(h.pnlPct || 0)}">${fmt.pct(h.pnlPct || 0)}</b>
+      </div>` : `<div class="ov-bw-row ov-bw-empty"><span class="muted">—</span></div>`;
+    const bwCard = `<div class="ov-card ov-bw">
+        <div class="ov-card-hd"><div class="ov-tick"></div><div class="label">BEST / WORST · 最佳/最差</div></div>
+        ${bwRow(best, true)}
+        ${worst ? bwRow(worst, false) : (HOLDINGS.length ? "" : bwRow(null))}
+      </div>`;
+
     const ov = $("#overview");
     ov.innerHTML = `
       <div class="ov-card" id="nav-card">
@@ -64,6 +97,7 @@
         <div class="value">$${portfolioValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
         <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${fmt.signed(totalPnlDollar)} 浮</span>${realizedPnl !== 0 ? ` <span class="${fmt.sign(realizedPnl)}" style="font-size:10.5px">${fmt.signed(realizedPnl)} 已</span>` : ""}</span></div>
       </div>
+      ${riskCard}
       ${card({
         label: "OPEN P&L · 总浮盈/浮亏", info: false,
         value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
@@ -76,8 +110,15 @@
         sub: `<span class="chip ${todaySign}">${fmt.pct(todayPct)}</span><span class="muted">vs 昨收</span>`,
         spark: ""
       })}
+      ${bwCard}
       ${pieCard()}
     `;
+    ov.querySelectorAll("[data-ov-sym]").forEach(row => {
+      row.addEventListener("click", () => {
+        const h = HOLDINGS.find(x => tradeKey(x) === tradeKey({ sym: row.dataset.ovSym, entry: row.dataset.ovEntry, cost: row.dataset.ovCost }));
+        if (h) openDrawer(h);
+      });
+    });
     renderDailySources();
   }
 

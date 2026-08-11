@@ -1509,6 +1509,19 @@
 
   /* ALLOCATION BAR CHART (replaces pie) */
   .ov-alloc { flex-direction: column; gap: 8px; align-items: stretch; }
+  /* Best/Worst card: two clickable rows instead of the usual single value+sub */
+  .ov-bw { justify-content: flex-start; gap: 10px; }
+  .ov-bw-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; margin: 0 -6px;
+    border-radius: 7px; cursor: pointer; transition: background .12s; }
+  .ov-bw-row:hover { background: var(--bg-2); }
+  .ov-bw-row.ov-bw-empty { cursor: default; }
+  .ov-bw-row.ov-bw-empty:hover { background: transparent; }
+  .ov-bw-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .ov-bw-dot.up { background: var(--up); }
+  .ov-bw-dot.down { background: var(--down); }
+  .ov-bw-sym { font-size: 13px; font-weight: 700; color: var(--fg-0); flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ov-bw-pct { font-family: var(--f-mono); font-size: 14px; font-weight: 700; letter-spacing: -.02em; flex-shrink: 0; }
   .alloc-head { display: flex; align-items: baseline; justify-content: space-between; }
   .alloc-head .label {
     border-bottom: none; padding-bottom: 0;
@@ -3054,8 +3067,11 @@
     #analytics-view { padding: 20px 32px 60px; }
     #market-view { padding: 20px 32px 60px; }
     #sim-view { padding: 20px 32px 60px; }
-    /* Overview: 3 cards per row; alloc card spans last 2 cols on row 2 */
+    /* Overview: 6 cards, 3-col grid. NAV spans 2 (hero) so row 1 is NAV+risk (3 cols
+       exactly); row 2 is OPEN/DAY/best-worst (3 cols); alloc takes its own full row —
+       this tiling has zero empty grid cells at any of these three breakpoints. */
     .overview { grid-template-columns: repeat(3, 1fr) !important; }
+    .overview > #nav-card { grid-column: span 2; }
     .overview > .ov-alloc { grid-column: 1 / -1; }
     /* Sim panel-head: tabs+search on row 1, filters on row 2 */
     #sim-view .panel-head { flex-wrap: wrap; align-items: center; gap: 12px 10px; }
@@ -3078,6 +3094,8 @@
     main { padding: 16px 32px 40px; }
     .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .overview { grid-template-columns: repeat(3, 1fr) !important; }
+    .overview > #nav-card { grid-column: span 2; }
+    .overview > .ov-alloc { grid-column: 1 / -1; }
   }
 
   /* ============ MOBILE (@media max-width: 768px) ============ */
@@ -3131,10 +3149,14 @@
     main { padding: 12px 12px 86px; gap: 10px; }
 
     /* ---- Overview strip ---- */
-    /* 4 cards since 持仓数 merged into OPEN P&L — a 2-col grid leaves DAY P&L stranded
-       beside an empty half, so stack all of them full-width on mobile. */
+    /* 6 cards, single column on mobile — a multi-column grid here just leaves odd cards
+       stranded beside empty space at this width. #nav-card's `grid-column: span 2` from
+       the desktop/tablet rules is an ID selector (specificity beats `.overview > *`), so
+       it must be explicitly reset here or it'll try to span into a phantom 2nd column
+       even though grid-template-columns only defines one. */
     .overview { grid-template-columns: 1fr !important; }
     .overview > * { grid-column: 1 / -1; }
+    .overview > #nav-card { grid-column: 1 / -1; }
     .ov-card { min-height: 90px; padding: 12px; }
 
     /* ---- Panel / table ---- */
@@ -4786,8 +4808,8 @@
   </div>
 </div>
 
-<script src="data.js?v=614"></script>
-<script src="desk.js?v=614"></script>
+<script src="data.js?v=615"></script>
+<script src="desk.js?v=615"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
