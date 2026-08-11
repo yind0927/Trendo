@@ -62,24 +62,18 @@
           <div class="label" style="justify-content:space-between">NAV · 总资产<button class="nav-edit-btn" title="编辑基准总额"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button></div>
         </div>
         <div class="value">$${portfolioValue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
-        <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${totalPnlDollar >= 0 ? "+" : ""}${fmt.signed(totalPnlDollar)} 浮</span>${realizedPnl !== 0 ? ` <span class="${fmt.sign(realizedPnl)}" style="font-size:10.5px">${realizedPnl >= 0 ? "+" : ""}${fmt.signed(realizedPnl)} 已</span>` : ""}</span></div>
+        <div class="sub"><span class="muted">基准 $${totalNotional.toLocaleString("en-US",{maximumFractionDigits:0})} <span class="${pnlSign}" style="font-size:10.5px">${fmt.signed(totalPnlDollar)} 浮</span>${realizedPnl !== 0 ? ` <span class="${fmt.sign(realizedPnl)}" style="font-size:10.5px">${fmt.signed(realizedPnl)} 已</span>` : ""}</span></div>
       </div>
       ${card({
         label: "OPEN P&L · 总浮盈/浮亏", info: false,
         value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
-        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${winners}W · ${losers}L</span>${avgWinLossLine}`,
+        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${HOLDINGS.length} 持仓 · ${winners}W · ${losers}L</span>${avgWinLossLine}`,
         spark: ""
       })}
       ${card({
         label: "DAY P&L · 今日盈亏", info: false,
         value: `<span class="${todaySign}">${fmt.signed(todayPnl)}</span>`,
         sub: `<span class="chip ${todaySign}">${fmt.pct(todayPct)}</span><span class="muted">vs 昨收</span>`,
-        spark: ""
-      })}
-      ${card({
-        label: "OPEN POSITIONS · 当前持仓数", info: false,
-        value: `${HOLDINGS.length}`,
-        sub: `<span class="muted">现持仓</span>`,
         spark: ""
       })}
       ${pieCard()}
@@ -186,35 +180,57 @@
   }
 
   function pieCard() {
-    // Real calculation from HOLDINGS
+    // Allocation is computed from the REAL committed capital (cost × qty), not from the
+    // user-entered `size` field — size can drift from the actual position value, and once
+    // dollar amounts are shown next to the percentages any drift becomes visible nonsense.
     const sectorMap = {};
+    let investedAmt = 0;
     HOLDINGS.forEach(h => {
-      const nm  = h.bx?.sector?.name  || "其他";
-      const col = h.bx?.sector?.color || "oklch(0.35 0.01 250)";
-      if (!sectorMap[nm]) sectorMap[nm] = { name: nm, color: col, pct: 0 };
-      sectorMap[nm].pct += h.size || 0;
+      const amt = (h.cost || 0) * (h.qty || 0);
+      if (amt <= 0) return;
+      const nm  = h.bx?.sector?.name  || "未分类";
+      const col = h.bx?.sector?.color || "oklch(0.55 0.03 250)";
+      if (!sectorMap[nm]) sectorMap[nm] = { name: nm, color: col, amt: 0, n: 0 };
+      sectorMap[nm].amt += amt;
+      sectorMap[nm].n   += 1;
+      investedAmt += amt;
     });
-    const sectors = Object.values(sectorMap).sort((a, b) => b.pct - a.pct);
-    const invested = sectors.reduce((s, x) => s + x.pct, 0);
-    const cash = Math.max(0, 100 - invested);
-    if (cash > 0.1) sectors.push({ name: "现金", color: "oklch(0.35 0.01 250)", pct: +cash.toFixed(1) });
-    const maxPct = Math.max(...sectors.map(s => s.pct));
+    const base     = totalNotional > 0 ? totalNotional : investedAmt;
+    const cashAmt  = Math.max(0, base - investedAmt);
+    const rows     = Object.values(sectorMap).sort((a, b) => b.amt - a.amt);
+    if (cashAmt > 0.5) rows.push({ name: "现金", color: "oklch(0.42 0.015 250)", amt: cashAmt, n: null, isCash: true });
+    const investedPct = base > 0 ? investedAmt / base * 100 : 0;
+
+    if (!rows.length) return `
+      <div class="ov-pie ov-alloc">
+        <div class="alloc-head"><span class="label">ALLOCATION · 仓位分布</span></div>
+        <div class="alloc-empty">暂无持仓</div>
+      </div>`;
+
+    // Bars scale against the FULL base (not the largest row) so the track reads as
+    // "share of the account" — scaling to max made a 30% position look like 100%.
     return `
       <div class="ov-pie ov-alloc">
         <div class="alloc-head">
           <span class="label">ALLOCATION · 仓位分布</span>
-          <span class="big">${invested.toFixed(0)}% <span style="font-size:var(--fs-small);font-weight:500;opacity:.6">已投</span></span>
+          <span class="alloc-head-r">
+            <b class="big">${fmt.usd(investedAmt)}</b>
+            <span class="alloc-head-sub">已投 · ${investedPct.toFixed(1)}%</span>
+          </span>
         </div>
         <div class="alloc-bars">
-          ${sectors.slice(0, 7).map(s => `
-            <div class="alloc-row">
-              <span class="alloc-name">${s.name}</span>
+          ${rows.slice(0, 7).map(s => {
+            const pct = base > 0 ? s.amt / base * 100 : 0;
+            return `
+            <div class="alloc-row${s.isCash ? " is-cash" : ""}" title="${s.name} ${fmt.usd(s.amt)} · 占总资产 ${pct.toFixed(1)}%${s.n ? ` · ${s.n} 笔持仓` : ""}">
+              <span class="alloc-name">${s.name}${s.n ? `<i class="alloc-n">${s.n}</i>` : ""}</span>
               <div class="alloc-track">
-                <div class="alloc-fill" style="width:${(s.pct / maxPct * 100).toFixed(1)}%;background:${s.color}"></div>
+                <div class="alloc-fill" style="width:${Math.min(100, pct).toFixed(1)}%;background:${s.color}"></div>
               </div>
-              <span class="alloc-pct">${s.pct.toFixed(1)}%</span>
-            </div>
-          `).join("")}
+              <span class="alloc-amt">${fmt.usd(s.amt)}</span>
+              <span class="alloc-pct">${pct.toFixed(1)}%</span>
+            </div>`;
+          }).join("")}
         </div>
       </div>`;
   }
@@ -5339,37 +5355,36 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="muted" style="font-size:9px">${intrinsic > 0.005 ? "将被指派" : "OTM作废"}</span>${itmWarn}</span>`;
     }
 
-    // Underlying price track: 入场价 (center) → 现价 (fill), with the strike marked on the
-    // same axis. Replaces the old time-decay bar — how far the underlying has moved, and
-    // whether it's heading toward the strike, is what actually decides this position's
-    // outcome; days elapsed is already shown as the DTE tag in the header.
-    const entryPx = pos.underlyingAtEntry;
-    let pxBar = "";
-    if (entryPx > 0 && spot != null) {
-      const movePct   = (spot - entryPx) / entryPx * 100;
-      const strikePct = (pos.strike - entryPx) / entryPx * 100;
-      // Scale so both the current move and the strike stay on-axis, min ±10%.
-      const cap  = Math.max(10, Math.abs(movePct) * 1.25, Math.abs(strikePct) * 1.15);
-      const half = w => Math.min(50, Math.abs(w) / cap * 50);
-      const mv   = half(movePct);
-      const cls  = movePct >= 0 ? "up" : "down";
-      const strikeLeft = Math.max(0, Math.min(100, 50 + strikePct / cap * 50));
-      const moveStr = `${movePct >= 0 ? "+" : "−"}${Math.abs(movePct).toFixed(1)}%`;
-      pxBar = `<div class="opts-px-wrap" title="入场时现价 $${entryPx.toFixed(2)} → 当前 $${spot.toFixed(2)}（${moveStr}）· 行权价 $${pos.strike}">
-        <div class="opts-px-track">
-          <div class="opts-px-mid"></div>
-          <div class="opts-px-fill ${cls}" style="left:${(movePct >= 0 ? 50 : 50 - mv).toFixed(1)}%;width:${mv.toFixed(1)}%"></div>
-          <div class="opts-px-strike" style="left:${strikeLeft.toFixed(1)}%" title="行权价 $${pos.strike}"></div>
+    // Premium-capture progress: how much of the credit you sold has already been earned.
+    // Capture % = (卖出权利金 − 当前买回价) / 卖出权利金 — i.e. what fraction of the premium
+    // you'd keep if you closed right now. Needs a recorded mark; without one there is no
+    // honest way to know (the option's live price is not derivable from the underlying
+    // alone in this manual-record model), so the bar renders empty and prompts for it.
+    const capPct = (pos.manualMark != null && pos.premium > 0)
+      ? (pos.premium - pos.manualMark) / pos.premium * 100 : null;
+    let premBar;
+    if (capPct == null) {
+      premBar = `<div class="opts-pb-wrap">
+        <div class="opts-pb-track"><div class="opts-pb-fill empty" style="width:0%"></div></div>
+        <div class="opts-pb-lbl"><span>权利金捕获</span><b class="dim">未记录现价</b></div>
+      </div>`;
+    } else {
+      const neg  = capPct < 0;
+      const w    = Math.min(100, Math.abs(capPct));
+      const cls  = neg ? "down" : "up";
+      const kept = pos.premium * 100 * pos.qty * Math.max(0, Math.min(1, capPct / 100));
+      premBar = `<div class="opts-pb-wrap" title="${neg
+          ? `买回价 $${pos.manualMark.toFixed(2)} 高于卖出价 $${pos.premium.toFixed(2)}，目前浮亏`
+          : `卖出 $${pos.premium.toFixed(2)} · 现价 $${pos.manualMark.toFixed(2)} · 平仓可留 ${fmt.usd(kept)}`}">
+        <div class="opts-pb-track">
+          <div class="opts-pb-fill ${cls}" style="width:${w.toFixed(1)}%"></div>
         </div>
-        <div class="opts-px-lbl">
-          <span>入场 $${entryPx.toFixed(2)}</span>
-          <b class="${cls}">${moveStr}</b>
-          <span>现价 $${spot.toFixed(2)}</span>
+        <div class="opts-pb-lbl">
+          <span>权利金捕获</span>
+          <b class="${cls}">${neg ? "−" : ""}${Math.abs(capPct).toFixed(0)}%</b>
+          <span class="opts-pb-r">${neg ? "浮亏中" : `已赚 ${fmt.usd(kept)} / ${fmt.usd(premTotal)}`}</span>
         </div>
       </div>`;
-    } else if (spot != null) {
-      pxBar = `<div class="opts-px-wrap"><div class="opts-px-lbl opts-px-none">
-        <span>入场时现价未记录</span><span>现价 $${spot.toFixed(2)}</span></div></div>`;
     }
 
     // Floating P&L via manually recorded current option price (broker's mark/mid)
@@ -5422,7 +5437,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="opts-card-m"><div class="opts-card-ml">最大盈利</div><div class="opts-card-mv up" title="OTM到期时全额获得">+$${premTotal.toFixed(0)}</div></div>
         <div class="opts-card-m"><div class="opts-card-ml">${isCSP ? "安全垫" : "溢价距"}</div><div class="opts-card-mv ${cushionPct == null ? "dim" : cushionPct >= 0 ? "up" : "warn"}">${cushionPct == null ? "—" : (cushionPct >= 0 ? "+" : "") + cushionPct.toFixed(1) + "%"}</div></div>
       </div>
-      ${pxBar}
+      ${premBar}
       <div class="opts-card-foot">
         ${estRow ? `<div>${estRow}</div>` : ""}
         ${stockRow ? `<div class="opts-mark-row">${stockRow}</div>` : ""}
