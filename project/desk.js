@@ -1165,7 +1165,7 @@ function rsAdjustGrade(grade, rsResult) {
   const _optsSymGroupsOpen  = new Set(); // which symbol groups are expanded in settled section // group IDs of expanded wheel combo cards
   let simOptionsSym   = "QQQ";  // sell-modal default
   let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
-  const OPT_WATCH_SYMS = ["DRAM", "MAGS", "SMH", "GLD", "IWM", "QQQ"];
+  const OPT_WATCH_SYMS = ["MAGS", "SMH", "SOXL", "GLD", "IWM", "QQQ"];
   let _optSpot = {};            // { sym: last } — refreshed by fetchPrices()
   let newPositionContext = "desk"; // "desk" | "sim"
   let pendingCloseCtx = "desk";
