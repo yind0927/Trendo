@@ -34,7 +34,7 @@ window.BUCKET_STATUS = {
   "Near Stop":   { label: "近止损 · Near Stop",     cls: "near-stop",   color: "var(--down)"          },
   "Early":       { label: "初期 · Early",           cls: "early",       color: "var(--orange)"        },
   "Midway":      { label: "中期 · Midway",          cls: "midway",      color: "var(--warn)"          },
-  "On Track":    { label: "进行中 · On Track",      cls: "on-track",    color: "var(--accent)"        },
+  "On Track":    { label: "进行中 · On Track",      cls: "on-track",    color: "var(--blue)"          },
   "Near Target": { label: "近止盈 · Near Target",    cls: "near-target", color: "var(--ok)"            },
 };
 

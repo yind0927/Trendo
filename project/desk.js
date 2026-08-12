@@ -61,13 +61,13 @@
     // are called out separately rather than silently treated as zero-risk.
     const riskedPosns  = HOLDINGS.filter(h => h.stop != null && h.stop < h.cost && h.qty > 0);
     const totalRiskAmt = riskedPosns.reduce((s, h) => s + (h.cost - h.stop) * h.qty, 0);
-    const stopsSetCount = HOLDINGS.filter(h => h.stop != null && h.qty > 0).length;
+    const nearStopCount = HOLDINGS.filter(h => progressBucket(h) === "Near Stop").length;
     const noStopCount  = HOLDINGS.filter(h => (h.stop == null) && h.qty > 0).length;
     const totalRiskPct = totalNotional > 0 && HOLDINGS.length ? totalRiskAmt / totalNotional * 100 : null;
     const riskCard = HOLDINGS.length ? card({
       label: "TOTAL RISK · 总风险敞口", info: false,
       value: `<span class="down">−${fmt.usd(totalRiskAmt)}</span>`,
-      sub: `<span class="muted">${totalRiskPct != null ? totalRiskPct.toFixed(1) + "% 占总仓 · " : ""}${stopsSetCount}笔有止损${noStopCount ? ` · ${noStopCount}笔无止损` : ""}</span>`,
+      sub: `<span class="muted">${totalRiskPct != null ? totalRiskPct.toFixed(1) + "% 占总仓 · " : ""}${nearStopCount}笔近止损${noStopCount ? ` · ${noStopCount}笔无止损` : ""}</span>`,
       spark: ""
     }) : card({ label: "TOTAL RISK · 总风险敞口", info: false, value: `<span class="muted">—</span>`, sub: `<span class="muted">暂无持仓</span>`, spark: "" });
 

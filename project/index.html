@@ -39,6 +39,11 @@
     --accent-dim: oklch(0.78 0.12 var(--accent-h) / .14);
     --accent-line: oklch(0.78 0.12 var(--accent-h) / .35);
 
+    /* blue — used for On Track / 进行中 status */
+    --blue: oklch(0.72 0.15 245);
+    --blue-dim: oklch(0.72 0.15 245 / .15);
+    --blue-line: oklch(0.72 0.15 245 / .35);
+
     /* P&L semantics: US convention — green up, red down */
     --up:   oklch(0.77 0.15 158);
     --up-faint: oklch(0.77 0.15 158 / .07);
@@ -1479,11 +1484,11 @@
   .status.midway .dot { background: oklch(0.80 0.15 75); }
 
   .status.on-track {
-    background: var(--accent-dim);
-    color: var(--accent);
-    border: 1px solid var(--accent-line);
+    background: var(--blue-dim);
+    color: var(--blue);
+    border: 1px solid var(--blue-line);
   }
-  .status.on-track .dot { background: var(--accent); }
+  .status.on-track .dot { background: var(--blue); }
 
   .status.near-target {
     background: oklch(0.77 0.15 158 / .14);
@@ -4808,8 +4813,8 @@
   </div>
 </div>
 
-<script src="data.js?v=616"></script>
-<script src="desk.js?v=616"></script>
+<script src="data.js?v=617"></script>
+<script src="desk.js?v=617"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
