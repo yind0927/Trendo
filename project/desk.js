@@ -61,12 +61,13 @@
     // are called out separately rather than silently treated as zero-risk.
     const riskedPosns  = HOLDINGS.filter(h => h.stop != null && h.stop < h.cost && h.qty > 0);
     const totalRiskAmt = riskedPosns.reduce((s, h) => s + (h.cost - h.stop) * h.qty, 0);
-    const noStopCount  = HOLDINGS.length - riskedPosns.length;
+    const stopsSetCount = HOLDINGS.filter(h => h.stop != null && h.qty > 0).length;
+    const noStopCount  = HOLDINGS.filter(h => (h.stop == null) && h.qty > 0).length;
     const totalRiskPct = totalNotional > 0 && HOLDINGS.length ? totalRiskAmt / totalNotional * 100 : null;
     const riskCard = HOLDINGS.length ? card({
       label: "TOTAL RISK · 总风险敞口", info: false,
       value: `<span class="down">−${fmt.usd(totalRiskAmt)}</span>`,
-      sub: `<span class="muted">${totalRiskPct != null ? totalRiskPct.toFixed(1) + "% of NAV · " : ""}${riskedPosns.length}笔止损中${noStopCount ? ` · ${noStopCount}笔无止损` : ""}</span>`,
+      sub: `<span class="muted">${totalRiskPct != null ? totalRiskPct.toFixed(1) + "% 占总仓 · " : ""}${stopsSetCount}笔有止损${noStopCount ? ` · ${noStopCount}笔无止损` : ""}</span>`,
       spark: ""
     }) : card({ label: "TOTAL RISK · 总风险敞口", info: false, value: `<span class="muted">—</span>`, sub: `<span class="muted">暂无持仓</span>`, spark: "" });
 
@@ -99,15 +100,15 @@
       </div>
       ${riskCard}
       ${card({
-        label: "OPEN P&L · 总浮盈/浮亏", info: false,
-        value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
-        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${HOLDINGS.length} 持仓 · ${winners}W · ${losers}L</span>${avgWinLossLine}`,
-        spark: ""
-      })}
-      ${card({
         label: "DAY P&L · 今日盈亏", info: false,
         value: `<span class="${todaySign}">${fmt.signed(todayPnl)}</span>`,
         sub: `<span class="chip ${todaySign}">${fmt.pct(todayPct)}</span><span class="muted">vs 昨收</span>`,
+        spark: ""
+      })}
+      ${card({
+        label: "OPEN P&L · 总浮盈/浮亏", info: false,
+        value: `<span class="${pnlSign}">${fmt.signed(totalPnlDollar)}</span>`,
+        sub: `<span class="chip ${pnlSign}">${fmt.pct(totalPnlPct)}</span><span class="muted">${HOLDINGS.length} 持仓 · ${winners}W · ${losers}L</span>${avgWinLossLine}`,
         spark: ""
       })}
       ${bwCard}
