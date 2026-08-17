@@ -681,11 +681,12 @@ function rsAdjustGrade(grade, rsResult) {
         trendArr = d > 0 ? "▲" : d < 0 ? "▼" : "–";
       }
       const rs = rec.rsResult ? `<span class="dsc-hist-rs">RS ${rec.rsResult.score}/${rec.rsResult.max}</span>` : `<span class="dsc-hist-rs dsc-na">—</span>`;
+      const stTag = rec.st === true ? `<span class="dsc-hist-st up">▲多</span>` : rec.st === false ? `<span class="dsc-hist-st down">▼空</span>` : "";
       return `<div class="dsc-hist-row">
         <span class="dsc-hist-date">${rec.date}${rec.isEntry ? ' <span class="dsc-hist-tag">入场</span>' : ""}</span>
         <span class="dsc-hist-grade" style="color:${meta.color}">${rec.finalGrade}</span>
         <span class="dsc-hist-trend ${trendCls}">${trendArr}</span>
-        ${rs}
+        ${stTag}${rs}
       </div>`;
     });
     const listHTML = rowsChrono.length
@@ -7821,6 +7822,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (avgOpenWinPct !== null)  floatSubParts.push(`<span class="up">盈均+${avgOpenWinPct}%</span>`);
     if (avgOpenLossPct !== null) floatSubParts.push(`<span class="down">亏均−${avgOpenLossPct}%</span>`);
     const floatSub = floatSubParts.length ? floatSubParts.join(" · ") + ` · ${open}笔` : `${open} 笔持仓中`;
+    const openCost = SIM_HOLDINGS.reduce((s, h) => s + (h.cost || 0) * (h.qty || 0), 0);
     el.innerHTML = `
       <div class="sim-card">
         <div class="sim-card-label" style="display:flex;justify-content:space-between;align-items:center">
@@ -7838,14 +7840,9 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="sim-card-sub">${floatSub}</div>
       </div>
       <div class="sim-card">
-        <div class="sim-card-label">已实现盈亏</div>
-        <div class="sim-card-value ${fmt.sign(realizedPnl)}">${closedTotal ? fmt.signed(Math.round(realizedPnl)) : "—"}</div>
-        <div class="sim-card-sub">${closedTotal} 笔已平仓</div>
-      </div>
-      <div class="sim-card">
-        <div class="sim-card-label">模拟胜率</div>
-        <div class="sim-card-value ${wins >= closedTotal / 2 ? 'up' : closedTotal ? 'down' : 'neu'}">${winRate}</div>
-        <div class="sim-card-sub">${closedTotal ? `${wins}胜 / ${closedTotal - wins}负` : "暂无数据"}</div>
+        <div class="sim-card-label">已投入总额</div>
+        <div class="sim-card-value neu">${openCost > 0 ? fmt.usd(Math.round(openCost)) : "—"}</div>
+        <div class="sim-card-sub">${open} 笔持仓中</div>
       </div>`;
 
 
