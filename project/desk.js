@@ -7832,6 +7832,28 @@ function rsAdjustGrade(grade, rsResult) {
     if (avgOpenLossPct !== null) floatSubParts.push(`<span class="down">亏均−${avgOpenLossPct}%</span>`);
     const floatSub = floatSubParts.length ? floatSubParts.join(" · ") + ` · ${open}笔` : `${open} 笔持仓中`;
     const openCost = SIM_HOLDINGS.reduce((s, h) => s + (h.cost || 0) * (h.qty || 0), 0);
+    // Time-weighted average capital utilization (open + closed combined)
+    let avgUtil = null;
+    const allForUtil = [
+      ...SIM_HOLDINGS.map(h => ({ cost: h.cost || 0, qty: h.qty || 0, entry: h.entry, closedAt: null })),
+      ...SIM_CLOSED.map(h => ({ cost: h.cost || 0, qty: h.qty || 0, entry: h.entry, closedAt: h.closedAt })),
+    ];
+    if (allForUtil.length > 0 && simNotional > 0) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let totalDollarDays = 0, earliest = null;
+      allForUtil.forEach(p => {
+        if (!p.entry) return;
+        const days = Math.max(1, calcTradingDays(p.entry, p.closedAt || todayStr) + 1);
+        totalDollarDays += p.cost * p.qty * days;
+        if (!earliest || p.entry < earliest) earliest = p.entry;
+      });
+      if (earliest && totalDollarDays > 0) {
+        const span = Math.max(1, calcTradingDays(earliest, todayStr) + 1);
+        avgUtil = totalDollarDays / (simNotional * span) * 100;
+      }
+    }
+    const utilStr = avgUtil !== null ? avgUtil.toFixed(1) + "%" : "—";
+    const utilTotal = SIM_HOLDINGS.length + SIM_CLOSED.length;
     el.innerHTML = `
       <div class="sim-card">
         <div class="sim-card-label" style="display:flex;justify-content:space-between;align-items:center">
@@ -7852,6 +7874,11 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="sim-card-label">已投入总额</div>
         <div class="sim-card-value neu">${openCost > 0 ? fmt.usd(Math.round(openCost)) : "—"}</div>
         <div class="sim-card-sub">${open} 笔持仓中</div>
+      </div>
+      <div class="sim-card">
+        <div class="sim-card-label">平均资金使用率</div>
+        <div class="sim-card-value neu">${utilStr}</div>
+        <div class="sim-card-sub">${utilTotal} 笔 · 持仓中+已平仓</div>
       </div>`;
 
 
