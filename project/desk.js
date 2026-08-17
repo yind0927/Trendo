@@ -8419,7 +8419,7 @@ function rsAdjustGrade(grade, rsResult) {
     return { values: monthEndValues, labels, dailyChanges: monthPnls };
   }
 
-  function portfolioCurveSVG(points, labels, h, chartId) {
+  function portfolioCurveSVG(points, labels, h, chartId, baselineValue) {
     if (points.length < 2) return "";
     const W = 560;
     const minV = Math.min(...points), maxV = Math.max(...points);
@@ -8468,6 +8468,7 @@ function rsAdjustGrade(grade, rsResult) {
       <stop offset="1" stop-color="${col}" stop-opacity="0.02"/>
     </linearGradient></defs>
     ${gridLines}
+    ${(() => { if (baselineValue == null) return ""; const by = sy(baselineValue); return (by > 2 && by < h - 2) ? `<line x1="8" y1="${by.toFixed(1)}" x2="${W-8}" y2="${by.toFixed(1)}" stroke="var(--fg-3)" stroke-width="0.8" stroke-dasharray="3,5" opacity="0.45"/>` : ""; })()}
     <path d="${areaD}" fill="url(#${gid})"/>
     <path d="${pathD}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     <circle cx="${sx(0).toFixed(1)}" cy="${sy(points[0]).toFixed(1)}" r="3" fill="${col}" stroke="var(--bg-1)" stroke-width="1.5" opacity="0.6"/>
@@ -8481,7 +8482,7 @@ function rsAdjustGrade(grade, rsResult) {
 </div>`;
   }
 
-  function wireCurveTooltip(chartId, points, labels, dailyChanges) {
+  function wireCurveTooltip(chartId, points, labels, dailyChanges, startValue) {
     const svg   = document.getElementById(chartId);
     const tip   = document.getElementById(chartId + "-tip");
     const cross = document.getElementById(chartId + "-cross");
@@ -8496,42 +8497,66 @@ function rsAdjustGrade(grade, rsResult) {
     const h = svg.viewBox.baseVal.height;
     const sx = i => ((i / (points.length - 1)) * (W - 16) + 8);
     const sy = v => (h - 6) - ((v - lo) / range) * (h - 14);
+    const sv = startValue ?? points[0]; // period start for cumulative calc
 
-    svg.addEventListener("mousemove", e => {
-      const rect = svg.getBoundingClientRect();
-      const relX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-      const pct  = relX / rect.width;
-      const idx  = Math.min(points.length - 1, Math.max(0, Math.round(pct * (points.length - 1))));
-      const val  = points[idx];
-      const lbl  = labels ? (labels[idx] || "") : "";
+    const showAt = (relX, rect) => {
+      const pct = relX / rect.width;
+      const idx = Math.min(points.length - 1, Math.max(0, Math.round(pct * (points.length - 1))));
+      const val = points[idx];
+      const lbl = labels ? (labels[idx] || "") : "";
 
-      // Daily P&L: use actual recorded change for that day/period
+      // 当日/当期涨跌
       const dayPnl = dailyChanges ? (dailyChanges[idx] || 0) : (val - (idx > 0 ? points[idx - 1] : val));
-      const pct2   = val > 0 ? (dayPnl / val * 100) : 0;
+      const dayPct = val > 0 ? (dayPnl / val * 100) : 0;
 
-      // Crosshair + dot
+      // 区间累计（从第一个点到当前点）
+      const cumPnl = val - sv;
+      const cumPct = sv > 0 ? (cumPnl / sv * 100) : 0;
+      const isYear = points.length <= 12;
+      const periodWord = isYear ? "当月" : "当日";
+
       const vx = sx(idx);
       cross.setAttribute("x1", vx); cross.setAttribute("x2", vx);
       cross.setAttribute("opacity", "0.55");
       hdot.setAttribute("cx", vx); hdot.setAttribute("cy", sy(val));
       hdot.setAttribute("opacity", "1");
 
-      // Tooltip: show portfolio value + that day's actual PnL
-      tip.innerHTML = `<div class="ec-tip-label">${lbl}</div>` +
+      tip.innerHTML =
+        `<div class="ec-tip-label">${lbl}</div>` +
         `<div class="ec-tip-val">${fmt.usd(Math.round(val))}</div>` +
-        `<div class="ec-tip-chg ${dayPnl >= 0 ? 'up' : 'down'}">${dayPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(dayPnl)).toLocaleString()} (${pct2 >= 0 ? '+' : ''}${pct2.toFixed(2)}%)</div>`;
+        `<div class="ec-tip-chg ${dayPnl >= 0 ? 'up' : 'down'}">${dayPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(dayPnl)).toLocaleString("en-US")} (${dayPct >= 0 ? '+' : ''}${dayPct.toFixed(1)}%) · ${periodWord}</div>` +
+        `<div class="ec-tip-chg ${cumPnl >= 0 ? 'up' : 'down'}" style="opacity:.75;margin-top:2px">${cumPnl >= 0 ? '+' : '−'}$${Math.abs(Math.round(cumPnl)).toLocaleString("en-US")} (${cumPct >= 0 ? '+' : ''}${cumPct.toFixed(1)}%) · 区间累计</div>`;
 
-      const tipHalf = 65;
+      const tipHalf = 70;
       const clampedX = Math.max(tipHalf, Math.min(rect.width - tipHalf, relX));
       tip.style.left = clampedX + "px";
       tip.style.display = "block";
-    });
+    };
 
-    svg.addEventListener("mouseleave", () => {
+    const hide = () => {
       cross.setAttribute("opacity", "0");
       hdot.setAttribute("opacity", "0");
       tip.style.display = "none";
+    };
+
+    svg.addEventListener("mousemove", e => {
+      showAt(Math.max(0, Math.min(svg.getBoundingClientRect().width, e.clientX - svg.getBoundingClientRect().left)), svg.getBoundingClientRect());
     });
+    svg.addEventListener("mouseleave", hide);
+
+    // Touch support for mobile
+    const onTouch = e => {
+      e.preventDefault();
+      const t = e.touches[0] || e.changedTouches[0];
+      if (!t) return;
+      const rect = svg.getBoundingClientRect();
+      showAt(Math.max(0, Math.min(rect.width, t.clientX - rect.left)), rect);
+    };
+    svg.addEventListener("touchstart",  onTouch, { passive: false });
+    svg.addEventListener("touchmove",   onTouch, { passive: false });
+    let _hideTimer;
+    svg.addEventListener("touchend", () => { _hideTimer = setTimeout(hide, 1800); });
+    svg.addEventListener("touchstart", () => { clearTimeout(_hideTimer); }, { passive: true });
   }
 
   function renderAnalytics() {
@@ -8703,13 +8728,19 @@ function rsAdjustGrade(grade, rsResult) {
         </div>` : ""}
       </div>
 
-      <div class="analytics-card" style="margin-bottom:14px">
+      ${(() => {
+        const sv = curveData.values[0], ev = curveData.values[curveData.values.length - 1];
+        const pChg = ev - sv, pPct = sv > 0 ? pChg / sv * 100 : 0;
+        const pLbl = { week: "本周", month: "近月", year: "近年" }[equityPeriod] ?? "";
+        const pCls = fmt.sign(pChg);
+        return `<div class="analytics-card" style="margin-bottom:14px">
         <div class="ec-header">
           <div>
             ${atitle("总资产曲线", "Portfolio Value")}
-            <div class="analytics-card-sub">
+            <div class="analytics-card-sub" style="display:flex;align-items:baseline;gap:0;flex-wrap:wrap">
               <span class="mono" style="font-size:15px;font-weight:700;color:var(--fg-0)">${fmt.usd(Math.round(currentPortfolioValue))}</span>
               <span class="mono ${fmt.sign(totalPnlDisplay)}" style="font-size:11px;margin-left:6px">${fmt.signed(Math.round(totalPnlDisplay))}</span>
+              ${pChg !== 0 ? `<span class="mono ${pCls}" style="font-size:11px;margin-left:10px;padding-left:10px;border-left:1px solid var(--line)">${pLbl} ${pChg >= 0 ? "+" : ""}${pPct.toFixed(1)}% (${fmt.signed(Math.round(pChg))})</span>` : ""}
             </div>
           </div>
           <div class="ec-period-seg">
@@ -8718,8 +8749,9 @@ function rsAdjustGrade(grade, rsResult) {
             <button class="ec-period-btn${equityPeriod === 'year' ? ' active' : ''}" data-period="year">年</button>
           </div>
         </div>
-        <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136, "ec-main")}</div>
-      </div>
+        <div style="margin-top:14px">${portfolioCurveSVG(curveData.values, curveData.labels, 136, "ec-main", totalNotional)}</div>
+      </div>`;
+      })()}
 
       <div class="analytics-card" style="margin-bottom:14px">
         ${atitle("评级绩效", "Grade Performance")}
@@ -8818,7 +8850,7 @@ function rsAdjustGrade(grade, rsResult) {
     });
     if (!["week","month","year"].includes(equityPeriod)) equityPeriod = "week";
 
-    wireCurveTooltip("ec-main", curveData.values, curveData.labels, curveData.dailyChanges);
+    wireCurveTooltip("ec-main", curveData.values, curveData.labels, curveData.dailyChanges, curveData.values[0]);
 
     const calPrev = $("#cal-prev", aContent);
     const calNext = $("#cal-next", aContent);
