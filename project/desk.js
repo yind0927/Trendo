@@ -681,7 +681,7 @@ function rsAdjustGrade(grade, rsResult) {
         trendArr = d > 0 ? "▲" : d < 0 ? "▼" : "–";
       }
       const rs = rec.rsResult ? `<span class="dsc-hist-rs">RS ${rec.rsResult.score}/${rec.rsResult.max}</span>` : `<span class="dsc-hist-rs dsc-na">—</span>`;
-      const stTag = rec.st === true ? `<span class="dsc-hist-st up">▲多</span>` : rec.st === false ? `<span class="dsc-hist-st down">▼空</span>` : "";
+      const stTag = rec.st === true ? `<span class="dsc-hist-st up">▲</span>` : rec.st === false ? `<span class="dsc-hist-st down">▼</span>` : "";
       return `<div class="dsc-hist-row">
         <span class="dsc-hist-date">${rec.date}${rec.isEntry ? ' <span class="dsc-hist-tag">入场</span>' : ""}</span>
         <span class="dsc-hist-grade" style="color:${meta.color}">${rec.finalGrade}</span>
@@ -1011,6 +1011,15 @@ function rsAdjustGrade(grade, rsResult) {
         refreshLiveGrade();
       });
     });
+    // Init _lastLiveST from latest history entry (or entryST) so recording without
+    // re-clicking ST still carries the most-recently chosen direction.
+    const latestHistST = h.bxHistory?.length ? h.bxHistory[h.bxHistory.length - 1].st : undefined;
+    const initST = latestHistST !== undefined ? latestHistST : (h.bx?.entryST ?? null);
+    if (initST === true || initST === false) {
+      _lastLiveST = initST;
+      const stVal = String(initST);
+      $$("[data-drawer-st]", dr).forEach(b => b.classList.toggle("active", b.dataset.drawerSt === stVal));
+    }
 
     // ── Sector color swatches ─────────────────────────────────────────────
     $$("[data-drawer-color]", dr).forEach(opt => {

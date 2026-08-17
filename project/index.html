@@ -1403,9 +1403,9 @@
   .dsc-hist-trend.flat { color: var(--fg-3); }
   .dsc-hist-rs { font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); flex-shrink: 0; width: 56px; text-align: right; }
   .dsc-hist-rs.dsc-na { color: var(--fg-3); opacity: .5; }
-  .dsc-hist-st { font-size: 10px; font-family: var(--f-mono); flex-shrink: 0; margin-right: 4px; }
-  .dsc-hist-st.up { color: var(--up); }
-  .dsc-hist-st.down { color: var(--down); }
+  .dsc-hist-st { font-size: 9px; font-family: var(--f-mono); flex-shrink: 0; margin-right: 4px; padding: 1px 4px; border-radius: 3px; }
+  .dsc-hist-st.up { color: var(--up); background: oklch(0.78 0.17 145 / .12); }
+  .dsc-hist-st.down { color: var(--down); background: oklch(0.70 0.19 25 / .12); }
   /* Table grade chip (replaces BX Bars when entry grade stored) */
   .bxg-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
   .bxg-val {
@@ -4816,8 +4816,8 @@
   </div>
 </div>
 
-<script src="data.js?v=621"></script>
-<script src="desk.js?v=621"></script>
+<script src="data.js?v=622"></script>
+<script src="desk.js?v=622"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
