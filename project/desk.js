@@ -2023,13 +2023,13 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         ${!isClosed ? (() => {
           const baseCost = ccAdjCost(h);
-          let peakTick = "";
+          let peakTick = "", peakLabel = "";
           if (h.peakPrice && h.target && h.target > baseCost) {
             const peak = h.peakPrice;
-            const cur = h.last || 0;
+            const cur = h.last > 0 ? h.last : null;
             const peakInProfit = peak >= baseCost;
             const hitTarget = peak >= h.target;
-            const curInLoss = cur < baseCost;
+            const curInLoss = cur !== null && cur < baseCost;
             let tickLeft = null, tickBg;
             if (hitTarget) {
               tickLeft = 97;
@@ -2037,22 +2037,25 @@ function rsAdjustGrade(grade, rsResult) {
             } else if (peakInProfit) {
               tickLeft = Math.min(96, Math.max(3, (peak - baseCost) / (h.target - baseCost) * 100));
               tickBg = curInLoss ? "rgba(251,191,36,0.55)" : "rgba(255,255,255,0.45)";
-            } else if (h.stop && h.stop < baseCost && peak > cur) {
+            } else if (h.stop && h.stop < baseCost && cur !== null && peak > cur) {
               tickLeft = Math.min(96, Math.max(3, (baseCost - peak) / (baseCost - h.stop) * 100));
               tickBg = "rgba(255,255,255,0.22)";
             }
             if (tickLeft !== null) {
-              const dayStr = h.peakDay ? `入场后第${h.peakDay}天` : "";
-              const distPct = cur > 0 ? ((peak - cur) / cur * 100) : 0;
-              const distSign = distPct >= 0 ? "+" : "";
-              const tooltip = [`历史最高 ${price(peak)}`, dayStr, `距现价 ${distSign}${distPct.toFixed(1)}%`].filter(Boolean).join(" · ");
+              const dayStr = h.peakDay ? `第${h.peakDay}天` : "";
+              const distPct = cur ? ((peak - cur) / cur * 100) : null;
+              const distStr = distPct !== null ? `${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%` : "";
+              const labelParts = [`最高 $${price(peak)}`, dayStr, distStr].filter(Boolean);
+              const labelText = labelParts.join(" · ");
+              const tooltip = [`历史最高 $${price(peak)}`, h.peakDay ? `入场后第${h.peakDay}天` : "", distStr ? `距现价 ${distStr}` : ""].filter(Boolean).join(" · ");
               peakTick = `<div class="hc-prog-peak" style="left:${tickLeft.toFixed(1)}%;background:${tickBg}" title="${tooltip}"></div>`;
+              peakLabel = `<div class="hc-peak-label">${labelText}</div>`;
             }
           }
           return `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
           ${peakTick}
-        </div>`;
+        </div>${peakLabel}`;
         })() : ""}
         <div class="hc-price-row">
           <span class="hc-entry-price">${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>入 $${price(ccAdjCost(h))}` : `入 $${price(h.cost)}`}</span>
