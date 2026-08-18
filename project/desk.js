@@ -1366,6 +1366,11 @@ function rsAdjustGrade(grade, rsResult) {
               .sort((a, b) => a.date.localeCompare(b.date));
           }
         }
+        // Carry local peakPrice forward if cloud blob pre-dates v625 and doesn't have it yet
+        if (localH.peakPrice && !out.peakPrice) {
+          out.peakPrice = localH.peakPrice;
+          out.peakPriceAt = localH.peakPriceAt;
+        }
         // Protect bx entry-grade fields (set once at open, null-guard only)
         if (localH.bx) {
           if (!out.bx) {
@@ -1457,6 +1462,7 @@ function rsAdjustGrade(grade, rsResult) {
     // boot) and any symbol that arrived only from the cloud still needs its earnings date.
     renderEvents();
     fetchAllEarnings();
+    fetchPeakPrices();
     if (currentPage === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
     renderSim();
     if (currentPage === "analytics") renderAnalytics();
@@ -2016,7 +2022,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${!isClosed ? (() => {
           const baseCost = ccAdjCost(h);
           let peakTick = "";
-          if (h.peakPrice && h.peakPrice > h.last && h.target && h.target > baseCost) {
+          if (h.peakPrice && h.peakPrice > baseCost && h.target && h.target > baseCost) {
             const peakPct = Math.min(100, Math.max(0, (h.peakPrice - baseCost) / (h.target - baseCost) * 100));
             peakTick = `<div class="hc-prog-peak" style="left:${peakPct.toFixed(1)}%"></div>`;
           }
