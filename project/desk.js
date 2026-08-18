@@ -1366,9 +1366,11 @@ function rsAdjustGrade(grade, rsResult) {
               .sort((a, b) => a.date.localeCompare(b.date));
           }
         }
-        // Carry local peakPrice forward if cloud blob pre-dates v625 and doesn't have it yet
+        // Carry local peakPrice forward if cloud blob pre-dates v625/v627 and doesn't have it yet
         if (localH.peakPrice && !out.peakPrice) {
           out.peakPrice = localH.peakPrice;
+          out.peakDate  = localH.peakDate;
+          out.peakDay   = localH.peakDay;
           out.peakPriceAt = localH.peakPriceAt;
         }
         // Protect bx entry-grade fields (set once at open, null-guard only)
@@ -2022,9 +2024,30 @@ function rsAdjustGrade(grade, rsResult) {
         ${!isClosed ? (() => {
           const baseCost = ccAdjCost(h);
           let peakTick = "";
-          if (h.peakPrice && h.peakPrice > baseCost && h.target && h.target > baseCost) {
-            const peakPct = Math.min(100, Math.max(0, (h.peakPrice - baseCost) / (h.target - baseCost) * 100));
-            peakTick = `<div class="hc-prog-peak" style="left:${peakPct.toFixed(1)}%"></div>`;
+          if (h.peakPrice && h.target && h.target > baseCost) {
+            const peak = h.peakPrice;
+            const cur = h.last || 0;
+            const peakInProfit = peak >= baseCost;
+            const hitTarget = peak >= h.target;
+            const curInLoss = cur < baseCost;
+            let tickLeft = null, tickBg;
+            if (hitTarget) {
+              tickLeft = 97;
+              tickBg = "rgba(251,191,36,0.75)";
+            } else if (peakInProfit) {
+              tickLeft = Math.min(96, Math.max(3, (peak - baseCost) / (h.target - baseCost) * 100));
+              tickBg = curInLoss ? "rgba(251,191,36,0.55)" : "rgba(255,255,255,0.45)";
+            } else if (h.stop && h.stop < baseCost && peak > cur) {
+              tickLeft = Math.min(96, Math.max(3, (baseCost - peak) / (baseCost - h.stop) * 100));
+              tickBg = "rgba(255,255,255,0.22)";
+            }
+            if (tickLeft !== null) {
+              const dayStr = h.peakDay ? `入场后第${h.peakDay}天` : "";
+              const distPct = cur > 0 ? ((peak - cur) / cur * 100) : 0;
+              const distSign = distPct >= 0 ? "+" : "";
+              const tooltip = [`历史最高 ${price(peak)}`, dayStr, `距现价 ${distSign}${distPct.toFixed(1)}%`].filter(Boolean).join(" · ");
+              peakTick = `<div class="hc-prog-peak" style="left:${tickLeft.toFixed(1)}%;background:${tickBg}" title="${tooltip}"></div>`;
+            }
           }
           return `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
@@ -2813,16 +2836,17 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // One-shot per day: fetch daily closes for all holdings and record the max close price
-  // since each holding's entry date. Stored as h.peakPrice + h.peakPriceAt so the card
-  // can render a tick on the progress bar when price has pulled back from the historical peak.
+  // since each holding's entry date. Also stores the date and trading-day number so the
+  // card tooltip can show "历史最高 $X · 入场后第N天 · 距现价 +Y%".
   let _peakFetchInFlight = false;
   async function fetchPeakPrices() {
     if (_peakFetchInFlight) return;
     const STALE_MS = 24 * 3600 * 1000;
     const now = Date.now();
     const allHoldings = [...HOLDINGS, ...SIM_HOLDINGS];
+    // Also re-fetch if peakDate is missing (holdings saved by v625/v626 before this field existed)
     const needUpdate = allHoldings.filter(h =>
-      h.entry && h.kind !== "crypto" && (!h.peakPriceAt || now - h.peakPriceAt > STALE_MS)
+      h.entry && h.kind !== "crypto" && (!h.peakPriceAt || now - h.peakPriceAt > STALE_MS || !h.peakDate)
     );
     if (!needUpdate.length) return;
 
@@ -2846,16 +2870,15 @@ function rsAdjustGrade(grade, rsResult) {
     let changed = false;
     allHoldings.forEach(h => {
       if (!h.entry || !closes[h.sym]) return;
-      const prices = Object.entries(closes[h.sym])
-        .filter(([d]) => d >= h.entry)
-        .map(([, v]) => v);
-      if (!prices.length) return;
-      const peak = Math.max(...prices);
-      if (peak > 0 && peak !== h.peakPrice) {
-        h.peakPrice = peak;
-        h.peakPriceAt = now;
-        changed = true;
-      } else if (peak > 0 && !h.peakPriceAt) {
+      let peakPrice = 0, peakDate = null;
+      Object.entries(closes[h.sym]).forEach(([d, v]) => {
+        if (d >= h.entry && v > peakPrice) { peakPrice = v; peakDate = d; }
+      });
+      if (!peakPrice) return;
+      if (peakPrice !== h.peakPrice || !h.peakDate || !h.peakPriceAt) {
+        h.peakPrice   = peakPrice;
+        h.peakDate    = peakDate;
+        h.peakDay     = peakDate ? Math.max(1, calcTradingDays(h.entry, peakDate)) : null;
         h.peakPriceAt = now;
         changed = true;
       }
