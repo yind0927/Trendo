@@ -2013,9 +2013,18 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="hc-sep muted">·</span>
           <span class="hc-days muted">${h.days ?? 0}天${h._mergedCount > 1 ? ` · ${h._mergedCount}次出场` : ""}</span>
         </div>
-        ${!isClosed ? `<div class="hc-prog-wrap">
+        ${!isClosed ? (() => {
+          const baseCost = ccAdjCost(h);
+          let peakTick = "";
+          if (h.peakPrice && h.peakPrice > h.last && h.target && h.target > baseCost) {
+            const peakPct = Math.min(100, Math.max(0, (h.peakPrice - baseCost) / (h.target - baseCost) * 100));
+            peakTick = `<div class="hc-prog-peak" style="left:${peakPct.toFixed(1)}%"></div>`;
+          }
+          return `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
-        </div>` : ""}
+          ${peakTick}
+        </div>`;
+        })() : ""}
         <div class="hc-price-row">
           <span class="hc-entry-price">${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>入 $${price(ccAdjCost(h))}` : `入 $${price(h.cost)}`}</span>
           <span class="hc-price-arrow">→</span>
@@ -2794,6 +2803,62 @@ function rsAdjustGrade(grade, rsResult) {
       renderTable();
       renderSimTable();
       renderEvents();
+    }
+  }
+
+  // One-shot per day: fetch daily closes for all holdings and record the max close price
+  // since each holding's entry date. Stored as h.peakPrice + h.peakPriceAt so the card
+  // can render a tick on the progress bar when price has pulled back from the historical peak.
+  let _peakFetchInFlight = false;
+  async function fetchPeakPrices() {
+    if (_peakFetchInFlight) return;
+    const STALE_MS = 24 * 3600 * 1000;
+    const now = Date.now();
+    const allHoldings = [...HOLDINGS, ...SIM_HOLDINGS];
+    const needUpdate = allHoldings.filter(h =>
+      h.entry && h.kind !== "crypto" && (!h.peakPriceAt || now - h.peakPriceAt > STALE_MS)
+    );
+    if (!needUpdate.length) return;
+
+    const syms = [...new Set(needUpdate.map(h => h.sym))];
+    const earliest = needUpdate.reduce((min, h) => (!min || h.entry < min ? h.entry : min), null);
+    if (!earliest || !syms.length) return;
+
+    _peakFetchInFlight = true;
+    let data;
+    try {
+      const r = await fetch(`/api/history?symbols=${encodeURIComponent(syms.join(","))}&from=${earliest}`);
+      if (!r.ok) return;
+      data = await r.json();
+    } catch (_) {
+      return;
+    } finally {
+      _peakFetchInFlight = false;
+    }
+
+    const closes = data?.results || {};
+    let changed = false;
+    allHoldings.forEach(h => {
+      if (!h.entry || !closes[h.sym]) return;
+      const prices = Object.entries(closes[h.sym])
+        .filter(([d]) => d >= h.entry)
+        .map(([, v]) => v);
+      if (!prices.length) return;
+      const peak = Math.max(...prices);
+      if (peak > 0 && peak !== h.peakPrice) {
+        h.peakPrice = peak;
+        h.peakPriceAt = now;
+        changed = true;
+      } else if (peak > 0 && !h.peakPriceAt) {
+        h.peakPriceAt = now;
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      saveToStorage();
+      renderTable();
+      renderSimTable();
     }
   }
 
@@ -12672,6 +12737,7 @@ function rsAdjustGrade(grade, rsResult) {
   renderDeskMonthly();
   renderEvents();
   fetchAllEarnings();
+  fetchPeakPrices();
   if (HOLDINGS.length > 0) initHoldingsBriefCard();
   wireHoldingsViewToggle();
   wireSimHoldingsViewToggle();

@@ -2894,7 +2894,11 @@
   .hc-pnl.down, .hc-pct.down, .hc-r.down { color: var(--down); }
   .hc-prog-wrap {
     height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden;
-    display: flex;
+    display: flex; position: relative;
+  }
+  .hc-prog-peak {
+    position: absolute; top: 0; bottom: 0; width: 2px;
+    background: rgba(255,255,255,.45); border-radius: 1px; pointer-events: none;
   }
   .hc-prog-fill { height: 100%; border-radius: 2px; transition: width .3s; min-width: 2px; }
   .hc-price-row {
@@ -4816,8 +4820,8 @@
   </div>
 </div>
 
-<script src="data.js?v=624"></script>
-<script src="desk.js?v=624"></script>
+<script src="data.js?v=625"></script>
+<script src="desk.js?v=625"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
