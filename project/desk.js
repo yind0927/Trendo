@@ -6215,11 +6215,11 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // ─── ETF 历史日收益分布模块 ─────────────────────────────────────────────
-  // 每只ETF的固定区间分界点（单位：%），生成5档：轻微/小幅/中等/较大/极端
+  // 每只ETF的固定区间分界点（单位：%），5个断点生成6档
   const ETF_DIST_THRESHOLDS = {
-    SOXL: [3, 6, 9, 15],       // 3x杠杆，日波动极大
-    GLD:  [0.5, 1, 1.5, 2],    // 黄金，低波动
-    _default: [1, 2, 3, 5],    // 普通权益ETF
+    SOXL: [0.75, 1.5, 3, 6, 15],   // 3x杠杆，日波动极大
+    GLD:  [0.1, 0.25, 0.5, 1, 2],  // 黄金，低波动
+    _default: [0.25, 0.5, 1, 2, 5], // 普通权益ETF
   };
   const ETF_DIST_NAMES = {
     MAGS: "Magnificent 7", SMH: "VanEck 半导体", SOXL: "半导体3x",
@@ -6255,7 +6255,7 @@ function rsAdjustGrade(grade, rsResult) {
     const buckets = ETF_DIST_BUCKETS.map(b => ({
       ...b, count: returns.filter(r => r >= b.min && r < b.max).length
     }));
-    // 每只ETF固定区间阈值（5档），格式化百分比不含多余小数
+    // 每只ETF固定区间阈值（6档），格式化百分比不含多余小数
     const rawLevels = ETF_DIST_THRESHOLDS[sym] || ETF_DIST_THRESHOLDS._default;
     const tLevels = rawLevels.map(v => v / 100);
     const fmtT = v => { const p = +(v * 100).toFixed(2); return p === Math.floor(p) ? `${Math.floor(p)}%` : `${p}%`; };
