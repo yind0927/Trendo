@@ -6349,8 +6349,15 @@ function rsAdjustGrade(grade, rsResult) {
   function _renderEtfDistCards() {
     const el = document.getElementById("etf-dist-module");
     if (!el) return;
+    const sectionHd = `
+      <div class="sim-section-label" style="margin-bottom:12px">
+        <span class="ssl-zh">历史波动分布</span>
+        <span class="ssl-en">Daily Returns</span>
+        <span class="ssl-rule"></span>
+        ${_etfDistData ? `<button class="etf-dist-refresh" id="etf-dist-refresh-btn" title="刷新数据">↻</button>` : ""}
+      </div>`;
     if (!_etfDistData) {
-      el.innerHTML = `<div class="etf-dist-trigger">
+      el.innerHTML = `${sectionHd}<div class="etf-dist-trigger">
         <button class="btn" id="etf-dist-load-btn" style="font-size:11.5px">加载历史分布数据</button>
         <span class="muted" style="font-size:11px;margin-left:8px">拉取 6 只 ETF 全历史日线（约 2 秒）</span>
       </div>`;
@@ -6359,14 +6366,7 @@ function rsAdjustGrade(grade, rsResult) {
       return;
     }
     const cardsHTML = OPT_WATCH_SYMS.map(sym => _etfDistCardHTML(sym, _etfDistData[sym])).join("");
-    el.innerHTML = `
-      <div class="sim-section-label" style="margin-bottom:12px">
-        <span class="ssl-zh">历史波动分布</span>
-        <span class="ssl-en">Historical Daily Return Distribution</span>
-        <span class="ssl-rule"></span>
-        <button class="etf-dist-refresh" id="etf-dist-refresh-btn" title="刷新数据">↻</button>
-      </div>
-      <div class="etf-dist-grid">${cardsHTML}</div>`;
+    el.innerHTML = `${sectionHd}<div class="etf-dist-grid">${cardsHTML}</div>`;
     const btn = el.querySelector("#etf-dist-refresh-btn");
     if (btn) btn.addEventListener("click", () => {
       localStorage.removeItem("trendo_etf_dist_v1");
