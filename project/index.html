@@ -2484,7 +2484,7 @@
   }
   .etf-dist-nodata { font-size: 11px; color: var(--fg-3); padding: 8px 0; }
   /* Card body: chart left, thresholds right */
-  .etf-dist-card-body { display: flex; gap: 24px; align-items: flex-start; }
+  .etf-dist-card-body { display: flex; gap: 24px; align-items: flex-end; }
   .etf-dist-chart-area { flex: 0 0 38%; min-width: 0; }
   .etf-dist-thresh-area { flex: 1; min-width: 0; display: flex; align-items: center; }
   /* Bar chart — 12 bars aligned to 6 tiers each side */
@@ -4897,8 +4897,8 @@
   </div>
 </div>
 
-<script src="data.js?v=638"></script>
-<script src="desk.js?v=638"></script>
+<script src="data.js?v=639"></script>
+<script src="desk.js?v=639"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
