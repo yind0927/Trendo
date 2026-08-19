@@ -6283,24 +6283,32 @@ function rsAdjustGrade(grade, rsResult) {
       }
       thresholds.push({ downLabel, upLabel, downPct: downCount / n * 100, upPct: upCount / n * 100 });
     }
+    const skew = returns.reduce((s, r) => s + ((r - avg) / stdDev) ** 3, 0) / n;
     return {
       n, dateFirst: dates[0], dateLast: dates[dates.length - 1],
       buckets, thresholds,
-      maxDrop: Math.min(...returns), maxGain: Math.max(...returns), avg, stdDev,
+      maxDrop: Math.min(...returns), maxGain: Math.max(...returns), avg, stdDev, skew,
     };
   }
 
   function _etfDistCardHTML(sym, stats) {
     const name = ETF_DIST_NAMES[sym] || sym;
     if (!stats) return `<div class="etf-dist-card"><div class="etf-dist-card-hd"><span class="etf-dist-sym">${sym}</span><span class="etf-dist-name">${name}</span></div><div class="etf-dist-nodata">数据不足</div></div>`;
-    const { n, buckets, thresholds, maxDrop, maxGain, avg, stdDev, dateFirst, dateLast } = stats;
+    const { n, buckets, thresholds, stdDev, skew } = stats;
     const maxCount = Math.max(...buckets.map(b => b.count));
-    const fp = (v, d = 1) => (v >= 0 ? "+" : "") + (v * 100).toFixed(d) + "%";
     const p = v => (v * 100).toFixed(1) + "%";
 
+    // Skewness badge: 负值=左偏（下尾更重），正值=右偏
+    let skewBadge = "";
+    if (skew < -0.3) skewBadge = `<span class="etf-dist-skew dn">左偏</span>`;
+    else if (skew > 0.3) skewBadge = `<span class="etf-dist-skew up">右偏</span>`;
+
+    // Bar chart with frequency % label on top of each bar
     const chartBars = buckets.map(b => {
       const hPct = maxCount > 0 ? Math.max(3, b.count / maxCount * 100) : 3;
+      const freqPct = n > 0 ? (b.count / n * 100).toFixed(1) : "0.0";
       return `<div class="etf-dist-bar-col">
+        <div class="etf-dist-bar-pct">${freqPct}</div>
         <div class="etf-dist-bar-wrap"><div class="etf-dist-bar ${b.side}" style="height:${hPct.toFixed(0)}%"></div></div>
         <div class="etf-dist-bar-label">${b.label}</div>
       </div>`;
@@ -6327,15 +6335,16 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="etf-dist-card-hd">
         <span class="etf-dist-sym">${sym}</span>
         <span class="etf-dist-name">${name}</span>
+        ${skewBadge}
         <span class="etf-dist-sigma">σ ${(stdDev * 100).toFixed(1)}%</span>
       </div>
-      <div class="etf-dist-chart">${chartBars}</div>
-      <div class="etf-dist-thresh">${threshRows}</div>
-      <div class="etf-dist-footer">
-        <span>跌 <b class="dn">${(maxDrop * 100).toFixed(1)}%</b></span>
-        <span>涨 <b class="up">${(maxGain * 100).toFixed(1)}%</b></span>
-        <span>均 <b>${fp(avg, 2)}</b></span>
-        <span class="etf-dist-footer-n">${n.toLocaleString()}天</span>
+      <div class="etf-dist-card-body">
+        <div class="etf-dist-chart-area">
+          <div class="etf-dist-chart">${chartBars}</div>
+        </div>
+        <div class="etf-dist-thresh-area">
+          <div class="etf-dist-thresh">${threshRows}</div>
+        </div>
       </div>
     </div>`;
   }
