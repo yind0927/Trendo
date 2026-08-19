@@ -2483,12 +2483,12 @@
     margin-left: auto; white-space: nowrap; opacity: .8;
   }
   .etf-dist-nodata { font-size: 11px; color: var(--fg-3); padding: 8px 0; }
-  /* Card body: chart left, thresholds right */
-  .etf-dist-card-body { display: flex; gap: 24px; align-items: flex-end; }
-  .etf-dist-chart-area { flex: 0 0 38%; min-width: 0; }
+  /* Card body: chart left, thresholds right — stretch aligns both top and bottom */
+  .etf-dist-card-body { display: flex; gap: 24px; align-items: stretch; }
+  .etf-dist-chart-area { flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column; }
   .etf-dist-thresh-area { flex: 1; min-width: 0; display: flex; align-items: center; }
-  /* Bar chart — 12 bars aligned to 6 tiers each side */
-  .etf-dist-chart { display: flex; align-items: flex-end; gap: 3px; height: 96px; }
+  /* Bar chart — fills chart-area height so bars align with threshold rows */
+  .etf-dist-chart { display: flex; align-items: flex-end; gap: 3px; flex: 1; height: auto; }
   .etf-dist-bar-col {
     flex: 1; display: flex; flex-direction: column; align-items: center;
     height: 100%; gap: 2px;
@@ -2529,7 +2529,14 @@
   @media (max-width: 640px) {
     .etf-dist-card { padding: 14px 14px 12px; }
     .etf-dist-card-body { flex-direction: column; gap: 16px; }
-    .etf-dist-chart-area { width: 100%; flex: none; }
+    /* Chart: give explicit height so flex:1 resolves in a column parent */
+    .etf-dist-chart-area { flex: none; width: 100%; height: 88px; }
+    .etf-dist-chart { flex: none; height: 100%; }
+    /* Threshold table: shrink fixed columns so rows fit on narrow screens */
+    .etf-dist-thresh-area { flex: none; width: 100%; }
+    .etf-dist-thresh-row { grid-template-columns: 52px 1fr 24px 4px 52px 1fr 24px; gap: 3px; }
+    .etf-dist-tl { font-size: 8px; }
+    .etf-dist-tv { font-size: 9px; }
   }
   /* ── End-of-page marker (last child of every view) */
   .page-end { display: flex; width: 100%; max-width: 1180px; margin: 0 auto;
@@ -4897,8 +4904,8 @@
   </div>
 </div>
 
-<script src="data.js?v=639"></script>
-<script src="desk.js?v=639"></script>
+<script src="data.js?v=640"></script>
+<script src="desk.js?v=640"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
