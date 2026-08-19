@@ -6227,6 +6227,23 @@ function rsAdjustGrade(grade, rsResult) {
   };
   let _etfDistData = null;
   let _etfDistFetching = false;
+  // Cache key carries a schema version. The stats shape has changed several times
+  // (σ-based → fixed thresholds → 12-bar `bars` array); a blob written by an older
+  // deploy on the SAME calendar day used to be read back as valid and then blow up
+  // in _etfDistCardHTML (stats.bars undefined), which aborted renderOptions() before
+  // the module's innerHTML was ever assigned — the whole module silently vanished.
+  // Bump this suffix whenever the _calcEtfDailyStats return shape changes.
+  const ETF_DIST_KEY = "trendo_etf_dist_v2";
+  // Shape guard: never trust a cached blob just because its date matches.
+  function _etfDistStatsValid(s) {
+    if (s === null) return true; // legitimate "insufficient data" marker
+    return !!s && Array.isArray(s.bars) && s.bars.length > 0
+      && Array.isArray(s.thresholds) && s.thresholds.length > 0
+      && typeof s.n === "number";
+  }
+  function _etfDistDataValid(d) {
+    return !!d && typeof d === "object" && Object.values(d).every(_etfDistStatsValid);
+  }
 
   function _calcEtfDailyStats(closesObj, sym) {
     const dates = Object.keys(closesObj).sort();
@@ -6365,11 +6382,22 @@ function rsAdjustGrade(grade, rsResult) {
       if (btn) btn.addEventListener("click", _fetchEtfDistribution);
       return;
     }
-    const cardsHTML = OPT_WATCH_SYMS.map(sym => _etfDistCardHTML(sym, _etfDistData[sym])).join("");
+    // A malformed blob must degrade to the load button, never take the module
+    // (and with it the tail of renderOptions) down with an uncaught throw.
+    let cardsHTML;
+    try {
+      cardsHTML = OPT_WATCH_SYMS.map(sym => _etfDistCardHTML(sym, _etfDistData[sym])).join("");
+    } catch (e) {
+      console.warn("[ETF分布] 渲染失败，已清除缓存重来:", e);
+      try { localStorage.removeItem(ETF_DIST_KEY); } catch (_) {}
+      _etfDistData = null;
+      _renderEtfDistCards();
+      return;
+    }
     el.innerHTML = `${sectionHd}<div class="etf-dist-grid">${cardsHTML}</div>`;
     const btn = el.querySelector("#etf-dist-refresh-btn");
     if (btn) btn.addEventListener("click", () => {
-      localStorage.removeItem("trendo_etf_dist_v1");
+      localStorage.removeItem(ETF_DIST_KEY);
       _etfDistData = null;
       _fetchEtfDistribution();
     });
@@ -6377,11 +6405,11 @@ function rsAdjustGrade(grade, rsResult) {
 
   async function _fetchEtfDistribution() {
     if (_etfDistFetching) return;
-    const KEY = "trendo_etf_dist_v1";
+    const KEY = ETF_DIST_KEY;
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     try {
       const cached = JSON.parse(localStorage.getItem(KEY) || "null");
-      if (cached && cached._date === today && cached.data) {
+      if (cached && cached._date === today && _etfDistDataValid(cached.data)) {
         _etfDistData = cached.data;
         _renderEtfDistCards();
         return;
@@ -6412,11 +6440,12 @@ function rsAdjustGrade(grade, rsResult) {
 
   function _initEtfDistModule() {
     if (_etfDistData) { _renderEtfDistCards(); return; }
-    const KEY = "trendo_etf_dist_v1";
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     try {
-      const cached = JSON.parse(localStorage.getItem(KEY) || "null");
-      if (cached && cached._date === today && cached.data) {
+      // Drop any blob left behind by the pre-v2 schema so it can't linger in storage.
+      localStorage.removeItem("trendo_etf_dist_v1");
+      const cached = JSON.parse(localStorage.getItem(ETF_DIST_KEY) || "null");
+      if (cached && cached._date === today && _etfDistDataValid(cached.data)) {
         _etfDistData = cached.data;
         _renderEtfDistCards();
         return;

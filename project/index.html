@@ -2534,8 +2534,10 @@
     .etf-dist-chart { flex: none; height: 100%; }
     /* Threshold table: shrink fixed columns so rows fit on narrow screens */
     .etf-dist-thresh-area { flex: none; width: 100%; }
-    .etf-dist-thresh-row { grid-template-columns: 52px 1fr 24px 4px 52px 1fr 24px; gap: 3px; }
-    .etf-dist-tl { font-size: 8px; }
+    /* Label column must fit the widest tier label ("-0.25%~-0.5%", 12 mono chars)
+       or overflow:hidden silently clips the trailing "%". */
+    .etf-dist-thresh-row { grid-template-columns: 61px 1fr 25px 4px 61px 1fr 25px; gap: 3px; }
+    .etf-dist-tl { font-size: 8px; letter-spacing: -.02em; }
     .etf-dist-tv { font-size: 9px; }
   }
   /* ── End-of-page marker (last child of every view) */
@@ -4904,8 +4906,8 @@
   </div>
 </div>
 
-<script src="data.js?v=641"></script>
-<script src="desk.js?v=641"></script>
+<script src="data.js?v=642"></script>
+<script src="desk.js?v=642"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
