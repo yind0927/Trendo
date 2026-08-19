@@ -6244,16 +6244,22 @@ function rsAdjustGrade(grade, rsResult) {
     }
     if (returns.length < 20) return null;
     const n = returns.length;
+    const avg = returns.reduce((s, r) => s + r, 0) / n;
+    const stdDev = Math.sqrt(returns.reduce((s, r) => s + (r - avg) ** 2, 0) / n);
     const buckets = ETF_DIST_BUCKETS.map(b => ({
       ...b, count: returns.filter(r => r >= b.min && r < b.max).length
     }));
-    const thresholds = [0.01, 0.02, 0.03, 0.05].map(t => ({
-      t,
-      downPct: returns.filter(r => r <= -t).length / n * 100,
-      upPct:   returns.filter(r => r >= t).length / n * 100,
-    }));
-    const avg = returns.reduce((s, r) => s + r, 0) / n;
-    const stdDev = Math.sqrt(returns.reduce((s, r) => s + (r - avg) ** 2, 0) / n);
+    // σ-adaptive thresholds: 每只ETF按自身波动率定标，跨ETF等量可比
+    const thresholds = [0.5, 1.0, 1.5, 2.0].map(m => {
+      const t = stdDev * m;
+      return {
+        sigMult: m,
+        t,
+        tPct: (t * 100).toFixed(1),
+        downPct: returns.filter(r => r <= -t).length / n * 100,
+        upPct:   returns.filter(r => r >= t).length / n * 100,
+      };
+    });
     return {
       n, dateFirst: dates[0], dateLast: dates[dates.length - 1],
       buckets, thresholds,
@@ -6280,15 +6286,15 @@ function rsAdjustGrade(grade, rsResult) {
     }).join("");
 
     const threshRows = thresholds.map(t => {
-      const tLabel = `>${(t.t * 100).toFixed(0)}%`;
       const dnW = Math.min(100, t.downPct * 2).toFixed(0);
       const upW = Math.min(100, t.upPct * 2).toFixed(0);
+      const sigLabel = (sign) => `<span class="etf-dist-sig">${t.sigMult}σ</span><span class="etf-dist-sig-val">${sign}${t.tPct}%</span>`;
       return `<div class="etf-dist-thresh-row">
-        <span class="etf-dist-tl">${tLabel}</span>
+        <span class="etf-dist-tl">${sigLabel("-")}</span>
         <span class="etf-dist-tbw"><span class="etf-dist-tb dn" style="width:${dnW}%"></span></span>
         <span class="etf-dist-tv dn">${p(t.downPct / 100)}</span>
         <span class="etf-dist-tsep"></span>
-        <span class="etf-dist-tl">${tLabel}</span>
+        <span class="etf-dist-tl">${sigLabel("+")}</span>
         <span class="etf-dist-tbw"><span class="etf-dist-tb up" style="width:${upW}%"></span></span>
         <span class="etf-dist-tv up">${p(t.upPct / 100)}</span>
       </div>`;
@@ -6298,9 +6304,11 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="etf-dist-card-hd">
         <span class="etf-dist-sym">${sym}</span>
         <span class="etf-dist-name">${name}</span>
+        <span class="etf-dist-sigma">σ=${(stdDev * 100).toFixed(1)}%/日</span>
         <span class="etf-dist-meta">${dateFirst.slice(0,4)}–${dateLast.slice(0,4)} · ${n.toLocaleString()}天</span>
       </div>
       <div class="etf-dist-chart">${chartBars}</div>
+      <div class="etf-dist-chart-note">各区间频率之和 = 100% 交易日</div>
       <div class="etf-dist-thresh-hds">
         <span class="etf-dist-thresh-side-hd dn">跌幅概率</span>
         <span class="etf-dist-thresh-side-hd up" style="grid-column:4/7">涨幅概率</span>

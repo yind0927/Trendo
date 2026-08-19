@@ -2480,6 +2480,7 @@
   }
   .etf-dist-sym { font-size: 13px; font-weight: 700; font-family: var(--f-mono); }
   .etf-dist-name { font-size: 10.5px; color: var(--fg-3); }
+  .etf-dist-sigma { font-size: 9.5px; color: var(--accent); font-family: var(--f-mono); white-space: nowrap; }
   .etf-dist-meta { font-size: 9.5px; color: var(--fg-3); margin-left: auto; white-space: nowrap; }
   .etf-dist-nodata { font-size: 11px; color: var(--fg-3); padding: 8px 0; }
   /* Distribution bar chart */
@@ -2523,13 +2524,19 @@
   .etf-dist-thresh-side-hd.dn { color: var(--down); }
   .etf-dist-thresh-side-hd.up { color: var(--up); }
   .etf-dist-thresh { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+  .etf-dist-chart-note {
+    font-size: 9px; color: var(--fg-3); text-align: center; margin: 3px 0 6px;
+  }
   .etf-dist-thresh-row {
-    display: grid; grid-template-columns: 22px 1fr 30px 6px 22px 1fr 30px;
+    display: grid; grid-template-columns: 36px 1fr 30px 6px 36px 1fr 30px;
     align-items: center; gap: 3px;
   }
   .etf-dist-tl {
-    font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+    white-space: nowrap;
   }
+  .etf-dist-sig { font-size: 9.5px; font-weight: 600; color: var(--fg-2); font-family: var(--f-mono); }
+  .etf-dist-sig-val { font-size: 8.5px; color: var(--fg-3); font-family: var(--f-mono); }
   .etf-dist-tbw {
     height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden;
   }
@@ -4921,8 +4928,8 @@
   </div>
 </div>
 
-<script src="data.js?v=630"></script>
-<script src="desk.js?v=630"></script>
+<script src="data.js?v=631"></script>
+<script src="desk.js?v=631"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
