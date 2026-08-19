@@ -6298,11 +6298,6 @@ function rsAdjustGrade(grade, rsResult) {
     const maxCount = Math.max(...buckets.map(b => b.count));
     const p = v => (v * 100).toFixed(1) + "%";
 
-    // Skewness badge: 负值=左偏（下尾更重），正值=右偏
-    let skewBadge = "";
-    if (skew < -0.3) skewBadge = `<span class="etf-dist-skew dn">左偏</span>`;
-    else if (skew > 0.3) skewBadge = `<span class="etf-dist-skew up">右偏</span>`;
-
     // Bar chart with frequency % label on top of each bar
     const chartBars = buckets.map(b => {
       const hPct = maxCount > 0 ? Math.max(3, b.count / maxCount * 100) : 3;
@@ -6317,7 +6312,7 @@ function rsAdjustGrade(grade, rsResult) {
     // 极端档在上，轻微档在下；条形宽度各自归一化到本侧最大值
     const dnMax = Math.max(...thresholds.map(t => t.downPct), 1);
     const upMax = Math.max(...thresholds.map(t => t.upPct), 1);
-    const threshRows = [...thresholds].reverse().map(t => {
+    const threshRows = thresholds.map(t => {
       const dnW = (t.downPct / dnMax * 100).toFixed(0);
       const upW = (t.upPct / upMax * 100).toFixed(0);
       return `<div class="etf-dist-thresh-row">
@@ -6335,7 +6330,6 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="etf-dist-card-hd">
         <span class="etf-dist-sym">${sym}</span>
         <span class="etf-dist-name">${name}</span>
-        ${skewBadge}
         <span class="etf-dist-sigma">σ ${(stdDev * 100).toFixed(1)}%</span>
       </div>
       <div class="etf-dist-card-body">

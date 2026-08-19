@@ -2468,50 +2468,38 @@
     color: var(--fg-3); padding: 2px 4px; line-height: 1;
   }
   .etf-dist-refresh:hover { color: var(--accent); }
-  .etf-dist-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .etf-dist-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
   .etf-dist-card {
     background: var(--bg-1); border: 1px solid var(--line);
-    border-radius: 12px; padding: 12px 14px 12px;
+    border-radius: 14px; padding: 18px 20px 16px;
   }
   .etf-dist-card-hd {
-    display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 16px;
   }
-  .etf-dist-sym { font-size: 13px; font-weight: 700; font-family: var(--f-mono); }
-  .etf-dist-name { font-size: 10px; color: var(--fg-3); }
-  .etf-dist-skew {
-    font-size: 8.5px; font-family: var(--f-mono); font-weight: 600;
-    padding: 1px 5px; border-radius: 3px; line-height: 1.5;
-  }
-  .etf-dist-skew.dn {
-    color: var(--down); background: oklch(0.70 0.19 25 / .12);
-    border: 1px solid oklch(0.70 0.19 25 / .3);
-  }
-  .etf-dist-skew.up {
-    color: var(--up); background: oklch(0.78 0.17 145 / .12);
-    border: 1px solid oklch(0.78 0.17 145 / .3);
-  }
+  .etf-dist-sym { font-size: 14px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.01em; }
+  .etf-dist-name { font-size: 11px; color: var(--fg-3); }
   .etf-dist-sigma {
-    font-size: 9px; color: var(--accent); font-family: var(--f-mono);
-    margin-left: auto; white-space: nowrap; opacity: .85;
+    font-size: 10px; color: var(--accent); font-family: var(--f-mono);
+    margin-left: auto; white-space: nowrap; opacity: .8;
   }
   .etf-dist-nodata { font-size: 11px; color: var(--fg-3); padding: 8px 0; }
   /* Card body: chart left, thresholds right */
-  .etf-dist-card-body { display: flex; gap: 16px; align-items: flex-start; }
-  .etf-dist-chart-area { flex: 0 0 42%; }
-  .etf-dist-thresh-area { flex: 1; display: flex; align-items: center; min-height: 0; }
+  .etf-dist-card-body { display: flex; gap: 28px; align-items: flex-start; }
+  .etf-dist-chart-area { flex: 0 0 40%; }
+  .etf-dist-thresh-area { flex: 1; display: flex; align-items: center; }
   /* Bar chart */
-  .etf-dist-chart { display: flex; align-items: flex-end; gap: 3px; height: 84px; }
+  .etf-dist-chart { display: flex; align-items: flex-end; gap: 4px; height: 96px; }
   .etf-dist-bar-col {
     flex: 1; display: flex; flex-direction: column; align-items: center;
-    height: 100%; gap: 1px;
+    height: 100%; gap: 2px;
   }
   .etf-dist-bar-pct {
-    font-size: 7px; color: var(--fg-3); font-family: var(--f-mono);
-    height: 11px; display: flex; align-items: flex-end; justify-content: center;
+    font-size: 7.5px; color: var(--fg-3); font-family: var(--f-mono);
+    height: 12px; display: flex; align-items: flex-end; justify-content: center;
     white-space: nowrap; line-height: 1;
   }
   .etf-dist-bar-wrap { flex: 1; display: flex; align-items: flex-end; width: 100%; }
-  .etf-dist-bar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; }
+  .etf-dist-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
   .etf-dist-bar.dn2 { background: oklch(0.58 0.19 18); }
   .etf-dist-bar.dn1 { background: oklch(0.65 0.14 18); }
   .etf-dist-bar.dn0 { background: oklch(0.72 0.07 18); }
@@ -2519,30 +2507,31 @@
   .etf-dist-bar.up1 { background: oklch(0.65 0.12 145); }
   .etf-dist-bar.up2 { background: oklch(0.58 0.17 145); }
   .etf-dist-bar-label {
-    font-size: 6px; color: var(--fg-3); text-align: center; line-height: 1;
-    height: 12px; display: flex; align-items: flex-end;
+    font-size: 6.5px; color: var(--fg-3); text-align: center; line-height: 1;
+    height: 13px; display: flex; align-items: flex-end;
     white-space: nowrap; overflow: hidden;
   }
   /* Threshold rows */
-  .etf-dist-thresh { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .etf-dist-thresh { display: flex; flex-direction: column; gap: 7px; width: 100%; }
   .etf-dist-thresh-row {
-    display: grid; grid-template-columns: 60px 1fr 28px 4px 60px 1fr 28px;
-    align-items: center; gap: 3px;
+    display: grid; grid-template-columns: 64px 1fr 30px 6px 64px 1fr 30px;
+    align-items: center; gap: 4px;
   }
-  .etf-dist-tl { font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; }
-  .etf-dist-tbw { height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
-  .etf-dist-tb { height: 100%; border-radius: 2px; display: block; }
+  .etf-dist-tl { font-size: 9.5px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; }
+  .etf-dist-tbw { height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+  .etf-dist-tb { height: 100%; border-radius: 3px; display: block; }
   .etf-dist-tb.dn { background: oklch(0.70 0.17 18 / .75); }
   .etf-dist-tb.up { background: oklch(0.70 0.14 145 / .75); }
   .etf-dist-tv {
-    font-size: 9.5px; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+    font-size: 10px; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
     text-align: right;
   }
   .etf-dist-tv.dn { color: var(--down); }
   .etf-dist-tv.up { color: var(--up); }
-  .etf-dist-tsep { border-left: 1px solid var(--line); height: 10px; justify-self: center; }
+  .etf-dist-tsep { border-left: 1px solid var(--line); height: 12px; justify-self: center; opacity: .6; }
   @media (max-width: 640px) {
-    .etf-dist-card-body { flex-direction: column; }
+    .etf-dist-card { padding: 14px 14px 12px; }
+    .etf-dist-card-body { flex-direction: column; gap: 16px; }
     .etf-dist-chart-area { width: 100%; flex: none; }
   }
   /* ── End-of-page marker (last child of every view) */
@@ -4911,8 +4900,8 @@
   </div>
 </div>
 
-<script src="data.js?v=634"></script>
-<script src="desk.js?v=634"></script>
+<script src="data.js?v=635"></script>
+<script src="desk.js?v=635"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
