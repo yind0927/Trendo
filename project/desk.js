@@ -6214,6 +6214,187 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
+  // ─── ETF 历史日收益分布模块 ─────────────────────────────────────────────
+  const ETF_DIST_NAMES = {
+    MAGS: "Magnificent 7", SMH: "VanEck 半导体", SOXL: "半导体3x",
+    GLD: "黄金 ETF", IWM: "Russell 2000", QQQ: "纳斯达克 100", DRAM: "存储与内存",
+    XLK: "科技", XLY: "消费", XLV: "医疗", XLF: "金融",
+  };
+  const ETF_DIST_BUCKETS = [
+    { label: "≤-5%",  min: -Infinity, max: -0.05,  side: "dn2" },
+    { label: "-3~-5%",min: -0.05,     max: -0.03,  side: "dn2" },
+    { label: "-2~-3%",min: -0.03,     max: -0.02,  side: "dn1" },
+    { label: "-1~-2%",min: -0.02,     max: -0.01,  side: "dn1" },
+    { label: "0~-1%", min: -0.01,     max: 0,      side: "dn0" },
+    { label: "0~+1%", min: 0,         max: 0.01,   side: "up0" },
+    { label: "+1~+2%",min: 0.01,      max: 0.02,   side: "up1" },
+    { label: "+2~+3%",min: 0.02,      max: 0.03,   side: "up1" },
+    { label: "+3~+5%",min: 0.03,      max: 0.05,   side: "up2" },
+    { label: "≥+5%",  min: 0.05,      max: Infinity, side: "up2" },
+  ];
+  let _etfDistData = null;
+  let _etfDistFetching = false;
+
+  function _calcEtfDailyStats(closesObj) {
+    const dates = Object.keys(closesObj).sort();
+    const returns = [];
+    for (let i = 1; i < dates.length; i++) {
+      const prev = closesObj[dates[i - 1]], cur = closesObj[dates[i]];
+      if (prev > 0 && cur > 0) returns.push((cur - prev) / prev);
+    }
+    if (returns.length < 20) return null;
+    const n = returns.length;
+    const buckets = ETF_DIST_BUCKETS.map(b => ({
+      ...b, count: returns.filter(r => r >= b.min && r < b.max).length
+    }));
+    const thresholds = [0.01, 0.02, 0.03, 0.05].map(t => ({
+      t,
+      downPct: returns.filter(r => r <= -t).length / n * 100,
+      upPct:   returns.filter(r => r >= t).length / n * 100,
+    }));
+    const avg = returns.reduce((s, r) => s + r, 0) / n;
+    const stdDev = Math.sqrt(returns.reduce((s, r) => s + (r - avg) ** 2, 0) / n);
+    return {
+      n, dateFirst: dates[0], dateLast: dates[dates.length - 1],
+      buckets, thresholds,
+      maxDrop: Math.min(...returns), maxGain: Math.max(...returns), avg, stdDev,
+    };
+  }
+
+  function _etfDistCardHTML(sym, stats) {
+    const name = ETF_DIST_NAMES[sym] || sym;
+    if (!stats) return `<div class="etf-dist-card"><div class="etf-dist-card-hd"><span class="etf-dist-sym">${sym}</span><span class="etf-dist-name">${name}</span></div><div class="etf-dist-nodata">数据不足</div></div>`;
+    const { n, buckets, thresholds, maxDrop, maxGain, avg, stdDev, dateFirst, dateLast } = stats;
+    const maxCount = Math.max(...buckets.map(b => b.count));
+    const fp = (v, d = 1) => (v >= 0 ? "+" : "") + (v * 100).toFixed(d) + "%";
+    const p = v => (v * 100).toFixed(1) + "%";
+
+    const chartBars = buckets.map(b => {
+      const hPct = maxCount > 0 ? Math.max(3, b.count / maxCount * 100) : 3;
+      const freq = (b.count / n * 100).toFixed(1);
+      return `<div class="etf-dist-bar-col">
+        <div class="etf-dist-bar-pct">${freq}</div>
+        <div class="etf-dist-bar-wrap"><div class="etf-dist-bar ${b.side}" style="height:${hPct.toFixed(0)}%"></div></div>
+        <div class="etf-dist-bar-label">${b.label}</div>
+      </div>`;
+    }).join("");
+
+    const threshRows = thresholds.map(t => {
+      const tLabel = `>${(t.t * 100).toFixed(0)}%`;
+      const dnW = Math.min(100, t.downPct * 2).toFixed(0);
+      const upW = Math.min(100, t.upPct * 2).toFixed(0);
+      return `<div class="etf-dist-thresh-row">
+        <span class="etf-dist-tl">${tLabel}</span>
+        <span class="etf-dist-tbw"><span class="etf-dist-tb dn" style="width:${dnW}%"></span></span>
+        <span class="etf-dist-tv dn">${p(t.downPct / 100)}</span>
+        <span class="etf-dist-tsep"></span>
+        <span class="etf-dist-tl">${tLabel}</span>
+        <span class="etf-dist-tbw"><span class="etf-dist-tb up" style="width:${upW}%"></span></span>
+        <span class="etf-dist-tv up">${p(t.upPct / 100)}</span>
+      </div>`;
+    }).join("");
+
+    return `<div class="etf-dist-card">
+      <div class="etf-dist-card-hd">
+        <span class="etf-dist-sym">${sym}</span>
+        <span class="etf-dist-name">${name}</span>
+        <span class="etf-dist-meta">${dateFirst.slice(0,4)}–${dateLast.slice(0,4)} · ${n.toLocaleString()}天</span>
+      </div>
+      <div class="etf-dist-chart">${chartBars}</div>
+      <div class="etf-dist-thresh-hds">
+        <span class="etf-dist-thresh-side-hd dn">跌幅概率</span>
+        <span class="etf-dist-thresh-side-hd up" style="grid-column:4/7">涨幅概率</span>
+      </div>
+      <div class="etf-dist-thresh">${threshRows}</div>
+      <div class="etf-dist-footer">
+        <span>最大跌 <b class="dn">${(maxDrop * 100).toFixed(1)}%</b></span>
+        <span>最大涨 <b class="up">${(maxGain * 100).toFixed(1)}%</b></span>
+        <span>日均 <b>${fp(avg, 2)}</b></span>
+        <span>日波动 <b>${(stdDev * 100).toFixed(1)}%</b></span>
+      </div>
+    </div>`;
+  }
+
+  function _renderEtfDistCards() {
+    const el = document.getElementById("etf-dist-module");
+    if (!el) return;
+    if (!_etfDistData) {
+      el.innerHTML = `<div class="etf-dist-trigger">
+        <button class="btn" id="etf-dist-load-btn" style="font-size:11.5px">加载历史分布数据</button>
+        <span class="muted" style="font-size:11px;margin-left:8px">拉取 6 只 ETF 全历史日线（约 2 秒）</span>
+      </div>`;
+      const btn = el.querySelector("#etf-dist-load-btn");
+      if (btn) btn.addEventListener("click", _fetchEtfDistribution);
+      return;
+    }
+    const cardsHTML = OPT_WATCH_SYMS.map(sym => _etfDistCardHTML(sym, _etfDistData[sym])).join("");
+    el.innerHTML = `
+      <div class="sim-section-label" style="margin-bottom:12px">
+        <span class="ssl-zh">历史波动分布</span>
+        <span class="ssl-en">Historical Daily Return Distribution</span>
+        <span class="ssl-rule"></span>
+        <button class="etf-dist-refresh" id="etf-dist-refresh-btn" title="刷新数据">↻</button>
+      </div>
+      <div class="etf-dist-grid">${cardsHTML}</div>`;
+    const btn = el.querySelector("#etf-dist-refresh-btn");
+    if (btn) btn.addEventListener("click", () => {
+      localStorage.removeItem("trendo_etf_dist_v1");
+      _etfDistData = null;
+      _fetchEtfDistribution();
+    });
+  }
+
+  async function _fetchEtfDistribution() {
+    if (_etfDistFetching) return;
+    const KEY = "trendo_etf_dist_v1";
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    try {
+      const cached = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (cached && cached._date === today && cached.data) {
+        _etfDistData = cached.data;
+        _renderEtfDistCards();
+        return;
+      }
+    } catch (_) {}
+    _etfDistFetching = true;
+    const el = document.getElementById("etf-dist-module");
+    if (el) el.innerHTML = `<div class="etf-dist-loading">加载 ${OPT_WATCH_SYMS.length} 只 ETF 全历史数据中…</div>`;
+    try {
+      const r = await fetch(`/api/history?symbols=${encodeURIComponent(OPT_WATCH_SYMS.join(","))}&from=2005-01-01`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const results = data?.results || {};
+      _etfDistData = {};
+      OPT_WATCH_SYMS.forEach(sym => {
+        if (results[sym]) _etfDistData[sym] = _calcEtfDailyStats(results[sym]);
+      });
+      localStorage.setItem(KEY, JSON.stringify({ _date: today, data: _etfDistData }));
+    } catch (e) {
+      _etfDistFetching = false;
+      const el2 = document.getElementById("etf-dist-module");
+      if (el2) el2.innerHTML = `<div class="etf-dist-loading" style="color:var(--down)">加载失败: ${e.message}</div>`;
+      return;
+    }
+    _etfDistFetching = false;
+    _renderEtfDistCards();
+  }
+
+  function _initEtfDistModule() {
+    if (_etfDistData) { _renderEtfDistCards(); return; }
+    const KEY = "trendo_etf_dist_v1";
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    try {
+      const cached = JSON.parse(localStorage.getItem(KEY) || "null");
+      if (cached && cached._date === today && cached.data) {
+        _etfDistData = cached.data;
+        _renderEtfDistCards();
+        return;
+      }
+    } catch (_) {}
+    _renderEtfDistCards(); // shows load button
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   function renderOptions() {
     const innerId = currentOptMode === "real" ? "real-opts-inner" : "sim-opts-inner";
     const inner = document.getElementById(innerId);
@@ -6350,9 +6531,11 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
       </div>
       ${body}
-      ${_optStrategiesHTML()}`;
+      ${_optStrategiesHTML()}
+      <div id="etf-dist-module" class="etf-dist-module"></div>`;
 
     wireOptions();
+    _initEtfDistModule();
   }
 
   // Backward-compat alias
