@@ -6225,18 +6225,6 @@ function rsAdjustGrade(grade, rsResult) {
     GLD: "黄金 ETF", IWM: "Russell 2000", QQQ: "纳斯达克 100", DRAM: "存储与内存",
     XLK: "科技", XLY: "消费", XLV: "医疗", XLF: "金融",
   };
-  const ETF_DIST_BUCKETS = [
-    { label: "≤-5%",  min: -Infinity, max: -0.05,  side: "dn2" },
-    { label: "-3~-5%",min: -0.05,     max: -0.03,  side: "dn2" },
-    { label: "-2~-3%",min: -0.03,     max: -0.02,  side: "dn1" },
-    { label: "-1~-2%",min: -0.02,     max: -0.01,  side: "dn1" },
-    { label: "0~-1%", min: -0.01,     max: 0,      side: "dn0" },
-    { label: "0~+1%", min: 0,         max: 0.01,   side: "up0" },
-    { label: "+1~+2%",min: 0.01,      max: 0.02,   side: "up1" },
-    { label: "+2~+3%",min: 0.02,      max: 0.03,   side: "up1" },
-    { label: "+3~+5%",min: 0.03,      max: 0.05,   side: "up2" },
-    { label: "≥+5%",  min: 0.05,      max: Infinity, side: "up2" },
-  ];
   let _etfDistData = null;
   let _etfDistFetching = false;
 
@@ -6251,9 +6239,6 @@ function rsAdjustGrade(grade, rsResult) {
     const n = returns.length;
     const avg = returns.reduce((s, r) => s + r, 0) / n;
     const stdDev = Math.sqrt(returns.reduce((s, r) => s + (r - avg) ** 2, 0) / n);
-    const buckets = ETF_DIST_BUCKETS.map(b => ({
-      ...b, count: returns.filter(r => r >= b.min && r < b.max).length
-    }));
     // 每只ETF固定区间阈值（6档），格式化百分比不含多余小数
     const rawLevels = ETF_DIST_THRESHOLDS[sym] || ETF_DIST_THRESHOLDS._default;
     const tLevels = rawLevels.map(v => v / 100);
@@ -6283,9 +6268,27 @@ function rsAdjustGrade(grade, rsResult) {
       thresholds.push({ downLabel, upLabel, downPct: downCount / n * 100, upPct: upCount / n * 100 });
     }
     const skew = returns.reduce((s, r) => s + ((r - avg) / stdDev) ** 3, 0) / n;
+    // 12 bars aligned to tiers: 6 dn (extreme→mild) + 6 up (mild→extreme)
+    const N = tLevels.length;
+    const bars = [];
+    for (let i = N; i >= 0; i--) {
+      let count;
+      if (i === N) count = returns.filter(r => r <= -tLevels[N - 1]).length;
+      else if (i === 0) count = returns.filter(r => r < 0 && r > -tLevels[0]).length;
+      else count = returns.filter(r => r <= -tLevels[i - 1] && r > -tLevels[i]).length;
+      const pos = N - i;
+      bars.push({ count, side: `dn${2 - Math.floor(pos * 3 / (N + 1))}` });
+    }
+    for (let i = 0; i <= N; i++) {
+      let count;
+      if (i === N) count = returns.filter(r => r >= tLevels[N - 1]).length;
+      else if (i === 0) count = returns.filter(r => r >= 0 && r < tLevels[0]).length;
+      else count = returns.filter(r => r >= tLevels[i - 1] && r < tLevels[i]).length;
+      bars.push({ count, side: `up${Math.floor(i * 3 / (N + 1))}` });
+    }
     return {
       n, dateFirst: dates[0], dateLast: dates[dates.length - 1],
-      buckets, thresholds,
+      bars, thresholds,
       maxDrop: Math.min(...returns), maxGain: Math.max(...returns), avg, stdDev, skew,
     };
   }
@@ -6293,18 +6296,19 @@ function rsAdjustGrade(grade, rsResult) {
   function _etfDistCardHTML(sym, stats) {
     const name = ETF_DIST_NAMES[sym] || sym;
     if (!stats) return `<div class="etf-dist-card"><div class="etf-dist-card-hd"><span class="etf-dist-sym">${sym}</span><span class="etf-dist-name">${name}</span></div><div class="etf-dist-nodata">数据不足</div></div>`;
-    const { n, buckets, thresholds, stdDev, skew } = stats;
-    const maxCount = Math.max(...buckets.map(b => b.count));
+    const { n, bars, thresholds, stdDev, skew } = stats;
+    const maxCount = Math.max(...bars.map(b => b.count));
     const p = v => (v * 100).toFixed(1) + "%";
 
-    // Bar chart with frequency % label on top of each bar
-    const chartBars = buckets.map(b => {
-      const hPct = maxCount > 0 ? Math.max(3, b.count / maxCount * 100) : 3;
+    // 12 bars with frequency % on top; center divider separates dn/up halves
+    const half = bars.length / 2;
+    const chartBars = bars.map((b, idx) => {
+      const hPct = maxCount > 0 ? Math.max(2, b.count / maxCount * 100) : 2;
       const freqPct = n > 0 ? (b.count / n * 100).toFixed(1) : "0.0";
-      return `<div class="etf-dist-bar-col">
+      const centerGap = idx === half - 1 ? ' etf-dist-bar-col-last-dn' : '';
+      return `<div class="etf-dist-bar-col${centerGap}">
         <div class="etf-dist-bar-pct">${freqPct}</div>
         <div class="etf-dist-bar-wrap"><div class="etf-dist-bar ${b.side}" style="height:${hPct.toFixed(0)}%"></div></div>
-        <div class="etf-dist-bar-label">${b.label}</div>
       </div>`;
     }).join("");
 
