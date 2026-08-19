@@ -2484,9 +2484,9 @@
   }
   .etf-dist-nodata { font-size: 11px; color: var(--fg-3); padding: 8px 0; }
   /* Card body: chart left, thresholds right */
-  .etf-dist-card-body { display: flex; gap: 28px; align-items: flex-start; }
-  .etf-dist-chart-area { flex: 0 0 40%; }
-  .etf-dist-thresh-area { flex: 1; display: flex; align-items: center; }
+  .etf-dist-card-body { display: flex; gap: 24px; align-items: flex-start; }
+  .etf-dist-chart-area { flex: 0 0 38%; min-width: 0; }
+  .etf-dist-thresh-area { flex: 1; min-width: 0; display: flex; align-items: center; }
   /* Bar chart */
   .etf-dist-chart { display: flex; align-items: flex-end; gap: 4px; height: 96px; }
   .etf-dist-bar-col {
@@ -2514,10 +2514,10 @@
   /* Threshold rows */
   .etf-dist-thresh { display: flex; flex-direction: column; gap: 7px; width: 100%; }
   .etf-dist-thresh-row {
-    display: grid; grid-template-columns: 64px 1fr 30px 6px 64px 1fr 30px;
+    display: grid; grid-template-columns: 76px 1fr 30px 6px 76px 1fr 30px;
     align-items: center; gap: 4px;
   }
-  .etf-dist-tl { font-size: 9.5px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; }
+  .etf-dist-tl { font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; overflow: hidden; }
   .etf-dist-tbw { height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
   .etf-dist-tb { height: 100%; border-radius: 3px; display: block; }
   .etf-dist-tb.dn { background: oklch(0.70 0.17 18 / .75); }
@@ -4900,8 +4900,8 @@
   </div>
 </div>
 
-<script src="data.js?v=636"></script>
-<script src="desk.js?v=636"></script>
+<script src="data.js?v=637"></script>
+<script src="desk.js?v=637"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

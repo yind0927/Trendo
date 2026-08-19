@@ -6218,8 +6218,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 每只ETF的固定区间分界点（单位：%），5个断点生成6档
   const ETF_DIST_THRESHOLDS = {
     SOXL: [0.75, 1.5, 3, 6, 15],   // 3x杠杆，日波动极大
-    GLD:  [0.1, 0.25, 0.5, 1, 2],  // 黄金，低波动
-    _default: [0.25, 0.5, 1, 2, 5], // 普通权益ETF
+    _default: [0.25, 0.5, 1, 2, 5], // 普通权益ETF（含GLD）
   };
   const ETF_DIST_NAMES = {
     MAGS: "Magnificent 7", SMH: "VanEck 半导体", SOXL: "半导体3x",
