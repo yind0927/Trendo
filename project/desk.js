@@ -6278,8 +6278,8 @@ function rsAdjustGrade(grade, rsResult) {
       } else {
         downCount = returns.filter(r => r <= -tLo && r > -tHi).length;
         upCount   = returns.filter(r => r >= tLo && r < tHi).length;
-        downLabel = `-${fmtT(tLo)} ~ -${fmtT(tHi)}`;
-        upLabel   = `+${fmtT(tLo)} ~ +${fmtT(tHi)}`;
+        downLabel = `-${fmtT(tLo)}~-${fmtT(tHi)}`;
+        upLabel   = `+${fmtT(tLo)}~+${fmtT(tHi)}`;
       }
       thresholds.push({ downLabel, upLabel, downPct: downCount / n * 100, upPct: upCount / n * 100 });
     }
@@ -6300,9 +6300,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     const chartBars = buckets.map(b => {
       const hPct = maxCount > 0 ? Math.max(3, b.count / maxCount * 100) : 3;
-      const freq = (b.count / n * 100).toFixed(1);
       return `<div class="etf-dist-bar-col">
-        <div class="etf-dist-bar-pct">${freq}</div>
         <div class="etf-dist-bar-wrap"><div class="etf-dist-bar ${b.side}" style="height:${hPct.toFixed(0)}%"></div></div>
         <div class="etf-dist-bar-label">${b.label}</div>
       </div>`;
@@ -6329,19 +6327,15 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="etf-dist-card-hd">
         <span class="etf-dist-sym">${sym}</span>
         <span class="etf-dist-name">${name}</span>
-        <span class="etf-dist-meta">${dateFirst.slice(0,4)}–${dateLast.slice(0,4)} · ${n.toLocaleString()}天</span>
+        <span class="etf-dist-sigma">σ ${(stdDev * 100).toFixed(1)}%</span>
       </div>
       <div class="etf-dist-chart">${chartBars}</div>
-      <div class="etf-dist-thresh-hds">
-        <span class="etf-dist-thresh-side-hd dn">跌幅概率</span>
-        <span class="etf-dist-thresh-side-hd up" style="grid-column:4/7">涨幅概率</span>
-      </div>
       <div class="etf-dist-thresh">${threshRows}</div>
       <div class="etf-dist-footer">
-        <span>最大跌 <b class="dn">${(maxDrop * 100).toFixed(1)}%</b></span>
-        <span>最大涨 <b class="up">${(maxGain * 100).toFixed(1)}%</b></span>
-        <span>日均 <b>${fp(avg, 2)}</b></span>
-        <span>日波动 <b>${(stdDev * 100).toFixed(1)}%</b></span>
+        <span>跌 <b class="dn">${(maxDrop * 100).toFixed(1)}%</b></span>
+        <span>涨 <b class="up">${(maxGain * 100).toFixed(1)}%</b></span>
+        <span>均 <b>${fp(avg, 2)}</b></span>
+        <span class="etf-dist-footer-n">${n.toLocaleString()}天</span>
       </div>
     </div>`;
   }

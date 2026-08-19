@@ -2473,32 +2473,29 @@
   }
   .etf-dist-card {
     background: var(--bg-1); border: 1px solid var(--line);
-    border-radius: 12px; padding: 12px 12px 10px; overflow: hidden;
+    border-radius: 12px; padding: 11px 11px 9px;
+    display: flex; flex-direction: column; gap: 0;
   }
   .etf-dist-card-hd {
-    display: flex; align-items: baseline; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 6px; margin-bottom: 9px;
   }
-  .etf-dist-sym { font-size: 13px; font-weight: 700; font-family: var(--f-mono); }
-  .etf-dist-name { font-size: 10.5px; color: var(--fg-3); }
-  .etf-dist-meta { font-size: 9.5px; color: var(--fg-3); margin-left: auto; white-space: nowrap; }
+  .etf-dist-sym { font-size: 12.5px; font-weight: 700; font-family: var(--f-mono); }
+  .etf-dist-name { font-size: 10px; color: var(--fg-3); }
+  .etf-dist-sigma {
+    font-size: 9px; color: var(--accent); font-family: var(--f-mono);
+    margin-left: auto; white-space: nowrap; opacity: .85;
+  }
   .etf-dist-nodata { font-size: 11px; color: var(--fg-3); padding: 8px 0; }
-  /* Distribution bar chart */
+  /* Bar chart — visual only, no % labels */
   .etf-dist-chart {
     display: flex; align-items: flex-end; gap: 2px;
-    height: 88px; margin-bottom: 10px;
+    height: 56px; margin-bottom: 8px;
   }
   .etf-dist-bar-col {
     flex: 1; display: flex; flex-direction: column; align-items: center;
     height: 100%; gap: 2px;
   }
-  .etf-dist-bar-pct {
-    font-size: 7px; color: var(--fg-3); line-height: 1;
-    height: 10px; display: flex; align-items: center;
-    font-variant-numeric: tabular-nums;
-  }
-  .etf-dist-bar-wrap {
-    flex: 1; display: flex; align-items: flex-end; width: 100%;
-  }
+  .etf-dist-bar-wrap { flex: 1; display: flex; align-items: flex-end; width: 100%; }
   .etf-dist-bar { width: 100%; border-radius: 2px 2px 0 0; min-height: 2px; }
   .etf-dist-bar.dn2 { background: oklch(0.58 0.19 18); }
   .etf-dist-bar.dn1 { background: oklch(0.65 0.14 18); }
@@ -2507,49 +2504,38 @@
   .etf-dist-bar.up1 { background: oklch(0.65 0.12 145); }
   .etf-dist-bar.up2 { background: oklch(0.58 0.17 145); }
   .etf-dist-bar-label {
-    font-size: 6.5px; color: var(--fg-3); text-align: center; line-height: 1.2;
-    height: 14px; display: flex; align-items: center;
-    white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums;
+    font-size: 6px; color: var(--fg-3); text-align: center; line-height: 1;
+    height: 12px; display: flex; align-items: flex-end;
+    white-space: nowrap; overflow: hidden;
   }
   /* Threshold rows */
-  .etf-dist-thresh-hds {
-    display: grid; grid-template-columns: 22px 1fr 30px 6px 22px 1fr 30px;
-    margin-bottom: 3px;
-  }
-  .etf-dist-thresh-side-hd {
-    font-size: 8.5px; letter-spacing: .05em; text-transform: uppercase;
-    grid-column: span 3;
-  }
-  .etf-dist-thresh-side-hd.dn { color: var(--down); }
-  .etf-dist-thresh-side-hd.up { color: var(--up); }
-  .etf-dist-thresh { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+  .etf-dist-thresh { display: flex; flex-direction: column; gap: 3px; margin-bottom: 7px; }
   .etf-dist-thresh-row {
-    display: grid; grid-template-columns: 58px 1fr 30px 6px 58px 1fr 30px;
-    align-items: center; gap: 3px;
+    display: grid; grid-template-columns: 52px 1fr 26px 4px 52px 1fr 26px;
+    align-items: center; gap: 2px;
   }
-  .etf-dist-tl { font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; }
-  .etf-dist-tbw {
-    height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden;
-  }
+  .etf-dist-tl { font-size: 8.5px; color: var(--fg-3); font-family: var(--f-mono); white-space: nowrap; }
+  .etf-dist-tbw { height: 3px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
   .etf-dist-tb { height: 100%; border-radius: 2px; display: block; }
-  .etf-dist-tb.dn { background: var(--down); }
-  .etf-dist-tb.up { background: var(--up); }
+  .etf-dist-tb.dn { background: oklch(0.70 0.17 18 / .75); }
+  .etf-dist-tb.up { background: oklch(0.70 0.14 145 / .75); }
   .etf-dist-tv {
-    font-size: 9.5px; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+    font-size: 9px; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
     text-align: right;
   }
   .etf-dist-tv.dn { color: var(--down); }
   .etf-dist-tv.up { color: var(--up); }
-  .etf-dist-tsep { width: 6px; }
+  .etf-dist-tsep { border-left: 1px solid var(--line); height: 10px; justify-self: center; }
   /* Footer */
   .etf-dist-footer {
-    display: flex; flex-wrap: wrap; gap: 4px 10px;
-    border-top: 1px solid var(--line); padding-top: 7px;
-    font-size: 9.5px; color: var(--fg-3);
+    display: flex; gap: 8px; align-items: center;
+    font-size: 9px; color: var(--fg-3); margin-top: auto; padding-top: 6px;
+    border-top: 1px solid oklch(0 0 0 / .12);
   }
   .etf-dist-footer b { font-weight: 600; }
   .etf-dist-footer .dn { color: var(--down); }
   .etf-dist-footer .up { color: var(--up); }
+  .etf-dist-footer-n { margin-left: auto; opacity: .55; }
   @media (max-width: 640px) {
     .etf-dist-grid { grid-template-columns: 1fr; }
   }
@@ -4919,8 +4905,8 @@
   </div>
 </div>
 
-<script src="data.js?v=632"></script>
-<script src="desk.js?v=632"></script>
+<script src="data.js?v=633"></script>
+<script src="desk.js?v=633"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
