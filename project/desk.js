@@ -6322,7 +6322,7 @@ function rsAdjustGrade(grade, rsResult) {
     const chartBars = bars.map((b, idx) => {
       const hPct = maxCount > 0 ? Math.max(2, b.count / maxCount * 100) : 2;
       const freqPct = n > 0 ? (b.count / n * 100).toFixed(1) : "0.0";
-      const label = hPct >= 20 ? `${freqPct}%` : '';
+      const label = `${freqPct}%`;
       const sep = idx === half - 1 ? '<div class="etf-dist-sep"></div>' : '';
       return `<div class="etf-dist-bar-col">
         <div class="etf-dist-bar-pct">${label}</div>
