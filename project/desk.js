@@ -6317,16 +6317,17 @@ function rsAdjustGrade(grade, rsResult) {
     const maxCount = Math.max(...bars.map(b => b.count));
     const p = v => (v * 100).toFixed(1) + "%";
 
-    // 12 bars with frequency % on top; center divider separates dn/up halves
+    // 12 bars: % label only on bars tall enough to avoid clutter; sep div between dn/up halves
     const half = bars.length / 2;
     const chartBars = bars.map((b, idx) => {
       const hPct = maxCount > 0 ? Math.max(2, b.count / maxCount * 100) : 2;
       const freqPct = n > 0 ? (b.count / n * 100).toFixed(1) : "0.0";
-      const centerGap = idx === half - 1 ? ' etf-dist-bar-col-last-dn' : '';
-      return `<div class="etf-dist-bar-col${centerGap}">
-        <div class="etf-dist-bar-pct" title="${freqPct}%">${b.count}</div>
+      const label = hPct >= 20 ? `${freqPct}%` : '';
+      const sep = idx === half - 1 ? '<div class="etf-dist-sep"></div>' : '';
+      return `<div class="etf-dist-bar-col">
+        <div class="etf-dist-bar-pct">${label}</div>
         <div class="etf-dist-bar-wrap"><div class="etf-dist-bar ${b.side}" style="height:${hPct.toFixed(0)}%"></div></div>
-      </div>`;
+      </div>${sep}`;
     }).join("");
 
     // 极端档在上，轻微档在下；条形宽度各自归一化到本侧最大值

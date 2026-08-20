@@ -2485,29 +2485,41 @@
   .etf-dist-nodata { font-size: 11px; color: var(--fg-3); padding: 8px 0; }
   /* Card body: chart left, thresholds right — stretch aligns both top and bottom */
   .etf-dist-card-body { display: flex; gap: 24px; align-items: stretch; }
-  .etf-dist-chart-area { flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column; }
+  .etf-dist-chart-area {
+    flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column;
+    border-bottom: 1px solid var(--line);
+  }
   .etf-dist-thresh-area { flex: 1; min-width: 0; display: flex; align-items: center; }
   /* Bar chart — fills chart-area height so bars align with threshold rows */
-  .etf-dist-chart { display: flex; align-items: flex-end; gap: 3px; flex: 1; height: auto; }
+  .etf-dist-chart { display: flex; align-items: flex-end; gap: 2px; flex: 1; height: auto; }
   .etf-dist-bar-col {
     flex: 1; display: flex; flex-direction: column; align-items: center;
     height: 100%; gap: 2px;
   }
-  /* Extra right margin on last-dn bar creates a visual center divider */
-  .etf-dist-bar-col-last-dn { margin-right: 5px; }
+  /* Thin separator div between dn and up halves */
+  .etf-dist-sep {
+    width: 1px; flex-shrink: 0; background: var(--line); align-self: stretch;
+    margin: 10px 3px 0; opacity: .5;
+  }
+  /* % label: only populated for tall bars (hPct >= 20), fixed height keeps layout stable */
   .etf-dist-bar-pct {
-    font-size: 7px; color: var(--fg-3); font-family: var(--f-mono);
-    height: 11px; display: flex; align-items: flex-end; justify-content: center;
+    font-size: 8px; color: var(--fg-2); font-family: var(--f-mono);
+    height: 12px; display: flex; align-items: flex-end; justify-content: center;
     white-space: nowrap; line-height: 1;
   }
   .etf-dist-bar-wrap { flex: 1; display: flex; align-items: flex-end; width: 100%; }
-  .etf-dist-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
-  .etf-dist-bar.dn2 { background: oklch(0.58 0.19 18); }
-  .etf-dist-bar.dn1 { background: oklch(0.65 0.14 18); }
-  .etf-dist-bar.dn0 { background: oklch(0.72 0.07 18); }
-  .etf-dist-bar.up0 { background: oklch(0.72 0.07 145); }
-  .etf-dist-bar.up1 { background: oklch(0.65 0.12 145); }
-  .etf-dist-bar.up2 { background: oklch(0.58 0.17 145); }
+  .etf-dist-bar {
+    width: 100%; border-radius: 4px 4px 0 0; min-height: 2px;
+    transition: filter .15s;
+  }
+  .etf-dist-bar:hover { filter: brightness(1.18); }
+  /* Gradient bars: rich base at bottom, lighter tip at top */
+  .etf-dist-bar.dn2 { background: linear-gradient(to top, oklch(0.50 0.23 18), oklch(0.70 0.13 18)); }
+  .etf-dist-bar.dn1 { background: linear-gradient(to top, oklch(0.58 0.18 18), oklch(0.76 0.09 18)); }
+  .etf-dist-bar.dn0 { background: linear-gradient(to top, oklch(0.67 0.10 18), oklch(0.80 0.04 18)); }
+  .etf-dist-bar.up0 { background: linear-gradient(to top, oklch(0.67 0.10 145), oklch(0.80 0.04 145)); }
+  .etf-dist-bar.up1 { background: linear-gradient(to top, oklch(0.58 0.16 145), oklch(0.76 0.09 145)); }
+  .etf-dist-bar.up2 { background: linear-gradient(to top, oklch(0.50 0.21 145), oklch(0.70 0.12 145)); }
   /* Threshold rows */
   .etf-dist-thresh { display: flex; flex-direction: column; gap: 7px; width: 100%; }
   .etf-dist-thresh-row {
@@ -4906,8 +4918,8 @@
   </div>
 </div>
 
-<script src="data.js?v=643"></script>
-<script src="desk.js?v=643"></script>
+<script src="data.js?v=644"></script>
+<script src="desk.js?v=644"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
