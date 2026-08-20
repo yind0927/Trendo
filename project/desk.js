@@ -6324,7 +6324,7 @@ function rsAdjustGrade(grade, rsResult) {
       const freqPct = n > 0 ? (b.count / n * 100).toFixed(1) : "0.0";
       const centerGap = idx === half - 1 ? ' etf-dist-bar-col-last-dn' : '';
       return `<div class="etf-dist-bar-col${centerGap}">
-        <div class="etf-dist-bar-pct">${freqPct}%</div>
+        <div class="etf-dist-bar-pct" title="${freqPct}%">${b.count}</div>
         <div class="etf-dist-bar-wrap"><div class="etf-dist-bar ${b.side}" style="height:${hPct.toFixed(0)}%"></div></div>
       </div>`;
     }).join("");
