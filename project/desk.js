@@ -1722,8 +1722,12 @@ function rsAdjustGrade(grade, rsResult) {
 
     // MFE Profit Protection (only for open positions with an entry ATR recorded)
     if (h.entryATR > 0 && h.last > 0 && h.cost > 0) {
-      const curGain = h.last - h.cost; // per-share gain vs cost
-      if (curGain > (h.mfe ?? 0)) h.mfe = curGain; // MFE only moves up
+      // Use closing-price history (spark) for consistency with exit-quality peak in Analytics;
+      // also include current last so intraday moves aren't missed while the page is open.
+      const sparkPeak = h.spark?.length ? Math.max(...h.spark) - h.cost : 0;
+      const livePeak  = h.last - h.cost;
+      const candidate = Math.max(sparkPeak, livePeak, 0);
+      if (candidate > (h.mfe ?? 0)) h.mfe = candidate; // MFE only moves up
       if (!h.ppActive && (h.mfe ?? 0) >= 2 * h.entryATR) h.ppActive = true;
       if (h.ppActive) {
         const newPP = h.cost + (h.mfe ?? 0) * 0.5;
