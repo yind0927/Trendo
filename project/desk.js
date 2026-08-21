@@ -2057,7 +2057,7 @@ function rsAdjustGrade(grade, rsResult) {
               const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
               return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:${mkAlpha(meta.color, 12)}">${grade}</span>${rsLabel}`;
             })() : ""}
-            ${!isClosed && h.ppActive ? `<span class="pp-badge active" title="Profit Protection 已激活 · 保护价 $${price(h.ppPrice)} · ${h.last > 0 && h.ppPrice ? ((h.last - h.ppPrice) / h.last * 100).toFixed(1) + '% 余量' : ''}">PP✓</span>` : (!isClosed && h.entryATR > 0 ? `<span class="pp-badge" title="PP 待激活 · 需涨 $${price(2 * h.entryATR - (h.mfe ?? 0))} 触发">PP</span>` : "")}
+            ${!isClosed && h.ppActive ? `<span class="pp-badge active" title="Profit Protection 已激活 · 峰值 $${price(h.cost + (h.mfe??0))} · 保护价 $${price(h.ppPrice)} · ${h.last > 0 && h.ppPrice ? ((h.last - h.ppPrice) / h.last * 100).toFixed(1) + '% 余量' : ''}">PP✓</span>` : (!isClosed && h.entryATR > 0 ? `<span class="pp-badge" title="PP 待激活 · 峰值 $${price(h.cost + (h.mfe??0))} · 还需 +$${price(Math.max(0, 2*h.entryATR - (h.mfe??0)))} 触发">PP</span>` : "")}
             <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
           </div>
           <div class="hc-actions">${actions}</div>
@@ -2678,54 +2678,76 @@ function rsAdjustGrade(grade, rsResult) {
     const hasATR   = h.entryATR > 0;
     const atr2     = hasATR ? h.entryATR * 2 : 0;
     const mfe      = h.mfe ?? 0;
+    const peakPx   = h.cost + mfe;                          // absolute peak price
     const ppP      = h.ppPrice;
     const isActive = !!h.ppActive;
-    const distRaw  = (h.last > 0 && ppP) ? h.last - ppP : null;
-    const distPct  = distRaw !== null ? (distRaw / h.last * 100) : null;
-    const needed   = hasATR && !isActive ? Math.max(0, atr2 - mfe) : null;
-    const mfeProg  = hasATR && atr2 > 0 ? Math.min(1, mfe / atr2) : 0;
     const chipCls  = !hasATR ? "" : isActive ? " pp-chip-on" : " pp-chip-pend";
     const chipTxt  = !hasATR ? "未启用" : isActive ? "已激活" : "待激活";
 
+    // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice always at 50%
+    const activeBar = (() => {
+      if (!isActive || !h.last || mfe <= 0) return "";
+      const pos     = Math.min(Math.max((h.last - h.cost) / mfe, 0), 1);
+      const safe    = h.last >= ppP;
+      const distPct = ((h.last - ppP) / h.last * 100);
+      return `
+        <div class="pp-axis-wrap">
+          <div class="pp-axis-track">
+            <div class="pp-axis-fill ${safe ? "safe" : "breach"}" style="width:${(pos*100).toFixed(1)}%"></div>
+            <div class="pp-axis-pp-line" title="保护价 $${price(ppP)}"></div>
+          </div>
+          <div class="pp-axis-labels">
+            <span title="入场成本">$${price(h.cost)}</span>
+            <span class="pp-axis-pp-tag ${safe ? "safe" : "breach"}">保护价 ${safe ? "▲" : "▼"} ${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%</span>
+            <span title="历史峰值收盘价">$${price(peakPx)}</span>
+          </div>
+        </div>`;
+    })();
+
+    // Pending state: progress bar mfe toward 2×ATR threshold
+    const pendingBar = (() => {
+      if (isActive || !hasATR) return "";
+      const prog    = Math.min(mfe / atr2, 1);
+      const needed  = Math.max(0, atr2 - mfe);
+      return `
+        <div class="pp-prog-wrap">
+          <div class="pp-prog-track">
+            <div class="pp-prog-fill${prog >= 1 ? " done" : ""}" style="width:${(prog*100).toFixed(1)}%"></div>
+          </div>
+          <div class="pp-prog-labels">
+            <span>$${price(h.cost)}</span>
+            <span>${(prog*100).toFixed(0)}% ${needed > 0.001 ? "· 还需 +$" + price(needed) : "· 边缘"}</span>
+            <span title="激活阈值 = cost + 2×ATR">$${price(h.cost + atr2)}</span>
+          </div>
+        </div>`;
+    })();
+
     const metricsHTML = isActive
       ? `<div class="pp-metrics">
+          <div class="pp-row">
+            <span class="pp-row-label">峰值价格</span>
+            <span class="pp-row-val up mono">$${price(peakPx)}</span>
+            <span class="pp-row-sub">+$${price(mfe)} / share</span>
+          </div>
           <div class="pp-row">
             <span class="pp-row-label">保护价</span>
             <span class="pp-row-val up mono">$${price(ppP)}</span>
             <span class="pp-row-sub">cost + 50% MFE</span>
           </div>
-          <div class="pp-row">
-            <span class="pp-row-label">距保护价</span>
-            <span class="pp-row-val ${distRaw !== null && distRaw >= 0 ? "up" : "down"} mono">${distPct !== null ? (distRaw >= 0 ? "+" : "") + distPct.toFixed(1) + "%" : "—"}</span>
-            <span class="pp-row-sub">${distRaw !== null ? (distRaw >= 0 ? "安全" : "已触发") : ""}</span>
-          </div>
-          <div class="pp-row">
-            <span class="pp-row-label">MFE 峰值</span>
-            <span class="pp-row-val up mono">+$${price(mfe)}</span>
-            <span class="pp-row-sub">per share</span>
-          </div>
+          ${activeBar}
         </div>`
       : `<div class="pp-metrics">
           <div class="pp-row">
             <span class="pp-row-label">激活阈值</span>
-            <span class="pp-row-val mono">+$${price(atr2)}</span>
-            <span class="pp-row-sub">2 × ATR</span>
+            <span class="pp-row-val mono">$${price(h.cost + atr2)}</span>
+            <span class="pp-row-sub">cost + 2×ATR</span>
           </div>
           <div class="pp-row">
-            <span class="pp-row-label">MFE 峰值</span>
-            <span class="pp-row-val ${mfe > 0 ? "up" : ""} mono">${mfe > 0 ? "+" : ""}$${price(mfe)}</span>
-            <span class="pp-row-sub">${needed > 0.001 ? "还需 +$" + price(needed) : "边缘"}</span>
+            <span class="pp-row-label">当前峰值</span>
+            <span class="pp-row-val ${mfe > 0 ? "up" : ""} mono">$${price(peakPx)}</span>
+            <span class="pp-row-sub">${mfe > 0 ? "+$" + price(mfe) + " / share" : "尚未超过入场价"}</span>
           </div>
-          <div class="pp-prog-wrap">
-            <div class="pp-prog-track">
-              <div class="pp-prog-fill${mfeProg >= 1 ? " done" : ""}" style="width:${(mfeProg * 100).toFixed(1)}%"></div>
-            </div>
-            <div class="pp-prog-labels">
-              <span>0</span>
-              <span>${(mfeProg * 100).toFixed(0)}%</span>
-              <span>2×ATR</span>
-            </div>
-          </div>
+          ${pendingBar}
         </div>`;
 
     return `<div id="pp-block-wrap">
@@ -2736,7 +2758,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="pp-atr-row">
         <span class="pp-atr-label">入场 ATR<span class="edit-hint">点击编辑</span></span>
         <input type="number" id="drawer-pp-atr" class="pp-atr-input" step="0.01" min="0"
-          value="${hasATR ? h.entryATR : ""}" placeholder="填写 ATR(14)"/>
+          value="${hasATR ? h.entryATR : ""}" placeholder="填写 ATR 值，如 2.50"/>
       </div>
       ${hasATR ? metricsHTML : `<div class="pp-hint">填写 ATR 后自动计算激活阈值与保护价</div>`}
     </div>`;

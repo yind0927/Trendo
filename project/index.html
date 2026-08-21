@@ -2455,18 +2455,27 @@
   .pp-atr-input:focus { border-color:var(--accent); outline:none; }
   .pp-hint { font-size:10.5px; color:var(--fg-3); padding:2px 0 6px; }
   .pp-metrics { display:flex; flex-direction:column; gap:5px; padding:8px 10px; background:var(--bg-2); border-radius:8px; }
-  .pp-row { display:grid; grid-template-columns:85px 1fr auto; align-items:baseline; gap:0 8px; }
+  .pp-row { display:grid; grid-template-columns:72px 1fr auto; align-items:baseline; gap:0 8px; }
   .pp-row-label { font-size:10px; color:var(--fg-3); letter-spacing:.03em; }
   .pp-row-val { font-size:13px; font-family:var(--f-mono); font-weight:600; }
   .pp-row-sub { font-size:9.5px; color:var(--fg-3); font-family:var(--f-mono); text-align:right; }
+  /* Pending state: activation progress bar */
   .pp-prog-wrap { margin-top:8px; }
   .pp-prog-track { height:4px; background:var(--bg-1); border-radius:2px; overflow:hidden; position:relative; margin-bottom:4px; }
   .pp-prog-fill { height:100%; background:var(--warn); border-radius:2px; transition:width .3s; }
   .pp-prog-fill.done { background:var(--up); }
   .pp-prog-labels { display:flex; justify-content:space-between; font-size:9px; color:var(--fg-3); font-family:var(--f-mono); }
-  /* PP card badge */
-  .pp-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:5px; font-size:9.5px; font-weight:700; font-family:var(--f-mono); letter-spacing:.04em; background:color-mix(in oklch,var(--warn) 14%,transparent); color:var(--warn); border:1px solid color-mix(in oklch,var(--warn) 30%,transparent); }
-  .pp-badge.active { background:color-mix(in oklch,var(--up) 14%,transparent); color:var(--up); border-color:color-mix(in oklch,var(--up) 30%,transparent); }
+  /* Active state: price-axis bar */
+  .pp-axis-wrap { margin-top:10px; }
+  .pp-axis-track { height:6px; background:var(--bg-1); border-radius:3px; position:relative; margin-bottom:5px; overflow:visible; }
+  .pp-axis-fill { height:100%; border-radius:3px; transition:width .3s; }
+  .pp-axis-fill.safe   { background:color-mix(in oklch,var(--up) 60%,transparent); }
+  .pp-axis-fill.breach { background:color-mix(in oklch,var(--down) 60%,transparent); }
+  .pp-axis-pp-line { position:absolute; left:50%; top:-3px; bottom:-3px; width:2px; background:var(--warn); border-radius:1px; cursor:default; }
+  .pp-axis-labels { display:flex; justify-content:space-between; font-size:9px; color:var(--fg-3); font-family:var(--f-mono); }
+  .pp-axis-pp-tag { font-size:9px; font-family:var(--f-mono); font-weight:600; }
+  .pp-axis-pp-tag.safe   { color:var(--up); }
+  .pp-axis-pp-tag.breach { color:var(--down); }
   .curve-labels { display: flex; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
   .ec-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .ec-period-seg { display: flex; gap: 2px; background: var(--bg-2); border-radius: 8px; padding: 3px; flex-shrink: 0; }
@@ -4628,7 +4637,7 @@
         </div>
       </div>
       <div class="form-row">
-        <label>入场 ATR <span style="font-weight:400;color:var(--fg-3);font-size:11px;text-transform:none;letter-spacing:0">可选 · Profit Protection 激活阈值</span></label>
+        <label>入场 ATR <span style="font-weight:400;color:var(--fg-3);font-size:11px;text-transform:none;letter-spacing:0">可选 · Profit Protection</span></label>
         <input type="number" id="form-entry-atr" placeholder="选填，如 2.50" step="0.01" min="0"/>
       </div>
       <div class="form-row">
@@ -4973,8 +4982,8 @@
   </div>
 </div>
 
-<script src="data.js?v=651"></script>
-<script src="desk.js?v=651"></script>
+<script src="data.js?v=652"></script>
+<script src="desk.js?v=652"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
