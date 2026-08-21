@@ -1132,6 +1132,7 @@ function rsAdjustGrade(grade, rsResult) {
   let histCache   = {}; // { yahooSym: { "YYYY-MM-DD": closePrice } } — in-memory, not persisted
   let histPnlLog  = {}; // { "YYYY-MM-DD": computedDelta } — built from histCache
   let histLoading = false;
+  let simHistLoading = false;
 
   // 月度回测「资金加权收益率 vs VOO」基准对比的三个会话级缓存（均不持久化，标签页刷新即清空）：
   //   _curBenchCache  — 当月（进行中）VOO 的日历月涨跌幅，按 monthKey 缓存 20 分钟——这个
@@ -3760,7 +3761,7 @@ function rsAdjustGrade(grade, rsResult) {
     saveToStorage();
     if (isSim) {
       if (isFull && simSelectedSym === sym) closeSimDrawer();
-      renderSimTable(); renderSimOverview(); renderSimAnalytics(); renderSimMonthly();
+      renderSimTable(); renderSimOverview(); renderSimAnalytics(); renderSimMonthly(); renderSimExitQuality();
     } else {
       if (isFull && selectedSym === sym) closeDrawer();
       renderTable(); renderOverview(); renderDeskMonthly();
@@ -3898,7 +3899,7 @@ function rsAdjustGrade(grade, rsResult) {
       ? (simSelectedSym === sym && simSelectedEntry === entry && Math.abs((simSelectedCost ?? NaN) - cost) < 0.001)
       : simSelectedSym === sym;
     if (simRestoreSelMatches) closeSimDrawer();
-    renderSimOverview(); renderSimTable(); renderSimAnalytics(); renderSimMonthly();
+    renderSimOverview(); renderSimTable(); renderSimAnalytics(); renderSimMonthly(); renderSimExitQuality();
   }
 
   function wireDrawerRestoreButton(h, isSim) {
@@ -4257,6 +4258,52 @@ function rsAdjustGrade(grade, rsResult) {
 
     buildHistoricalPnl();
     if (currentPage === "analytics") renderAnalytics();
+    if (currentPage === "sim") renderSimExitQuality();
+  }
+
+  async function fetchSimHistory() {
+    const needed = [...new Set(
+      SIM_CLOSED.map(h => h.kind === "crypto" ? `${h.sym}-USD` : h.sym)
+    )].filter(s => !histCache[s]);
+    if (!needed.length) { renderSimExitQuality(); return; }
+    simHistLoading = true;
+    renderSimExitQuality();
+    const fromDate = SIM_CLOSED
+      .map(h => h.entry?.slice(0, 10)).filter(Boolean).sort()[0] || "2020-01-01";
+    const CHUNK = 20;
+    for (let i = 0; i < needed.length; i += CHUNK) {
+      const batch = needed.slice(i, i + CHUNK);
+      try {
+        const r = await fetch(`/api/history?symbols=${batch.join(",")}&from=${fromDate}`);
+        if (r.ok) {
+          const { results } = await r.json();
+          if (results) Object.assign(histCache, results);
+        }
+      } catch (_) {}
+    }
+    simHistLoading = false;
+    renderSimExitQuality();
+  }
+
+  function renderSimExitQuality() {
+    const lbl = document.getElementById("sim-eq-label");
+    const el  = document.getElementById("sim-eq-content");
+    if (!el) return;
+    if (!SIM_CLOSED.length) {
+      if (lbl) lbl.style.display = "none";
+      el.style.display = "none"; el.innerHTML = ""; return;
+    }
+    const needed = [...new Set(
+      SIM_CLOSED.map(h => h.kind === "crypto" ? `${h.sym}-USD` : h.sym)
+    )].filter(s => !histCache[s]);
+    if (needed.length && !simHistLoading) fetchSimHistory();
+    if (lbl) lbl.style.display = "";
+    el.style.display = "";
+    el.innerHTML = `<div class="analytics-card" style="margin-bottom:14px">
+      ${atitle("出场质量分析", "Exit Quality")}
+      <div class="analytics-card-sub">峰值盈利 vs 实际出场 · 按损耗排序</div>
+      <div style="margin-top:14px">${exitQualityHTML(SIM_CLOSED, { limit: 10 })}</div>
+    </div>`;
   }
 
   function recordDailyPnl() {
@@ -5117,6 +5164,7 @@ function rsAdjustGrade(grade, rsResult) {
     renderSimTable();
     renderSimAnalytics();
     renderSimMonthly();
+    renderSimExitQuality();
     renderSimDailySources();
   }
 
@@ -8836,9 +8884,11 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="analytics-card-title"><span class="mkt-sl-zh">${zh}</span>${en ? `<span class="mkt-sl-en">${en}</span>` : ""}</div>`;
   }
 
-  function exitQualityHTML() {
-    const closed = CLOSED_POSITIONS;
+  function exitQualityHTML(closedArr, { limit } = {}) {
+    const closed = closedArr ?? CLOSED_POSITIONS;
+    const isSimMode = closedArr != null && closedArr !== CLOSED_POSITIONS;
     if (!closed.length) return `<div class="eq-empty">暂无已平仓记录</div>`;
+    if (isSimMode && simHistLoading) return `<div class="eq-empty">正在加载历史价格…</div>`;
 
     // Group partial closes into trades (sym + entry + cost)
     const tradeMap = new Map();
@@ -8881,13 +8931,14 @@ function rsAdjustGrade(grade, rsResult) {
       rows.push({ h: { ...h0, closedAt: closeDate }, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt: records.length });
     }
 
+    const _loading = isSimMode ? simHistLoading : histLoading;
     if (!rows.length && !pureLossRows.length) {
-      return histLoading
+      return _loading
         ? `<div class="eq-empty">加载历史价格中…</div>`
         : `<div class="eq-empty">暂无数据 · 需要已平仓记录和历史价格</div>`;
     }
     if (!rows.length && pureLossRows.length) {
-      return histLoading
+      return _loading
         ? `<div class="eq-empty">加载历史价格中…</div>`
         : `<div class="eq-empty" style="text-align:left;padding:12px 0">
             <div style="margin-bottom:6px;color:var(--fg-2)">持仓期间价格未超过入场成本，无峰值盈利参考</div>
@@ -8922,12 +8973,32 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
       </div>`;
 
-    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }) => {
+    // Efficiency bucket tiles
+    const bkts = { high: { n: 0, pnl: 0 }, mid: { n: 0, pnl: 0 }, low: { n: 0, pnl: 0 } };
+    for (const r of rows) {
+      const b = r.efficiency >= 75 ? "high" : r.efficiency >= 45 ? "mid" : "low";
+      bkts[b].n++; bkts[b].pnl += r.actualPnl;
+    }
+    const bktMeta = { high: { zh: "高效", en: "High", range: "≥75%" }, mid: { zh: "普通", en: "Mid", range: "45–74%" }, low: { zh: "低效", en: "Low", range: "<45%" } };
+    const bucketsHTML = `<div class="eq-bucket-grid">${["high","mid","low"].map(key => {
+      const m = bktMeta[key]; const b = bkts[key];
+      const pnlStr = b.pnl >= 0 ? `+$${Math.round(b.pnl).toLocaleString("en-US")}` : `-$${Math.round(Math.abs(b.pnl)).toLocaleString("en-US")}`;
+      const pnlCls = b.pnl >= 0 ? "up" : "down";
+      return `<div class="eq-bucket eq-bucket-${key}">
+        <div class="eq-bucket-label">${m.zh} <span class="eq-bucket-en">${m.en}</span></div>
+        <div class="eq-bucket-range">${m.range}</div>
+        <div class="eq-bucket-count">${b.n} <span style="font-size:10px;font-weight:400;opacity:.7">笔</span></div>
+        <div class="eq-bucket-pnl ${pnlCls}">${b.n > 0 ? pnlStr : "—"}</div>
+      </div>`;
+    }).join("")}</div>`;
+
+    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }, rowIdx) => {
+      const hiddenCls = (limit && rowIdx >= limit) ? ' eq-row-hidden' : '';
       const actualW   = Math.max(0, Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100));
       const actualCls = actualPnl >= 0 ? "up" : "down";
       const chip      = effCls(efficiency);
       const trancheTag = isPartial ? `<span style="font-size:9.5px;color:var(--fg-3);margin-left:6px">${trancheCnt}次出场</span>` : "";
-      return `<div class="eq-row">
+      return `<div class="eq-row${hiddenCls}">
         <div class="eq-row-header">
           <div>
             <span class="eq-sym">${h.sym}</span>${trancheTag}
@@ -8949,6 +9020,10 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).join("");
 
+    const expandBtn = (limit && rows.length > limit)
+      ? `<button class="eq-expand-btn" onclick="this.previousElementSibling.querySelectorAll('.eq-row-hidden').forEach(r=>r.classList.remove('eq-row-hidden'));this.remove()">查看全部 ${rows.length} 笔 ↓</button>`
+      : "";
+
     const pureLossFooter = pureLossRows.length
       ? `<div style="margin-top:12px;padding:10px 14px;background:var(--bg-2);border-radius:8px;border:1px solid var(--line)">
            <div style="font-size:10.5px;color:var(--fg-3);margin-bottom:6px;letter-spacing:0.04em">以下交易持仓期间价格未超过入场成本，无峰值盈利参考，不计入效率统计</div>
@@ -8958,7 +9033,7 @@ function rsAdjustGrade(grade, rsResult) {
          </div>`
       : "";
 
-    return summaryHTML + listHTML + pureLossFooter;
+    return summaryHTML + bucketsHTML + `<div class="eq-rows-wrap">${listHTML}</div>` + expandBtn + pureLossFooter;
   }
 
   function equityCurveSVG(points, h) {
