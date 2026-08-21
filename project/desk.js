@@ -900,6 +900,8 @@ function rsAdjustGrade(grade, rsResult) {
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
     });
+    // Wire PP block ATR input
+    wirePPBlock(h, currentPage === "sim" ? simNotional : totalNotional);
     // Wire drawer Journal note — same field as journalNote in Journal page
     const drawerNote = $(".drawer-journal-note", dr);
     if (drawerNote) {
@@ -2608,27 +2610,7 @@ function rsAdjustGrade(grade, rsResult) {
             </div>
           </div>
 
-          ${!isClosed && h.entryATR > 0 ? (() => {
-            const atr2 = h.entryATR * 2;
-            const mfe  = h.mfe ?? 0;
-            const ppP  = h.ppPrice;
-            const isActive = !!h.ppActive;
-            const distRaw  = (h.last > 0 && ppP) ? h.last - ppP : null;
-            const distPct  = (h.last > 0 && ppP)  ? (distRaw / h.last * 100) : null;
-            const needed   = isActive ? null : Math.max(0, atr2 - mfe);
-            return `<div class="pp-block${isActive ? " active" : ""}">
-              <div class="pp-block-hd">⚡ Profit Protection${isActive ? " · 已激活" : " · 待激活"}</div>
-              <div class="pp-grid">
-                <div class="pp-item"><span class="pk">入场 ATR</span><span class="pv mono">$${price(h.entryATR)}</span></div>
-                <div class="pp-item"><span class="pk">激活阈值 (2×ATR)</span><span class="pv mono">+$${price(atr2)}</span></div>
-                <div class="pp-item"><span class="pk">状态</span><span class="pv"><span class="pp-status-chip${isActive ? " active" : ""}">${isActive ? "已激活" : needed !== null && needed <= 0.001 ? "边缘" : "待激活"}</span></span></div>
-                <div class="pp-item"><span class="pk">MFE 峰值涨幅</span><span class="pv mono up">+$${price(mfe)}</span></div>
-                ${isActive ? `<div class="pp-item"><span class="pk">保护价 (50% MFE)</span><span class="pv mono up">$${price(ppP)}</span></div>
-                <div class="pp-item"><span class="pk">距保护价</span><span class="pv mono ${distRaw !== null && distRaw >= 0 ? 'up' : 'down'}">${distPct !== null ? (distRaw >= 0 ? "+" : "") + distPct.toFixed(1) + "%" : "—"}</span></div>` : `<div class="pp-item"><span class="pk">还需涨</span><span class="pv mono">${needed !== null ? "+$" + price(needed) : "—"}</span></div>
-                <div class="pp-item"><span class="pk">保护价触发后</span><span class="pv" style="font-size:10.5px;color:var(--fg-2)">50% MFE 保底</span></div>`}
-              </div>
-            </div>`;
-          })() : ""}
+          ${!isClosed ? ppBlockHTML(h) : ""}
           <div class="plan-subhead">执行记录</div>
           <div class="exec-list">
             ${(h.entries || []).map((e, i) => `
@@ -2686,6 +2668,69 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
       </div>
     `;
+  }
+
+  function ppBlockHTML(h) {
+    const hasATR   = h.entryATR > 0;
+    const atr2     = hasATR ? h.entryATR * 2 : 0;
+    const mfe      = h.mfe ?? 0;
+    const ppP      = h.ppPrice;
+    const isActive = !!h.ppActive;
+    const distRaw  = (h.last > 0 && ppP) ? h.last - ppP : null;
+    const distPct  = distRaw !== null ? (distRaw / h.last * 100) : null;
+    const needed   = hasATR && !isActive ? Math.max(0, atr2 - mfe) : null;
+    const statusTxt = !hasATR ? "未记录" : isActive ? "已激活" : needed <= 0.001 ? "边缘" : "待激活";
+    return `<div id="pp-block-wrap" class="pp-block${isActive ? " active" : ""}">
+      <div class="pp-block-hd">⚡ Profit Protection${hasATR ? (isActive ? " · 已激活" : " · 待激活") : ""}</div>
+      <div class="pp-atr-row">
+        <span class="pp-atr-label">入场 ATR<span class="edit-hint">点击编辑</span></span>
+        <input type="number" id="drawer-pp-atr" class="pp-atr-input" step="0.01" min="0"
+          value="${hasATR ? h.entryATR : ""}" placeholder="填写开仓时 ATR(14)"/>
+      </div>
+      ${hasATR ? `<div class="pp-grid">
+        <div class="pp-item"><span class="pk">2×ATR 阈值</span><span class="pv mono">+$${price(atr2)}</span></div>
+        <div class="pp-item"><span class="pk">MFE 峰值涨幅</span><span class="pv mono up">+$${price(mfe)}</span></div>
+        <div class="pp-item"><span class="pk">状态</span><span class="pv"><span class="pp-status-chip${isActive ? " active" : ""}">${statusTxt}</span></span></div>
+        ${isActive
+          ? `<div class="pp-item"><span class="pk">保护价 (50% MFE)</span><span class="pv mono up">$${price(ppP)}</span></div>
+             <div class="pp-item"><span class="pk">距保护价</span><span class="pv mono ${distRaw !== null && distRaw >= 0 ? "up" : "down"}">${distPct !== null ? (distRaw >= 0 ? "+" : "") + distPct.toFixed(1) + "%" : "—"}</span></div>
+             <div class="pp-item"><span class="pk">触发后</span><span class="pv" style="font-size:10px;color:var(--fg-2)">跌破保护价出场</span></div>`
+          : `<div class="pp-item"><span class="pk">还需涨</span><span class="pv mono">${needed !== null ? "+$" + price(needed) : "—"}</span></div>
+             <div class="pp-item"><span class="pk">激活后保护</span><span class="pv" style="font-size:10px;color:var(--fg-2)">50% MFE 保底</span></div>
+             <div class="pp-item"></div>`}
+      </div>` : `<div class="pp-hint">填写 ATR 后自动计算激活门槛与保护价</div>`}
+    </div>`;
+  }
+
+  function wirePPBlock(h, notional) {
+    const input = $("#drawer-pp-atr");
+    if (!input) return;
+    const refresh = () => {
+      const wrap = $("#pp-block-wrap");
+      if (!wrap) return;
+      const tmp = document.createElement("div");
+      tmp.innerHTML = ppBlockHTML(h);
+      wrap.replaceWith(tmp.firstElementChild);
+      wirePPBlock(h, notional); // re-wire after DOM replace
+    };
+    const save = () => {
+      const raw = input.value.trim();
+      const v   = parseFloat(raw);
+      if (raw === "" || v === 0) {
+        delete h.entryATR; h.mfe = 0; h.ppActive = false; delete h.ppPrice;
+      } else if (!isNaN(v) && v > 0) {
+        h.entryATR = v;
+      } else {
+        return; // ignore invalid
+      }
+      recomputeHolding(h, notional);
+      saveToStorage();
+      refresh();
+      if (currentPage === "sim") { renderSimTable(); renderSimOverview(); }
+      else { renderTable(); renderOverview(); }
+    };
+    input.addEventListener("blur", save);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); } });
   }
 
   function levelBar(h) {
@@ -8652,6 +8697,8 @@ function rsAdjustGrade(grade, rsResult) {
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
     });
+    // Wire PP block ATR input (sim)
+    wirePPBlock(h, simNotional);
     // Journal note save (sim)
     $$("[data-pos-note]", dr).forEach(ta => {
       ta.addEventListener("input", () => { h.notes = ta.value; saveToStorage(); });

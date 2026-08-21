@@ -2449,6 +2449,11 @@
   .pp-block.active { border-left-color:var(--up); }
   .pp-block-hd { font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--warn); margin-bottom:8px; text-transform:uppercase; }
   .pp-block.active .pp-block-hd { color:var(--up); }
+  .pp-atr-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .pp-atr-label { font-size:10px; color:var(--fg-2); white-space:nowrap; min-width:55px; }
+  .pp-atr-input { flex:1; background:var(--bg-1); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; font-family:var(--f-mono); color:var(--fg-1); min-width:0; }
+  .pp-atr-input:focus { border-color:var(--accent); outline:none; }
+  .pp-hint { font-size:10.5px; color:var(--fg-3); padding:2px 0 4px; }
   .pp-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px 10px; }
   .pp-item { display:flex; flex-direction:column; gap:1px; }
   .pp-item .pk { font-size:9.5px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.05em; }
@@ -4961,8 +4966,8 @@
   </div>
 </div>
 
-<script src="data.js?v=648"></script>
-<script src="desk.js?v=648"></script>
+<script src="data.js?v=649"></script>
+<script src="desk.js?v=649"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
