@@ -2444,22 +2444,29 @@
   /* Profit Protection badge (card view) */
   .pp-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:5px; font-size:9.5px; font-weight:700; font-family:var(--f-mono); letter-spacing:.04em; background:color-mix(in oklch,var(--warn) 14%,transparent); color:var(--warn); border:1px solid color-mix(in oklch,var(--warn) 30%,transparent); }
   .pp-badge.active { background:color-mix(in oklch,var(--up) 14%,transparent); color:var(--up); border-color:color-mix(in oklch,var(--up) 30%,transparent); }
-  /* PP drawer block */
-  .pp-block { margin:10px 0 0; padding:10px 12px; border-radius:9px; background:var(--bg-2); border-left:3px solid var(--warn); }
-  .pp-block.active { border-left-color:var(--up); }
-  .pp-block-hd { font-size:10px; font-weight:700; letter-spacing:.06em; color:var(--warn); margin-bottom:8px; text-transform:uppercase; }
-  .pp-block.active .pp-block-hd { color:var(--up); }
-  .pp-atr-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-  .pp-atr-label { font-size:10px; color:var(--fg-2); white-space:nowrap; min-width:55px; }
+  /* PP drawer module */
+  .pp-subhead { display:flex; align-items:center; justify-content:space-between; }
+  .pp-chip { display:inline-block; padding:1px 8px; border-radius:5px; font-size:9px; font-weight:700; font-family:var(--f-mono); letter-spacing:.05em; background:var(--bg-2); color:var(--fg-3); border:1px solid var(--line); }
+  .pp-chip-pend { background:color-mix(in oklch,var(--warn) 12%,transparent); color:var(--warn); border-color:color-mix(in oklch,var(--warn) 28%,transparent); }
+  .pp-chip-on   { background:color-mix(in oklch,var(--up) 12%,transparent); color:var(--up); border-color:color-mix(in oklch,var(--up) 28%,transparent); }
+  .pp-atr-row { display:flex; align-items:center; gap:8px; margin:8px 0 10px; }
+  .pp-atr-label { font-size:10px; color:var(--fg-2); white-space:nowrap; min-width:60px; }
   .pp-atr-input { flex:1; background:var(--bg-1); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; font-family:var(--f-mono); color:var(--fg-1); min-width:0; }
   .pp-atr-input:focus { border-color:var(--accent); outline:none; }
-  .pp-hint { font-size:10.5px; color:var(--fg-3); padding:2px 0 4px; }
-  .pp-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px 10px; }
-  .pp-item { display:flex; flex-direction:column; gap:1px; }
-  .pp-item .pk { font-size:9.5px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.05em; }
-  .pp-item .pv { font-size:12.5px; font-family:var(--f-mono); font-weight:600; }
-  .pp-status-chip { display:inline-block; padding:1px 7px; border-radius:5px; font-size:9.5px; font-weight:700; font-family:var(--f-mono); background:color-mix(in oklch,var(--warn) 14%,transparent); color:var(--warn); border:1px solid color-mix(in oklch,var(--warn) 28%,transparent); }
-  .pp-status-chip.active { background:color-mix(in oklch,var(--up) 14%,transparent); color:var(--up); border-color:color-mix(in oklch,var(--up) 28%,transparent); }
+  .pp-hint { font-size:10.5px; color:var(--fg-3); padding:2px 0 6px; }
+  .pp-metrics { display:flex; flex-direction:column; gap:5px; padding:8px 10px; background:var(--bg-2); border-radius:8px; }
+  .pp-row { display:grid; grid-template-columns:85px 1fr auto; align-items:baseline; gap:0 8px; }
+  .pp-row-label { font-size:10px; color:var(--fg-3); letter-spacing:.03em; }
+  .pp-row-val { font-size:13px; font-family:var(--f-mono); font-weight:600; }
+  .pp-row-sub { font-size:9.5px; color:var(--fg-3); font-family:var(--f-mono); text-align:right; }
+  .pp-prog-wrap { margin-top:8px; }
+  .pp-prog-track { height:4px; background:var(--bg-1); border-radius:2px; overflow:hidden; position:relative; margin-bottom:4px; }
+  .pp-prog-fill { height:100%; background:var(--warn); border-radius:2px; transition:width .3s; }
+  .pp-prog-fill.done { background:var(--up); }
+  .pp-prog-labels { display:flex; justify-content:space-between; font-size:9px; color:var(--fg-3); font-family:var(--f-mono); }
+  /* PP card badge */
+  .pp-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:5px; font-size:9.5px; font-weight:700; font-family:var(--f-mono); letter-spacing:.04em; background:color-mix(in oklch,var(--warn) 14%,transparent); color:var(--warn); border:1px solid color-mix(in oklch,var(--warn) 30%,transparent); }
+  .pp-badge.active { background:color-mix(in oklch,var(--up) 14%,transparent); color:var(--up); border-color:color-mix(in oklch,var(--up) 30%,transparent); }
   .curve-labels { display: flex; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
   .ec-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .ec-period-seg { display: flex; gap: 2px; background: var(--bg-2); border-radius: 8px; padding: 3px; flex-shrink: 0; }
@@ -4966,8 +4973,8 @@
   </div>
 </div>
 
-<script src="data.js?v=649"></script>
-<script src="desk.js?v=649"></script>
+<script src="data.js?v=650"></script>
+<script src="desk.js?v=650"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
