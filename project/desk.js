@@ -1722,15 +1722,14 @@ function rsAdjustGrade(grade, rsResult) {
 
     // MFE Profit Protection (only for open positions with an entry ATR recorded)
     if (h.entryATR > 0 && h.last > 0 && h.cost > 0) {
-      // Use closing-price history (spark) for consistency with exit-quality peak in Analytics;
-      // also include current last so intraday moves aren't missed while the page is open.
-      const sparkPeak = h.spark?.length ? Math.max(...h.spark) - h.cost : 0;
-      const livePeak  = h.last - h.cost;
-      const candidate = Math.max(sparkPeak, livePeak, 0);
-      if (candidate > (h.mfe ?? 0)) h.mfe = candidate; // MFE only moves up
-      if (!h.ppActive && (h.mfe ?? 0) >= 2 * h.entryATR) h.ppActive = true;
+      // MFE is always recomputed fresh from spark (closing prices) + current last,
+      // so it stays in sync with the sparkline visual peak. No ratchet on h.mfe itself
+      // — only ppPrice ratchets, since that is the actual trailing stop level.
+      const sparkMax = h.spark?.length ? Math.max(...h.spark) : h.cost;
+      h.mfe = Math.max(sparkMax, h.last, h.cost) - h.cost;
+      if (!h.ppActive && h.mfe >= 2 * h.entryATR) h.ppActive = true;
       if (h.ppActive) {
-        const newPP = h.cost + (h.mfe ?? 0) * 0.5;
+        const newPP = h.cost + h.mfe * 0.5;
         if (!h.ppPrice || newPP > h.ppPrice) h.ppPrice = newPP; // protection level only moves up
       }
     }
