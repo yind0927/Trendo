@@ -1717,6 +1717,17 @@ function rsAdjustGrade(grade, rsResult) {
     h.risk1R = h.stop ? h.cost - h.stop : 0;
     h.rMult = h.risk1R !== 0 ? (h.last - h.cost) / h.risk1R : 0;
     if (h.entry) h.days = calcTradingDays(h.entry);
+
+    // MFE Profit Protection (only for open positions with an entry ATR recorded)
+    if (h.entryATR > 0 && h.last > 0 && h.cost > 0) {
+      const curGain = h.last - h.cost; // per-share gain vs cost
+      if (curGain > (h.mfe ?? 0)) h.mfe = curGain; // MFE only moves up
+      if (!h.ppActive && (h.mfe ?? 0) >= 2 * h.entryATR) h.ppActive = true;
+      if (h.ppActive) {
+        const newPP = h.cost + (h.mfe ?? 0) * 0.5;
+        if (!h.ppPrice || newPP > h.ppPrice) h.ppPrice = newPP; // protection level only moves up
+      }
+    }
   }
 
   // ── Covered Call premium records ─────────────────────────────────────────
@@ -2040,6 +2051,7 @@ function rsAdjustGrade(grade, rsResult) {
               const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
               return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:${mkAlpha(meta.color, 12)}">${grade}</span>${rsLabel}`;
             })() : ""}
+            ${!isClosed && h.ppActive ? `<span class="pp-badge active" title="Profit Protection 已激活 · 保护价 $${price(h.ppPrice)} · ${h.last > 0 && h.ppPrice ? ((h.last - h.ppPrice) / h.last * 100).toFixed(1) + '% 余量' : ''}">PP✓</span>` : (!isClosed && h.entryATR > 0 ? `<span class="pp-badge" title="PP 待激活 · 需涨 $${price(2 * h.entryATR - (h.mfe ?? 0))} 触发">PP</span>` : "")}
             <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
           </div>
           <div class="hc-actions">${actions}</div>
@@ -2596,6 +2608,27 @@ function rsAdjustGrade(grade, rsResult) {
             </div>
           </div>
 
+          ${!isClosed && h.entryATR > 0 ? (() => {
+            const atr2 = h.entryATR * 2;
+            const mfe  = h.mfe ?? 0;
+            const ppP  = h.ppPrice;
+            const isActive = !!h.ppActive;
+            const distRaw  = (h.last > 0 && ppP) ? h.last - ppP : null;
+            const distPct  = (h.last > 0 && ppP)  ? (distRaw / h.last * 100) : null;
+            const needed   = isActive ? null : Math.max(0, atr2 - mfe);
+            return `<div class="pp-block${isActive ? " active" : ""}">
+              <div class="pp-block-hd">⚡ Profit Protection${isActive ? " · 已激活" : " · 待激活"}</div>
+              <div class="pp-grid">
+                <div class="pp-item"><span class="pk">入场 ATR</span><span class="pv mono">$${price(h.entryATR)}</span></div>
+                <div class="pp-item"><span class="pk">激活阈值 (2×ATR)</span><span class="pv mono">+$${price(atr2)}</span></div>
+                <div class="pp-item"><span class="pk">状态</span><span class="pv"><span class="pp-status-chip${isActive ? " active" : ""}">${isActive ? "已激活" : needed !== null && needed <= 0.001 ? "边缘" : "待激活"}</span></span></div>
+                <div class="pp-item"><span class="pk">MFE 峰值涨幅</span><span class="pv mono up">+$${price(mfe)}</span></div>
+                ${isActive ? `<div class="pp-item"><span class="pk">保护价 (50% MFE)</span><span class="pv mono up">$${price(ppP)}</span></div>
+                <div class="pp-item"><span class="pk">距保护价</span><span class="pv mono ${distRaw !== null && distRaw >= 0 ? 'up' : 'down'}">${distPct !== null ? (distRaw >= 0 ? "+" : "") + distPct.toFixed(1) + "%" : "—"}</span></div>` : `<div class="pp-item"><span class="pk">还需涨</span><span class="pv mono">${needed !== null ? "+$" + price(needed) : "—"}</span></div>
+                <div class="pp-item"><span class="pk">保护价触发后</span><span class="pv" style="font-size:10.5px;color:var(--fg-2)">50% MFE 保底</span></div>`}
+              </div>
+            </div>`;
+          })() : ""}
           <div class="plan-subhead">执行记录</div>
           <div class="exec-list">
             ${(h.entries || []).map((e, i) => `
@@ -3521,9 +3554,10 @@ function rsAdjustGrade(grade, rsResult) {
       e.preventDefault();
       const sym    = $("#form-ticker").value.toUpperCase().trim();
       const name   = ($("#form-name")?.value.trim()) || sym;
-      const target = parseFloat($("#form-target").value) || 0;
-      const qty    = parseInt($("#form-qty").value);
-      const isSim  = newPositionContext === "sim";
+      const target   = parseFloat($("#form-target").value) || 0;
+      const qty      = parseInt($("#form-qty").value);
+      const entryATR = parseFloat($("#form-entry-atr")?.value) || 0;
+      const isSim    = newPositionContext === "sim";
 
       const orderType  = isSim ? ($("#form-order-seg .active")?.dataset.order || "manual") : "manual";
       const stop       = parseFloat($("#form-stop").value) || 0;
@@ -3620,7 +3654,8 @@ function rsAdjustGrade(grade, rsResult) {
           bxData.entryRsResult   = _pendingRsResult;
           bxData.entrySectorEtf  = _pendingRsEtf;
           return bxData;
-        })()
+        })(),
+        ...(entryATR > 0 && { entryATR })
       };
 
       targetHoldings.push(newPos);
