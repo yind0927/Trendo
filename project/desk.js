@@ -1722,11 +1722,13 @@ function rsAdjustGrade(grade, rsResult) {
 
     // MFE Profit Protection (only for open positions with an entry ATR recorded)
     if (h.entryATR > 0 && h.last > 0 && h.cost > 0) {
-      // MFE is always recomputed fresh from spark (closing prices) + current last,
-      // so it stays in sync with the sparkline visual peak. No ratchet on h.mfe itself
-      // — only ppPrice ratchets, since that is the actual trailing stop level.
-      const sparkMax = h.spark?.length ? Math.max(...h.spark) : h.cost;
-      h.mfe = Math.max(sparkMax, h.last, h.cost) - h.cost;
+      // MFE is always recomputed fresh, not ratcheted, so it never drifts from the
+      // card's own peak display. h.peakPrice is the authoritative entry-to-date daily-close
+      // high (fetchPeakPrices(), same value the card's peak tick shows) — use it when present;
+      // h.spark is only a short display window for the sparkline and can under-report the
+      // true peak, so it's just a fallback for symbols peakPrice hasn't been fetched for yet.
+      const knownPeak = h.peakPrice || (h.spark?.length ? Math.max(...h.spark) : h.cost);
+      h.mfe = Math.max(knownPeak, h.last, h.cost) - h.cost;
       if (!h.ppActive && h.mfe >= 2 * h.entryATR) h.ppActive = true;
       if (h.ppActive) {
         const newPP = h.cost + h.mfe * 0.5;
@@ -2721,12 +2723,16 @@ function rsAdjustGrade(grade, rsResult) {
         </div>`;
     })();
 
+    const peakSrcNote = h.peakPrice
+      ? (h.peakDay ? `第${h.peakDay}天` : "")
+      : "临时估算，未同步历史价";
+
     const metricsHTML = isActive
       ? `<div class="pp-metrics">
           <div class="pp-row">
             <span class="pp-row-label">峰值价格</span>
             <span class="pp-row-val up mono">$${price(peakPx)}</span>
-            <span class="pp-row-sub">+$${price(mfe)} / share</span>
+            <span class="pp-row-sub">+$${price(mfe)} · ${peakSrcNote}</span>
           </div>
           <div class="pp-row">
             <span class="pp-row-label">保护价</span>
@@ -2744,7 +2750,7 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="pp-row">
             <span class="pp-row-label">当前峰值</span>
             <span class="pp-row-val ${mfe > 0 ? "up" : ""} mono">$${price(peakPx)}</span>
-            <span class="pp-row-sub">${mfe > 0 ? "+$" + price(mfe) + " / share" : "尚未超过入场价"}</span>
+            <span class="pp-row-sub">${mfe > 0 ? "+$" + price(mfe) + " · " + peakSrcNote : "尚未超过入场价"}</span>
           </div>
           ${pendingBar}
         </div>`;
