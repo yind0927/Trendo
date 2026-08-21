@@ -9359,6 +9359,7 @@ function rsAdjustGrade(grade, rsResult) {
     const effCls      = e => e >= 75 ? "high" : e >= 45 ? "mid" : "low";
     const effLabel    = e => e < 0 ? "亏损出场" : e + "% 效率";
 
+    const totalLeft = rows.reduce((s, r) => s + r.leftOnTable, 0);
     const summaryHTML = `
       <div class="eq-summary">
         <div class="eq-summary-card">
@@ -9367,9 +9368,9 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="eq-summary-sub">${rows.length} 笔有效记录</div>
         </div>
         <div class="eq-summary-card">
-          <div class="eq-summary-label">ACTUAL · 实际盈亏</div>
-          <div class="eq-summary-value ${fmt.sign(totalActual)}">${fmt.signed(Math.round(totalActual))}</div>
-          <div class="eq-summary-sub">已实现</div>
+          <div class="eq-summary-label">LEFT ON TABLE · 损耗总计</div>
+          <div class="eq-summary-value down">−$${Math.round(totalLeft).toLocaleString("en-US")}</div>
+          <div class="eq-summary-sub">峰值 − 实际出场</div>
         </div>
         <div class="eq-summary-card">
           <div class="eq-summary-label">EFFICIENCY · 出场效率</div>
