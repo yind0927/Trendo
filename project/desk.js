@@ -2054,9 +2054,7 @@ function rsAdjustGrade(grade, rsResult) {
               const grade = h.bx?.entryFinalGrade;
               if (!grade) return "";
               const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
-              const rs = h.bx?.entryRsResult;
-              const rsLabel = rs ? `<span class="hc-grade-rs">${rs.score}/${rs.max}</span>` : "";
-              return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:${mkAlpha(meta.color, 12)}">${grade}</span>${rsLabel}`;
+              return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:${mkAlpha(meta.color, 12)}">${grade}</span>`;
             })() : ""}
             ${!isClosed && h.ppActive ? `<span class="pp-badge active" title="Profit Protection 已激活 · 峰值 $${price(h.cost + (h.mfe??0))} · 保护价 $${price(h.ppPrice)} · ${h.last > 0 && h.ppPrice ? ((h.last - h.ppPrice) / h.last * 100).toFixed(1) + '% 余量' : ''}">PP✓</span>` : (!isClosed && h.entryATR > 0 ? `<span class="pp-badge" title="PP 待激活 · 峰值 $${price(h.cost + (h.mfe??0))} · 还需 +$${price(Math.max(0, 2*h.entryATR - (h.mfe??0)))} 触发">PP</span>` : "")}
             <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
@@ -2176,9 +2174,7 @@ function rsAdjustGrade(grade, rsResult) {
         const grade = h.bx?.entryFinalGrade;
         if (grade) {
           const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
-          const rs = h.bx?.entryRsResult;
-          const rsLabel = rs ? `<span class="bxg-rs">${rs.score}/${rs.max}</span>` : "";
-          return `<td><div class="bxg-cell"><span class="bxg-val" style="color:${meta.color}">${grade}</span>${rsLabel}</div></td>`;
+          return `<td><div class="bxg-cell"><span class="bxg-val" style="color:${meta.color}">${grade}</span></div></td>`;
         }
         return `<td><span style="color:var(--fg-3);font-size:12px">—</span></td>`;
       }
