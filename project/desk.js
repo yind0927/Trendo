@@ -2746,12 +2746,16 @@ function rsAdjustGrade(grade, rsResult) {
         盈利保护 · Profit Protection
         <span class="pp-chip${chipCls}">${chipTxt}</span>
       </div>
-      <div class="pp-atr-row">
-        <span class="pp-atr-label">入场 ATR<span class="edit-hint">点击编辑</span></span>
-        <input type="number" id="drawer-pp-atr" class="pp-atr-input" step="0.01" min="0"
-          value="${hasATR ? h.entryATR : ""}" placeholder="填写 ATR 值，如 2.50"/>
+      <div class="pp-card">
+        <div class="pp-card-atr">
+          <span class="pp-atr-label">入场 ATR<span class="edit-hint">点击编辑</span></span>
+          <input type="number" id="drawer-pp-atr" class="pp-atr-input" step="0.01" min="0"
+            value="${hasATR ? h.entryATR : ""}" placeholder="填写 ATR 值，如 2.50"/>
+        </div>
+        <div class="pp-card-body">
+          ${hasATR ? metricsHTML : `<div class="pp-hint">填写 ATR 后自动计算激活阈值与保护价</div>`}
+        </div>
       </div>
-      ${hasATR ? metricsHTML : `<div class="pp-hint">填写 ATR 后自动计算激活阈值与保护价</div>`}
     </div>`;
   }
 

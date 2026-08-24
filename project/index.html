@@ -2449,25 +2449,28 @@
   .pp-chip { display:inline-block; padding:1px 8px; border-radius:5px; font-size:9px; font-weight:700; font-family:var(--f-mono); letter-spacing:.05em; background:var(--bg-2); color:var(--fg-3); border:1px solid var(--line); }
   .pp-chip-pend { background:color-mix(in oklch,var(--warn) 12%,transparent); color:var(--warn); border-color:color-mix(in oklch,var(--warn) 28%,transparent); }
   .pp-chip-on   { background:color-mix(in oklch,var(--up) 12%,transparent); color:var(--up); border-color:color-mix(in oklch,var(--up) 28%,transparent); }
-  .pp-atr-row { display:flex; align-items:center; gap:8px; margin:8px 0 10px; }
+  /* PP card container — matches dsc-wrap design */
+  .pp-card { background:var(--bg-1); border:1px solid var(--line); border-radius:9px; overflow:hidden; margin-top:8px; }
+  .pp-card-atr { display:flex; align-items:center; gap:8px; padding:9px 12px; border-bottom:1px solid var(--line); }
+  .pp-card-body { padding:10px 12px; }
   .pp-atr-label { font-size:10px; color:var(--fg-2); white-space:nowrap; min-width:60px; }
-  .pp-atr-input { flex:1; background:var(--bg-1); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; font-family:var(--f-mono); color:var(--fg-1); min-width:0; }
+  .pp-atr-input { flex:1; background:var(--bg-2); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; font-family:var(--f-mono); color:var(--fg-1); min-width:0; }
   .pp-atr-input:focus { border-color:var(--accent); outline:none; }
-  .pp-hint { font-size:10.5px; color:var(--fg-3); padding:2px 0 6px; }
-  .pp-metric-table { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--line); padding-top:8px; margin-bottom:2px; }
+  .pp-hint { font-size:10.5px; color:var(--fg-3); padding:2px 0 2px; }
+  .pp-metric-table { display:flex; flex-direction:column; gap:4px; margin-bottom:2px; }
   .pp-mrow { display:grid; grid-template-columns:72px 1fr auto; align-items:baseline; gap:0 8px; padding:2px 0; }
   .pp-mlabel { font-size:10.5px; color:var(--fg-3); font-family:var(--f-mono); flex-shrink:0; }
   .pp-mval { font-size:13px; font-family:var(--f-mono); font-weight:600; }
   .pp-msub { font-size:9.5px; color:var(--fg-3); font-family:var(--f-mono); text-align:right; }
   /* Pending state: activation progress bar */
-  .pp-prog-wrap { margin-top:8px; }
-  .pp-prog-track { height:4px; background:var(--bg-1); border-radius:2px; overflow:hidden; position:relative; margin-bottom:4px; }
+  .pp-prog-wrap { margin-top:10px; }
+  .pp-prog-track { height:4px; background:var(--bg-0); border-radius:2px; overflow:hidden; position:relative; margin-bottom:4px; }
   .pp-prog-fill { height:100%; background:var(--warn); border-radius:2px; transition:width .3s; }
   .pp-prog-fill.done { background:var(--up); }
   .pp-prog-labels { display:flex; justify-content:space-between; font-size:9px; color:var(--fg-3); font-family:var(--f-mono); }
   /* Active state: price-axis bar */
-  .pp-axis-wrap { margin-top:10px; }
-  .pp-axis-track { height:6px; background:var(--bg-1); border-radius:3px; position:relative; margin-bottom:5px; overflow:visible; }
+  .pp-axis-wrap { margin-top:12px; }
+  .pp-axis-track { height:6px; background:var(--bg-0); border-radius:3px; position:relative; margin-bottom:5px; overflow:visible; }
   .pp-axis-fill { height:100%; border-radius:3px; transition:width .3s; }
   .pp-axis-fill.safe   { background:color-mix(in oklch,var(--up) 60%,transparent); }
   .pp-axis-fill.breach { background:color-mix(in oklch,var(--down) 60%,transparent); }
@@ -4982,8 +4985,8 @@
   </div>
 </div>
 
-<script src="data.js?v=657"></script>
-<script src="desk.js?v=657"></script>
+<script src="data.js?v=658"></script>
+<script src="desk.js?v=658"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
