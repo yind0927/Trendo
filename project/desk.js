@@ -2055,7 +2055,7 @@ function rsAdjustGrade(grade, rsResult) {
               const meta = BX_GRADE_META[grade] || BX_GRADE_META["C"];
               return `<span class="hc-grade-chip" style="color:${meta.color};border-color:${meta.color};background:${mkAlpha(meta.color, 12)}">${grade}</span>`;
             })() : ""}
-            ${!isClosed && h.ppActive ? `<span class="pp-badge active" title="Profit Protection 已激活 · 峰值 $${price(h.cost + (h.mfe??0))} · 保护价 $${price(h.ppPrice)} · ${h.last > 0 && h.ppPrice ? ((h.last - h.ppPrice) / h.last * 100).toFixed(1) + '% 余量' : ''}">PP✓</span>` : (!isClosed && h.entryATR > 0 ? `<span class="pp-badge" title="PP 待激活 · 峰值 $${price(h.cost + (h.mfe??0))} · 还需 +$${price(Math.max(0, 2*h.entryATR - (h.mfe??0)))} 触发">PP</span>` : "")}
+            ${!isClosed && h.ppActive ? (() => { const _ppBreach = h.last > 0 && h.ppPrice > 0 && h.last < h.ppPrice; return `<span class="pp-badge${_ppBreach ? " breach" : " active"}" title="${_ppBreach ? "⚠️ 已跌破保护价 · 止损信号触发 · 保护价 $" + price(h.ppPrice) : "Profit Protection 已激活 · 峰值 $" + price(h.cost + (h.mfe??0)) + " · 保护价 $" + price(h.ppPrice) + " · " + (h.last > 0 && h.ppPrice ? ((h.last - h.ppPrice) / h.last * 100).toFixed(1) + "% 余量" : "")}">${_ppBreach ? "PP!" : "PP✓"}</span>`; })() : (!isClosed && h.entryATR > 0 ? `<span class="pp-badge" title="PP 待激活 · 峰值 $${price(h.cost + (h.mfe??0))} · 还需 +$${price(Math.max(0, 2*h.entryATR - (h.mfe??0)))} 触发">PP</span>` : "")}
             <span class="status ${statusCls}"><span class="dot"></span>${statusLabel}</span>
           </div>
           <div class="hc-actions">${actions}</div>
@@ -2677,8 +2677,9 @@ function rsAdjustGrade(grade, rsResult) {
     const peakPx   = h.cost + mfe;
     const ppP      = h.ppPrice;
     const isActive = !!h.ppActive;
-    const chipCls  = !hasATR ? "" : isActive ? " pp-chip-on" : " pp-chip-pend";
-    const chipTxt  = !hasATR ? "未启用" : isActive ? "已激活" : "待激活";
+    const isBreach = isActive && h.last > 0 && h.ppPrice > 0 && h.last < h.ppPrice;
+    const chipCls  = !hasATR ? "" : isBreach ? " pp-chip-breach" : isActive ? " pp-chip-on" : " pp-chip-pend";
+    const chipTxt  = !hasATR ? "未启用" : isBreach ? "已触及" : isActive ? "已激活" : "待激活";
 
     const peakSrcNote = h.peakPrice
       ? (h.peakDay ? `第${h.peakDay}天` : "")
@@ -2732,11 +2733,12 @@ function rsAdjustGrade(grade, rsResult) {
     const metricsHTML = isActive
       ? `<div class="pp-metric-table">
           ${mrow("峰值价格", `$${price(peakPx)}`, "var(--up)", `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}`)}
-          ${mrow("保护价", `$${price(ppP)}`, "var(--accent)", "cost + 50% MFE")}
+          ${mrow("保护价", `$${price(ppP)}`, isBreach ? "var(--down)" : "var(--accent)", "入场价 + 50% MFE")}
         </div>
+        ${isBreach ? `<div class="pp-breach-note">⚠️ 当前价已跌破保护价，止损信号触发</div>` : ""}
         ${activeBar}`
       : `<div class="pp-metric-table">
-          ${mrow("激活阈值", `$${price(h.cost + atr2)}`, "var(--fg-1)", "cost + 2×ATR")}
+          ${mrow("激活阈值", `$${price(h.cost + atr2)}`, "var(--fg-1)", "入场价 + 2×ATR")}
           ${mrow("当前峰值", `$${price(peakPx)}`, mfe > 0 ? "var(--up)" : "var(--fg-2)", mfe > 0 ? `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}` : "尚未超过入场价")}
         </div>
         ${pendingBar}`;
