@@ -2031,7 +2031,6 @@ function rsAdjustGrade(grade, rsResult) {
           const _distPct = _cur ? ((_peak - _cur) / _cur * 100) : null;
           const _distStr = _distPct !== null ? `${_distPct >= 0 ? "+" : ""}${_distPct.toFixed(1)}%` : "";
           const _tooltip = [`历史最高 $${price(_peak)}`, h.peakDay ? `入场后第${h.peakDay}天` : "", _distStr ? `距现价 ${_distStr}` : ""].filter(Boolean).join(" · ");
-          peakTick = `<div class="hc-prog-peak" style="left:${_tickLeft.toFixed(1)}%;background:${_tickBg}" title="${_tooltip}"></div>`;
           peakLabelText = [`$${price(_peak)}`, _dayStr, _distStr].filter(Boolean).join(" · ");
         }
       }
@@ -2675,18 +2674,22 @@ function rsAdjustGrade(grade, rsResult) {
     const hasATR   = h.entryATR > 0;
     const atr2     = hasATR ? h.entryATR * 2 : 0;
     const mfe      = h.mfe ?? 0;
-    const peakPx   = h.cost + mfe;                          // absolute peak price
+    const peakPx   = h.cost + mfe;
     const ppP      = h.ppPrice;
     const isActive = !!h.ppActive;
     const chipCls  = !hasATR ? "" : isActive ? " pp-chip-on" : " pp-chip-pend";
     const chipTxt  = !hasATR ? "未启用" : isActive ? "已激活" : "待激活";
 
-    // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice always at 50%
+    const peakSrcNote = h.peakPrice
+      ? (h.peakDay ? `第${h.peakDay}天` : "")
+      : "临时估算";
+
+    // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice at 50%
     const activeBar = (() => {
       if (!isActive || !h.last || mfe <= 0) return "";
       const pos     = Math.min(Math.max((h.last - h.cost) / mfe, 0), 1);
       const safe    = h.last >= ppP;
-      const distPct = ((h.last - ppP) / h.last * 100);
+      const distPct = (h.last - ppP) / h.last * 100;
       return `
         <div class="pp-axis-wrap">
           <div class="pp-axis-track">
@@ -2701,11 +2704,11 @@ function rsAdjustGrade(grade, rsResult) {
         </div>`;
     })();
 
-    // Pending state: progress bar mfe toward 2×ATR threshold
+    // Pending state: progress bar toward 2×ATR threshold
     const pendingBar = (() => {
       if (isActive || !hasATR) return "";
-      const prog    = Math.min(mfe / atr2, 1);
-      const needed  = Math.max(0, atr2 - mfe);
+      const prog   = Math.min(mfe / atr2, 1);
+      const needed = Math.max(0, atr2 - mfe);
       return `
         <div class="pp-prog-wrap">
           <div class="pp-prog-track">
@@ -2714,42 +2717,29 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="pp-prog-labels">
             <span>$${price(h.cost)}</span>
             <span>${(prog*100).toFixed(0)}% ${needed > 0.001 ? "· 还需 +$" + price(needed) : "· 边缘"}</span>
-            <span title="激活阈值 = cost + 2×ATR">$${price(h.cost + atr2)}</span>
+            <span>$${price(h.cost + atr2)}</span>
           </div>
         </div>`;
     })();
 
-    const peakSrcNote = h.peakPrice
-      ? (h.peakDay ? `第${h.peakDay}天` : "")
-      : "临时估算，未同步历史价";
+    const mrow = (label, val, valColor, sub) => `
+      <div class="pp-mrow">
+        <span class="pp-mlabel">${label}</span>
+        <span class="pp-mval" style="color:${valColor}">${val}</span>
+        <span class="pp-msub">${sub}</span>
+      </div>`;
 
     const metricsHTML = isActive
-      ? `<div class="pp-metrics">
-          <div class="pp-row">
-            <span class="pp-row-label">峰值价格</span>
-            <span class="pp-row-val up mono">$${price(peakPx)}</span>
-            <span class="pp-row-sub">+$${price(mfe)} · ${peakSrcNote}</span>
-          </div>
-          <div class="pp-row">
-            <span class="pp-row-label">保护价</span>
-            <span class="pp-row-val up mono">$${price(ppP)}</span>
-            <span class="pp-row-sub">cost + 50% MFE</span>
-          </div>
-          ${activeBar}
-        </div>`
-      : `<div class="pp-metrics">
-          <div class="pp-row">
-            <span class="pp-row-label">激活阈值</span>
-            <span class="pp-row-val mono">$${price(h.cost + atr2)}</span>
-            <span class="pp-row-sub">cost + 2×ATR</span>
-          </div>
-          <div class="pp-row">
-            <span class="pp-row-label">当前峰值</span>
-            <span class="pp-row-val ${mfe > 0 ? "up" : ""} mono">$${price(peakPx)}</span>
-            <span class="pp-row-sub">${mfe > 0 ? "+$" + price(mfe) + " · " + peakSrcNote : "尚未超过入场价"}</span>
-          </div>
-          ${pendingBar}
-        </div>`;
+      ? `<div class="pp-metric-table">
+          ${mrow("峰值价格", `$${price(peakPx)}`, "var(--up)", `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}`)}
+          ${mrow("保护价", `$${price(ppP)}`, "var(--accent)", "cost + 50% MFE")}
+        </div>
+        ${activeBar}`
+      : `<div class="pp-metric-table">
+          ${mrow("激活阈值", `$${price(h.cost + atr2)}`, "var(--fg-1)", "cost + 2×ATR")}
+          ${mrow("当前峰值", `$${price(peakPx)}`, mfe > 0 ? "var(--up)" : "var(--fg-2)", mfe > 0 ? `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}` : "尚未超过入场价")}
+        </div>
+        ${pendingBar}`;
 
     return `<div id="pp-block-wrap">
       <div class="plan-subhead pp-subhead">

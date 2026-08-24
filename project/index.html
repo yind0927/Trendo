@@ -2454,11 +2454,11 @@
   .pp-atr-input { flex:1; background:var(--bg-1); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; font-family:var(--f-mono); color:var(--fg-1); min-width:0; }
   .pp-atr-input:focus { border-color:var(--accent); outline:none; }
   .pp-hint { font-size:10.5px; color:var(--fg-3); padding:2px 0 6px; }
-  .pp-metrics { display:flex; flex-direction:column; gap:5px; padding:8px 10px; background:var(--bg-2); border-radius:8px; }
-  .pp-row { display:grid; grid-template-columns:72px 1fr auto; align-items:baseline; gap:0 8px; }
-  .pp-row-label { font-size:10px; color:var(--fg-3); letter-spacing:.03em; }
-  .pp-row-val { font-size:13px; font-family:var(--f-mono); font-weight:600; }
-  .pp-row-sub { font-size:9.5px; color:var(--fg-3); font-family:var(--f-mono); text-align:right; }
+  .pp-metric-table { display:flex; flex-direction:column; gap:4px; border-top:1px solid var(--line); padding-top:8px; margin-bottom:2px; }
+  .pp-mrow { display:grid; grid-template-columns:72px 1fr auto; align-items:baseline; gap:0 8px; padding:2px 0; }
+  .pp-mlabel { font-size:10.5px; color:var(--fg-3); font-family:var(--f-mono); flex-shrink:0; }
+  .pp-mval { font-size:13px; font-family:var(--f-mono); font-weight:600; }
+  .pp-msub { font-size:9.5px; color:var(--fg-3); font-family:var(--f-mono); text-align:right; }
   /* Pending state: activation progress bar */
   .pp-prog-wrap { margin-top:8px; }
   .pp-prog-track { height:4px; background:var(--bg-1); border-radius:2px; overflow:hidden; position:relative; margin-bottom:4px; }
@@ -4982,8 +4982,8 @@
   </div>
 </div>
 
-<script src="data.js?v=656"></script>
-<script src="desk.js?v=656"></script>
+<script src="data.js?v=657"></script>
+<script src="desk.js?v=657"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
