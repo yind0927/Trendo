@@ -2449,6 +2449,11 @@
   .eq-bucket-pnl { font-size: 10px; font-family: var(--f-mono); margin-top: 2px; }
   .eq-expand-btn { display: block; width: 100%; margin-top: 12px; padding: 8px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; font-size: 11.5px; color: var(--fg-2); cursor: pointer; font-family: var(--f-mono); }
   .eq-expand-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .eq-sort-bar { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; }
+  .eq-sort-label { font-size: 10px; color: var(--fg-3); letter-spacing: .06em; text-transform: uppercase; margin-right: 2px; }
+  .eq-sort-chip { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-family: var(--f-mono); border: 1px solid var(--line); background: transparent; color: var(--fg-2); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+  .eq-sort-chip:hover { border-color: var(--accent); color: var(--accent); }
+  .eq-sort-chip.active { background: color-mix(in oklch, var(--accent) 14%, transparent); color: var(--accent); border-color: color-mix(in oklch, var(--accent) 35%, transparent); }
   /* Profit Protection badge (card view) */
   .pp-badge { display:inline-flex; align-items:center; gap:3px; padding:1px 6px; border-radius:5px; font-size:9.5px; font-weight:700; font-family:var(--f-mono); letter-spacing:.04em; background:color-mix(in oklch,var(--warn) 14%,transparent); color:var(--warn); border:1px solid color-mix(in oklch,var(--warn) 30%,transparent); }
   .pp-badge.active { background:color-mix(in oklch,var(--up) 14%,transparent); color:var(--up); border-color:color-mix(in oklch,var(--up) 30%,transparent); }
@@ -4996,8 +5001,8 @@
   </div>
 </div>
 
-<script src="data.js?v=661"></script>
-<script src="desk.js?v=661"></script>
+<script src="data.js?v=662"></script>
+<script src="desk.js?v=662"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

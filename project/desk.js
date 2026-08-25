@@ -9447,9 +9447,23 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="analytics-card-title"><span class="mkt-sl-zh">${zh}</span>${en ? `<span class="mkt-sl-en">${en}</span>` : ""}</div>`;
   }
 
+  let _eqSortMode = "loss"; // "loss" | "date"
+  window._eqResort = (mode, isSim) => {
+    _eqSortMode = mode;
+    if (isSim) {
+      renderSimExitQuality();
+    } else {
+      const el = $("#eq-content");
+      if (el) el.innerHTML = exitQualityHTML();
+      const sub = el?.closest(".analytics-card")?.querySelector(".analytics-card-sub");
+      if (sub) sub.textContent = mode === "date" ? "峰值盈利 vs 实际出场 · 按日期排序" : "峰值盈利 vs 实际出场 · 按损耗排序";
+    }
+  };
+
   function exitQualityHTML(closedArr, { limit } = {}) {
     const closed = closedArr ?? CLOSED_POSITIONS;
     const isSimMode = closedArr != null && closedArr !== CLOSED_POSITIONS;
+    const sortMode = _eqSortMode;
     if (!closed.length) return `<div class="eq-empty">暂无已平仓记录</div>`;
     if (isSimMode && simHistLoading) return `<div class="eq-empty">正在加载历史价格…</div>`;
 
@@ -9509,7 +9523,11 @@ function rsAdjustGrade(grade, rsResult) {
            </div>`;
     }
 
-    rows.sort((a, b) => b.leftOnTable - a.leftOnTable);
+    if (sortMode === "date") {
+      rows.sort((a, b) => (b.h.closedAt || "") > (a.h.closedAt || "") ? 1 : -1);
+    } else {
+      rows.sort((a, b) => b.leftOnTable - a.leftOnTable);
+    }
 
     const totalPeak   = rows.reduce((s, r) => s + r.peakPnl, 0);
     const totalActual = rows.reduce((s, r) => s + r.actualPnl, 0);
@@ -9556,6 +9574,12 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).join("")}</div>`;
 
+    const sortBar = `<div class="eq-sort-bar">
+      <span class="eq-sort-label">排序</span>
+      <button class="eq-sort-chip${sortMode === "loss" ? " active" : ""}" onclick="_eqResort('loss',${isSimMode})">按损耗↓</button>
+      <button class="eq-sort-chip${sortMode === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期↓</button>
+    </div>`;
+
     const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }, rowIdx) => {
       const hiddenCls = (limit && rowIdx >= limit) ? ' eq-row-hidden' : '';
       const actualW   = Math.max(0, Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100));
@@ -9597,7 +9621,7 @@ function rsAdjustGrade(grade, rsResult) {
          </div>`
       : "";
 
-    return summaryHTML + bucketsHTML + `<div class="eq-rows-wrap">${listHTML}</div>` + expandBtn + pureLossFooter;
+    return summaryHTML + bucketsHTML + sortBar + `<div class="eq-rows-wrap">${listHTML}</div>` + expandBtn + pureLossFooter;
   }
 
   function equityCurveSVG(points, h) {
