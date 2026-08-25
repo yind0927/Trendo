@@ -3638,9 +3638,12 @@ function rsAdjustGrade(grade, rsResult) {
     if (_sizerStopIn)  _sizerStopIn.addEventListener("input", _updateSizer);
     $("#form-est-entry")?.addEventListener("input", _updateSizer);
     $("#form-limit-price")?.addEventListener("input", _updateSizer);
+    const _ppAtrIn = $("#form-entry-atr");
     if (_sizerAtrIn) {
       _sizerAtrIn.addEventListener("input", () => {
         const atr = parseFloat(_sizerAtrIn.value);
+        // Sync back to PP ATR field (no event dispatch — avoids loop)
+        if (_ppAtrIn && _ppAtrIn.value !== _sizerAtrIn.value) _ppAtrIn.value = _sizerAtrIn.value;
         if (!atr || isNaN(atr) || atr <= 0) return;
         const orderMode = orderSeg?.querySelector(".active")?.dataset.order || "manual";
         const refEntry = orderMode === "market"
@@ -3653,6 +3656,20 @@ function rsAdjustGrade(grade, rsResult) {
         if (stopEl) { stopEl.value = (refEntry - 2.5 * atr).toFixed(2); stopEl.dispatchEvent(new Event("input")); }
       });
     }
+    // PP ATR field syncs to sizer ATR and triggers stop calculation
+    if (_ppAtrIn && _sizerAtrIn) {
+      _ppAtrIn.addEventListener("input", () => {
+        _sizerAtrIn.value = _ppAtrIn.value;
+        _sizerAtrIn.dispatchEvent(new Event("input")); // triggers stop = entry − 2.5×ATR
+      });
+    }
+    // When entry price is filled after ATR is already set, recalculate stop
+    const _reCalcStopIfATR = () => {
+      if (_sizerAtrIn?.value) _sizerAtrIn.dispatchEvent(new Event("input"));
+    };
+    if (_sizerEntryIn) _sizerEntryIn.addEventListener("input", _reCalcStopIfATR);
+    $("#form-est-entry")?.addEventListener("input", _reCalcStopIfATR);
+    $("#form-limit-price")?.addEventListener("input", _reCalcStopIfATR);
 
     form.addEventListener("submit", e => {
       e.preventDefault();
