@@ -3711,6 +3711,7 @@ function rsAdjustGrade(grade, rsResult) {
           entryDate: entryDateStr,
           earnings: earningsStr,
           createdAt: new Date().toISOString(),
+          ...(entryATR > 0 && { entryATR }),
           bx: (() => {
             const bxData = readFormBX();
             const ebxg = calcBXGrade(bxData.current, bxData.weekly, bxData.monthly);
@@ -4738,6 +4739,7 @@ function rsAdjustGrade(grade, rsResult) {
           risk1R: order.stop ? execPrice - order.stop : 0,
           rMult: 0, days: daysHeld, spark: [execPrice],
           bx: order.bx,
+          ...(order.entryATR > 0 && { entryATR: order.entryATR }),
         };
         recomputeHolding(newPos, simNotional);
         SIM_HOLDINGS.push(newPos);

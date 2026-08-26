@@ -109,6 +109,7 @@ async function processKey(syncKey, redis, fhKey, pgKey) {
       risk1R: order.stop ? last - order.stop : 0,
       rMult: 0, days: daysHeld, spark: [last],
       bx: order.bx,
+      ...(order.entryATR > 0 && { entryATR: order.entryATR }),
     });
     pendingOpen.splice(pendingOpen.indexOf(order), 1);
     fills++;
