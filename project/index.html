@@ -1552,10 +1552,10 @@
   .alloc-pct { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); width: 42px; text-align: right; flex-shrink: 0; }
   .alloc-row.is-cash .alloc-name, .alloc-row.is-cash .alloc-amt { color: var(--fg-3); font-weight: 500; }
   .alloc-empty { font-size: 11px; color: var(--fg-3); padding: 6px 0; }
-  .alloc-syms { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 1px; flex-basis: 100%; margin-top: -4px; }
-  .alloc-sym-chip { font-family: var(--f-mono); font-size: 9.5px; font-weight: 600; letter-spacing: .03em;
-    padding: 1px 5px; border-radius: 4px; border: 1px solid; opacity: .75;
-    background: color-mix(in oklch, currentColor 8%, transparent); }
+  .alloc-syms { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px 0 2px; flex-basis: 100%; margin-top: -2px; }
+  .alloc-sym-chip { font-family: var(--f-mono); font-size: 9px; font-weight: 500; letter-spacing: .04em;
+    padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line);
+    color: var(--fg-3); background: transparent; line-height: 1.5; }
 
   /* BX ALIGN GRID (Sector + Overall vs VOO) */
   .bx-align-grid { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
@@ -2224,6 +2224,9 @@
   .tl-pnl { font-family: var(--f-mono); font-weight: 700; font-size: 13px; text-align: right; }
   .tl-pnl-pct { font-size: 10px; font-weight: 500; text-align: right; margin-top: 2px; color: var(--fg-3); font-family: var(--f-mono); }
   .tl-open-badge { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 4px; font-size: 9.5px; font-family: var(--f-sans); background: oklch(0.78 0.12 195 / 0.15); color: var(--accent); border: 1px solid oklch(0.78 0.12 195 / 0.35); vertical-align: middle; }
+  .tl-close-badge { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 4px; font-size: 9px; font-family: var(--f-sans); vertical-align: middle; }
+  .tl-close-badge.full { background: color-mix(in oklch,var(--fg-3) 10%,transparent); color: var(--fg-3); border: 1px solid color-mix(in oklch,var(--fg-3) 25%,transparent); }
+  .tl-close-badge.partial { background: color-mix(in oklch,var(--warn) 12%,transparent); color: var(--warn); border: 1px solid color-mix(in oklch,var(--warn) 30%,transparent); }
   .sim-tab {
     padding: 5px 14px; border-radius: 7px; border: 1px solid transparent;
     background: none; cursor: pointer; font-size: 12.5px; color: var(--fg-2);
@@ -5005,8 +5008,8 @@
   </div>
 </div>
 
-<script src="data.js?v=664"></script>
-<script src="desk.js?v=664"></script>
+<script src="data.js?v=665"></script>
+<script src="desk.js?v=665"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

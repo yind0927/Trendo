@@ -272,7 +272,7 @@
               </div>
               <span class="alloc-amt">${fmt.usd(s.amt)}</span>
               <span class="alloc-pct">${pct.toFixed(1)}%</span>
-              ${s.syms && s.syms.length ? `<div class="alloc-syms">${s.syms.map(sym => `<span class="alloc-sym-chip" style="border-color:${s.color};color:${s.color}">${sym}</span>`).join("")}</div>` : ""}
+              ${s.syms && s.syms.length ? `<div class="alloc-syms">${s.syms.map(sym => `<span class="alloc-sym-chip">${sym}</span>`).join("")}</div>` : ""}
             </div>`;
           }).join("")}
         </div>
@@ -4547,6 +4547,9 @@ function rsAdjustGrade(grade, rsResult) {
       } catch (_) {}
     }
     simHistLoading = false;
+    // Mark any symbol that still has no data so renderSimExitQuality
+    // doesn't keep re-triggering fetchSimHistory on every render.
+    needed.forEach(s => { if (!histCache[s]) histCache[s] = {}; });
     renderSimExitQuality();
   }
 
@@ -8669,13 +8672,16 @@ function rsAdjustGrade(grade, rsResult) {
           const pnlPct = h.cost > 0 ? ((h.closePrice - h.cost) / h.cost * 100) : null;
           const entryD = h.entry?.slice(0, 10) || "—";
           const closeD = h.closedAt?.slice(0, 10) || "—";
+          const isPartial = h.exitReason === "partial";
+          const closeLabel = isPartial ? "部分平仓" : "全部平仓";
+          const closeLabelCls = isPartial ? "tl-close-badge partial" : "tl-close-badge full";
           return `<div class="tl-row">
             <div>
               <div class="tl-sym">${h.sym}</div>
               <div class="tl-name">${h.name || ""}</div>
             </div>
             <div class="tl-mid">
-              <div class="tl-prices">$${h.cost?.toFixed(2)} → $${h.closePrice?.toFixed(2)}</div>
+              <div class="tl-prices">$${h.cost?.toFixed(2)} → $${h.closePrice?.toFixed(2)}<span class="${closeLabelCls}">${closeLabel}</span></div>
               <div class="tl-dates">${entryD} → ${closeD}${h.days ? " · " + h.days + "天" : ""}</div>
             </div>
             <div>
