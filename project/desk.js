@@ -232,9 +232,10 @@
       if (amt <= 0) return;
       const nm  = h.bx?.sector?.name  || "未分类";
       const col = h.bx?.sector?.color || "oklch(0.55 0.03 250)";
-      if (!sectorMap[nm]) sectorMap[nm] = { name: nm, color: col, amt: 0, n: 0 };
+      if (!sectorMap[nm]) sectorMap[nm] = { name: nm, color: col, amt: 0, n: 0, syms: [] };
       sectorMap[nm].amt += amt;
       sectorMap[nm].n   += 1;
+      sectorMap[nm].syms.push(h.sym);
       investedAmt += amt;
     });
     const base     = totalNotional > 0 ? totalNotional : investedAmt;
@@ -271,6 +272,7 @@
               </div>
               <span class="alloc-amt">${fmt.usd(s.amt)}</span>
               <span class="alloc-pct">${pct.toFixed(1)}%</span>
+              ${s.syms && s.syms.length ? `<div class="alloc-syms">${s.syms.map(sym => `<span class="alloc-sym-chip" style="border-color:${s.color};color:${s.color}">${sym}</span>`).join("")}</div>` : ""}
             </div>`;
           }).join("")}
         </div>

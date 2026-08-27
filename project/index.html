@@ -1540,7 +1540,7 @@
   .alloc-head .big { font-family: var(--f-mono); font-size: 18px; font-weight: 700; color: var(--fg-0); letter-spacing: -.02em; }
   .alloc-head-sub { font-size: var(--fs-small); font-weight: 500; color: var(--fg-3); }
   .alloc-bars { display: flex; flex-direction: column; gap: 6px; }
-  .alloc-row { display: flex; align-items: center; gap: 8px; }
+  .alloc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .alloc-name { font-size: 11px; color: var(--fg-1); width: 92px; flex-shrink: 0; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; display: flex; align-items: baseline; gap: 4px; }
   .alloc-n { font-style: normal; font-family: var(--f-mono); font-size: 9px; color: var(--fg-3);
@@ -1552,6 +1552,10 @@
   .alloc-pct { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); width: 42px; text-align: right; flex-shrink: 0; }
   .alloc-row.is-cash .alloc-name, .alloc-row.is-cash .alloc-amt { color: var(--fg-3); font-weight: 500; }
   .alloc-empty { font-size: 11px; color: var(--fg-3); padding: 6px 0; }
+  .alloc-syms { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 1px; flex-basis: 100%; margin-top: -4px; }
+  .alloc-sym-chip { font-family: var(--f-mono); font-size: 9.5px; font-weight: 600; letter-spacing: .03em;
+    padding: 1px 5px; border-radius: 4px; border: 1px solid; opacity: .75;
+    background: color-mix(in oklch, currentColor 8%, transparent); }
 
   /* BX ALIGN GRID (Sector + Overall vs VOO) */
   .bx-align-grid { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
@@ -5001,8 +5005,8 @@
   </div>
 </div>
 
-<script src="data.js?v=663"></script>
-<script src="desk.js?v=663"></script>
+<script src="data.js?v=664"></script>
+<script src="desk.js?v=664"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
