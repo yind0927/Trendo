@@ -9457,13 +9457,14 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="analytics-card-title"><span class="mkt-sl-zh">${zh}</span>${en ? `<span class="mkt-sl-en">${en}</span>` : ""}</div>`;
   }
 
-  let _eqSortMode = "loss_desc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
+  let _eqSortMode = "date_desc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
+  const _eqFieldDefault = { date: "desc", loss: "asc" };
   window._eqResort = (field, isSim) => {
     const [curField, curDir] = _eqSortMode.split("_");
     if (curField === field) {
       _eqSortMode = `${field}_${curDir === "desc" ? "asc" : "desc"}`;
     } else {
-      _eqSortMode = `${field}_desc`;
+      _eqSortMode = `${field}_${_eqFieldDefault[field]}`;
     }
     if (isSim) {
       renderSimExitQuality();
@@ -9472,7 +9473,7 @@ function rsAdjustGrade(grade, rsResult) {
       if (el) el.innerHTML = exitQualityHTML();
       const sub = el?.closest(".analytics-card")?.querySelector(".analytics-card-sub");
       const [f, d] = _eqSortMode.split("_");
-      const dirLabel = d === "asc" ? "升序" : "降序";
+      const dirLabel = d === "asc" ? "↑" : "↓";
       if (sub) sub.textContent = f === "date" ? `峰值盈利 vs 实际出场 · 按日期${dirLabel}` : `峰值盈利 vs 实际出场 · 按损耗${dirLabel}`;
     }
   };
@@ -9600,8 +9601,8 @@ function rsAdjustGrade(grade, rsResult) {
     const dateArrow = sortField === "date" ? (sortDir === "asc" ? "↑" : "↓") : "↓";
     const sortBar = `<div class="eq-sort-bar">
       <span class="eq-sort-label">排序</span>
-      <button class="eq-sort-chip${sortField === "loss" ? " active" : ""}" onclick="_eqResort('loss',${isSimMode})">按损耗${lossArrow}</button>
       <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
+      <button class="eq-sort-chip${sortField === "loss" ? " active" : ""}" onclick="_eqResort('loss',${isSimMode})">按损耗${lossArrow}</button>
     </div>`;
 
     const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }, rowIdx) => {
