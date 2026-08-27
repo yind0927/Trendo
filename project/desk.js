@@ -9600,8 +9600,8 @@ function rsAdjustGrade(grade, rsResult) {
     const dateArrow = sortField === "date" ? (sortDir === "asc" ? "↑" : "↓") : "↑";
     const sortBar = `<div class="eq-sort-bar">
       <span class="eq-sort-label">排序</span>
-      <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
       <button class="eq-sort-chip${sortField === "loss" ? " active" : ""}" onclick="_eqResort('loss',${isSimMode})">按损耗${lossArrow}</button>
+      <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
     </div>`;
 
     const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }, rowIdx) => {
