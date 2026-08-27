@@ -9457,7 +9457,7 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="analytics-card-title"><span class="mkt-sl-zh">${zh}</span>${en ? `<span class="mkt-sl-en">${en}</span>` : ""}</div>`;
   }
 
-  let _eqSortMode = "date_asc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
+  let _eqSortMode = "loss_asc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
   window._eqResort = (field, isSim) => {
     const [curField, curDir] = _eqSortMode.split("_");
     if (curField === field) {
