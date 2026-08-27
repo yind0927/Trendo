@@ -9457,16 +9457,23 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="analytics-card-title"><span class="mkt-sl-zh">${zh}</span>${en ? `<span class="mkt-sl-en">${en}</span>` : ""}</div>`;
   }
 
-  let _eqSortMode = "loss"; // "loss" | "date"
-  window._eqResort = (mode, isSim) => {
-    _eqSortMode = mode;
+  let _eqSortMode = "loss_desc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
+  window._eqResort = (field, isSim) => {
+    const [curField, curDir] = _eqSortMode.split("_");
+    if (curField === field) {
+      _eqSortMode = `${field}_${curDir === "desc" ? "asc" : "desc"}`;
+    } else {
+      _eqSortMode = `${field}_desc`;
+    }
     if (isSim) {
       renderSimExitQuality();
     } else {
       const el = $("#eq-content");
       if (el) el.innerHTML = exitQualityHTML();
       const sub = el?.closest(".analytics-card")?.querySelector(".analytics-card-sub");
-      if (sub) sub.textContent = mode === "date" ? "峰值盈利 vs 实际出场 · 按日期排序" : "峰值盈利 vs 实际出场 · 按损耗排序";
+      const [f, d] = _eqSortMode.split("_");
+      const dirLabel = d === "asc" ? "升序" : "降序";
+      if (sub) sub.textContent = f === "date" ? `峰值盈利 vs 实际出场 · 按日期${dirLabel}` : `峰值盈利 vs 实际出场 · 按损耗${dirLabel}`;
     }
   };
 
@@ -9533,10 +9540,15 @@ function rsAdjustGrade(grade, rsResult) {
            </div>`;
     }
 
-    if (sortMode === "date") {
-      rows.sort((a, b) => (b.h.closedAt || "") > (a.h.closedAt || "") ? 1 : -1);
+    const [sortField, sortDir] = sortMode.split("_");
+    const asc = sortDir === "asc";
+    if (sortField === "date") {
+      rows.sort((a, b) => {
+        const cmp = (a.h.closedAt || "") > (b.h.closedAt || "") ? 1 : -1;
+        return asc ? cmp : -cmp;
+      });
     } else {
-      rows.sort((a, b) => b.leftOnTable - a.leftOnTable);
+      rows.sort((a, b) => asc ? a.leftOnTable - b.leftOnTable : b.leftOnTable - a.leftOnTable);
     }
 
     const totalPeak   = rows.reduce((s, r) => s + r.peakPnl, 0);
@@ -9584,10 +9596,12 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).join("")}</div>`;
 
+    const lossArrow = sortField === "loss" ? (sortDir === "asc" ? "↑" : "↓") : "↓";
+    const dateArrow = sortField === "date" ? (sortDir === "asc" ? "↑" : "↓") : "↓";
     const sortBar = `<div class="eq-sort-bar">
       <span class="eq-sort-label">排序</span>
-      <button class="eq-sort-chip${sortMode === "loss" ? " active" : ""}" onclick="_eqResort('loss',${isSimMode})">按损耗↓</button>
-      <button class="eq-sort-chip${sortMode === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期↓</button>
+      <button class="eq-sort-chip${sortField === "loss" ? " active" : ""}" onclick="_eqResort('loss',${isSimMode})">按损耗${lossArrow}</button>
+      <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
     </div>`;
 
     const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }, rowIdx) => {
