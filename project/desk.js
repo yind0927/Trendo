@@ -9457,14 +9457,13 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="analytics-card-title"><span class="mkt-sl-zh">${zh}</span>${en ? `<span class="mkt-sl-en">${en}</span>` : ""}</div>`;
   }
 
-  let _eqSortMode = "date_desc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
-  const _eqFieldDefault = { date: "desc", loss: "asc" };
+  let _eqSortMode = "date_asc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
   window._eqResort = (field, isSim) => {
     const [curField, curDir] = _eqSortMode.split("_");
     if (curField === field) {
-      _eqSortMode = `${field}_${curDir === "desc" ? "asc" : "desc"}`;
+      _eqSortMode = `${field}_${curDir === "asc" ? "desc" : "asc"}`;
     } else {
-      _eqSortMode = `${field}_${_eqFieldDefault[field]}`;
+      _eqSortMode = `${field}_asc`;
     }
     if (isSim) {
       renderSimExitQuality();
@@ -9597,8 +9596,8 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).join("")}</div>`;
 
-    const lossArrow = sortField === "loss" ? (sortDir === "asc" ? "↑" : "↓") : "↓";
-    const dateArrow = sortField === "date" ? (sortDir === "asc" ? "↑" : "↓") : "↓";
+    const lossArrow = sortField === "loss" ? (sortDir === "asc" ? "↑" : "↓") : "↑";
+    const dateArrow = sortField === "date" ? (sortDir === "asc" ? "↑" : "↓") : "↑";
     const sortBar = `<div class="eq-sort-bar">
       <span class="eq-sort-label">排序</span>
       <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
