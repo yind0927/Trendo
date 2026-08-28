@@ -4685,6 +4685,10 @@
         <label>数量（股）</label>
         <input type="number" id="form-qty" placeholder="100" step="1" required/>
       </div>
+      <div class="form-row">
+        <label>总资金 <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(仓位计算用)</span></label>
+        <input type="number" id="form-sizer-capital" placeholder="默认账户本金" step="1" min="1"/>
+      </div>
       <div id="form-sizer-hint" style="display:none" class="form-sizer-hint">
         <div id="sizer-grade-mode" class="sizer-grade-mode" style="display:none">
           <span class="sgm-grade" id="sgm-grade-badge"></span>
@@ -4708,11 +4712,6 @@
           <span class="sizer-atr-tag">ATR(14)</span>
           <input type="number" id="form-atr" class="sizer-atr-input" placeholder="选填" step="0.01" min="0"/>
           <span class="sizer-atr-hint">× 2.5 → 止损</span>
-        </div>
-        <div class="sizer-capital-line">
-          <span class="sizer-capital-tag">总资金</span>
-          <input type="number" id="form-sizer-capital" class="sizer-capital-input" placeholder="留空用默认" step="1" min="1"/>
-          <span class="sizer-capital-hint">覆盖默认本金</span>
         </div>
         <div class="sizer-calc-line" id="form-sizer-calc-line" style="display:none">
           <span id="form-sizer-suggest" class="sizer-suggest"></span>
@@ -5019,8 +5018,8 @@
   </div>
 </div>
 
-<script src="data.js?v=671"></script>
-<script src="desk.js?v=671"></script>
+<script src="data.js?v=672"></script>
+<script src="desk.js?v=672"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {

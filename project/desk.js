@@ -3349,10 +3349,15 @@ function rsAdjustGrade(grade, rsResult) {
       }
       updateOrderUI();
     };
-    openBtn.addEventListener("click", () => { newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
+    const _prefillCapital = (ctx) => {
+      const cap = $("#form-sizer-capital");
+      if (cap) cap.value = (ctx === "sim" ? simNotional : totalNotional);
+    };
+    openBtn.addEventListener("click", () => { newPositionContext = "desk"; _prefillCapital("desk"); resetDateFields(); resetOrderType(); openModal("new-position-modal"); });
     $("#mobile-fab")?.addEventListener("click", () => {
       if (currentPage === "sim") {
         newPositionContext = "sim";
+        _prefillCapital("sim");
         const fd = $("#form-date"); if (fd) fd.value = new Date().toISOString().slice(0, 10);
         const fe = $("#form-earnings"); if (fe) fe.value = "";
         const orderRow = $("#form-order-type-row");
@@ -3366,7 +3371,7 @@ function rsAdjustGrade(grade, rsResult) {
         const ei = $("#form-entry"); if (ei) ei.required = true;
         openModal("new-position-modal");
       } else {
-        newPositionContext = "desk"; resetDateFields(); resetOrderType(); openModal("new-position-modal");
+        newPositionContext = "desk"; _prefillCapital("desk"); resetDateFields(); resetOrderType(); openModal("new-position-modal");
       }
     });
     closeBtn.addEventListener("click", () => { newPositionContext = "desk"; resetFormBX(); closeModal("new-position-modal"); });
@@ -3640,12 +3645,7 @@ function rsAdjustGrade(grade, rsResult) {
     const _sizerEntryIn  = $("#form-entry");
     const _sizerStopIn   = $("#form-stop");
     const _sizerAtrIn    = $("#form-atr");
-    const _sizerCapIn    = $("#form-sizer-capital");
-    // Pre-fill capital input with current account notional
-    if (_sizerCapIn && !_sizerCapIn.value) {
-      _sizerCapIn.value = newPositionContext === "sim" ? simNotional : totalNotional;
-    }
-    if (_sizerCapIn) _sizerCapIn.addEventListener("input", _updateSizer);
+    $("#form-sizer-capital")?.addEventListener("input", _updateSizer);
     if (_sizerEntryIn) _sizerEntryIn.addEventListener("input", _updateSizer);
     if (_sizerStopIn)  _sizerStopIn.addEventListener("input", _updateSizer);
     $("#form-est-entry")?.addEventListener("input", _updateSizer);
@@ -8857,6 +8857,7 @@ function rsAdjustGrade(grade, rsResult) {
     const simNewBtn = $("#sim-new-pos-btn");
     if (simNewBtn) simNewBtn.addEventListener("click", () => {
       newPositionContext = "sim";
+      _prefillCapital("sim");
       const fd = $("#form-date"); if (fd) fd.value = new Date().toISOString().slice(0, 10);
       const fe = $("#form-earnings"); if (fe) fe.value = "";
       // Show order type selector for sim
