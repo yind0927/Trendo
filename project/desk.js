@@ -3598,7 +3598,9 @@ function rsAdjustGrade(grade, rsResult) {
         return;
       }
       if (_sizerCalcLn) _sizerCalcLn.style.display = "";
-      const notional = newPositionContext === "sim" ? simNotional : totalNotional;
+      const defaultNotional = newPositionContext === "sim" ? simNotional : totalNotional;
+      const capOverride = parseFloat($("#form-sizer-capital")?.value);
+      const notional = (capOverride > 0 && !isNaN(capOverride)) ? capOverride : defaultNotional;
       const sugQty = Math.max(1, Math.floor(notional * parseFloat(rp) / 100 / (entry - stop)));
       const sugAmt = sugQty * entry;
       const sugPct = notional > 0 ? (sugAmt / notional * 100).toFixed(1) : "?";
@@ -3626,16 +3628,24 @@ function rsAdjustGrade(grade, rsResult) {
         else entry = parseFloat($("#form-entry")?.value);
         const stop = parseFloat($("#form-stop")?.value);
         if (!entry || !stop || entry <= stop) return;
-        const notional = newPositionContext === "sim" ? simNotional : totalNotional;
+        const defaultNotional2 = newPositionContext === "sim" ? simNotional : totalNotional;
+        const capOverride2 = parseFloat($("#form-sizer-capital")?.value);
+        const notional = (capOverride2 > 0 && !isNaN(capOverride2)) ? capOverride2 : defaultNotional2;
         const riskPct  = parseFloat(localStorage.getItem("trendo_risk_pct") || "0.5");
         const sugQty = Math.max(1, Math.floor(notional * riskPct / 100 / (entry - stop)));
         const q = $("#form-qty");
         if (q) { q.value = sugQty; q.dispatchEvent(new Event("input")); }
       });
     }
-    const _sizerEntryIn = $("#form-entry");
-    const _sizerStopIn  = $("#form-stop");
-    const _sizerAtrIn   = $("#form-atr");
+    const _sizerEntryIn  = $("#form-entry");
+    const _sizerStopIn   = $("#form-stop");
+    const _sizerAtrIn    = $("#form-atr");
+    const _sizerCapIn    = $("#form-sizer-capital");
+    // Pre-fill capital input with current account notional
+    if (_sizerCapIn && !_sizerCapIn.value) {
+      _sizerCapIn.value = newPositionContext === "sim" ? simNotional : totalNotional;
+    }
+    if (_sizerCapIn) _sizerCapIn.addEventListener("input", _updateSizer);
     if (_sizerEntryIn) _sizerEntryIn.addEventListener("input", _updateSizer);
     if (_sizerStopIn)  _sizerStopIn.addEventListener("input", _updateSizer);
     $("#form-est-entry")?.addEventListener("input", _updateSizer);

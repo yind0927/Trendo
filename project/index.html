@@ -1303,6 +1303,12 @@
   .sizer-atr-input::placeholder { color: var(--fg-3); font-family: var(--f-sans); font-size: 10.5px; }
   .sizer-atr-input:focus { outline: none; border-color: var(--accent); }
   .sizer-atr-hint { font-size: 10.5px; color: var(--fg-3); white-space: nowrap; }
+  .sizer-capital-line { display: flex; align-items: center; gap: 7px; }
+  .sizer-capital-tag { font-size: 10px; font-family: var(--f-mono); font-weight: 700; color: var(--fg-3); background: var(--bg-3); border: 1px solid var(--line); border-radius: 3px; padding: 2px 6px; flex-shrink: 0; }
+  .sizer-capital-input { background: var(--bg-3); border: 1px solid var(--line); border-radius: 5px; color: var(--fg-0); font-family: var(--f-mono); font-size: 12px; padding: 4px 8px; width: 110px; min-width: 0; box-sizing: border-box; }
+  .sizer-capital-input::placeholder { color: var(--fg-3); font-family: var(--f-sans); font-size: 10.5px; }
+  .sizer-capital-input:focus { outline: none; border-color: var(--accent); }
+  .sizer-capital-hint { font-size: 10.5px; color: var(--fg-3); white-space: nowrap; }
   .sizer-calc-line { display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid color-mix(in oklch, var(--accent) 20%, transparent); }
   .sizer-suggest { font-size: 13px; font-weight: 800; color: var(--fg-0); font-family: var(--f-mono); flex: 1; letter-spacing: -0.01em; }
   .sizer-fill-btn { all: unset; cursor: pointer; padding: 4px 12px; background: var(--accent); border-radius: 5px; font-size: 11px; font-weight: 700; color: oklch(0.14 0.012 250); white-space: nowrap; transition: opacity .12s; flex-shrink: 0; }
@@ -4703,6 +4709,11 @@
           <input type="number" id="form-atr" class="sizer-atr-input" placeholder="选填" step="0.01" min="0"/>
           <span class="sizer-atr-hint">× 2.5 → 止损</span>
         </div>
+        <div class="sizer-capital-line">
+          <span class="sizer-capital-tag">总资金</span>
+          <input type="number" id="form-sizer-capital" class="sizer-capital-input" placeholder="留空用默认" step="1" min="1"/>
+          <span class="sizer-capital-hint">覆盖默认本金</span>
+        </div>
         <div class="sizer-calc-line" id="form-sizer-calc-line" style="display:none">
           <span id="form-sizer-suggest" class="sizer-suggest"></span>
           <button type="button" class="sizer-fill-btn" id="form-sizer-fill">填入</button>
@@ -5008,8 +5019,8 @@
   </div>
 </div>
 
-<script src="data.js?v=670"></script>
-<script src="desk.js?v=670"></script>
+<script src="data.js?v=671"></script>
+<script src="desk.js?v=671"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").then(reg => {
