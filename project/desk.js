@@ -8857,7 +8857,7 @@ function rsAdjustGrade(grade, rsResult) {
     const simNewBtn = $("#sim-new-pos-btn");
     if (simNewBtn) simNewBtn.addEventListener("click", () => {
       newPositionContext = "sim";
-      _prefillCapital("sim");
+      const _cap = $("#form-sizer-capital"); if (_cap) _cap.value = simNotional;
       const fd = $("#form-date"); if (fd) fd.value = new Date().toISOString().slice(0, 10);
       const fe = $("#form-earnings"); if (fe) fe.value = "";
       // Show order type selector for sim
