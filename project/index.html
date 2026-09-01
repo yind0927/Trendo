@@ -2643,7 +2643,7 @@
   /* Mobile: the navbar becomes a fixed bottom tab bar at 768px, so the rule needs
      clearance or it sits underneath it and never reads as "the end". */
   @media (max-width: 768px) {
-    .page-end { padding: 24px 16px calc(100px + env(safe-area-inset-bottom)); }
+    .page-end { padding: 24px 16px calc(116px + env(safe-area-inset-bottom)); }
   }
 
   /* ── 周几盈亏分布（日历卡片底部） */
@@ -3312,27 +3312,25 @@
 .top-actions { gap: 6px; }
     .top-actions .btn:not(.icon) { display: none; }
 
-    /* ---- Navbar → floating pill tab bar ---- */
+    /* ---- Navbar → floating frosted pill tab bar ---- */
     .navbar {
       position: fixed;
-      bottom: calc(24px + env(safe-area-inset-bottom));
+      bottom: calc(38px + env(safe-area-inset-bottom));
       left: 50%; right: auto; top: auto;
       width: calc(100% - 28px); max-width: 480px;
       margin: 0; padding: 6px;
       border-left: none; border-top: none;
-      border: 1px solid color-mix(in oklch, var(--line) 60%, transparent);
-      background: color-mix(in oklch, var(--bg-1) 80%, transparent);
-      backdrop-filter: blur(32px) saturate(1.6);
-      -webkit-backdrop-filter: blur(32px) saturate(1.6);
+      border: 1px solid oklch(1 0 0 / .11);
+      background: color-mix(in oklch, var(--bg-1) 65%, transparent);
+      backdrop-filter: blur(48px) saturate(2.2) brightness(1.12);
+      -webkit-backdrop-filter: blur(48px) saturate(2.2) brightness(1.12);
       height: auto; gap: 2px;
       justify-content: space-around;
       border-radius: 28px;
       box-shadow:
-        0 20px 60px oklch(0 0 0 / .6),
-        0 4px 16px oklch(0 0 0 / .35),
-        0 1px 3px oklch(0 0 0 / .2),
-        inset 0 1px 0 oklch(1 0 0 / .1),
-        inset 0 -1px 0 oklch(0 0 0 / .15);
+        0 8px 28px oklch(0 0 0 / .38),
+        0 2px 6px oklch(0 0 0 / .18),
+        inset 0 1px 0 oklch(1 0 0 / .14);
       z-index: 50;
       will-change: transform;
       transform: translateX(-50%);
@@ -3360,7 +3358,7 @@
     .navlink.active .nav-icon { transform: scale(1.2); filter: none; }
 
     /* ---- Main layout ---- */
-    main { padding: 12px 12px calc(100px + env(safe-area-inset-bottom)); gap: 10px; }
+    main { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); gap: 10px; }
 
     /* ---- Overview strip ---- */
     /* 6 cards, single column on mobile — a multi-column grid here just leaves odd cards
@@ -3420,14 +3418,14 @@
     .form-2col { grid-template-columns: 1fr; gap: 0; }
 
     /* ---- Sim view ---- */
-    #sim-view { padding: 12px 12px calc(100px + env(safe-area-inset-bottom)); }
+    #sim-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
     #sim-overview { grid-template-columns: repeat(2, 1fr); }
     .panel-wrap.sim-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     /* sim-holdings first-column sticky + padding handled by the shared table rule above */
 
     /* ---- Inspirations / Options ---- */
-    #inspirations-view { padding: 12px 12px calc(100px + env(safe-area-inset-bottom)); }
-    #options-view { padding: 12px 12px calc(100px + env(safe-area-inset-bottom)); }
+    #inspirations-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
+    #options-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
     .j-statsbar { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg-1); }
     .j-statsbar-sep { display: none; }
     .j-statsbar-item { flex: unset; padding: 9px 10px; box-shadow: 1px 0 0 0 var(--line), 0 1px 0 0 var(--line); background: var(--bg-1); }
@@ -3438,7 +3436,7 @@
     .jc-tag-chip { font-size: 10.5px; padding: 2px 7px; }
 
     /* ---- Analytics ---- */
-    #analytics-view { padding: 12px 12px calc(100px + env(safe-area-inset-bottom)); }
+    #analytics-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
     .analytics-card { padding: 12px 13px; }
     .analytics-card-title { font-size: 10.5px; }
     .analytics-chart-row { flex-direction: column; gap: 8px; margin-bottom: 10px; }
@@ -3474,7 +3472,7 @@
 
     /* ---- FAB 开仓按钮 ---- */
     .mobile-fab {
-      position: fixed; bottom: calc(110px + env(safe-area-inset-bottom)); right: 20px; z-index: 55;
+      position: fixed; bottom: calc(128px + env(safe-area-inset-bottom)); right: 20px; z-index: 55;
       width: 54px; height: 54px; border-radius: 50%;
       background: var(--accent); color: #fff;
       display: grid; place-items: center;
@@ -3636,7 +3634,7 @@
   .mkt-refresh-btn:hover { color: var(--fg-0); border-color: var(--fg-2); }
 
   @media (max-width: 768px) {
-    #market-view { padding: 12px 12px calc(100px + env(safe-area-inset-bottom)); }
+    #market-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
     .mkt-row { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
     .mkt-card { padding: 12px 12px 10px; gap: 8px; }
     .mkt-card-val { font-size: 30px; }
@@ -5039,8 +5037,8 @@
   </div>
 </div>
 
-<script src="data.js?v=676"></script>
-<script src="desk.js?v=676"></script>
+<script src="data.js?v=677"></script>
+<script src="desk.js?v=677"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
