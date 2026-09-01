@@ -5018,26 +5018,20 @@
   </div>
 </div>
 
-<script src="data.js?v=673"></script>
-<script src="desk.js?v=673"></script>
+<script src="data.js?v=674"></script>
+<script src="desk.js?v=674"></script>
 <script>
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").then(reg => {
-    reg.addEventListener("updatefound", () => {
-      const sw = reg.installing;
-      sw.addEventListener("statechange", () => {
-        if (sw.state === "installed" && navigator.serviceWorker.controller) {
-          // New version available — show update banner
-          const banner = document.createElement("div");
-          banner.style.cssText = "position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999;background:var(--accent);color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px oklch(0 0 0/.4);white-space:nowrap";
-          banner.innerHTML = `已有新版本 <button style="background:#fff;color:var(--accent);border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer">立即更新</button>`;
-          document.body.appendChild(banner);
-          banner.querySelector("button").onclick = () => { sw.postMessage({ type: "SKIP_WAITING" }); location.reload(); };
-        }
-      });
-    });
+  navigator.serviceWorker.register("/sw.js");
+  // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
+  // triggers controllerchange; SW also broadcasts NEW_VERSION as backup).
+  // Guard prevents double-reload if both signals fire.
+  let _swReloading = false;
+  const _swReload = () => { if (!_swReloading) { _swReloading = true; location.reload(); } };
+  navigator.serviceWorker.addEventListener("controllerchange", _swReload);
+  navigator.serviceWorker.addEventListener("message", e => {
+    if (e.data?.type === "NEW_VERSION") _swReload();
   });
-  navigator.serviceWorker.addEventListener("controllerchange", () => location.reload());
 }
 </script>
 
