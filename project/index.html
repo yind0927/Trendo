@@ -3878,19 +3878,12 @@
   }
   .splash-text { display: flex; flex-direction: column; align-items: center; gap: 5px; }
   .splash-mark {
-    width: 138px; height: 56px; border-radius: 13px;
+    width: 96px; height: 96px; border-radius: 18px;
     border: 1.5px solid var(--accent);
-    background: color-mix(in oklch, var(--accent) 42%, var(--bg-0));
-    display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr);
-    gap: 1px; overflow: hidden;
-    box-shadow: 0 12px 44px -8px oklch(0.78 0.12 var(--accent-h) / .5);
-  }
-  .sm-cell {
-    display: flex; align-items: center; justify-content: center;
     background: var(--bg-0);
-    font-family: var(--f-mono, ui-monospace, monospace);
-    font-weight: 800; font-size: 17px;
-    color: var(--accent);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 12px 44px -8px oklch(0.78 0.12 var(--accent-h) / .5);
   }
   .splash-name {
     font-size: 26px; font-weight: 700; letter-spacing: -0.04em; color: var(--fg-0);
@@ -3917,12 +3910,12 @@
 <div id="splash-screen" aria-hidden="true">
   <div class="splash-brand">
     <div class="splash-mark" aria-hidden="true">
-      <div class="sm-cell">T</div>
-      <div class="sm-cell">R</div>
-      <div class="sm-cell">E</div>
-      <div class="sm-cell">N</div>
-      <div class="sm-cell">D</div>
-      <div class="sm-cell">O</div>
+      <svg viewBox="0 0 96 96" width="88" height="88" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12,66 L26,50 L40,57 L58,34 L82,14 L82,72 L12,72 Z" fill="var(--accent)" opacity="0.07"/>
+        <polyline points="12,66 26,50 40,57 58,34 82,14" stroke="var(--accent)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="82" cy="14" r="4.5" fill="var(--accent)"/>
+        <text x="12" y="92" font-family="ui-monospace,monospace" font-weight="800" font-size="22" fill="var(--accent)">Tr</text>
+      </svg>
     </div>
     <div class="splash-text">
       <div class="splash-name">Trendo</div>
@@ -3955,15 +3948,9 @@
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="oklch(0.14 0.012 250)"/>
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="1.5"/>
-        <line x1="3" y1="20.5" x2="37" y2="20.5" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.85" stroke-opacity="0.42"/>
-        <line x1="14.3" y1="3" x2="14.3" y2="37" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.85" stroke-opacity="0.42"/>
-        <line x1="25.7" y1="3" x2="25.7" y2="37" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.85" stroke-opacity="0.42"/>
-        <text x="8.5" y="12" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">T</text>
-        <text x="20" y="12" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">R</text>
-        <text x="31.5" y="12" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">E</text>
-        <text x="8.5" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">N</text>
-        <text x="20" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">D</text>
-        <text x="31.5" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">O</text>
+        <polyline points="5,25 11,19 17,22 24,14 33,9" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="33" cy="9" r="2" fill="oklch(0.78 0.12 var(--accent-h))"/>
+        <text x="6" y="35" text-anchor="start" font-family="ui-monospace,monospace" font-weight="800" font-size="12" fill="oklch(0.78 0.12 var(--accent-h))">Tr</text>
       </svg>
     </div>
     <div class="wordmark">
@@ -4090,15 +4077,9 @@
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="oklch(0.14 0.012 250)"/>
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="1.5"/>
-        <line x1="3" y1="20.5" x2="37" y2="20.5" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.85" stroke-opacity="0.42"/>
-        <line x1="14.3" y1="3" x2="14.3" y2="37" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.85" stroke-opacity="0.42"/>
-        <line x1="25.7" y1="3" x2="25.7" y2="37" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.85" stroke-opacity="0.42"/>
-        <text x="8.5" y="12" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">T</text>
-        <text x="20" y="12" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">R</text>
-        <text x="31.5" y="12" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">E</text>
-        <text x="8.5" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">N</text>
-        <text x="20" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">D</text>
-        <text x="31.5" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">O</text>
+        <polyline points="5,25 11,19 17,22 24,14 33,9" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="33" cy="9" r="2" fill="oklch(0.78 0.12 var(--accent-h))"/>
+        <text x="6" y="35" text-anchor="start" font-family="ui-monospace,monospace" font-weight="800" font-size="12" fill="oklch(0.78 0.12 var(--accent-h))">Tr</text>
       </svg>
     </div>
     <div class="sb-wm">
@@ -5058,8 +5039,8 @@
   </div>
 </div>
 
-<script src="data.js?v=681"></script>
-<script src="desk.js?v=681"></script>
+<script src="data.js?v=682"></script>
+<script src="desk.js?v=682"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
