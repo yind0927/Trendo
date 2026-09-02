@@ -159,14 +159,22 @@
   .brand{ display:flex; align-items:center; gap: 10px; font-weight: 600; letter-spacing: -0.01em;}
   .brand .mark{
     width: 22px; height: 22px; border-radius: 6px;
-    background: linear-gradient(135deg, var(--accent) 0%, oklch(0.55 0.18 calc(var(--accent-h) + 50)) 100%);
-    box-shadow: 0 0 0 1px oklch(1 0 0 / .08) inset, 0 4px 14px -3px oklch(0.78 0.12 var(--accent-h) / .6);
-    position: relative;
+    background: var(--bg-0);
+    border: 1.5px solid var(--accent);
+    box-shadow: 0 4px 14px -3px oklch(0.78 0.12 var(--accent-h) / .5);
+    position: relative; overflow: hidden;
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
   }
-  .brand .mark::after{
-    content:""; position:absolute; inset: 5px 5px 5px 5px;
-    background: var(--bg-0); border-radius: 2px;
-    clip-path: polygon(0 70%, 25% 45%, 50% 60%, 75% 20%, 100% 35%, 100% 100%, 0 100%);
+  .brand .mark::before{
+    content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+    background:
+      linear-gradient(color-mix(in oklch, var(--accent) 45%, transparent) 0 0) center / 1px 100% no-repeat,
+      linear-gradient(color-mix(in oklch, var(--accent) 45%, transparent) 0 0) center / 100% 1px no-repeat;
+  }
+  .brand .mark .mc{
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--f-mono,ui-monospace,monospace); font-weight:800; font-size:6px;
+    color:var(--accent); position:relative; z-index:0;
   }
   .brand .name{ font-size: 14px; }
   .brand .name .dim{ color: var(--fg-2); font-weight: 400; }
@@ -3869,15 +3877,24 @@
     animation: splashIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
   .splash-mark {
-    width: 72px; height: 72px; border-radius: 20px;
-    background: linear-gradient(135deg, var(--accent) 0%, oklch(0.55 0.18 calc(var(--accent-h) + 50)) 100%);
-    box-shadow: 0 0 0 1px oklch(1 0 0 / .08) inset, 0 12px 48px -8px oklch(0.78 0.12 var(--accent-h) / .75);
-    position: relative;
+    width: 72px; height: 72px; border-radius: 18px;
+    background: var(--bg-0);
+    border: 2px solid var(--accent);
+    box-shadow: 0 12px 48px -8px oklch(0.78 0.12 var(--accent-h) / .55);
+    position: relative; overflow: hidden;
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
   }
-  .splash-mark::after {
-    content: ""; position: absolute; inset: 18px 18px 18px 18px;
-    background: var(--bg-0); border-radius: 3px;
-    clip-path: polygon(0 70%, 25% 45%, 50% 60%, 75% 20%, 100% 35%, 100% 100%, 0 100%);
+  .splash-mark::before {
+    content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background:
+      linear-gradient(color-mix(in oklch, var(--accent) 40%, transparent) 0 0) center / 1px 100% no-repeat,
+      linear-gradient(color-mix(in oklch, var(--accent) 40%, transparent) 0 0) center / 100% 1px no-repeat;
+  }
+  .sm-cell {
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--f-mono, ui-monospace, monospace);
+    font-weight: 800; font-size: 22px; letter-spacing: -0.01em;
+    color: var(--accent); position: relative; z-index: 0;
   }
   .splash-name {
     font-size: 30px; font-weight: 700; letter-spacing: -0.04em; color: var(--fg-0);
@@ -3904,7 +3921,12 @@
 <!-- Splash screen — auto-dismisses after ~2s -->
 <div id="splash-screen" aria-hidden="true">
   <div class="splash-brand">
-    <div class="splash-mark"></div>
+    <div class="splash-mark" aria-hidden="true">
+      <div class="sm-cell">T</div>
+      <div class="sm-cell">R</div>
+      <div class="sm-cell">D</div>
+      <div class="sm-cell">O</div>
+    </div>
     <div>
       <div class="splash-name">Trendo</div>
       <div class="splash-sub">Swing Trading Dashboard</div>
@@ -3934,59 +3956,14 @@
   <a class="brand" href="#">
     <div class="logo" aria-hidden="true">
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-        <defs>
-          <linearGradient id="lgGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="oklch(0.86 0.13 var(--accent-h))"/>
-            <stop offset="0.55" stop-color="oklch(0.60 0.17 calc(var(--accent-h) + 20))"/>
-            <stop offset="1" stop-color="oklch(0.28 0.14 calc(var(--accent-h) + 70))"/>
-          </linearGradient>
-          <linearGradient id="lgSheen" x1="0" y1="0" x2="0" y2="40">
-            <stop offset="0" stop-color="oklch(1 0 0 / .28)"/>
-            <stop offset="0.6" stop-color="oklch(1 0 0 / 0)"/>
-          </linearGradient>
-          <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="oklch(0.12 0.012 250 / .55)"/>
-            <stop offset="1" stop-color="oklch(0.12 0.012 250 / 0)"/>
-          </linearGradient>
-        </defs>
-
-        <!-- tile -->
-        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#lgGrad)"/>
-        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#lgSheen)"/>
-        <rect x="1.5" y="1.5" width="37" height="37" rx="10.5" fill="none" stroke="oklch(1 0 0 / .22)"/>
-
-        <!-- subtle grid lines -->
-        <g stroke="oklch(0.12 0.012 250 / .12)" stroke-width="0.6">
-          <line x1="7" y1="14" x2="33" y2="14"/>
-          <line x1="7" y1="22" x2="33" y2="22"/>
-          <line x1="7" y1="30" x2="33" y2="30"/>
-        </g>
-
-        <!-- trendline area fill under the line -->
-        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9 L 33 33 L 7 33 Z"
-              fill="url(#areaFill)"/>
-
-        <!-- trendline (the "trend" in Trendo) -->
-        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9"
-              fill="none" stroke="oklch(0.10 0.012 250)"
-              stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-
-        <!-- price nodes -->
-        <g fill="oklch(0.10 0.012 250)">
-          <circle cx="13" cy="24" r="1.4"/>
-          <circle cx="18" cy="26" r="1.4"/>
-          <circle cx="24" cy="18" r="1.4"/>
-        </g>
-        <!-- final node highlighted as breakout -->
-        <circle cx="30" cy="12" r="2.6" fill="oklch(0.95 0.10 var(--accent-h))"
-                stroke="oklch(0.10 0.012 250)" stroke-width="1.2"/>
-
-        <!-- breakout arrow from final node -->
-        <g stroke="oklch(0.10 0.012 250)" stroke-width="1.6" stroke-linecap="round" fill="none">
-          <path d="M 32 10 L 35 7"/>
-          <path d="M 35 7 L 32.5 7"/>
-          <path d="M 35 7 L 35 9.5"/>
-        </g>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="oklch(0.14 0.012 250)"/>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="1.5"/>
+        <line x1="3" y1="20.5" x2="37" y2="20.5" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.9" stroke-opacity="0.45"/>
+        <line x1="20.5" y1="3" x2="20.5" y2="37" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.9" stroke-opacity="0.45"/>
+        <text x="11" y="14.5" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">T</text>
+        <text x="29" y="14.5" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">R</text>
+        <text x="11" y="28" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">D</text>
+        <text x="29" y="28" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">O</text>
       </svg>
     </div>
     <div class="wordmark">
@@ -4111,32 +4088,14 @@
   <div class="sb-brand-row">
     <div class="sb-logo">
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-        <defs>
-          <linearGradient id="sbGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="oklch(0.86 0.13 var(--accent-h))"/>
-            <stop offset="0.55" stop-color="oklch(0.60 0.17 calc(var(--accent-h) + 20))"/>
-            <stop offset="1" stop-color="oklch(0.28 0.14 calc(var(--accent-h) + 70))"/>
-          </linearGradient>
-          <linearGradient id="sbSheen" x1="0" y1="0" x2="0" y2="40">
-            <stop offset="0" stop-color="oklch(1 0 0 / .28)"/>
-            <stop offset="0.6" stop-color="oklch(1 0 0 / 0)"/>
-          </linearGradient>
-          <linearGradient id="sbArea" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="oklch(0.12 0.012 250 / .55)"/>
-            <stop offset="1" stop-color="oklch(0.12 0.012 250 / 0)"/>
-          </linearGradient>
-        </defs>
-        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#sbGrad)"/>
-        <rect x="1" y="1" width="38" height="38" rx="11" fill="url(#sbSheen)"/>
-        <rect x="1.5" y="1.5" width="37" height="37" rx="10.5" fill="none" stroke="oklch(1 0 0 / .22)"/>
-        <g stroke="oklch(0.12 0.012 250 / .12)" stroke-width="0.6">
-          <line x1="7" y1="14" x2="33" y2="14"/><line x1="7" y1="22" x2="33" y2="22"/><line x1="7" y1="30" x2="33" y2="30"/>
-        </g>
-        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9 L 33 33 L 7 33 Z" fill="url(#sbArea)"/>
-        <path d="M 7 28 L 13 24 L 18 26 L 24 18 L 30 12 L 33 9" fill="none" stroke="oklch(0.10 0.012 250)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        <g fill="oklch(0.10 0.012 250)"><circle cx="13" cy="24" r="1.4"/><circle cx="18" cy="26" r="1.4"/><circle cx="24" cy="18" r="1.4"/></g>
-        <circle cx="30" cy="12" r="2.6" fill="oklch(0.95 0.10 var(--accent-h))" stroke="oklch(0.10 0.012 250)" stroke-width="1.2"/>
-        <g stroke="oklch(0.10 0.012 250)" stroke-width="1.6" stroke-linecap="round" fill="none"><path d="M 32 10 L 34 8"/><path d="M 34 8 L 31.5 8"/><path d="M 34 8 L 34 10.5"/></g>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="oklch(0.14 0.012 250)"/>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="1.5"/>
+        <line x1="3" y1="20.5" x2="37" y2="20.5" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.9" stroke-opacity="0.45"/>
+        <line x1="20.5" y1="3" x2="20.5" y2="37" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.9" stroke-opacity="0.45"/>
+        <text x="11" y="14.5" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">T</text>
+        <text x="29" y="14.5" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">R</text>
+        <text x="11" y="28" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">D</text>
+        <text x="29" y="28" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="oklch(0.78 0.12 var(--accent-h))">O</text>
       </svg>
     </div>
     <div class="sb-wm">
@@ -5096,8 +5055,8 @@
   </div>
 </div>
 
-<script src="data.js?v=679"></script>
-<script src="desk.js?v=679"></script>
+<script src="data.js?v=680"></script>
+<script src="desk.js?v=680"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
