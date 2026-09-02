@@ -2687,17 +2687,18 @@ function rsAdjustGrade(grade, rsResult) {
       ? (h.peakDay ? `第${h.peakDay}天` : "")
       : "临时估算";
 
-    // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice at 50%
+    // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice at 60% MFE
     const activeBar = (() => {
       if (!isActive || !h.last || mfe <= 0) return "";
-      const pos     = Math.min(Math.max((h.last - h.cost) / mfe, 0), 1);
-      const safe    = h.last >= ppP;
-      const distPct = (h.last - ppP) / h.last * 100;
+      const pos       = Math.min(Math.max((h.last - h.cost) / mfe, 0), 1);
+      const safe      = h.last >= ppP;
+      const distPct   = (h.last - ppP) / h.last * 100;
+      const ppLinePct = Math.min(Math.max((ppP - h.cost) / mfe * 100, 0), 100);
       return `
         <div class="pp-axis-wrap">
           <div class="pp-axis-track">
             <div class="pp-axis-fill ${safe ? "safe" : "breach"}" style="width:${(pos*100).toFixed(1)}%"></div>
-            <div class="pp-axis-pp-line" title="保护价 $${price(ppP)}"></div>
+            <div class="pp-axis-pp-line" style="left:${ppLinePct.toFixed(1)}%" title="保护价 $${price(ppP)}"></div>
           </div>
           <div class="pp-axis-labels">
             <span title="入场成本">$${price(h.cost)}</span>
