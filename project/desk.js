@@ -1733,7 +1733,7 @@ function rsAdjustGrade(grade, rsResult) {
       h.mfe = Math.max(knownPeak, h.last, h.cost) - h.cost;
       if (!h.ppActive && h.mfe >= 2 * h.entryATR) h.ppActive = true;
       if (h.ppActive) {
-        const newPP = h.cost + h.mfe * 0.5;
+        const newPP = h.cost + h.mfe * 0.6;
         if (!h.ppPrice || newPP > h.ppPrice) h.ppPrice = newPP; // protection level only moves up
       }
     }
@@ -2735,7 +2735,7 @@ function rsAdjustGrade(grade, rsResult) {
     const metricsHTML = isActive
       ? `<div class="pp-metric-table">
           ${mrow("峰值价格", `$${price(peakPx)}`, "var(--up)", `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}`)}
-          ${mrow("保护价", `$${price(ppP)}`, isBreach ? "var(--down)" : "var(--accent)", "入场价 + 50% MFE")}
+          ${mrow("保护价", `$${price(ppP)}`, isBreach ? "var(--down)" : "var(--accent)", "入场价 + 60% MFE")}
         </div>
         ${isBreach ? `<div class="pp-breach-note">⚠️ 当前价已跌破保护价，止损信号触发</div>` : ""}
         ${activeBar}`
@@ -9591,10 +9591,10 @@ function rsAdjustGrade(grade, rsResult) {
     // Efficiency bucket tiles
     const bkts = { high: { n: 0, pnl: 0 }, mid: { n: 0, pnl: 0 }, low: { n: 0, pnl: 0 } };
     for (const r of rows) {
-      const b = r.efficiency >= 75 ? "high" : r.efficiency >= 45 ? "mid" : "low";
+      const b = r.efficiency > 70 ? "high" : r.efficiency >= 45 ? "mid" : "low";
       bkts[b].n++; bkts[b].pnl += r.actualPnl;
     }
-    const bktMeta = { high: { zh: "高效", en: "High", range: "≥75%" }, mid: { zh: "普通", en: "Mid", range: "45–74%" }, low: { zh: "低效", en: "Low", range: "<45%" } };
+    const bktMeta = { high: { zh: "高效", en: "High", range: ">70%" }, mid: { zh: "普通", en: "Mid", range: "45–70%" }, low: { zh: "低效", en: "Low", range: "<45%" } };
     const bucketsHTML = `<div class="eq-bucket-grid">${["high","mid","low"].map(key => {
       const m = bktMeta[key]; const b = bkts[key];
       const pnlStr = b.pnl >= 0 ? `+$${Math.round(b.pnl).toLocaleString("en-US")}` : `-$${Math.round(Math.abs(b.pnl)).toLocaleString("en-US")}`;
