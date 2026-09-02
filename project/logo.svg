@@ -1,10 +1,8 @@
 <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="#141b28"/>
   <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="#68dbd5" stroke-width="1.5"/>
-  <!-- T stem + left arm -->
-  <polyline points="7,18 14,18 14,33" stroke="#68dbd5" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Rising right arm — trend line -->
-  <polyline points="14,18 20,22 27,15 35,9" stroke="#68dbd5" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Peak dot -->
-  <circle cx="35" cy="9" r="2.3" fill="#68dbd5"/>
+  <!-- Geometric T — crossbar -->
+  <rect x="6.5" y="9.5" width="27" height="4.5" rx="1.5" fill="#68dbd5"/>
+  <!-- Geometric T — stem -->
+  <rect x="17.75" y="14" width="4.5" height="18.5" rx="1.5" fill="#68dbd5"/>
 </svg>
