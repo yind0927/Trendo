@@ -1,8 +1,14 @@
 <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="#141b28"/>
   <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="#68dbd5" stroke-width="1.5"/>
-  <!-- Geometric T — crossbar -->
-  <rect x="6.5" y="9.5" width="27" height="4.5" rx="1.5" fill="#68dbd5"/>
-  <!-- Geometric T — stem -->
-  <rect x="17.75" y="14" width="4.5" height="18.5" rx="1.5" fill="#68dbd5"/>
+  <!-- Single horizontal rule — sole design element replacing the grid -->
+  <line x1="4" y1="20.5" x2="36" y2="20.5" stroke="#68dbd5" stroke-width="0.9" stroke-opacity="0.38"/>
+  <!-- Top row: T R E -->
+  <text x="9"  y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">T</text>
+  <text x="20" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">R</text>
+  <text x="31" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">E</text>
+  <!-- Bottom row: N D O -->
+  <text x="9"  y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">N</text>
+  <text x="20" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">D</text>
+  <text x="31" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">O</text>
 </svg>

@@ -3877,11 +3877,8 @@
     animation: splashIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
   .splash-wm {
-    font-size: 54px; font-weight: 800; letter-spacing: -0.055em; line-height: 1;
-    font-family: var(--f-sans);
+    width: 88px; height: 88px;
   }
-  .splash-wm em { font-style: normal; color: var(--accent); }
-  .splash-wm span { color: var(--fg-0); }
   .splash-sub {
     font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
     color: var(--fg-3); font-family: var(--f-sans); margin-top: 2px;
@@ -3902,7 +3899,19 @@
 <!-- Splash screen — auto-dismisses after ~2s -->
 <div id="splash-screen" aria-hidden="true">
   <div class="splash-brand">
-    <div class="splash-wm"><em>Tr</em><span>endo</span></div>
+    <div class="splash-wm">
+      <svg width="88" height="88" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="#141b28"/>
+        <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="#68dbd5" stroke-width="1.5"/>
+        <line x1="4" y1="20.5" x2="36" y2="20.5" stroke="#68dbd5" stroke-width="0.9" stroke-opacity="0.38"/>
+        <text x="9"  y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">T</text>
+        <text x="20" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">R</text>
+        <text x="31" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">E</text>
+        <text x="9"  y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">N</text>
+        <text x="20" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">D</text>
+        <text x="31" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">O</text>
+      </svg>
+    </div>
     <div class="splash-sub">Swing Trading Dashboard</div>
   </div>
 </div>
@@ -3931,8 +3940,13 @@
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="oklch(0.14 0.012 250)"/>
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="1.5"/>
-        <rect x="6.5" y="9.5" width="27" height="4.5" rx="1.5" fill="oklch(0.78 0.12 var(--accent-h))"/>
-        <rect x="17.75" y="14" width="4.5" height="18.5" rx="1.5" fill="oklch(0.78 0.12 var(--accent-h))"/>
+        <line x1="4" y1="20.5" x2="36" y2="20.5" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.9" stroke-opacity="0.38"/>
+        <text x="9"  y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">T</text>
+        <text x="20" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">R</text>
+        <text x="31" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">E</text>
+        <text x="9"  y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">N</text>
+        <text x="20" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">D</text>
+        <text x="31" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">O</text>
       </svg>
     </div>
     <div class="wordmark">
@@ -4059,8 +4073,13 @@
       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="oklch(0.14 0.012 250)"/>
         <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="1.5"/>
-        <rect x="6.5" y="9.5" width="27" height="4.5" rx="1.5" fill="oklch(0.78 0.12 var(--accent-h))"/>
-        <rect x="17.75" y="14" width="4.5" height="18.5" rx="1.5" fill="oklch(0.78 0.12 var(--accent-h))"/>
+        <line x1="4" y1="20.5" x2="36" y2="20.5" stroke="oklch(0.78 0.12 var(--accent-h))" stroke-width="0.9" stroke-opacity="0.38"/>
+        <text x="9"  y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">T</text>
+        <text x="20" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">R</text>
+        <text x="31" y="13" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">E</text>
+        <text x="9"  y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">N</text>
+        <text x="20" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">D</text>
+        <text x="31" y="29" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="oklch(0.78 0.12 var(--accent-h))">O</text>
       </svg>
     </div>
     <div class="sb-wm">
@@ -5020,8 +5039,8 @@
   </div>
 </div>
 
-<script src="data.js?v=684"></script>
-<script src="desk.js?v=684"></script>
+<script src="data.js?v=685"></script>
+<script src="desk.js?v=685"></script>
 <script>
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js");
