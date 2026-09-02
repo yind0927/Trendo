@@ -1192,6 +1192,7 @@ function rsAdjustGrade(grade, rsResult) {
   let analysisHistory = []; // persistent AI analysis history across days, synced to cloud
 
   // ============ CLOUD SYNC (Upstash) ============
+  const DEMO_KEY = "trendo-demo-2026"; // matches api/data.js — read-only demo blob
   let syncKey    = localStorage.getItem("trendo_sync_key") || "";
   let syncTimer  = null;
   let lastSyncAt = null;
@@ -13136,6 +13137,12 @@ function rsAdjustGrade(grade, rsResult) {
           <button class="sp-action" id="sp-apply">载入</button>
         </div>
       </div>
+      <div class="sp-sep"></div>
+      <div class="sp-section">
+        <div class="sp-label">平台演示</div>
+        <div class="sp-hint" style="margin-bottom:8px">加载示例数据预览所有功能，不影响你的真实数据</div>
+        <button class="sp-action sp-demo-btn" id="sp-demo">进入演示模式 Demo</button>
+      </div>
       <div id="sync-status" class="sp-status" data-state="${syncKey ? 'pending' : 'off'}">
         ${syncKey ? (lastSyncAt ? `已同步 ${String(lastSyncAt.getHours()).padStart(2,"0")}:${String(lastSyncAt.getMinutes()).padStart(2,"0")}` : "同步中…") : "未同步"}
       </div>
@@ -13205,6 +13212,21 @@ function rsAdjustGrade(grade, rsResult) {
       } else {
         btn.textContent = "未找到数据"; btn.disabled = false;
         setTimeout(() => { btn.textContent = "载入"; btn.disabled = false; }, 2000);
+      }
+    });
+
+    document.getElementById("sp-demo")?.addEventListener("click", async () => {
+      const btn = document.getElementById("sp-demo");
+      btn.textContent = "加载中…"; btn.disabled = true;
+      const data = await syncPull(DEMO_KEY);
+      if (data) {
+        // Session-only: don't overwrite the user's real syncKey in localStorage
+        applyCloudData(data);
+        document.getElementById("sync-panel")?.classList.remove("open");
+        renderTable(); renderSimTable(); renderOverview(); renderSimOverview();
+      } else {
+        btn.textContent = "加载失败，请重试"; btn.disabled = false;
+        setTimeout(() => { btn.textContent = "进入演示模式 Demo"; btn.disabled = false; }, 2000);
       }
     });
 
