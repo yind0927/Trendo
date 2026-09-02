@@ -1,12 +1,10 @@
 <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Dark background -->
   <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="#141b28"/>
-  <!-- Teal accent border -->
   <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="#68dbd5" stroke-width="1.5"/>
-  <!-- Rising price line -->
-  <polyline points="5,25 11,19 17,22 24,14 33,9" stroke="#68dbd5" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- Current price dot -->
-  <circle cx="33" cy="9" r="2" fill="#68dbd5"/>
-  <!-- Tr monogram -->
-  <text x="6" y="35" text-anchor="start" font-family="ui-monospace,monospace" font-weight="800" font-size="12" fill="#68dbd5">Tr</text>
+  <!-- T stem + left arm -->
+  <polyline points="7,18 14,18 14,33" stroke="#68dbd5" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Rising right arm — trend line -->
+  <polyline points="14,18 20,22 27,15 35,9" stroke="#68dbd5" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Peak dot -->
+  <circle cx="35" cy="9" r="2.3" fill="#68dbd5"/>
 </svg>
