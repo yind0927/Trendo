@@ -4,19 +4,27 @@
   <!-- Teal accent border -->
   <rect x="1.5" y="1.5" width="37" height="37" rx="9.5" fill="none" stroke="#68dbd5" stroke-width="1.5"/>
   <!-- Horizontal divider -->
-  <line x1="3" y1="20.5" x2="37" y2="20.5" stroke="#68dbd5" stroke-width="0.9" stroke-opacity="0.45"/>
-  <!-- Vertical divider -->
-  <line x1="20.5" y1="3" x2="20.5" y2="37" stroke="#68dbd5" stroke-width="0.9" stroke-opacity="0.45"/>
+  <line x1="3" y1="20.5" x2="37" y2="20.5" stroke="#68dbd5" stroke-width="0.85" stroke-opacity="0.42"/>
+  <!-- Vertical divider 1 -->
+  <line x1="14.3" y1="3" x2="14.3" y2="37" stroke="#68dbd5" stroke-width="0.85" stroke-opacity="0.42"/>
+  <!-- Vertical divider 2 -->
+  <line x1="25.7" y1="3" x2="25.7" y2="37" stroke="#68dbd5" stroke-width="0.85" stroke-opacity="0.42"/>
   <!-- T -->
-  <text x="11" y="14.5" text-anchor="middle" dominant-baseline="middle"
-    font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="#68dbd5">T</text>
+  <text x="8.5" y="12" text-anchor="middle" dominant-baseline="middle"
+    font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">T</text>
   <!-- R -->
-  <text x="29" y="14.5" text-anchor="middle" dominant-baseline="middle"
-    font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="#68dbd5">R</text>
+  <text x="20" y="12" text-anchor="middle" dominant-baseline="middle"
+    font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">R</text>
+  <!-- E -->
+  <text x="31.5" y="12" text-anchor="middle" dominant-baseline="middle"
+    font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">E</text>
+  <!-- N -->
+  <text x="8.5" y="29" text-anchor="middle" dominant-baseline="middle"
+    font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">N</text>
   <!-- D -->
-  <text x="11" y="28" text-anchor="middle" dominant-baseline="middle"
-    font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="#68dbd5">D</text>
+  <text x="20" y="29" text-anchor="middle" dominant-baseline="middle"
+    font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">D</text>
   <!-- O -->
-  <text x="29" y="28" text-anchor="middle" dominant-baseline="middle"
-    font-family="ui-monospace,monospace" font-weight="800" font-size="11.5" fill="#68dbd5">O</text>
+  <text x="31.5" y="29" text-anchor="middle" dominant-baseline="middle"
+    font-family="ui-monospace,monospace" font-weight="800" font-size="9.5" fill="#68dbd5">O</text>
 </svg>
