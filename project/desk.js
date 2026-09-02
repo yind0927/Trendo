@@ -1338,8 +1338,18 @@ function rsAdjustGrade(grade, rsResult) {
     }
   }
 
+  function _showDemoBanner() {
+    if (document.getElementById("demo-banner")) return;
+    const el = document.createElement("div");
+    el.id = "demo-banner";
+    el.innerHTML = `<span class="demo-banner-dot"></span>演示模式 · DEMO &nbsp;示例数据，操作不会保存`;
+    document.body.prepend(el);
+    document.body.style.paddingTop = (parseInt(getComputedStyle(document.body).paddingTop) || 0) + 32 + "px";
+  }
+
   function applyCloudData(data) {
     if (!data) return;
+    if (data._demo) _showDemoBanner();
     // Carry this session's live market fields across the array replacement. They came
     // from the current session's API fetch (never from storage — noMarket guarantees
     // the cloud blob has none), so restoring them is safe and keeps 今日盈亏 / tape
