@@ -5057,11 +5057,10 @@
   </div>
 </div>
 
-<script src="data.js?v=689"></script>
-<script src="desk.js?v=689"></script>
+<script src="data.js?v=690"></script>
+<script src="desk.js?v=690"></script>
 <script>
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js");
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
   // triggers controllerchange; SW also broadcasts NEW_VERSION as backup).
   // Guard prevents double-reload if both signals fire.
@@ -5071,6 +5070,9 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", e => {
     if (e.data?.type === "NEW_VERSION") _swReload();
   });
+  // reg.update() forces the browser to check /sw.js for changes on every page load.
+  // Without this, desktop Chrome may wait up to 24h before checking for a new SW.
+  navigator.serviceWorker.register("/sw.js").then(reg => reg.update());
 }
 </script>
 
