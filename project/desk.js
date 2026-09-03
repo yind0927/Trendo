@@ -1957,17 +1957,17 @@ function rsAdjustGrade(grade, rsResult) {
       });
     }
 
-    // counts
+    // counts — use groupTrades() so partial-close records count as one trade
     const rc = $("#row-count"); if (rc) rc.textContent = rows.length;
+    const _closedG = groupTrades(CLOSED_POSITIONS);
     $("#c-open").textContent   = HOLDINGS.length;
-    $("#c-closed").textContent = CLOSED_POSITIONS.length;
+    $("#c-closed").textContent = _closedG.length;
     if (activeTab === "closed") {
-      const cp = CLOSED_POSITIONS;
-      const profit = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
-      const loss   = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length;
-      const even   = cp.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length;
+      const profit = _closedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
+      const loss   = _closedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length;
+      const even   = _closedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length;
       const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
-      set("#c-cl-all",    cp.length);
+      set("#c-cl-all",    _closedG.length);
       set("#c-cl-profit", profit);
       set("#c-cl-loss",   loss);
       set("#c-cl-even",   even);
@@ -8529,14 +8529,16 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     // Counts — run before card/list branch so card mode also updates chips
+    // Use groupTrades() so partial-close records from the same trade are counted as one.
     const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    const _simClosedG = groupTrades(SIM_CLOSED);
     setCount("sim-c-open",   SIM_HOLDINGS.length);
-    setCount("sim-c-closed", SIM_CLOSED.length);
+    setCount("sim-c-closed", _simClosedG.length);
     if (simActiveTab === "closed") {
-      setCount("sim-c-cl-all",    SIM_CLOSED.length);
-      setCount("sim-c-cl-profit", SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
-      setCount("sim-c-cl-loss",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length);
-      setCount("sim-c-cl-even",   SIM_CLOSED.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length);
+      setCount("sim-c-cl-all",    _simClosedG.length);
+      setCount("sim-c-cl-profit", _simClosedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
+      setCount("sim-c-cl-loss",   _simClosedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length);
+      setCount("sim-c-cl-even",   _simClosedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length);
     } else {
       setCount("sim-c-all",   SIM_HOLDINGS.length);
       setCount("sim-c-eq",    SIM_HOLDINGS.filter(h => h.kind === "equity").length);
@@ -8647,7 +8649,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (labelEl) {
       labelEl.style.display = hasAny ? "" : "none";
       const countEl = $("#sim-trade-log-count");
-      if (countEl) countEl.textContent = (SIM_HOLDINGS.length + SIM_CLOSED.length) + " 笔";
+      if (countEl) countEl.textContent = (SIM_HOLDINGS.length + groupTrades(SIM_CLOSED).length) + " 笔";
       const toggleBtn = $("#sim-trade-log-toggle", labelEl);
       if (toggleBtn) {
         toggleBtn.classList.toggle("collapsed", simTradeLogCollapsed);
