@@ -10,6 +10,11 @@ export default async function handler(req, res) {
   const sym   = (req.query.sym || "").toUpperCase().trim();
   if (!sym) return res.status(400).json({ error: "Missing sym" });
 
+  // CDN-cache per symbol (keyed by URL query). 12h fresh, 24h stale-while-revalidate.
+  // The client already guards with a 24h localStorage cache, so fresh invocations are
+  // rare; the CDN layer prevents concurrent edge nodes from each re-invoking the function.
+  const cacheHdr = "s-maxage=43200, stale-while-revalidate=86400";
+
   const today = new Date().toISOString().slice(0, 10);
   const to    = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
 
@@ -24,6 +29,7 @@ export default async function handler(req, res) {
       // Filter by symbol (free tier may return unfiltered results)
       const cal  = (data.earningsCalendar || []).filter(e => e.symbol === sym);
       if (cal.length > 0) {
+        res.setHeader("Cache-Control", cacheHdr);
         return res.status(200).json({ date: cal[0].date });
       }
     } catch (_) {}
@@ -40,9 +46,11 @@ export default async function handler(req, res) {
     if (dates.length > 0) {
       // earningsDate[0].raw is a Unix timestamp in seconds
       const next = new Date(dates[0].raw * 1000).toISOString().slice(0, 10);
+      res.setHeader("Cache-Control", cacheHdr);
       return res.status(200).json({ date: next });
     }
   } catch (_) {}
 
+  res.setHeader("Cache-Control", cacheHdr);
   return res.status(200).json({ date: null });
 }
