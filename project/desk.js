@@ -8390,8 +8390,9 @@ function rsAdjustGrade(grade, rsResult) {
     if (label) label.style.display = hasAny ? "" : "none";
     const pnl = SIM_HOLDINGS.reduce((s, h) => s + (h.pnlDollar || 0), 0);
     const open = SIM_HOLDINGS.length;
-    const closedTotal = SIM_CLOSED.length;
-    const wins = SIM_CLOSED.filter(h => (h.pnlFinal || 0) > 0).length;
+    const closedGrouped = groupTrades(SIM_CLOSED); // group partial-close records into single trades
+    const closedTotal = closedGrouped.length;
+    const wins = closedGrouped.filter(h => (h.pnlFinal || 0) > 0).length;
     const realizedPnl = SIM_CLOSED.reduce((s, h) => s + (h.pnlFinal || 0), 0);
     const winRate = closedTotal > 0 ? (wins / closedTotal * 100).toFixed(0) + "%" : "—";
     const nav = simNotional + pnl + realizedPnl;
@@ -8426,7 +8427,7 @@ function rsAdjustGrade(grade, rsResult) {
       }
     }
     const utilStr = avgUtil !== null ? avgUtil.toFixed(1) + "%" : "—";
-    const utilTotal = SIM_HOLDINGS.length + SIM_CLOSED.length;
+    const utilTotal = SIM_HOLDINGS.length + closedGrouped.length;
     el.innerHTML = `
       <div class="sim-card">
         <div class="sim-card-label" style="display:flex;justify-content:space-between;align-items:center">
