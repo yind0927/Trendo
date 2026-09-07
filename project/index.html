@@ -136,13 +136,12 @@
     -webkit-font-smoothing: antialiased;
     min-width: 769px;
   }
-  /* ambient depth gradients — three overlapping glows for liquid-glass atmosphere */
+  /* faint starfield grid */
   body::before{
     content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
     background:
-      radial-gradient(1400px 700px at 80% -8%, oklch(0.78 0.14 var(--accent-h) / 0.08), transparent 55%),
-      radial-gradient(1000px 600px at -8% 110%, oklch(0.70 0.15 280 / 0.07), transparent 55%),
-      radial-gradient(800px 400px at 50% 60%, oklch(0.78 0.12 var(--accent-h) / 0.035), transparent 65%);
+      radial-gradient(1200px 600px at 80% -10%, oklch(0.78 0.12 var(--accent-h) / 0.06), transparent 60%),
+      radial-gradient(900px 500px at -5% 110%, oklch(0.70 0.15 280 / 0.05), transparent 60%);
   }
 
   .num, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-weight: var(--mono-weight); }
@@ -161,11 +160,9 @@
     display: flex; align-items: center; gap: 20px;
     padding: 12px 28px;
     padding-top: calc(12px + env(safe-area-inset-top));
-    background: oklch(0.14 0.012 250 / .82);
-    backdrop-filter: blur(20px) saturate(1.3);
-    -webkit-backdrop-filter: blur(20px) saturate(1.3);
-    border-bottom: 1px solid oklch(0.40 0.012 250 / .35);
-    box-shadow: 0 1px 0 0 oklch(1 0 0 / .04), var(--glass-shine);
+    background: color-mix(in oklch, var(--bg-0) 85%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
   }
   .brand{ display:flex; align-items:center; gap: 10px; font-weight: 600; letter-spacing: -0.01em;}
   .brand .mark{
@@ -230,16 +227,13 @@
     gap: var(--gap);
   }
   .ov-card{
-    background: oklch(0.18 0.013 250 / .80);
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    border: 1px solid var(--glass-border);
+    background: var(--bg-1);
+    border: 1px solid var(--line);
     border-radius: var(--radius);
     padding: var(--card-pad);
     position: relative; overflow: hidden;
     min-height: 118px;
     display: flex; flex-direction: column; justify-content: space-between;
-    box-shadow: var(--glass-shine), 0 4px 16px -4px oklch(0 0 0 / .20);
   }
   .ov-card-hd{ display: flex; flex-direction: column; gap: 6px; }
   .ov-tick{ width: 18px; height: 2px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
@@ -302,16 +296,13 @@
 
   /* ============ HOLDINGS TABLE ============ */
   .panel{
-    background: oklch(0.175 0.013 250 / .85);
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    border: 1px solid var(--glass-border);
+    background: var(--bg-1);
+    border: 1px solid var(--line);
     border-radius: var(--radius);
-    box-shadow: var(--glass-shine), 0 4px 16px -4px oklch(0 0 0 / .22);
   }
   .panel-head{
     display: flex; align-items: center; gap: 12px;
-    padding: 14px 18px; border-bottom: 1px solid var(--glass-border);
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
   }
   .panel-title{ display: flex; gap: 2px; background: var(--bg-2); border-radius: 8px; padding: 3px; border: 1px solid var(--line); flex-shrink: 0; }
   .panel-plain-title{ font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
@@ -504,9 +495,7 @@
   .drawer-body::-webkit-scrollbar-track{ background: transparent; }
 
   .drawer-section{
-    background: oklch(0.22 0.013 250 / .60);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: oklch(0.22 0.013 250 / .55);
     border: 1px solid oklch(0.42 0.012 250 / .35);
     border-radius: 12px; padding: 16px;
     box-shadow: var(--glass-shine), 0 2px 8px -2px oklch(0 0 0 / .18);
@@ -968,6 +957,12 @@
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
 
+  /* Sliding liquid-glass lens behind the active tab — mobile only (see media query) */
+  .nav-pill{ display: none; }
+  /* .navlink is an <a>, and Chromium starts a native link drag on mousedown+move,
+     which kills the pointer stream mid-gesture (pointercancel). Must be off for the
+     draggable tab-bar lens to work at all. */
+  .navlink{ -webkit-user-drag: none; user-select: none; -webkit-user-select: none; }
   .navbar{
     display: flex; align-items: center; gap: 16px;
     margin-left: 14px; padding-left: 18px;
@@ -2136,7 +2131,7 @@
   /* ────────────────────────────────────────────────────────── */
 
   .sim-a-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
-  .sim-astat { background: oklch(0.18 0.013 250 / .78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; box-shadow: var(--glass-shine); }
+  .sim-astat { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
   .sim-astat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); font-weight: 500; }
   .sim-astat-value { font-size: 18px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -.02em; }
   .sim-astat-sub { font-size: 12px; font-family: var(--f-mono); color: var(--fg-3); }
@@ -2442,12 +2437,7 @@
   .analytics-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
   .analytics-chart-row { display: flex; gap: 12px; margin-bottom: 14px; }
   .analytics-card {
-    background: oklch(0.18 0.013 250 / .78);
-    backdrop-filter: blur(14px) saturate(1.2);
-    -webkit-backdrop-filter: blur(14px) saturate(1.2);
-    border: 1px solid var(--glass-border);
-    border-radius: 12px; padding: 16px 18px;
-    box-shadow: var(--glass-shine), 0 3px 12px -3px oklch(0 0 0 / .18);
+    background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
     min-width: 0;
   }
   .analytics-card-title { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -2460,7 +2450,7 @@
      已经在用的视觉语言统一。只作用域到 #analytics-content 内部：.sim-astat 是全站共用
      组件（Sim 页/月度回测/Options 页 Premium Ledger 等到处都在用），不能动全局样式，
      只有 Analytics 页这两张卡片的元素/排版本身不变，只换皮肤。 */
-  #analytics-content .sim-astat { background: oklch(0.21 0.013 250 / .65); border: none; border-radius: 10px; gap: 0; }
+  #analytics-content .sim-astat { background: var(--bg-2); border: none; border-radius: 10px; gap: 0; }
   #analytics-content .sim-astat-label { margin-bottom: 4px; }
   #analytics-content .sim-astat-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
   #analytics-content .sim-astat-sub { font-size: 10px; margin-top: 2px; }
@@ -3190,11 +3180,8 @@
     flex-direction: column;
     width: var(--sb-w);
     flex-shrink: 0;
-    background: oklch(0.16 0.013 250 / .88);
-    backdrop-filter: blur(20px) saturate(1.3);
-    -webkit-backdrop-filter: blur(20px) saturate(1.3);
-    border-right: 1px solid oklch(0.38 0.012 250 / .35);
-    box-shadow: var(--glass-shine), 1px 0 0 0 oklch(1 0 0 / .03);
+    background: var(--bg-1);
+    border-right: 1px solid var(--line);
     overflow: hidden; /* .sb-nav scrolls internally */
   }
   .sb-brand-row {
@@ -3405,7 +3392,44 @@
       will-change: transform;
       transform: translateX(-50%);
       -webkit-transform: translateX(-50%) translate3d(0, 0, 0);
+      /* the lens is dragged horizontally — let it own the gesture instead of scrolling */
+      touch-action: none;
     }
+
+    /* Draggable glass lens. Width/offset are set from JS because the tab slots come
+       from flex layout. Deliberately NO blur here: the bar underneath already supplies
+       the frost, and a blur on a moving element would re-run the kernel every frame.
+       brightness/saturate are per-pixel, so the lens reads as glass at ~zero cost. */
+    .nav-pill {
+      display: block;
+      position: absolute;
+      top: 6px; bottom: 6px; left: 0;
+      width: 0;
+      border-radius: 22px;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        linear-gradient(155deg,
+          oklch(1 0 0 / .18) 0%,
+          oklch(1 0 0 / .06) 40%,
+          oklch(1 0 0 / .02) 62%,
+          oklch(1 0 0 / .11) 100%),
+        color-mix(in oklch, var(--accent) 22%, transparent);
+      backdrop-filter: brightness(1.16) saturate(1.4);
+      -webkit-backdrop-filter: brightness(1.16) saturate(1.4);
+      box-shadow:
+        inset 0 1px 0 oklch(1 0 0 / .30),
+        inset 0 -1px 0 oklch(0 0 0 / .16),
+        0 3px 10px -2px color-mix(in oklch, var(--accent) 38%, transparent),
+        0 1px 3px oklch(0 0 0 / .22);
+      transform: translate3d(0, 0, 0);
+      transition:
+        transform .42s cubic-bezier(.32, 1.42, .48, 1),
+        width .42s cubic-bezier(.32, 1.42, .48, 1);
+    }
+    /* while the finger is down the lens tracks it 1:1 — no easing in the way */
+    .nav-pill.dragging { transition: none; }
+
     .navlink {
       flex: 1; display: flex; flex-direction: column; align-items: center;
       justify-content: center; padding: 14px 4px;
@@ -3413,6 +3437,8 @@
       -webkit-tap-highlight-color: transparent;
       transition: background 0.15s ease;
       cursor: pointer;
+      position: relative; z-index: 1;
+      touch-action: none;
     }
     .navlink:active { transform: scale(0.84); transition: transform 0.07s ease; }
     .navlink::before { display: none; }
@@ -3421,7 +3447,8 @@
       transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
     .navlink.active {
-      background: color-mix(in oklch, var(--accent) 18%, transparent);
+      /* the sliding .nav-pill supplies the highlight now — a tint here would double it */
+      background: transparent;
       box-shadow: none; color: var(--accent);
     }
     .navlink.active::after { display: none; }
@@ -3564,7 +3591,7 @@
   .mkt-en { font-size: 12px; font-weight: 500; color: var(--fg-2); letter-spacing: 0.08em; }
   .mkt-date { font-family: var(--f-mono); font-size: 12px; color: var(--fg-3); }
   .mkt-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
-  .mkt-card { background: oklch(0.18 0.013 250 / .78); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); border: 1px solid var(--glass-border); border-radius: 12px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--glass-shine), 0 3px 12px -3px oklch(0 0 0 / .18); }
+  .mkt-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
   .mkt-card-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--fg-3); text-transform: uppercase; }
   .mkt-card-label::before { content: ""; display: block; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; margin-bottom: 6px; }
   .mkt-card-row { display: flex; align-items: baseline; gap: 10px; }
@@ -4037,6 +4064,7 @@
   </a>
 
   <nav class="navbar" aria-label="primary">
+    <span class="nav-pill" aria-hidden="true"></span>
     <a class="navlink active" href="#" data-page="desk">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Dashboard</a>
@@ -5117,8 +5145,8 @@
   </div>
 </div>
 
-<script src="data.js?v=690"></script>
-<script src="desk.js?v=690"></script>
+<script src="data.js?v=694"></script>
+<script src="desk.js?v=694"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5139,7 +5167,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v693";
+  const _swVer = "trendo-v694";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())

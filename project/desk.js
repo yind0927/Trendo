@@ -4198,12 +4198,117 @@ function rsAdjustGrade(grade, rsResult) {
     });
   }
 
+  // ============ MOBILE TAB BAR — draggable liquid-glass lens ============
+  // The lens sits behind the active tab and can be dragged along the bar: it tracks the
+  // finger 1:1, live-previews whichever tab it's over, and commits on release.
+  // Position comes from JS because the tab slots are flex-sized, not fixed-width.
+  let _navDragMoved = false;   // set by a real drag; suppresses the click that follows
+
+  function navPillEls() {
+    // NB: .navbar is NOT inside .topbar in the DOM — don't scope it that way.
+    const bar = document.querySelector(".navbar");
+    if (!bar) return null;
+    const pill = bar.querySelector(".nav-pill");
+    const links = $$(".navlink[data-page]", bar);
+    return (pill && links.length) ? { bar, pill, links } : null;
+  }
+
+  const isMobileNav = () => window.matchMedia("(max-width: 768px)").matches;
+
+  function positionNavPill(animate = true) {
+    const els = navPillEls();
+    if (!els || !isMobileNav()) return;
+    const { pill, links } = els;
+    const active = links.find(a => a.classList.contains("active")) || links[0];
+    if (!active.offsetWidth) return;           // bar not laid out yet
+    if (!animate) pill.classList.add("dragging");
+    pill.style.width = active.offsetWidth + "px";
+    pill.style.transform = `translate3d(${active.offsetLeft}px,0,0)`;
+    if (!animate) { void pill.offsetWidth; pill.classList.remove("dragging"); }
+  }
+
+  function wireNavPillDrag() {
+    const els = navPillEls();
+    if (!els) return;
+    const { bar, pill, links } = els;
+    let dragging = false, startX = 0, baseX = 0, pillW = 0, curIdx = 0;
+
+    // which tab is the lens sitting over, by centre distance
+    const idxAt = x => {
+      const c = x + pillW / 2;
+      let best = 0, bestD = Infinity;
+      links.forEach((a, i) => {
+        const d = Math.abs(a.offsetLeft + a.offsetWidth / 2 - c);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      return best;
+    };
+
+    // Move/up live on window, not on the bar: pointer capture proved unreliable here,
+    // and window listeners also keep the drag alive if the finger strays off the bar.
+    const onMove = e => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      if (!_navDragMoved && Math.abs(dx) > 4) _navDragMoved = true;
+      if (!_navDragMoved) return;
+      // NB: never preventDefault() a pointermove — Chromium responds by firing
+      // pointercancel and cutting the pointer stream dead. Scrolling is already
+      // held off by `touch-action: none` on the bar and its links.
+      const min = links[0].offsetLeft, max = links[links.length - 1].offsetLeft;
+      const x = Math.max(min, Math.min(max, baseX + dx));
+      pill.style.transform = `translate3d(${x}px,0,0)`;
+      const i = idxAt(x);
+      if (i !== curIdx) {
+        curIdx = i;
+        links.forEach((a, j) => a.classList.toggle("active", j === i));
+      }
+    };
+
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      pill.classList.remove("dragging");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+      if (_navDragMoved) switchPage(links[curIdx].dataset.page);  // also repositions the lens
+      else positionNavPill(true);
+    };
+
+    bar.addEventListener("dragstart", e => e.preventDefault());
+    bar.addEventListener("pointerdown", e => {
+      if (!isMobileNav()) return;
+      const active = links.find(a => a.classList.contains("active")) || links[0];
+      if (!active.offsetWidth) return;
+      dragging = true;
+      _navDragMoved = false;
+      startX = e.clientX;
+      baseX = active.offsetLeft;
+      pillW = active.offsetWidth;
+      curIdx = links.indexOf(active);
+      pill.classList.add("dragging");
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", endDrag);
+      window.addEventListener("pointercancel", endDrag);
+    });
+
+    requestAnimationFrame(() => positionNavPill(false));
+    window.addEventListener("resize", () => positionNavPill(false));
+    window.addEventListener("orientationchange", () => setTimeout(() => positionNavPill(false), 120));
+  }
+
   // ============ SEARCH / FILTERS / KEYBOARD ============
   function wireControls() {
     // Nav page switching
     $$(".navlink[data-page]").forEach(a => {
-      a.addEventListener("click", e => { e.preventDefault(); switchPage(a.dataset.page); });
+      a.addEventListener("click", e => {
+        e.preventDefault();
+        // a drag already committed the page — don't let the trailing click override it
+        if (_navDragMoved) { _navDragMoved = false; return; }
+        switchPage(a.dataset.page);
+      });
     });
+    wireNavPillDrag();
 
     // Inspirations sub-tabs (Journal / Preparation)
     $$("[data-insp-tab]").forEach(btn => {
@@ -5033,6 +5138,7 @@ function rsAdjustGrade(grade, rsResult) {
       }
     }
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
+    positionNavPill();
     applySidebarActiveColor(page);
     if (page === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
     if (page === "sim")          renderSim();
