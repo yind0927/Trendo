@@ -2366,6 +2366,7 @@ function rsAdjustGrade(grade, rsResult) {
     wireDrawerSwipe(false);
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
+    document.body.classList.add("drawer-open");
     $("#drawer").setAttribute("aria-hidden", "false");
     _playDrawerSwipeAnim();
   }
@@ -2498,6 +2499,7 @@ function rsAdjustGrade(grade, rsResult) {
     selectedCost = null;
     $("#drawer").classList.remove("open");
     $("#backdrop").classList.remove("open");
+    document.body.classList.remove("drawer-open");
     $("#drawer").setAttribute("aria-hidden", "true");
     renderTable();
   }
@@ -8865,6 +8867,7 @@ function rsAdjustGrade(grade, rsResult) {
     wireDrawerSwipe(true);
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
+    document.body.classList.add("drawer-open");
     $("#drawer").setAttribute("aria-hidden", "false");
     _playDrawerSwipeAnim();
   }
@@ -8875,6 +8878,7 @@ function rsAdjustGrade(grade, rsResult) {
     simSelectedCost = null;
     $("#drawer").classList.remove("open");
     $("#backdrop").classList.remove("open");
+    document.body.classList.remove("drawer-open");
     $("#drawer").setAttribute("aria-hidden", "true");
     renderSimTable();
   }
