@@ -3397,7 +3397,7 @@
     /* ---- Navbar → floating frosted pill tab bar ---- */
     .navbar {
       position: fixed;
-      bottom: calc(16px + env(safe-area-inset-bottom));
+      bottom: calc(26px + env(safe-area-inset-bottom));
       left: 50%; right: auto; top: auto;
       width: calc(100% - 32px); max-width: 440px;
       margin: 0; padding: 5px;
@@ -3523,7 +3523,7 @@
     .navlink.active .nav-icon { transform: scale(1.12); stroke-width: 2.15; filter: none; }
 
     /* ---- Main layout ---- */
-    main { padding: 12px 12px calc(96px + env(safe-area-inset-bottom)); gap: 10px; }
+    main { padding: 12px 12px calc(106px + env(safe-area-inset-bottom)); gap: 10px; }
 
     /* ---- Overview strip ---- */
     /* 6 cards, single column on mobile — a multi-column grid here just leaves odd cards
@@ -5213,8 +5213,8 @@
   </div>
 </div>
 
-<script src="data.js?v=697"></script>
-<script src="desk.js?v=697"></script>
+<script src="data.js?v=698"></script>
+<script src="desk.js?v=698"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5235,7 +5235,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v697";
+  const _swVer = "trendo-v698";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())
