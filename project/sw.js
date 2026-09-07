@@ -1,5 +1,5 @@
 // Trendo Service Worker — network-first, auto-update on deploy
-const CACHE = "trendo-v690";
+const CACHE = "trendo-v693";
 // JS is versioned via ?v= query in index.html — precache the same URLs so offline
 // fallback matches the real requests. Bump the version here AND in index.html together.
 const PRECACHE = ["/", "/index.html", "/data.js?v=690", "/desk.js?v=690", "/logo.svg", "/icon-192.png", "/icon-512.png", "/manifest.json"];
@@ -30,6 +30,16 @@ self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.pathname.startsWith("/api/")) return;
+
+  // Navigation requests (HTML page loads): always bypass HTTP cache so Arc and
+  // other browsers with aggressive caching always get the latest index.html.
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request, { cache: "no-store" })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
 
   e.respondWith(
     fetch(e.request)

@@ -5136,6 +5136,16 @@ if ("serviceWorker" in navigator) {
     reg.update();
     setInterval(() => reg.update(), 60000);
   });
+  // Backup version check: fetch /sw.js directly and compare CACHE name.
+  // Works in Arc and other browsers where SW lifecycle events are unreliable,
+  // because this is plain JS with no-store — bypasses all caches unconditionally.
+  const _swVer = "trendo-v693";
+  setInterval(() => {
+    fetch("/sw.js?" + Date.now(), { cache: "no-store" })
+      .then(r => r.text())
+      .then(t => { if (!t.includes(_swVer)) _swReload(); })
+      .catch(() => {});
+  }, 60000);
 }
 </script>
 
