@@ -3435,16 +3435,30 @@
     .navbar::before {
       content: ""; position: absolute; inset: 0; border-radius: inherit;
       padding: 1px; pointer-events: none; z-index: 3;
-      background: linear-gradient(145deg,
-        oklch(1 0 0 / .58) 0%,
-        oklch(1 0 0 / .13) 26%,
-        oklch(1 0 0 / .03) 50%,
-        oklch(1 0 0 / .17) 74%,
-        oklch(1 0 0 / .50) 100%);
-      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite: xor;
-      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      mask-composite: exclude;
+    }
+    /* The gradient is painted ONLY where the cut-out mask is known to work. Getting
+       this wrong does not degrade to "no rim" — it degrades to the full gradient
+       covering the whole bar as a white veil, which is exactly what shipped to iOS
+       in v695. Two rules matter:
+       1. Order. In WebKit `mask` is an alias of `-webkit-mask`, so a later `mask`
+          shorthand RESETS the composite. Safari then ignores the unprefixed
+          `mask-composite`, leaving composite at `add` — the two layers union and the
+          cut-out never happens. The -webkit- pair must come LAST so WebKit ends on
+          the value it understands.
+       2. @supports. If neither composite property is supported, paint nothing. */
+    @supports ((mask-composite: exclude) or (-webkit-mask-composite: xor)) {
+      .navbar::before {
+        background: linear-gradient(145deg,
+          oklch(1 0 0 / .58) 0%,
+          oklch(1 0 0 / .13) 26%,
+          oklch(1 0 0 / .03) 50%,
+          oklch(1 0 0 / .17) 74%,
+          oklch(1 0 0 / .50) 100%);
+        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        mask-composite: exclude;
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+      }
     }
 
     /* Draggable glass lens. Width/offset are set from JS because the tab slots come
@@ -5199,8 +5213,8 @@
   </div>
 </div>
 
-<script src="data.js?v=696"></script>
-<script src="desk.js?v=696"></script>
+<script src="data.js?v=697"></script>
+<script src="desk.js?v=697"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5221,7 +5235,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v696";
+  const _swVer = "trendo-v697";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())

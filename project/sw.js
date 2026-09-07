@@ -1,8 +1,8 @@
 // Trendo Service Worker — network-first, auto-update on deploy
-const CACHE = "trendo-v696";
+const CACHE = "trendo-v697";
 // JS is versioned via ?v= query in index.html — precache the same URLs so offline
 // fallback matches the real requests. Bump the version here AND in index.html together.
-const PRECACHE = ["/", "/index.html", "/data.js?v=696", "/desk.js?v=696", "/logo.svg", "/icon-192.png", "/icon-512.png", "/manifest.json"];
+const PRECACHE = ["/", "/index.html", "/data.js?v=697", "/desk.js?v=697", "/logo.svg", "/icon-192.png", "/icon-512.png", "/manifest.json"];
 
 self.addEventListener("install", e => {
   self.skipWaiting();
@@ -31,12 +31,27 @@ self.addEventListener("fetch", e => {
   const url = new URL(e.request.url);
   if (url.pathname.startsWith("/api/")) return;
 
-  // Navigation requests (HTML page loads): always bypass HTTP cache so Arc and
-  // other browsers with aggressive caching always get the latest index.html.
+  // Navigation (page load): serve the cached shell immediately, refresh it in the
+  // background. This is what makes a PWA relaunch instant instead of waiting on a
+  // full download of index.html — iOS drops backgrounded web apps from memory on its
+  // own schedule, which a page cannot extend, so the fix is to make the reload cheap
+  // rather than rare.
+  //
+  // Serving from cache does NOT strand anyone on an old build: CACHE is versioned, so
+  // a deploy means a new service worker with an empty cache, and its first navigation
+  // necessarily goes to the network. index.html also carries an update check that
+  // polls /sw.js and reloads when the version moves.
   if (e.request.mode === "navigate") {
     e.respondWith(
-      fetch(e.request, { cache: "no-store" })
-        .catch(() => caches.match(e.request))
+      caches.open(CACHE).then(cache =>
+        cache.match("/index.html").then(cached => {
+          const fresh = fetch(e.request).then(res => {
+            if (res.ok) cache.put("/index.html", res.clone());
+            return res;
+          });
+          return cached || fresh.catch(() => cache.match("/"));
+        })
+      )
     );
     return;
   }
