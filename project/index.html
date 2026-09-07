@@ -5130,9 +5130,12 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", e => {
     if (e.data?.type === "NEW_VERSION") _swReload();
   });
-  // reg.update() forces the browser to check /sw.js for changes on every page load.
-  // Without this, desktop Chrome may wait up to 24h before checking for a new SW.
-  navigator.serviceWorker.register("/sw.js").then(reg => reg.update());
+  // reg.update() forces browser to check /sw.js on load AND every 60s.
+  // Without periodic polling, desktop Chrome may wait up to 24h between checks.
+  navigator.serviceWorker.register("/sw.js").then(reg => {
+    reg.update();
+    setInterval(() => reg.update(), 60000);
+  });
 }
 </script>
 
