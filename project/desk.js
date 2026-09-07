@@ -4256,7 +4256,8 @@ function rsAdjustGrade(grade, rsResult) {
       // held off by `touch-action: none` on the bar and its links.
       const min = links[0].offsetLeft, max = links[links.length - 1].offsetLeft;
       const x = Math.max(min, Math.min(max, baseX + dx));
-      pill.style.transform = `translate3d(${x}px,0,0)`;
+      // slight lift while held — the lens reads as picked up, then springs back
+      pill.style.transform = `translate3d(${x}px,0,0) scale(1.06)`;
       const i = idxAt(x);
       if (i !== curIdx) {
         curIdx = i;

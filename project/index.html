@@ -3372,60 +3372,86 @@
     /* ---- Navbar → floating frosted pill tab bar ---- */
     .navbar {
       position: fixed;
-      bottom: calc(38px + env(safe-area-inset-bottom));
+      bottom: calc(16px + env(safe-area-inset-bottom));
       left: 50%; right: auto; top: auto;
-      width: calc(100% - 28px); max-width: 480px;
-      margin: 0; padding: 6px;
+      width: calc(100% - 32px); max-width: 440px;
+      margin: 0; padding: 5px;
       border-left: none; border-top: none;
-      border: 1px solid oklch(1 0 0 / .11);
-      background: color-mix(in oklch, var(--bg-1) 65%, transparent);
-      backdrop-filter: blur(48px) saturate(2.2) brightness(1.12);
-      -webkit-backdrop-filter: blur(48px) saturate(2.2) brightness(1.12);
-      height: auto; gap: 2px;
+      border: none;                      /* the rim is drawn by ::before, see below */
+      /* Real glass is TRANSPARENT and saturated, not milky. A big blur radius over an
+         opaque backing is what makes web navs read as frosted plastic. Low opacity +
+         strong saturation + a moderate radius looks far closer to the native material
+         AND costs less per frame — a fixed backdrop-filter has to re-sample the
+         backdrop on every scrolled frame, so the kernel size is paid continuously. */
+      background: color-mix(in oklch, var(--bg-1) 44%, transparent);
+      backdrop-filter: blur(26px) saturate(1.85);
+      -webkit-backdrop-filter: blur(26px) saturate(1.85);
+      height: auto; gap: 0;
       justify-content: space-around;
-      border-radius: 28px;
+      border-radius: 999px;              /* true capsule, as on iOS */
+      /* contact shadow + ambient shadow, rather than one broad haze */
       box-shadow:
-        0 8px 28px oklch(0 0 0 / .38),
-        0 2px 6px oklch(0 0 0 / .18),
-        inset 0 1px 0 oklch(1 0 0 / .14);
+        0 1px 1px oklch(0 0 0 / .10),
+        0 6px 16px -4px oklch(0 0 0 / .26),
+        0 18px 40px -12px oklch(0 0 0 / .38);
       z-index: 50;
       will-change: transform;
       transform: translateX(-50%);
       -webkit-transform: translateX(-50%) translate3d(0, 0, 0);
       /* the lens is dragged horizontally — let it own the gesture instead of scrolling */
       touch-action: none;
+      isolation: isolate;
+    }
+    /* Refracted rim. Glass bends light at its edge, so the highlight is not a uniform
+       1px line — it flares where the curve catches light and fades on the shaded side.
+       This variable rim, far more than the blur, is what separates the native material
+       from a flat frosted rectangle. Drawn as a masked gradient border: pure paint, so
+       it adds nothing to the per-frame scroll cost. */
+    .navbar::before {
+      content: ""; position: absolute; inset: 0; border-radius: inherit;
+      padding: 1px; pointer-events: none; z-index: 3;
+      background: linear-gradient(145deg,
+        oklch(1 0 0 / .58) 0%,
+        oklch(1 0 0 / .13) 26%,
+        oklch(1 0 0 / .03) 50%,
+        oklch(1 0 0 / .17) 74%,
+        oklch(1 0 0 / .50) 100%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
     }
 
     /* Draggable glass lens. Width/offset are set from JS because the tab slots come
-       from flex layout. Deliberately NO blur here: the bar underneath already supplies
-       the frost, and a blur on a moving element would re-run the kernel every frame.
-       brightness/saturate are per-pixel, so the lens reads as glass at ~zero cost. */
+       from flex layout.
+       ZERO filters here, by design. It sits inside .navbar, which already carries a
+       backdrop-filter — a nested backdrop-filter means the browser resolves the bar's
+       filtered output first and then filters that again, an extra pass on every frame
+       the backdrop moves. Since the lens rides on top of already-frosted glass, a
+       painted specular gradient reads the same and costs nothing while scrolling.
+       Neutral white rather than accent-tinted, which is what iOS actually does — the
+       colour comes from the icon on top, not from the capsule. */
     .nav-pill {
       display: block;
       position: absolute;
-      top: 6px; bottom: 6px; left: 0;
+      top: 5px; bottom: 5px; left: 0;
       width: 0;
-      border-radius: 22px;
+      border-radius: 999px;
       pointer-events: none;
       z-index: 0;
-      background:
-        linear-gradient(155deg,
-          oklch(1 0 0 / .18) 0%,
-          oklch(1 0 0 / .06) 40%,
-          oklch(1 0 0 / .02) 62%,
-          oklch(1 0 0 / .11) 100%),
-        color-mix(in oklch, var(--accent) 22%, transparent);
-      backdrop-filter: brightness(1.16) saturate(1.4);
-      -webkit-backdrop-filter: brightness(1.16) saturate(1.4);
+      background: linear-gradient(150deg,
+        oklch(1 0 0 / .28) 0%,
+        oklch(1 0 0 / .14) 44%,
+        oklch(1 0 0 / .08) 68%,
+        oklch(1 0 0 / .19) 100%);
       box-shadow:
-        inset 0 1px 0 oklch(1 0 0 / .30),
-        inset 0 -1px 0 oklch(0 0 0 / .16),
-        0 3px 10px -2px color-mix(in oklch, var(--accent) 38%, transparent),
-        0 1px 3px oklch(0 0 0 / .22);
+        inset 0 1px 0 oklch(1 0 0 / .46),
+        inset 0 -1px 0 oklch(0 0 0 / .12),
+        0 2px 6px -1px oklch(0 0 0 / .20);
       transform: translate3d(0, 0, 0);
       transition:
-        transform .42s cubic-bezier(.32, 1.42, .48, 1),
-        width .42s cubic-bezier(.32, 1.42, .48, 1);
+        transform .48s cubic-bezier(.22, 1.28, .36, 1),
+        width .48s cubic-bezier(.22, 1.28, .36, 1);
     }
     /* while the finger is down the lens tracks it 1:1 — no easing in the way */
     .nav-pill.dragging { transition: none; }
@@ -3442,9 +3468,11 @@
     }
     .navlink:active { transform: scale(0.84); transition: transform 0.07s ease; }
     .navlink::before { display: none; }
+    .navlink { color: var(--fg-2); }
     .navlink .nav-icon {
-      display: block; width: 24px; height: 24px; margin-bottom: 0; stroke-width: 1.65;
-      transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: block; width: 24px; height: 24px; margin-bottom: 0; stroke-width: 1.7;
+      transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  stroke-width 0.2s ease;
     }
     .navlink.active {
       /* the sliding .nav-pill supplies the highlight now — a tint here would double it */
@@ -3452,10 +3480,11 @@
       box-shadow: none; color: var(--accent);
     }
     .navlink.active::after { display: none; }
-    .navlink.active .nav-icon { transform: scale(1.2); filter: none; }
+    /* iOS marks the selected tab by weight, not just colour */
+    .navlink.active .nav-icon { transform: scale(1.12); stroke-width: 2.15; filter: none; }
 
     /* ---- Main layout ---- */
-    main { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); gap: 10px; }
+    main { padding: 12px 12px calc(96px + env(safe-area-inset-bottom)); gap: 10px; }
 
     /* ---- Overview strip ---- */
     /* 6 cards, single column on mobile — a multi-column grid here just leaves odd cards
@@ -5145,8 +5174,8 @@
   </div>
 </div>
 
-<script src="data.js?v=694"></script>
-<script src="desk.js?v=694"></script>
+<script src="data.js?v=695"></script>
+<script src="desk.js?v=695"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5167,7 +5196,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v694";
+  const _swVer = "trendo-v695";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())
