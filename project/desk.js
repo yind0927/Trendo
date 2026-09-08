@@ -5010,18 +5010,24 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // Sim page sub-tabs. Everything that is not the topbar, the tab bar itself or the
-  // picks panel belongs to the sim book, so the two views toggle without the existing
-  // sim markup needing to be restructured.
+  // picks panel belongs to the sim book.
+  //
+  // Visibility is expressed as ONE attribute and resolved in CSS, never by writing
+  // `display` onto each child. The sim book's own renderers already own `display` on
+  // their modules — renderSimExitQuality hides itself when SIM_CLOSED is empty and shows
+  // itself when it is not, and it runs again whenever an async history fetch lands. When
+  // this function also wrote `display` to those same elements the two owners fought: a
+  // fetch resolving after a switch to Model Picks would show the exit-quality module on
+  // top of the picks view, and tapping the sub-tab again would hide it. Its companion
+  // bug was the restore path — the previous display was cached on first switch and never
+  // updated, so returning to the book could un-hide a module the renderer had since
+  // hidden. Neither can happen now: the renderers write inline display freely, and the
+  // picks-mode rule overrides all of it for as long as that mode is on.
   function setSimSubTab(tab) {
     simSubTab = tab;
     const view = $("#sim-view"); if (!view) return;
     $$("[data-sim-tab]").forEach(b => b.classList.toggle("active", b.dataset.simTab === tab));
-    [...view.children].forEach(ch => {
-      if (ch.classList.contains("page-topbar") || ch.classList.contains("page-subtab-bar")) return;
-      if (ch.id === "sim-picks-panel") { ch.style.display = tab === "picks" ? "" : "none"; return; }
-      ch.dataset.mpPrevDisplay = ch.dataset.mpPrevDisplay ?? ch.style.display;
-      ch.style.display = tab === "picks" ? "none" : (ch.dataset.mpPrevDisplay || "");
-    });
+    view.dataset.subtab = tab;
     if (tab === "picks") { wireModelPicks(); renderModelPicks(); mpRefresh(); }
     else renderSim();
   }

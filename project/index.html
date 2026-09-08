@@ -1926,6 +1926,20 @@
      10 independent observations, and an average over that is not evidence yet. */
   .mp-warn { background:color-mix(in oklch, var(--warn) 12%, transparent); border:1px solid color-mix(in oklch, var(--warn) 35%, transparent);
              color:var(--warn); font-size:11.5px; line-height:1.6; border-radius:8px; padding:10px 13px; margin-bottom:14px; }
+  /* ── Sim sub-tab visibility ──
+     Driven entirely by #sim-view's data-subtab, so the sim book's renderers stay free to
+     set `display` on their own modules (renderSimExitQuality shows/hides itself as
+     SIM_CLOSED changes, including from an async history fetch that can land at any time).
+     The picks-mode rule needs !important precisely because it has to beat that inline
+     display — that is the whole point of it being a mode override rather than a second
+     writer of the same property. Absent the attribute the book shows, which is the right
+     default before setSimSubTab has ever run. */
+  #sim-view > #sim-picks-panel { display: none; }
+  #sim-view[data-subtab="picks"] > #sim-picks-panel { display: block; }
+  #sim-view[data-subtab="picks"] > *:not(.page-topbar):not(.page-subtab-bar):not(#sim-picks-panel) {
+    display: none !important;
+  }
+
   .mp-stats { margin-bottom:18px; }
   /* Six horizons (1/2/4/6/8/12w). Three columns tiles them 3x2 with no orphan; the old
      five-column grid left the sixth stranded alone on a second row. */
@@ -4846,7 +4860,9 @@
   </div>
 
   <!-- Model Picks: forward-test ledger. Rendered entirely from JS. -->
-  <div id="sim-picks-panel" style="display:none"></div>
+  <!-- No inline display: visibility is owned by the #sim-view[data-subtab] rules so that
+       nothing has to remember and restore a previous value. -->
+  <div id="sim-picks-panel"></div>
 
   <!-- 挂单队列 -->
   <div id="sim-pending-section" style="display:none;margin:0 0 12px">
@@ -5445,8 +5461,8 @@
   </div>
 </div>
 
-<script src="data.js?v=714"></script>
-<script src="desk.js?v=714"></script>
+<script src="data.js?v=715"></script>
+<script src="desk.js?v=715"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
