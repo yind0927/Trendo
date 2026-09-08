@@ -1885,6 +1885,16 @@
   .page-subtab { background: none; border: none; font-size: 12px; color: var(--fg-3); cursor: pointer; padding: 4px 10px; border-radius: 6px; font-family: inherit; transition: background .15s, color .15s; }
   .page-subtab.active { background: var(--accent); color: var(--bg-0); font-weight: 600; }
   .page-subtab:not(.active):hover { color: var(--fg-1); background: var(--line); }
+  /* ── Trade share card ── */
+  .share-preview { background:var(--bg-0); border:1px solid var(--line); border-radius:12px;
+                   padding:10px; display:flex; justify-content:center; }
+  .share-preview canvas { width:100%; max-width:340px; height:auto; border-radius:8px; display:block; }
+  .share-toggle { display:flex; align-items:center; gap:9px; margin:14px 0 4px; font-size:12.5px; cursor:pointer; }
+  .share-toggle input { accent-color:var(--accent); width:15px; height:15px; }
+  .share-hint { color:var(--fg-3); font-size:11px; margin-left:auto; }
+  .share-actions { display:flex; gap:9px; margin-top:14px; }
+  .share-actions .btn { flex:1; justify-content:center; }
+
   /* ── Model Picks (forward-test ledger, Sim page sub-tab) ── */
   .mp-gen { display:flex; align-items:center; gap:14px; background:var(--bg-1); border:1px solid var(--line);
             border-left:2px solid var(--accent); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; flex-wrap:wrap; }
@@ -4860,6 +4870,26 @@
   </svg>
 </button>
 
+<!-- Share card. The canvas is the deliverable; CSS only scales it for preview. -->
+<div class="modal-backdrop" id="share-modal-backdrop" style="z-index:120">
+  <div class="modal" id="share-modal" style="max-width:560px;padding:22px">
+    <div class="modal-header" style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span style="font-size:14px;font-weight:600">分享这笔交易</span>
+      <button class="close" id="share-close" style="margin-left:auto">✕</button>
+    </div>
+    <div class="share-preview"><canvas id="share-canvas"></canvas></div>
+    <label class="share-toggle">
+      <input type="checkbox" id="share-amount">
+      <span>显示盈亏金额</span>
+      <span class="share-hint">默认只显示百分比与 R 倍数</span>
+    </label>
+    <div class="share-actions">
+      <button class="btn" id="share-dl">下载图片</button>
+      <button class="btn primary" id="share-send">分享…</button>
+    </div>
+  </div>
+</div>
+
 <div class="drawer-backdrop" id="backdrop"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 
@@ -5284,8 +5314,8 @@
   </div>
 </div>
 
-<script src="data.js?v=704"></script>
-<script src="desk.js?v=704"></script>
+<script src="data.js?v=705"></script>
+<script src="desk.js?v=705"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5306,7 +5336,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v704";
+  const _swVer = "trendo-v705";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())

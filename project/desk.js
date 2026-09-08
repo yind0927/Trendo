@@ -2564,6 +2564,9 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
           </span>
           <span id="drawer-nav-counter" class="drawer-nav-counter" style="display:none"></span>
+          ${isClosed && !isSim ? `<button class="close" id="drawer-share" title="分享这笔交易">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>
+          </button>` : ""}
           <button class="close" id="drawer-close" title="关闭 (Esc)">✕</button>
         </div>
         <div class="hero-price">
@@ -4317,6 +4320,276 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
 
+
+  // ============ TRADE SHARE CARD ============
+  // Renders a closed trade to a 1080x1350 PNG, drawn directly on a canvas rather than
+  // by rasterising DOM. html2canvas and friends choke on exactly what this app's visual
+  // language is built from — oklch(), backdrop-filter, CSS custom properties — and the
+  // project has no build step to add a dependency to anyway. Drawing it explicitly costs
+  // more code but the output is deterministic and pixel-identical everywhere.
+  //
+  // Colours are resolved from the live CSS tokens at draw time, so the card tracks the
+  // platform's palette (and theme) instead of hard-coding a second copy of it that would
+  // silently drift out of sync.
+
+  const SC_W = 1080, SC_H = 1350, SC_PAD = 72;
+  let _scState = null;      // { h, series, showAmount }
+
+  // Resolve a CSS colour to concrete [r,g,b] by painting it and reading the pixel back.
+  // Parsing getComputedStyle().color is not enough: Chromium keeps oklch() in the
+  // computed value rather than converting to rgb, so any string-level alpha handling
+  // silently no-ops and every tint comes out fully opaque.
+  const _scProbe = document.createElement("canvas");
+  _scProbe.width = _scProbe.height = 1;
+  function scColor(expr) {
+    const probe = document.createElement("span");
+    probe.style.cssText = `position:absolute;visibility:hidden;color:${expr}`;
+    document.body.appendChild(probe);
+    const computed = getComputedStyle(probe).color;
+    probe.remove();
+    const g = _scProbe.getContext("2d", { willReadFrequently: true });
+    g.clearRect(0, 0, 1, 1);
+    g.fillStyle = "#000";
+    g.fillStyle = computed;                       // invalid values leave the fallback in place
+    g.fillRect(0, 0, 1, 1);
+    const d = g.getImageData(0, 0, 1, 1).data;
+    return [d[0], d[1], d[2]];
+  }
+  const scPal = () => ({
+    bg0:  scColor("var(--bg-0)"),  bg1: scColor("var(--bg-1)"), bg2: scColor("var(--bg-2)"),
+    fg1:  scColor("var(--fg-1)"),  fg2: scColor("var(--fg-2)"), fg3: scColor("var(--fg-3)"),
+    up:   scColor("var(--up)"),    down: scColor("var(--down)"),
+    accent: scColor("var(--accent)"), warn: scColor("var(--warn)"), line: scColor("var(--line)"),
+  });
+  const scAlpha = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const scRgb   = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+  function scRound(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+
+  // Daily closes across the holding period. The real price path is the point of the
+  // card — a bare P&L number says nothing about how the trade actually went.
+  async function scFetchSeries(h) {
+    try {
+      const r = await fetch(`/api/history?symbols=${encodeURIComponent(h.sym)}&from=${h.entry}`);
+      if (!r.ok) return null;
+      const j = await r.json();
+      const src = j.results?.[h.sym];
+      if (!src) return null;
+      const end = h.closedAt || "9999";
+      return Object.keys(src).sort()
+        .filter(d => d <= end)
+        .map(d => ({ d, px: src[d] }))
+        .filter(p => p.px != null);
+    } catch (_) { return null; }
+  }
+
+  function scDraw(canvas, h, series, showAmount) {
+    const P = scPal();
+    const ctx = canvas.getContext("2d");
+    canvas.width = SC_W; canvas.height = SC_H;
+    const win = (h.pnlFinal ?? h.pnlDollar ?? 0) >= 0;
+    const tone = win ? P.up : P.down;   // kept as [r,g,b]
+    const mono = n => `${n}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    const sans = (n, w = 400) => `${w} ${n}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+
+    // ── ground + ambient glow, same two-lobe language as the app background ──
+    ctx.fillStyle = scRgb(P.bg0); ctx.fillRect(0, 0, SC_W, SC_H);
+    const g1 = ctx.createRadialGradient(SC_W * 0.85, -80, 0, SC_W * 0.85, -80, 900);
+    g1.addColorStop(0, scAlpha(tone, 0.16)); g1.addColorStop(1, scAlpha(tone, 0));
+    ctx.fillStyle = g1; ctx.fillRect(0, 0, SC_W, SC_H);
+    const g2 = ctx.createRadialGradient(-60, SC_H + 60, 0, -60, SC_H + 60, 800);
+    g2.addColorStop(0, scAlpha(P.accent, 0.10)); g2.addColorStop(1, scAlpha(P.accent, 0));
+    ctx.fillStyle = g2; ctx.fillRect(0, 0, SC_W, SC_H);
+
+    // ── header ──
+    let y = SC_PAD + 16;
+    scRound(ctx, SC_PAD, y, 76, 76, 16);
+    ctx.fillStyle = scAlpha(P.accent, 0.14); ctx.fill();
+    ctx.strokeStyle = scAlpha(P.accent, 0.35); ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = scRgb(P.accent); ctx.font = mono(24); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(h.sym.slice(0, 4), SC_PAD + 38, y + 40);
+
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = scRgb(P.fg1); ctx.font = mono(38);
+    ctx.fillText(h.sym, SC_PAD + 98, y + 34);
+    ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(19);
+    ctx.fillText(`${h.name || ""} · ${h.kind === "crypto" ? "Crypto" : h.kind === "etf" ? "ETF" : "Equity"}`,
+                 SC_PAD + 98, y + 62);
+
+    const badge = win ? "盈利 · WIN" : (h.pnlFinal === 0 ? "持平 · FLAT" : "亏损 · LOSS");
+    ctx.font = sans(18, 600);
+    const bw = ctx.measureText(badge).width + 36;
+    scRound(ctx, SC_W - SC_PAD - bw, y + 20, bw, 40, 20);
+    ctx.fillStyle = scAlpha(tone, 0.16); ctx.fill();
+    ctx.strokeStyle = scAlpha(tone, 0.45); ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = scRgb(tone); ctx.textAlign = "center";
+    ctx.fillText(badge, SC_W - SC_PAD - bw / 2, y + 47);
+    ctx.textAlign = "left";
+
+    // ── hero: percentage carries the card; amount only on request ──
+    y = 300;
+    const pctTxt = `${h.pnlPct >= 0 ? "+" : ""}${(h.pnlPct ?? 0).toFixed(2)}%`;
+    ctx.fillStyle = scRgb(tone); ctx.font = mono(130);
+    ctx.fillText(pctTxt, SC_PAD, y);
+    const pw = ctx.measureText(pctTxt).width;
+    if (h.rMult != null) {
+      ctx.fillStyle = scAlpha(tone, 0.75); ctx.font = mono(40);
+      ctx.fillText(`${h.rMult >= 0 ? "+" : ""}${h.rMult.toFixed(2)}R`, SC_PAD + pw + 28, y);
+    }
+    if (showAmount) {
+      const amt = h.pnlFinal ?? h.pnlDollar ?? 0;
+      ctx.fillStyle = scRgb(P.fg2); ctx.font = mono(34);
+      ctx.fillText(`${amt >= 0 ? "+" : "−"}$${Math.abs(Math.round(amt)).toLocaleString()}`, SC_PAD, y + 48);
+    }
+
+    // ── chart ──
+    // fixed origin: the amount toggle must not move the chart under the user
+    const cx = SC_PAD, cy = 400, cw = SC_W - SC_PAD * 2, ch = 600;
+    scRound(ctx, cx, cy, cw, ch, 20);
+    ctx.fillStyle = scAlpha(P.bg1, 0.55); ctx.fill();
+    ctx.strokeStyle = scRgb(P.line); ctx.lineWidth = 1; ctx.stroke();
+
+    const pts = series && series.length > 1 ? series : null;
+    const entryPx = h.cost, exitPx = h.closePrice ?? h.last;
+    if (pts) {
+      const vals = pts.map(p => p.px);
+      const cand = [...vals, entryPx, exitPx];
+      if (h.stop   > 0) cand.push(h.stop);
+      if (h.target > 0) cand.push(h.target);
+      let lo = Math.min(...cand), hi = Math.max(...cand);
+      const padV = (hi - lo) * 0.12 || 1; lo -= padV; hi += padV;
+      const ix = 40, iy = 34;                                   // inner padding
+      const X = i => cx + ix + (cw - ix * 2) * (i / (pts.length - 1));
+      const Y = v => cy + iy + (ch - iy * 2) * (1 - (v - lo) / (hi - lo));
+
+      // reference levels
+      const level = (v, col, label) => {
+        if (!(v > 0) || v < lo || v > hi) return;
+        ctx.setLineDash([7, 7]); ctx.strokeStyle = scAlpha(col, 0.5); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(cx + ix, Y(v)); ctx.lineTo(cx + cw - ix, Y(v)); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = scAlpha(col, 0.95); ctx.font = sans(15, 700); ctx.textAlign = "right";
+        ctx.fillText(label, cx + cw - ix - 4, Y(v) - 9);
+        ctx.textAlign = "left";
+      };
+      // area first — reference levels drawn under it would be invisible
+      ctx.beginPath(); ctx.moveTo(X(0), Y(vals[0]));
+      pts.forEach((p, i) => ctx.lineTo(X(i), Y(p.px)));
+      ctx.lineTo(X(pts.length - 1), cy + ch - iy); ctx.lineTo(X(0), cy + ch - iy); ctx.closePath();
+      const ag = ctx.createLinearGradient(0, cy, 0, cy + ch);
+      ag.addColorStop(0, scAlpha(tone, 0.22)); ag.addColorStop(1, scAlpha(tone, 0.02));
+      ctx.fillStyle = ag; ctx.fill();
+
+      level(h.stop,   P.down, "STOP");
+      level(h.target, P.up,   "TARGET");
+      level(entryPx,  P.fg2,  "ENTRY");
+
+      ctx.beginPath(); ctx.moveTo(X(0), Y(vals[0]));
+      pts.forEach((p, i) => ctx.lineTo(X(i), Y(p.px)));
+      ctx.strokeStyle = scRgb(tone); ctx.lineWidth = 3.5; ctx.lineJoin = "round"; ctx.stroke();
+
+      // peak of the run, and the two ends
+      const peakI = vals.indexOf(Math.max(...vals));
+      const dot = (px, py, col, r = 9) => {
+        ctx.beginPath(); ctx.arc(px, py, r + 5, 0, Math.PI * 2);
+        ctx.fillStyle = scAlpha(col, 0.22); ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fillStyle = scRgb(col); ctx.fill();
+        ctx.strokeStyle = scRgb(P.bg0); ctx.lineWidth = 3; ctx.stroke();
+      };
+      if (peakI > 0 && peakI < pts.length - 1) {
+        dot(X(peakI), Y(vals[peakI]), P.warn, 7);
+        ctx.fillStyle = scRgb(P.warn); ctx.font = sans(15, 600); ctx.textAlign = "center";
+        ctx.fillText("峰值", X(peakI), Y(vals[peakI]) - 22);
+      }
+      dot(X(0), Y(vals[0]), P.fg2);
+      dot(X(pts.length - 1), Y(vals[vals.length - 1]), tone);
+    } else {
+      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(20); ctx.textAlign = "center";
+      ctx.fillText("价格数据不可用", cx + cw / 2, cy + ch / 2);
+      ctx.textAlign = "left";
+    }
+
+    // ── stats ──
+    const days = calcTradingDays(h.entry, h.closedAt);
+    let capture = "—";
+    if (pts) {
+      const peak = Math.max(...pts.map(p => p.px));
+      if (peak > entryPx) capture = `${Math.round((exitPx - entryPx) / (peak - entryPx) * 100)}%`;
+    }
+    const cells = [
+      ["持仓", `${days}d`],
+      ["入场 → 出场", `${price(entryPx)} → ${price(exitPx)}`],
+      ["R 倍数", h.rMult != null ? `${h.rMult >= 0 ? "+" : ""}${h.rMult.toFixed(2)}R` : "—"],
+      ["峰值捕获", capture],
+    ];
+    const sy = cy + ch + 40, sh = 122, gap = 14;
+    const sw = (cw - gap * 3) / 4;
+    cells.forEach(([label, val], i) => {
+      const x = cx + (sw + gap) * i;
+      scRound(ctx, x, sy, sw, sh, 14);
+      ctx.fillStyle = scAlpha(P.bg2, 0.7); ctx.fill();
+      ctx.fillStyle = scRgb(P.accent); ctx.fillRect(x + 20, sy + 26, 22, 3);   // the app's teal tick
+      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(16); ctx.textAlign = "left";
+      ctx.fillText(label, x + 20, sy + 56);
+      ctx.fillStyle = scRgb(P.fg1); ctx.font = mono(val.length > 13 ? 20 : 26);
+      ctx.fillText(val, x + 20, sy + 92);
+    });
+
+    // ── footer ──
+    const fy = SC_H - SC_PAD + 4;
+    ctx.fillStyle = scRgb(P.fg1); ctx.font = sans(24, 700);
+    ctx.fillText("Trendo", SC_PAD, fy);
+    const tw = ctx.measureText("Trendo").width;
+    ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(17);
+    ctx.fillText("Swing Trade Concepts", SC_PAD + tw + 14, fy);
+    ctx.textAlign = "right";
+    ctx.fillText(`${fmt.date(h.entry)} → ${fmt.date(h.closedAt)}`, SC_W - SC_PAD, fy);
+    ctx.textAlign = "left";
+  }
+
+  function scRender() {
+    if (!_scState) return;
+    const cv = $("#share-canvas"); if (!cv) return;
+    scDraw(cv, _scState.h, _scState.series, _scState.showAmount);
+  }
+
+  async function openShareCard(h) {
+    _scState = { h, series: null, showAmount: false };
+    openModal("share-modal-backdrop");  // .modal-backdrop.open is what actually shows it
+    scRender();                                   // draw immediately, fill in the path when it lands
+    _scState.series = await scFetchSeries(h);
+    scRender();
+  }
+
+  async function scExport(mode) {
+    const cv = $("#share-canvas"); if (!cv || !_scState) return;
+    const name = `trendo-${_scState.h.sym}-${_scState.h.closedAt || "trade"}.png`;
+    const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+    if (!blob) return;
+    // Native share sheet first — on iOS a plain <a download> is unreliable, and the
+    // sheet is what "share" actually means on a phone. Desktop falls through to a download.
+    if (mode === "share" && navigator.canShare) {
+      const file = new File([blob], name, { type: "image/png" });
+      if (navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file] }); return; }
+        catch (e) { if (e && e.name === "AbortError") return; }   // user dismissed the sheet
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   // ============ MODEL PICKS — forward-test ledger ============
   // Tickers come from wherever the user sourced them and are typed in by hand. The
   // ledger's job is to hold that list still and score it honestly afterwards.
@@ -4713,9 +4986,20 @@ function rsAdjustGrade(grade, rsResult) {
       if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
     });
     document.addEventListener("click", e => {
-      if (e.target && e.target.id === "drawer-close") {
+      // closest(), not target.id — the button wraps an <svg>, so a click can land on the icon
+      if (e.target?.closest?.("#drawer-close")) {
         if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
       }
+      if (e.target?.closest?.("#drawer-share")) {
+        const h = CLOSED_POSITIONS.find(x => tradeKey(x) === tradeKey({
+          sym: selectedSym, entry: selectedEntry, cost: selectedCost }))
+          || mergeClosedForDisplay(CLOSED_POSITIONS).find(x => x.sym === selectedSym);
+        if (h) openShareCard(h);
+      }
+      if (e.target?.closest?.("#share-dl"))    scExport("download");
+      if (e.target?.closest?.("#share-send"))  scExport("share");
+      if (e.target?.id === "share-amount")     { _scState && (_scState.showAmount = e.target.checked); scRender(); }
+      if (e.target?.closest?.("#share-close") || e.target?.id === "share-modal-backdrop") closeModal("share-modal-backdrop");
     });
     document.addEventListener("keydown", e => {
       if (e.key === "Escape") {
