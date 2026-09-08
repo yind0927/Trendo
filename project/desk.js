@@ -1185,9 +1185,26 @@ function rsAdjustGrade(grade, rsResult) {
   let newPositionContext = "desk"; // "desk" | "sim"
   let pendingCloseCtx = "desk";
   let pendingDeleteCtx = "desk";
+  // Short haptic taps. Android/Chrome implement this; iOS Safari ignores it entirely, so
+  // it is a progressive enhancement — never gate behaviour on it. Deliberately capped at
+  // a few tens of ms: a long buzz on a dashboard reads as an error, not as confirmation.
+  // Silenced under prefers-reduced-motion, which users set to mean "stop the extra
+  // sensory feedback", not just "stop things moving".
+  const _noMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  const haptic = pattern => {
+    if (_noMotion?.matches) return;
+    try { navigator.vibrate?.(pattern); } catch (_) { /* unsupported — nothing to do */ }
+  };
+
   let lastPriceFetch = 0;
-  const PRICE_INTERVAL_MS = 30000;
-  let priceIntervalMs = +(localStorage.getItem("trendo_refresh_interval") || 30) * 1000;
+  // The intervals settings offers, in seconds. A stored value outside this set — a 15
+  // from an older build, say — is snapped to the default instead of being left to drive
+  // polling at a rate no button represents, which would also leave the segmented control
+  // showing nothing selected.
+  const REFRESH_CHOICES = [30, 60, 120, 300];
+  const REFRESH_DEFAULT = 60;
+  const normRefresh = v => REFRESH_CHOICES.includes(+v) ? +v : REFRESH_DEFAULT;
+  let priceIntervalMs = normRefresh(localStorage.getItem("trendo_refresh_interval")) * 1000;
   let _lastMktCtx = null; // cached market context for holdings brief
   let analysisHistory = []; // persistent AI analysis history across days, synced to cloud
 
@@ -2341,6 +2358,7 @@ function rsAdjustGrade(grade, rsResult) {
       const dx = e.changedTouches[0].clientX - tx0;
       const dy = e.changedTouches[0].clientY - ty0;
       if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy)) return;
+      haptic(8);   // the card is about to change under the finger — confirm the commit
       const dir = dx < 0 ? 1 : -1;
       _drawerSwipeDir = dir > 0 ? "next" : "prev"; // swipe left → next, right → prev
       const curKey = isSim
@@ -4661,8 +4679,13 @@ function rsAdjustGrade(grade, rsResult) {
   // SIM_CLOSED, SIM_PENDING or any sim statistic.
 
   let simSubTab = "book";
-  const MP_CHECKPOINTS = [["d5", 5], ["d10", 10], ["d20", 20], ["d40", 40], ["d65", 65]];
-  const MP_PRIMARY = "d20";              // 4 weeks — the headline horizon
+  // 1 / 2 / 4 / 6 / 8 / 12 weeks, in trading days. Keys are day counts, so a horizon can
+  // be added or dropped without touching anything else: every label is derived as n/5,
+  // and mpRefresh only ever fills a checkpoint that is missing. Cohorts written under an
+  // older set keep whatever they already have — checkpoints are frozen once written — and
+  // pick up the new horizons on the next refresh, as long as history reaches that far.
+  const MP_CHECKPOINTS = [["d5", 5], ["d10", 10], ["d20", 20], ["d30", 30], ["d40", 40], ["d60", 60]];
+  const MP_PRIMARY = "d10";              // 2 weeks — the headline horizon
   const MP_MIN_N   = 20;                 // cohorts needed before the averages mean anything
 
   function mpIsoWeek(d) {
@@ -4987,6 +5010,7 @@ function rsAdjustGrade(grade, rsResult) {
         e.preventDefault();
         // a drag already committed the page — don't let the trailing click override it
         if (_navDragMoved) { _navDragMoved = false; return; }
+        if (!a.classList.contains("active")) haptic(8);
         switchPage(a.dataset.page);
       });
     });
@@ -5209,8 +5233,7 @@ function rsAdjustGrade(grade, rsResult) {
       if (tapeEl) tapeEl.style.display = "none";
       setSegActive("tape", "hide");
     }
-    const ri = sv("trendo_refresh_interval");
-    if (ri) setSegActive("refresh", ri);
+    setSegActive("refresh", String(normRefresh(sv("trendo_refresh_interval"))));
   }
 
   function persist() {
@@ -5251,21 +5274,21 @@ function rsAdjustGrade(grade, rsResult) {
     if (lu) lu.textContent = "更新于 " + hh + ":" + mm + ":" + ss;
 
     const now = Date.now();
-    // Off-hours throttle: with the US market closed and no crypto in the book, every
-    // quote is frozen at the last close — polling at 30s just burns serverless CPU
-    // (each poll = 2 upstream fetches per symbol). Stretch to 10min; pull-to-refresh,
-    // tab re-focus and order submission still force an immediate fetch (lastPriceFetch=0).
+    // Throttles below only ever LENGTHEN the user's chosen interval. Pull-to-refresh,
+    // tab re-focus and order submission all force an immediate fetch (lastPriceFetch=0),
+    // so a longer floor never means stale numbers in front of someone actually looking.
     const hasCrypto = [...SIM_HOLDINGS, ...HOLDINGS, ...SIM_PENDING].some(h => h.kind === "crypto");
     let effInterval = priceIntervalMs;
     // Off-hours (market closed, no crypto): every quote is frozen at the last close, so
-    // stretch to 10min.
-    if (!isUSMarketOpen() && !hasCrypto) effInterval = Math.max(effInterval, 600000);
+    // there is nothing to poll for. 30min — the only thing a fetch can change is the
+    // "updated at" stamp, and re-focus forces a fresh one anyway.
+    if (!isUSMarketOpen() && !hasCrypto) effInterval = Math.max(effInterval, 1800000);
     // Backgrounded tab: nobody is watching the numbers. A dashboard left open on a second
     // monitor / background tab was polling every 30s all session and burning serverless CPU
-    // for a page in view of no one. Stretch to 5min while hidden — pending orders still fill
+    // for a page in view of no one. Stretch to 15min while hidden — pending orders still fill
     // (background order-check worker + the visibilitychange handler forces an immediate
     // catch-up fetch the moment the tab is foregrounded again).
-    if (document.hidden) effInterval = Math.max(effInterval, 300000);
+    if (document.hidden) effInterval = Math.max(effInterval, 900000);
     if (now - lastPriceFetch >= effInterval) {
       lastPriceFetch = now;
       fetchPrices();
@@ -14086,46 +14109,77 @@ function rsAdjustGrade(grade, rsResult) {
 
   function initPullToRefresh() {
     if (window.innerWidth > 768) return;
-    const ptrEl = document.getElementById("ptr-indicator");
-    const ptrTxt = document.getElementById("ptr-text");
-    if (!ptrEl) return;
-    const THRESHOLD = 65;
-    let startY = 0, pulling = false;
+    const el = document.getElementById("ptr-indicator");
+    if (!el) return;
+    const txt  = document.getElementById("ptr-text");
+    const icon = el.querySelector(".ptr-icon");
+
+    const THRESHOLD = 72;   // damped px before the gesture arms
+    const SPAN      = 130;  // rubber-band scale: pull hard, get progressively less
+    const HIDDEN    = -60;  // parked above the viewport
+    const RESTING   = 10;   // where the capsule sits while refreshing
+
+    let startY = 0, pulling = false, armed = false, busy = false;
+
+    const place = (y, op) => {
+      el.style.transform = `translate(-50%, ${y}px)`;
+      el.style.opacity = String(op);
+    };
+    const park = () => { el.classList.add("ptr-settle"); place(HIDDEN, 0); };
 
     document.addEventListener("touchstart", e => {
-      startY = e.touches[0].clientY;
+      // Multi-touch is a pinch, not a pull. The drawer runs its own horizontal swipe and
+      // scrolls its own body, so leave it alone entirely while it is open.
+      if (busy || e.touches.length !== 1 || document.body.classList.contains("drawer-open")) {
+        pulling = false; return;
+      }
+      startY  = e.touches[0].clientY;
       pulling = window.scrollY <= 0;
+      armed   = false;
+      el.classList.remove("ptr-settle", "ptr-done");
     }, { passive: true });
 
     document.addEventListener("touchmove", e => {
-      if (!pulling) return;
+      if (!pulling || busy) return;
       const dy = e.touches[0].clientY - startY;
-      if (dy <= 0) return;
-      const prog = Math.min(dy / THRESHOLD, 1);
-      ptrEl.style.opacity = prog.toFixed(2);
-      ptrEl.style.height = Math.min(dy * 0.45, 40) + "px";
-      if (ptrTxt) ptrTxt.textContent = dy >= THRESHOLD ? "释放以刷新" : "下拉刷新";
-      ptrEl.classList.toggle("ptr-ready", dy >= THRESHOLD);
+      if (dy <= 0) { place(HIDDEN, 0); return; }
+      // Exponential rubber band: the first pixels track the finger almost 1:1 and the
+      // travel asymptotes towards SPAN, so the capsule can never be dragged off-screen
+      // however hard the pull. Same feel as a native overscroll.
+      const damped = SPAN * (1 - Math.exp(-dy / SPAN));
+      const prog   = Math.min(damped / THRESHOLD, 1);
+      place(HIDDEN + prog * (RESTING - HIDDEN), Math.min(prog * 1.35, 1));
+      // The arrow winds up as you pull — the gesture reads as loading a spring rather
+      // than as a bar that merely fades in.
+      if (icon) icon.style.transform = `rotate(${(damped / THRESHOLD) * 265}deg)`;
+
+      const ready = damped >= THRESHOLD;
+      if (ready !== armed) { armed = ready; if (ready) haptic(12); }  // one tap at the line
+      el.classList.toggle("ptr-ready", ready);
+      if (txt) txt.textContent = ready ? "释放刷新" : "下拉刷新";
     }, { passive: true });
 
     document.addEventListener("touchend", () => {
-      if (!pulling) return;
+      if (!pulling || busy) return;
       pulling = false;
-      const wasReady = ptrEl.classList.contains("ptr-ready");
-      ptrEl.classList.remove("ptr-ready");
-      if (!wasReady) {
-        ptrEl.style.opacity = "0";
-        ptrEl.style.height = "0";
-        return;
-      }
-      ptrEl.classList.add("ptr-spinning");
-      if (ptrTxt) ptrTxt.textContent = "正在刷新…";
-      ptrEl.style.height = "38px";
-      ptrEl.style.opacity = "1";
-      fetchPrices().finally(() => {
-        ptrEl.classList.remove("ptr-spinning");
-        ptrEl.style.opacity = "0";
-        ptrEl.style.height = "0";
+      el.classList.remove("ptr-ready");
+      if (!armed) { park(); return; }
+
+      armed = false; busy = true;
+      haptic([9, 26, 9]);
+      el.classList.add("ptr-settle", "ptr-spinning");
+      if (icon) icon.style.transform = "";      // hand rotation back to the spin keyframes
+      if (txt)  txt.textContent = "正在刷新";
+      place(RESTING, 1);
+
+      Promise.resolve(fetchPrices()).catch(() => {}).finally(() => {
+        // Count this as the tick's fetch too, so the polling timer does not immediately
+        // fire a second identical request on top of the one just made by hand.
+        lastPriceFetch = Date.now();
+        el.classList.remove("ptr-spinning");
+        el.classList.add("ptr-done");
+        if (txt) txt.textContent = "已更新";
+        setTimeout(() => { park(); busy = false; }, 520);
       });
     }, { passive: true });
   }
