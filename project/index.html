@@ -1902,6 +1902,9 @@
   .mp-cp { font-size:10px; color:var(--fg-3); font-family:var(--f-sans); }
   .mp-cp .num { font-size:11px; margin-left:3px; }
   .mp-cp.primary { color:var(--fg-1); font-weight:600; }
+  .mp-del-pick { margin-left:auto; font-size:11px; opacity:.5; }
+  .mp-del-pick:hover { opacity:1; }
+  .mp-pick-top .mp-del-pick + .mp-pick-rets { margin-left:10px; }
   .mp-err { color:var(--down); font-size:11.5px; flex-basis:100%; }
   /* Sample size is stated up front, not buried — 10 cohorts is 50 positions but only
      10 independent observations, and an average over that is not evidence yet. */
@@ -5281,8 +5284,8 @@
   </div>
 </div>
 
-<script src="data.js?v=703"></script>
-<script src="desk.js?v=703"></script>
+<script src="data.js?v=704"></script>
+<script src="desk.js?v=704"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5303,7 +5306,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v703";
+  const _swVer = "trendo-v704";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())

@@ -4353,6 +4353,11 @@ function rsAdjustGrade(grade, rsResult) {
     return !!c && (c.pickedAt || "").slice(0, 10) === new Date().toISOString().slice(0, 10)
                 && c.picks.every(p => p.entryPrice == null);
   }
+  // Removing a ticker you just mistyped is still drafting, so it is allowed — but the
+  // gate is the WHOLE cohort still being unpriced, not just that one name. Gating per
+  // name would leave a hole: once the session has opened you can see how the day is
+  // going, and any name whose data merely lagged would still be removable.
+  const mpPickDeletable = (c, _p) => mpDeletable(c);
 
   const mpRet = (from, to) => (from && to != null) ? (to - from) / from * 100 : null;
 
@@ -4371,7 +4376,20 @@ function rsAdjustGrade(grade, rsResult) {
       .map(s => s.trim()).filter(s => s && s.length <= 6))];
     if (!syms.length) return { error: "没有识别到有效代码" };
     const weekId = mpThisWeek();
-    if (mpCohort(weekId)) return { error: `本周（${weekId}）已有批次，一周只记一批` };
+    const existing = mpCohort(weekId);
+    if (existing) {
+      // Still drafting (same day, nothing priced yet) → append rather than reject, so a
+      // ticker deleted by mistake can be put back. Once anything is priced, the week is closed.
+      if (!mpDeletable(existing)) return { error: `本周（${weekId}）批次已定价，不可再修改` };
+      const add = syms.filter(s => !existing.picks.some(p => p.sym === s));
+      if (!add.length) return { error: "这些代码本周已录入" };
+      existing.picks.push(...add.map(sym => ({
+        sym, name: null, entryPrice: null, entryDate: null, checkpoints: {},
+      })));
+      if (note) existing.source = note.slice(0, 80);
+      saveToStorage();
+      return { ok: add.length };
+    }
 
     MODEL_PICKS.unshift({
       id: weekId,
@@ -4474,7 +4492,8 @@ function rsAdjustGrade(grade, rsResult) {
   // ── Render ────────────────────────────────────────────────────────────────
   function renderModelPicks() {
     const el = $("#sim-picks-panel"); if (!el) return;
-    const s = mpStats(), weekId = mpThisWeek(), has = !!mpCohort(weekId);
+    const s = mpStats(), weekId = mpThisWeek(), cur = mpCohort(weekId);
+    const has = !!cur && !mpDeletable(cur);   // "closed" only once something is priced
     const pct = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
     const cls = v => v == null ? "muted" : v >= 0 ? "up" : "down";
 
@@ -4483,7 +4502,9 @@ function rsAdjustGrade(grade, rsResult) {
         <div style="flex:1;min-width:260px">
           <div class="mp-gen-title">录入本周选股 · ${weekId}</div>
           <div class="mp-gen-sub">${has
-            ? "本周批次已录入。入场价取当日开盘价，写入后不可修改。"
+            ? "本周批次已定价锁定，不可再修改。"
+            : cur
+            ? "本周批次仍在起草：可继续补录代码，或删除录错的。一旦拿到开盘价即锁定。"
             : "粘贴或输入股票代码，空格或逗号分隔。入场价自动取<b>入场日开盘价</b>，无需手动挂单。"}</div>
         </div>
         ${has ? "" : `
@@ -4552,6 +4573,7 @@ function rsAdjustGrade(grade, rsResult) {
                 <span class="mp-sym">${p.sym}</span>
                 ${p.entryPrice == null ? `<span class="mp-nopx">等待开盘</span>`
                   : `<span class="mp-pick-foot">开盘入场 $${Number(p.entryPrice).toFixed(2)} · ${p.entryDate}</span>`}
+                ${mpPickDeletable(c, p) ? `<button class="mp-del mp-del-pick" data-mp-delpick="${c.id}|${p.sym}" title="尚未定价，可删除">✕</button>` : ""}
                 <span class="mp-pick-rets">
                   <span class="num ${cls(now)}" title="自入场开盘价至今">${pct(now)}</span>
                   <span class="num ${cls(vs)}" title="同期相对 VOO">${vs == null ? "—" : `${vs >= 0 ? "+" : ""}${vs.toFixed(2)}pp`}</span>
@@ -4583,6 +4605,17 @@ function rsAdjustGrade(grade, rsResult) {
         if (res.error) { if (err) err.textContent = res.error; return; }
         renderModelPicks();
         await mpRefresh();
+        return;
+      }
+      const dp = e.target.closest("[data-mp-delpick]");
+      if (dp) {
+        const [cid, sym] = dp.dataset.mpDelpick.split("|");
+        const c = mpCohort(cid); if (!c) return;
+        const i = c.picks.findIndex(x => x.sym === sym);
+        if (i < 0 || !mpPickDeletable(c, c.picks[i])) return;
+        c.picks.splice(i, 1);
+        if (!c.picks.length) MODEL_PICKS.splice(MODEL_PICKS.indexOf(c), 1);  // empty batch, drop it
+        saveToStorage(); renderModelPicks();
         return;
       }
       const del = e.target.closest("[data-mp-del]");
