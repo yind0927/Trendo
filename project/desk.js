@@ -4391,72 +4391,103 @@ function rsAdjustGrade(grade, rsResult) {
     } catch (_) { return null; }
   }
 
+  // Real brand mark, same sources the holdings table uses. crossOrigin is mandatory:
+  // without it a loaded logo taints the canvas and toBlob()/toDataURL() throw, killing
+  // the export entirely. With it, a host that sends no CORS header fails to load instead
+  // — so the worst case is the monogram fallback, never a broken share.
+  const _scLogos = new Map();
+  function scLogo(h) {
+    const key = `${h.sym}|${h.kind || ""}`;
+    if (_scLogos.has(key)) return _scLogos.get(key);
+    const entry = { img: new Image(), ok: false };
+    entry.img.crossOrigin = "anonymous";
+    entry.img.onload  = () => { entry.ok = true; scRender(); };
+    entry.img.onerror = () => { entry.ok = false; };
+    entry.img.src = h.kind === "crypto"
+      ? `https://assets.coincap.io/assets/icons/${h.sym.toLowerCase()}@2x.png`
+      : `https://s3-symbol-logo.tradingview.com/${h.sym.toUpperCase()}--big.svg`;
+    _scLogos.set(key, entry);
+    return entry;
+  }
+
   function scDraw(canvas, h, series, showAmount) {
     const P = scPal();
     const ctx = canvas.getContext("2d");
     canvas.width = SC_W; canvas.height = SC_H;
-    const win = (h.pnlFinal ?? h.pnlDollar ?? 0) >= 0;
-    const tone = win ? P.up : P.down;   // kept as [r,g,b]
-    const mono = n => `${n}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+
+    // Percentage is derived here, never read from h.pnlPct. That field is stored as a
+    // FRACTION across the app (fmt.pct multiplies by 100), and on merged multi-exit
+    // trades it is recomputed differently again — printing it raw rendered a +24% trade
+    // as "+0.24%". Deriving it from the same amount and cost basis the card already
+    // shows also guarantees the percentage and the dollar figure agree.
+    const amt   = h.pnlFinal ?? h.pnlDollar ?? 0;
+    const basis = (h.cost || 0) * (h.qty || 0);
+    const pctVal = basis > 0 ? amt / basis * 100 : (h.pnlPct ?? 0) * 100;
+
+    const win  = amt > 0, flat = amt === 0;
+    const tone = flat ? P.fg2 : win ? P.up : P.down;
+    const mono = (n, w = 400) => `${w} ${n}px ui-monospace, SFMono-Regular, Menlo, monospace`;
     const sans = (n, w = 400) => `${w} ${n}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
 
-    // ── ground + ambient glow, same two-lobe language as the app background ──
+    // ── ground ──
     ctx.fillStyle = scRgb(P.bg0); ctx.fillRect(0, 0, SC_W, SC_H);
-    const g1 = ctx.createRadialGradient(SC_W * 0.85, -80, 0, SC_W * 0.85, -80, 900);
-    g1.addColorStop(0, scAlpha(tone, 0.16)); g1.addColorStop(1, scAlpha(tone, 0));
-    ctx.fillStyle = g1; ctx.fillRect(0, 0, SC_W, SC_H);
-    const g2 = ctx.createRadialGradient(-60, SC_H + 60, 0, -60, SC_H + 60, 800);
-    g2.addColorStop(0, scAlpha(P.accent, 0.10)); g2.addColorStop(1, scAlpha(P.accent, 0));
-    ctx.fillStyle = g2; ctx.fillRect(0, 0, SC_W, SC_H);
+    const gl = ctx.createRadialGradient(SC_W * 0.5, SC_H * 0.42, 0, SC_W * 0.5, SC_H * 0.42, SC_W * 0.9);
+    gl.addColorStop(0, scAlpha(tone, 0.13)); gl.addColorStop(1, scAlpha(tone, 0));
+    ctx.fillStyle = gl; ctx.fillRect(0, 0, SC_W, SC_H);
 
-    // ── header ──
-    let y = SC_PAD + 16;
-    scRound(ctx, SC_PAD, y, 76, 76, 16);
-    ctx.fillStyle = scAlpha(P.accent, 0.14); ctx.fill();
-    ctx.strokeStyle = scAlpha(P.accent, 0.35); ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.fillStyle = scRgb(P.accent); ctx.font = mono(24); ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(h.sym.slice(0, 4), SC_PAD + 38, y + 40);
+    // ── top bar ──
+    const logo = scLogo(h);
+    const lx = SC_PAD, ly = 62, ls = 60;
+    if (logo.ok) {
+      ctx.save();
+      scRound(ctx, lx, ly, ls, ls, 14); ctx.clip();
+      ctx.fillStyle = "#fff"; ctx.fillRect(lx, ly, ls, ls);   // most marks assume a light ground
+      ctx.drawImage(logo.img, lx, ly, ls, ls);
+      ctx.restore();
+    } else {
+      scRound(ctx, lx, ly, ls, ls, 14);
+      ctx.fillStyle = scAlpha(P.accent, 0.15); ctx.fill();
+      ctx.strokeStyle = scAlpha(P.accent, 0.4); ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = scRgb(P.accent); ctx.font = mono(20, 700);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(h.sym.slice(0, 4), lx + ls / 2, ly + ls / 2 + 1);
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    }
+    ctx.fillStyle = scRgb(P.fg1); ctx.font = mono(30, 600);
+    ctx.fillText(h.sym, lx + ls + 20, ly + 27);
+    ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(16);
+    ctx.fillText((h.name || "").toUpperCase(), lx + ls + 20, ly + 51);
 
-    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = scRgb(P.fg1); ctx.font = mono(38);
-    ctx.fillText(h.sym, SC_PAD + 98, y + 34);
-    ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(19);
-    ctx.fillText(`${h.name || ""} · ${h.kind === "crypto" ? "Crypto" : h.kind === "etf" ? "ETF" : "Equity"}`,
-                 SC_PAD + 98, y + 62);
-
-    const badge = win ? "盈利 · WIN" : (h.pnlFinal === 0 ? "持平 · FLAT" : "亏损 · LOSS");
-    ctx.font = sans(18, 600);
-    const bw = ctx.measureText(badge).width + 36;
-    scRound(ctx, SC_W - SC_PAD - bw, y + 20, bw, 40, 20);
-    ctx.fillStyle = scAlpha(tone, 0.16); ctx.fill();
-    ctx.strokeStyle = scAlpha(tone, 0.45); ctx.lineWidth = 1.5; ctx.stroke();
+    const badge = flat ? "FLAT" : win ? "WIN" : "LOSS";
+    ctx.font = mono(17, 700);
+    const bw = ctx.measureText(badge).width + 34;
+    scRound(ctx, SC_W - SC_PAD - bw, ly + 14, bw, 34, 17);
+    ctx.fillStyle = scAlpha(tone, 0.18); ctx.fill();
+    ctx.strokeStyle = scAlpha(tone, 0.5); ctx.lineWidth = 1.5; ctx.stroke();
     ctx.fillStyle = scRgb(tone); ctx.textAlign = "center";
-    ctx.fillText(badge, SC_W - SC_PAD - bw / 2, y + 47);
+    ctx.fillText(badge, SC_W - SC_PAD - bw / 2, ly + 37);
     ctx.textAlign = "left";
 
-    // ── hero: percentage carries the card; amount only on request ──
-    y = 300;
-    const pctTxt = `${h.pnlPct >= 0 ? "+" : ""}${(h.pnlPct ?? 0).toFixed(2)}%`;
-    ctx.fillStyle = scRgb(tone); ctx.font = mono(130);
-    ctx.fillText(pctTxt, SC_PAD, y);
-    const pw = ctx.measureText(pctTxt).width;
-    if (h.rMult != null) {
-      ctx.fillStyle = scAlpha(tone, 0.75); ctx.font = mono(40);
-      ctx.fillText(`${h.rMult >= 0 ? "+" : ""}${h.rMult.toFixed(2)}R`, SC_PAD + pw + 28, y);
-    }
-    if (showAmount) {
-      const amt = h.pnlFinal ?? h.pnlDollar ?? 0;
-      ctx.fillStyle = scRgb(P.fg2); ctx.font = mono(34);
-      ctx.fillText(`${amt >= 0 ? "+" : "−"}$${Math.abs(Math.round(amt)).toLocaleString()}`, SC_PAD, y + 48);
+    // ── oversized ticker watermark, sitting behind the headline ──
+    ctx.save();
+    ctx.font = mono(230, 700); ctx.textAlign = "left";
+    ctx.fillStyle = scAlpha(P.fg1, 0.045);
+    ctx.fillText(h.sym, SC_PAD - 12, 400);
+    ctx.restore();
+
+    // ── headline ──
+    const pctTxt = `${pctVal >= 0 ? "+" : "−"}${Math.abs(pctVal).toFixed(2)}%`;
+    ctx.fillStyle = scRgb(tone); ctx.font = mono(148, 700);
+    ctx.fillText(pctTxt, SC_PAD - 6, 400);
+    let sub = h.rMult != null ? `${h.rMult >= 0 ? "+" : "−"}${Math.abs(h.rMult).toFixed(2)}R` : "";
+    if (showAmount) sub += `${sub ? "   ·   " : ""}${amt >= 0 ? "+" : "−"}$${Math.abs(Math.round(amt)).toLocaleString()}`;
+    if (sub) {
+      ctx.fillStyle = scAlpha(tone, 0.7); ctx.font = mono(38, 500);
+      ctx.fillText(sub, SC_PAD - 2, 456);
     }
 
-    // ── chart ──
-    // fixed origin: the amount toggle must not move the chart under the user
-    const cx = SC_PAD, cy = 400, cw = SC_W - SC_PAD * 2, ch = 600;
-    scRound(ctx, cx, cy, cw, ch, 20);
-    ctx.fillStyle = scAlpha(P.bg1, 0.55); ctx.fill();
-    ctx.strokeStyle = scRgb(P.line); ctx.lineWidth = 1; ctx.stroke();
-
+    // ── full-bleed chart: no frame, the path runs off both edges ──
+    const cy = 540, ch = 430, ix = 0;
     const pts = series && series.length > 1 ? series : null;
     const entryPx = h.cost, exitPx = h.closePrice ?? h.last;
     if (pts) {
@@ -4465,92 +4496,90 @@ function rsAdjustGrade(grade, rsResult) {
       if (h.stop   > 0) cand.push(h.stop);
       if (h.target > 0) cand.push(h.target);
       let lo = Math.min(...cand), hi = Math.max(...cand);
-      const padV = (hi - lo) * 0.12 || 1; lo -= padV; hi += padV;
-      const ix = 40, iy = 34;                                   // inner padding
-      const X = i => cx + ix + (cw - ix * 2) * (i / (pts.length - 1));
-      const Y = v => cy + iy + (ch - iy * 2) * (1 - (v - lo) / (hi - lo));
+      const padV = (hi - lo) * 0.18 || 1; lo -= padV; hi += padV;
+      const X = i => ix + (SC_W - ix * 2) * (i / (pts.length - 1));
+      const Y = v => cy + 30 + (ch - 60) * (1 - (v - lo) / (hi - lo));
 
-      // reference levels
-      const level = (v, col, label) => {
-        if (!(v > 0) || v < lo || v > hi) return;
-        ctx.setLineDash([7, 7]); ctx.strokeStyle = scAlpha(col, 0.5); ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(cx + ix, Y(v)); ctx.lineTo(cx + cw - ix, Y(v)); ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = scAlpha(col, 0.95); ctx.font = sans(15, 700); ctx.textAlign = "right";
-        ctx.fillText(label, cx + cw - ix - 4, Y(v) - 9);
-        ctx.textAlign = "left";
-      };
-      // area first — reference levels drawn under it would be invisible
       ctx.beginPath(); ctx.moveTo(X(0), Y(vals[0]));
       pts.forEach((p, i) => ctx.lineTo(X(i), Y(p.px)));
-      ctx.lineTo(X(pts.length - 1), cy + ch - iy); ctx.lineTo(X(0), cy + ch - iy); ctx.closePath();
+      ctx.lineTo(SC_W, cy + ch); ctx.lineTo(0, cy + ch); ctx.closePath();
       const ag = ctx.createLinearGradient(0, cy, 0, cy + ch);
-      ag.addColorStop(0, scAlpha(tone, 0.22)); ag.addColorStop(1, scAlpha(tone, 0.02));
+      ag.addColorStop(0, scAlpha(tone, 0.30)); ag.addColorStop(1, scAlpha(tone, 0));
       ctx.fillStyle = ag; ctx.fill();
 
-      level(h.stop,   P.down, "STOP");
+      const level = (v, col, label) => {
+        if (!(v > 0) || v < lo || v > hi) return;
+        ctx.setLineDash([6, 8]); ctx.strokeStyle = scAlpha(col, 0.45); ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(SC_PAD, Y(v)); ctx.lineTo(SC_W - SC_PAD, Y(v)); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = scAlpha(col, 0.95); ctx.font = mono(14, 700); ctx.textAlign = "right";
+        ctx.fillText(label, SC_W - SC_PAD, Y(v) - 10); ctx.textAlign = "left";
+      };
       level(h.target, P.up,   "TARGET");
       level(entryPx,  P.fg2,  "ENTRY");
+      level(h.stop,   P.down, "STOP");
 
       ctx.beginPath(); ctx.moveTo(X(0), Y(vals[0]));
       pts.forEach((p, i) => ctx.lineTo(X(i), Y(p.px)));
-      ctx.strokeStyle = scRgb(tone); ctx.lineWidth = 3.5; ctx.lineJoin = "round"; ctx.stroke();
+      ctx.strokeStyle = scRgb(tone); ctx.lineWidth = 4; ctx.lineJoin = "round";
+      ctx.shadowColor = scAlpha(tone, 0.55); ctx.shadowBlur = 22;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
 
-      // peak of the run, and the two ends
-      const peakI = vals.indexOf(Math.max(...vals));
       const dot = (px, py, col, r = 9) => {
-        ctx.beginPath(); ctx.arc(px, py, r + 5, 0, Math.PI * 2);
-        ctx.fillStyle = scAlpha(col, 0.22); ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, r + 7, 0, Math.PI * 2);
+        ctx.fillStyle = scAlpha(col, 0.2); ctx.fill();
         ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fillStyle = scRgb(col); ctx.fill();
-        ctx.strokeStyle = scRgb(P.bg0); ctx.lineWidth = 3; ctx.stroke();
+        ctx.strokeStyle = scRgb(P.bg0); ctx.lineWidth = 3.5; ctx.stroke();
       };
+      const peakI = vals.indexOf(Math.max(...vals));
       if (peakI > 0 && peakI < pts.length - 1) {
         dot(X(peakI), Y(vals[peakI]), P.warn, 7);
-        ctx.fillStyle = scRgb(P.warn); ctx.font = sans(15, 600); ctx.textAlign = "center";
-        ctx.fillText("峰值", X(peakI), Y(vals[peakI]) - 22);
+        ctx.fillStyle = scRgb(P.warn); ctx.font = mono(14, 700); ctx.textAlign = "center";
+        ctx.fillText("PEAK", X(peakI), Y(vals[peakI]) - 24); ctx.textAlign = "left";
       }
-      dot(X(0), Y(vals[0]), P.fg2);
-      dot(X(pts.length - 1), Y(vals[vals.length - 1]), tone);
-    } else {
-      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(20); ctx.textAlign = "center";
-      ctx.fillText("价格数据不可用", cx + cw / 2, cy + ch / 2);
-      ctx.textAlign = "left";
+      // the path bleeds off both edges, but the end markers stay fully inside the frame
+      dot(Math.max(X(0), 22), Y(vals[0]), P.fg2, 8);
+      dot(Math.min(X(pts.length - 1), SC_W - 24), Y(vals[vals.length - 1]), tone, 10);
     }
 
-    // ── stats ──
-    const days = calcTradingDays(h.entry, h.closedAt);
+    // ── stats: one editorial strip, hairline rules, no boxes ──
     let capture = "—";
     if (pts) {
       const peak = Math.max(...pts.map(p => p.px));
       if (peak > entryPx) capture = `${Math.round((exitPx - entryPx) / (peak - entryPx) * 100)}%`;
     }
     const cells = [
-      ["持仓", `${days}d`],
-      ["入场 → 出场", `${price(entryPx)} → ${price(exitPx)}`],
-      ["R 倍数", h.rMult != null ? `${h.rMult >= 0 ? "+" : ""}${h.rMult.toFixed(2)}R` : "—"],
-      ["峰值捕获", capture],
+      ["HELD",    `${calcTradingDays(h.entry, h.closedAt)}d`],
+      ["IN / OUT", `${price(entryPx)} → ${price(exitPx)}`],
+      ["R", h.rMult != null ? `${h.rMult >= 0 ? "+" : "−"}${Math.abs(h.rMult).toFixed(2)}` : "—"],
+      ["PEAK CAPTURE", capture],
     ];
-    const sy = cy + ch + 40, sh = 122, gap = 14;
-    const sw = (cw - gap * 3) / 4;
+    const sy = 1085;
+    ctx.strokeStyle = scAlpha(P.fg1, 0.13); ctx.lineWidth = 1;
+    [sy - 34, sy + 78].forEach(ry => {
+      ctx.beginPath(); ctx.moveTo(SC_PAD, ry); ctx.lineTo(SC_W - SC_PAD, ry); ctx.stroke();
+    });
+    const colW = (SC_W - SC_PAD * 2) / 4;
     cells.forEach(([label, val], i) => {
-      const x = cx + (sw + gap) * i;
-      scRound(ctx, x, sy, sw, sh, 14);
-      ctx.fillStyle = scAlpha(P.bg2, 0.7); ctx.fill();
-      ctx.fillStyle = scRgb(P.accent); ctx.fillRect(x + 20, sy + 26, 22, 3);   // the app's teal tick
-      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(16); ctx.textAlign = "left";
-      ctx.fillText(label, x + 20, sy + 56);
-      ctx.fillStyle = scRgb(P.fg1); ctx.font = mono(val.length > 13 ? 20 : 26);
-      ctx.fillText(val, x + 20, sy + 92);
+      const x = SC_PAD + colW * i;
+      if (i) {
+        ctx.strokeStyle = scAlpha(P.fg1, 0.10);
+        ctx.beginPath(); ctx.moveTo(x - 14, sy - 20); ctx.lineTo(x - 14, sy + 64); ctx.stroke();
+      }
+      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(13, 600);
+      ctx.fillText(label, x, sy + 2);
+      ctx.fillStyle = scRgb(P.fg1); ctx.font = mono(val.length > 12 ? 24 : 30, 600);
+      ctx.fillText(val, x, sy + 46);
     });
 
     // ── footer ──
-    const fy = SC_H - SC_PAD + 4;
-    ctx.fillStyle = scRgb(P.fg1); ctx.font = sans(24, 700);
-    ctx.fillText("Trendo", SC_PAD, fy);
-    const tw = ctx.measureText("Trendo").width;
-    ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(17);
-    ctx.fillText("Swing Trade Concepts", SC_PAD + tw + 14, fy);
+    const fy = SC_H - 58;
+    ctx.fillStyle = scRgb(P.accent); ctx.fillRect(SC_PAD, fy - 13, 24, 3);
+    ctx.fillStyle = scRgb(P.fg1); ctx.font = sans(22, 700);
+    ctx.fillText("Trendo", SC_PAD + 36, fy);
+    ctx.fillStyle = scRgb(P.fg3); ctx.font = mono(16);
     ctx.textAlign = "right";
     ctx.fillText(`${fmt.date(h.entry)} → ${fmt.date(h.closedAt)}`, SC_W - SC_PAD, fy);
     ctx.textAlign = "left";

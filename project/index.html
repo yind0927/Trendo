@@ -5314,8 +5314,8 @@
   </div>
 </div>
 
-<script src="data.js?v=705"></script>
-<script src="desk.js?v=705"></script>
+<script src="data.js?v=706"></script>
+<script src="desk.js?v=706"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5336,7 +5336,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v705";
+  const _swVer = "trendo-v706";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())
