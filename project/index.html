@@ -3630,6 +3630,14 @@
        which never once applied — leaving it in place only invites the next reader to
        key the label indent above to a 12px that isn't real. */
     .panel-head { flex-wrap: wrap; gap: 6px; }
+
+    /* The segmented control is a tray (1px border + 3px padding) wrapped around the real
+       Open/Closed buttons, so aligning the tray's box puts the buttons themselves 4px
+       right of the filter chips that wrap onto the line below them — and of the section
+       label above. The eye aligns to the button, not to the tray around it, so pull the
+       tray back by exactly its own inset. It bleeds 4px into the head's 20px padding,
+       which has room to spare. */
+    .panel-head .panel-title { margin-left: -4px; }
     .panel-head .filters { flex-wrap: wrap; gap: 5px; }
     .panel-head .sim-search { order: 3; margin-left: 0; flex: 1 1 100%; }
     .panel-head .sim-search input { width: 100%; }
@@ -5382,8 +5390,8 @@
   </div>
 </div>
 
-<script src="data.js?v=709"></script>
-<script src="desk.js?v=709"></script>
+<script src="data.js?v=710"></script>
+<script src="desk.js?v=710"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
