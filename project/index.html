@@ -751,7 +751,9 @@
      drawer's width or its glass: switching the glass off only moved it to 280ms.
      The ticker is decorative, and the drawer is a focused detail view, so hold it
      still while the drawer is up and resume on close. */
-  body.drawer-open .tape .track{ animation-play-state: paused; }
+  body.drawer-open .tape .track,
+  body.modal-open .tape .track,
+  body.page-hidden .tape .track{ animation-play-state: paused; }
   .tape .ti{ display: inline-flex; align-items: baseline; gap: 6px; }
   .tape .ti .s{ color: var(--fg-1); font-weight: 600; letter-spacing: 0.02em;}
   .tape .ti .p{ color: var(--fg-0);}
@@ -5213,8 +5215,8 @@
   </div>
 </div>
 
-<script src="data.js?v=700"></script>
-<script src="desk.js?v=700"></script>
+<script src="data.js?v=701"></script>
+<script src="desk.js?v=701"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5235,7 +5237,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v700";
+  const _swVer = "trendo-v701";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())
