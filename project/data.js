@@ -69,6 +69,35 @@ window.SIM_HOLDINGS    = [];
 window.SIM_CLOSED      = [];
 window.SIM_PENDING     = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }
 window.SIM_CLOSE_PENDING = []; // { id, sym, qty, orderType:"market"|"limit", limitPrice, createdAt }
+
+// ── Model Picks: a forward-test ledger, deliberately separate from the sim book ──
+// This is NOT a backtest. An LLM asked today which stocks to buy already knows how
+// the past played out, so scoring its picks against history measures nothing. Each
+// cohort is therefore locked when it is created and tracked forward from that point.
+//
+// Two prices per pick, on purpose:
+//   modelPrice — close on the day the cohort was created. Captured automatically and
+//                never editable. This is the discretion-free number: it is what the
+//                model's judgement alone was worth.
+//   fill.price — what the manually placed order actually got. Includes your timing.
+// The gap between the two curves is the execution effect, which is only separable
+// because both are stored.
+//
+// Cohorts are append-only. Picks are never edited after creation and a cohort can
+// only be deleted on the day it was made, before any checkpoint has landed —
+// otherwise "delete the bad weeks" quietly turns the whole ledger into fiction.
+// {
+//   id: "2026-W37", weekOf: "YYYY-MM-DD", pickedAt: ISO, model: "claude-opus-5",
+//   picks: [{
+//     sym, name, thesis, conviction,
+//     modelPrice, modelDate, priced,      // priced:false = quote API could not price it
+//     order: { type:"market"|"limit", limitPrice, qty, placedAt } | null,
+//     fill:  { price, date } | null,
+//     checkpoints: { d5:{px,pct}, d10:…, d20:…, d40:…, d65:… }   // frozen once written
+//   }],
+//   bench: { sym:"VOO", modelPrice, checkpoints:{…} }
+// }
+window.MODEL_PICKS = [];
 // Options wheel-strategy positions (sell-side: CSP cash-secured put / CC covered call).
 // Manual-entry model: only the underlying ETF spot is live; all option numbers are typed in.
 // { id, sym, type:"put"|"call", strat:"csp"|"cc", strike, expiry:"YYYY-MM-DD",

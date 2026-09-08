@@ -128,6 +128,114 @@ export default async function handler(req, res) {
   const isCron   = req.query.cron === "1";
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
+  // ── mode=picks — weekly stock picks for the forward-test ledger ────────────
+  // Lives here rather than in its own file because Vercel Hobby caps the project
+  // at 12 serverless functions and all 12 are in use.
+  //
+  // Deliberately given NO information about the user's holdings, watchlist or open
+  // positions. The ledger is meant to score the model's own judgement; feeding it
+  // the user's book would just measure how well it agrees with them.
+  if (req.query.mode === "picks") {
+    // ISO week key — one cohort per calendar week, so a double-click or a second
+    // device cannot spend another API call or hand back a different set of names.
+    const isoWeek = d => {
+      const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+      const yStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+      const wk = Math.ceil(((t - yStart) / 86400000 + 1) / 7);
+      return `${t.getUTCFullYear()}-W${String(wk).padStart(2, "0")}`;
+    };
+    const weekId  = isoWeek(now);
+    const picksKey = `trendo:model_picks:${weekId}`;
+
+    if (!force && kvUrl && kvToken) {
+      try {
+        const r = await fetch(`${kvUrl}/pipeline`, {
+          method: "POST", headers: kvHeaders,
+          body: JSON.stringify([["GET", picksKey]]),
+        });
+        const j = await r.json();
+        const hit = j?.[0]?.result;
+        if (hit) return res.status(200).json({ ...JSON.parse(hit), cached: true });
+      } catch (_) {}
+    }
+
+    const pickPrompt = `You are picking 5 US-listed stocks for a forward test that starts today, ${now.toISOString().slice(0, 10)} (ISO week ${weekId}).
+
+This is a real prediction that will be scored. The picks are locked the moment you return them and tracked forward against VOO over 1, 2, 4, 8 and 13 weeks. You get no credit for naming something that already ran — only for where it goes from here.
+
+Rules:
+- Exactly 5 tickers, all listed on a US exchange, all distinct.
+- Use the exact ticker symbol as it trades (e.g. BRK.B, not BRK-B).
+- No leveraged or inverse ETFs, no ETNs.
+- thesis: one sentence, in Chinese, on why this specific name over the next 4 weeks. Say what has to happen, not what already happened.
+- conviction: integer 1-5, where 5 is your strongest. Do not give all five the same number.
+
+Return ONLY a JSON array. No prose, no markdown fence:
+[{"sym":"AAPL","name":"Apple Inc.","thesis":"…","conviction":4}, …]`;
+
+    try {
+      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key":         anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "content-type":      "application/json",
+        },
+        body: JSON.stringify({
+          model:      "claude-sonnet-4-6",
+          max_tokens: 1500,
+          messages:   [{ role: "user", content: pickPrompt }],
+        }),
+        signal: AbortSignal.timeout(45000),
+      });
+      if (!aiRes.ok)
+        return res.status(502).json({ error: `Claude API error: ${(await aiRes.text()).slice(0, 200)}` });
+
+      const raw = (await aiRes.json()).content?.[0]?.text?.trim() || "";
+      // Tolerate a stray fence or a sentence before the array rather than failing the week.
+      const m = raw.match(/\[[\s\S]*\]/);
+      if (!m) return res.status(502).json({ error: "Model did not return a JSON array" });
+
+      let picks;
+      try { picks = JSON.parse(m[0]); }
+      catch (e) { return res.status(502).json({ error: "Model returned malformed JSON" }); }
+
+      picks = (Array.isArray(picks) ? picks : [])
+        .filter(p => p && typeof p.sym === "string" && p.sym.trim())
+        .slice(0, 5)
+        .map(p => ({
+          sym:        p.sym.trim().toUpperCase(),
+          name:       String(p.name || p.sym).slice(0, 60),
+          thesis:     String(p.thesis || "").slice(0, 300),
+          conviction: Math.max(1, Math.min(5, parseInt(p.conviction, 10) || 3)),
+        }));
+
+      if (!picks.length) return res.status(502).json({ error: "Model returned no usable picks" });
+
+      const payload = {
+        weekId,
+        picks,
+        model:       "claude-sonnet-4-6",
+        generatedAt: now.toISOString(),
+      };
+
+      if (kvUrl && kvToken) {
+        try {
+          await fetch(`${kvUrl}/pipeline`, {
+            method: "POST", headers: kvHeaders,
+            // 14 days: long enough that a re-open mid-week is free, short enough
+            // that the key set cannot grow without bound.
+            body: JSON.stringify([["SET", picksKey, JSON.stringify(payload), "EX", "1209600"]]),
+          });
+        } catch (_) {}
+      }
+      return res.status(200).json(payload);
+    } catch (e) {
+      return res.status(502).json({ error: `Claude request failed: ${String(e.message || e).slice(0, 200)}` });
+    }
+  }
+
   // Slot aligned to Beijing 09:30 / 21:30 (UTC+8)
   // am = 09:30–21:29 BJ · pm = 21:30–09:29 BJ next day
   function bjSlotKey(d) {

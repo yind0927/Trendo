@@ -1236,6 +1236,7 @@ function rsAdjustGrade(grade, rsResult) {
       simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
       simOptions: SIM_OPTIONS,
       realOptions: REAL_OPTIONS,
+      modelPicks: MODEL_PICKS,
       analysisHistory: histForSync,
       savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
     };
@@ -1430,6 +1431,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (Array.isArray(data.simClosePending)) SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending);
     if (Array.isArray(data.simOptions))      SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...data.simOptions);
     if (Array.isArray(data.realOptions))     REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions);
+    if (Array.isArray(data.modelPicks))      MODEL_PICKS.splice(0, MODEL_PICKS.length, ...data.modelPicks);
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
@@ -1551,6 +1553,7 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
       localStorage.setItem("trendo_v4_sim_options",        JSON.stringify(SIM_OPTIONS));
       localStorage.setItem("trendo_v4_real_options",       JSON.stringify(REAL_OPTIONS));
+      localStorage.setItem("trendo_v4_model_picks",        JSON.stringify(MODEL_PICKS));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_analysis_hist", JSON.stringify(analysisHistory));
       // Skip timestamp update for price-only ticks so they don't make local appear "newer"
@@ -1591,6 +1594,8 @@ function rsAdjustGrade(grade, rsResult) {
       if (so) { const parsed = JSON.parse(so); SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...parsed); }
       const ro = localStorage.getItem("trendo_v4_real_options");
       if (ro) { const parsed = JSON.parse(ro); REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...parsed); }
+      const mp = localStorage.getItem("trendo_v4_model_picks");
+      if (mp) { const parsed = JSON.parse(mp); MODEL_PICKS.splice(0, MODEL_PICKS.length, ...parsed); }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
@@ -4311,6 +4316,334 @@ function rsAdjustGrade(grade, rsResult) {
     window.addEventListener("orientationchange", () => setTimeout(() => positionNavPill(false), 120));
   }
 
+
+  // ============ MODEL PICKS — forward-test ledger ============
+  // Separate from the sim book on purpose: nothing here touches SIM_HOLDINGS,
+  // SIM_CLOSED or any sim statistic. See data.js for why this is a forward test
+  // and not a backtest, and why each pick carries two prices.
+
+  let simSubTab = "book";
+  const MP_CHECKPOINTS = [["d5", 5], ["d10", 10], ["d20", 20], ["d40", 40], ["d65", 65]];
+  const MP_PRIMARY = "d20";              // 4 weeks — the headline horizon
+  const MP_MIN_N   = 20;                 // cohorts needed before the numbers mean anything
+
+  function mpIsoWeek(d) {
+    const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+    const yStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+    const wk = Math.ceil(((t - yStart) / 86400000 + 1) / 7);
+    return `${t.getUTCFullYear()}-W${String(wk).padStart(2, "0")}`;
+  }
+  const mpThisWeek = () => mpIsoWeek(new Date());
+  const mpCohort   = id => MODEL_PICKS.find(c => c.id === id);
+
+  // A cohort may only be deleted the day it was made and before any checkpoint has
+  // landed. After that the record stands — being able to drop the weeks that went
+  // badly would make every number above it meaningless.
+  function mpDeletable(c) {
+    if (!c) return false;
+    const sameDay = (c.pickedAt || "").slice(0, 10) === new Date().toISOString().slice(0, 10);
+    const untouched = c.picks.every(p => !Object.keys(p.checkpoints || {}).length);
+    return sameDay && untouched;
+  }
+
+  // Equal-weight cohort return at a checkpoint. `basis` picks which entry price to
+  // measure from: "model" is the discretion-free reference, "fill" is what the
+  // manually placed order actually got. Unpriced or unfilled names are excluded and
+  // reported as a count rather than silently dropped.
+  function mpCohortReturn(c, key, basis) {
+    let sum = 0, n = 0, missing = 0;
+    for (const p of c.picks) {
+      const entry = basis === "fill" ? p.fill?.price : p.modelPrice;
+      const cp = p.checkpoints?.[key];
+      if (!entry || !cp || cp.px == null) { missing++; continue; }
+      sum += (cp.px - entry) / entry * 100; n++;
+    }
+    return { pct: n ? sum / n : null, n, missing };
+  }
+  function mpBenchReturn(c, key) {
+    const e = c.bench?.modelPrice, cp = c.bench?.checkpoints?.[key];
+    return (e && cp && cp.px != null) ? (cp.px - e) / e * 100 : null;
+  }
+
+  // ── Generate this week's cohort ───────────────────────────────────────────
+  async function mpGenerate(force = false) {
+    const weekId = mpThisWeek();
+    if (!force && mpCohort(weekId)) return;
+    const btn = $("#mp-gen-btn");
+    if (btn) { btn.disabled = true; btn.textContent = "生成中…"; }
+    try {
+      const r = await fetch(`/api/market-summary?mode=picks${force ? "&force=1" : ""}`);
+      const data = await r.json();
+      if (!r.ok || !Array.isArray(data.picks) || !data.picks.length)
+        throw new Error(data.error || "选股返回为空");
+
+      // Lock the reference price now. A pick the quote API cannot price is KEPT with
+      // priced:false — dropping it would quietly bias the ledger toward the names
+      // that happen to have clean data.
+      const syms = data.picks.map(p => p.sym);
+      let px = {};
+      try {
+        const q = await fetch(`/api/quote?stocks=${encodeURIComponent([...syms, "VOO"].join(","))}`);
+        if (q.ok) px = (await q.json()) || {};
+      } catch (_) {}
+      const priceOf = s => {
+        const v = px[s] ?? px[s?.toUpperCase()];
+        return (v && typeof v === "object") ? (v.last ?? v.price ?? null) : (typeof v === "number" ? v : null);
+      };
+
+      const today = new Date().toISOString().slice(0, 10);
+      const cohort = {
+        id: weekId,
+        weekOf: today,
+        pickedAt: new Date().toISOString(),
+        model: data.model || "claude-sonnet-4-6",
+        picks: data.picks.map(p => ({
+          sym: p.sym, name: p.name, thesis: p.thesis, conviction: p.conviction,
+          modelPrice: priceOf(p.sym), modelDate: today, priced: priceOf(p.sym) != null,
+          order: null, fill: null, checkpoints: {},
+        })),
+        bench: { sym: "VOO", modelPrice: priceOf("VOO"), checkpoints: {} },
+      };
+      const existing = MODEL_PICKS.findIndex(c => c.id === weekId);
+      if (existing >= 0) MODEL_PICKS.splice(existing, 1, cohort);
+      else MODEL_PICKS.unshift(cohort);
+      saveToStorage();
+      renderModelPicks();
+    } catch (e) {
+      const el = $("#mp-gen-err");
+      if (el) el.textContent = `生成失败：${e.message}`;
+      if (btn) { btn.disabled = false; btn.textContent = "生成本周选股"; }
+    }
+  }
+
+  // ── Manual order placement, using the sim book's own fill rules ────────────
+  function mpPlaceOrder(cohortId, sym, type, limitPrice, qty) {
+    const c = mpCohort(cohortId); if (!c) return;
+    const p = c.picks.find(x => x.sym === sym); if (!p || p.fill) return;
+    p.order = { type, limitPrice: type === "limit" ? limitPrice : null,
+                qty: qty || null, placedAt: new Date().toISOString() };
+    saveToStorage(); renderModelPicks();
+  }
+
+  // Called from fetchPrices with the same price map the sim book uses, and gated by
+  // the same isUSMarketOpen() — a market order should not fill at 3am off a stale quote.
+  function mpFillOrders(results) {
+    if (!isUSMarketOpen()) return false;
+    let changed = false;
+    for (const c of MODEL_PICKS) {
+      for (const p of c.picks) {
+        if (!p.order || p.fill) continue;
+        const px = results[p.sym]?.last;
+        if (px == null) continue;
+        const hit = p.order.type === "market" ||
+                    (p.order.limitPrice != null && px <= p.order.limitPrice);
+        if (!hit) continue;
+        p.fill = { price: px, date: new Date().toISOString().slice(0, 10) };
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  // ── Checkpoints ───────────────────────────────────────────────────────────
+  // Indexed by position in the close series rather than by calendar date: the Nth
+  // trading day after entry is simply the Nth bar, which sidesteps holidays entirely.
+  // Uses adjusted closes where available — a raw-close return spanning an ex-dividend
+  // date is systematically understated (same reason as the VOO monthly benchmark).
+  // Once a checkpoint is written it is never recomputed.
+  async function mpRefreshCheckpoints() {
+    const open = MODEL_PICKS.filter(c =>
+      c.picks.some(p => p.priced && MP_CHECKPOINTS.some(([k]) => !p.checkpoints?.[k])));
+    if (!open.length) return;
+    let changed = false;
+
+    for (const c of open) {
+      const syms = [...new Set(c.picks.filter(p => p.priced).map(p => p.sym))];
+      if (!syms.length) continue;
+      try {
+        const r = await fetch(`/api/history?symbols=${encodeURIComponent([...syms, "VOO"].join(","))}&from=${c.weekOf}`);
+        if (!r.ok) continue;
+        const j = await r.json();
+        const seriesOf = s => {
+          const src = j.adjResults?.[s] || j.results?.[s];
+          if (!src) return null;
+          return Object.keys(src).sort().map(d => src[d]);
+        };
+        const apply = (target, series) => {
+          if (!series || series.length < 2) return;
+          for (const [key, n] of MP_CHECKPOINTS) {
+            if (target.checkpoints[key]) continue;         // frozen once written
+            if (series.length > n && series[n] != null) {
+              target.checkpoints[key] = { px: series[n] };
+              changed = true;
+            }
+          }
+        };
+        for (const p of c.picks) if (p.priced) apply(p, seriesOf(p.sym));
+        if (c.bench) apply(c.bench, seriesOf("VOO"));
+      } catch (_) { /* try again next time the tab opens */ }
+    }
+    if (changed) { saveToStorage(); renderModelPicks(); }
+  }
+
+  // ── Aggregate ─────────────────────────────────────────────────────────────
+  function mpStats() {
+    const rows = MP_CHECKPOINTS.map(([key, n]) => {
+      const alphas = [];
+      for (const c of MODEL_PICKS) {
+        const r = mpCohortReturn(c, key, "model"), b = mpBenchReturn(c, key);
+        if (r.pct == null || b == null) continue;
+        alphas.push(r.pct - b);
+      }
+      const N = alphas.length;
+      return {
+        key, weeks: Math.round(n / 5), N,
+        avg: N ? alphas.reduce((a, b) => a + b, 0) / N : null,
+        winRate: N ? alphas.filter(a => a > 0).length / N * 100 : null,
+      };
+    });
+    return { rows, cohorts: MODEL_PICKS.length };
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  function renderModelPicks() {
+    const el = $("#sim-picks-panel"); if (!el) return;
+    const s = mpStats();
+    const weekId = mpThisWeek();
+    const hasThisWeek = !!mpCohort(weekId);
+    const pct = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+    const cls = v => v == null ? "muted" : v >= 0 ? "up" : "down";
+
+    const gen = `
+      <div class="mp-gen">
+        <div>
+          <div class="mp-gen-title">本周选股 · ${weekId}</div>
+          <div class="mp-gen-sub">${hasThisWeek
+            ? "本周批次已锁定。选股在生成的那一刻写死，之后不可修改。"
+            : "向模型索取 5 只股票，锁定当日收盘价后向前跟踪。"}</div>
+        </div>
+        ${hasThisWeek ? "" : `<button class="btn primary" id="mp-gen-btn">生成本周选股</button>`}
+        <div id="mp-gen-err" class="mp-err"></div>
+      </div>`;
+
+    const warn = s.cohorts < MP_MIN_N ? `
+      <div class="mp-warn">共 ${s.cohorts} 批 · 样本不足，当前数字还不足以判断模型是否有效。
+      5 只 × ${s.cohorts} 周看起来是 ${s.cohorts * 5} 个仓位，但只有 ${s.cohorts} 个独立观测。</div>` : "";
+
+    const stats = `
+      <div class="mp-stats">
+        <div class="sim-section-label"><span class="ssl-zh">超额收益</span><span class="ssl-en">vs VOO</span><span class="ssl-rule"></span></div>
+        <div class="mp-stat-grid">
+          ${s.rows.map(r => `
+            <div class="mp-stat${r.key === MP_PRIMARY ? " primary" : ""}">
+              <div class="mp-stat-label">${r.weeks} 周${r.key === MP_PRIMARY ? " · 主口径" : ""}</div>
+              <div class="mp-stat-val num ${cls(r.avg)}">${pct(r.avg)}</div>
+              <div class="mp-stat-sub">${r.N ? `胜率 ${r.winRate.toFixed(0)}% · N=${r.N}` : "尚无到期批次"}</div>
+            </div>`).join("")}
+        </div>
+      </div>`;
+
+    const cohorts = MODEL_PICKS.length ? MODEL_PICKS.map(c => {
+      const rm = mpCohortReturn(c, MP_PRIMARY, "model");
+      const rf = mpCohortReturn(c, MP_PRIMARY, "fill");
+      const bm = mpBenchReturn(c, MP_PRIMARY);
+      const unpriced = c.picks.filter(p => !p.priced).length;
+      return `
+      <div class="mp-cohort">
+        <div class="mp-cohort-hd">
+          <div>
+            <span class="mp-cohort-id">${c.id}</span>
+            <span class="mp-cohort-date">${c.weekOf} · ${c.model}</span>
+          </div>
+          <div class="mp-cohort-num">
+            <span class="mp-cohort-lbl">模型基准</span>
+            <span class="num ${cls(rm.pct)}">${pct(rm.pct)}</span>
+            <span class="mp-cohort-lbl">实际成交</span>
+            <span class="num ${cls(rf.pct)}">${pct(rf.pct)}</span>
+            <span class="mp-cohort-lbl">VOO</span>
+            <span class="num ${cls(bm)}">${pct(bm)}</span>
+          </div>
+          ${mpDeletable(c) ? `<button class="mp-del" data-mp-del="${c.id}" title="仅当天且无检查点时可删">✕</button>` : ""}
+        </div>
+        ${unpriced ? `<div class="mp-unpriced">${c.picks.length} 只中 ${unpriced} 只无法定价，已保留在记录中但不计入均值</div>` : ""}
+        <div class="mp-picks">
+          ${c.picks.map(p => {
+            const cp = p.checkpoints?.[MP_PRIMARY];
+            const mret = (p.modelPrice && cp) ? (cp.px - p.modelPrice) / p.modelPrice * 100 : null;
+            const fret = (p.fill?.price && cp) ? (cp.px - p.fill.price) / p.fill.price * 100 : null;
+            return `
+            <div class="mp-pick${p.priced ? "" : " unpriced"}">
+              <div class="mp-pick-top">
+                <span class="mp-sym">${p.sym}</span>
+                <span class="mp-conv" title="模型信心 ${p.conviction}/5">${"●".repeat(p.conviction)}${"○".repeat(5 - p.conviction)}</span>
+                <span class="mp-pick-rets">
+                  <span class="num ${cls(mret)}" title="按模型基准价 ${p.modelPrice ?? "—"}">${pct(mret)}</span>
+                  <span class="num ${cls(fret)}" title="按实际成交价 ${p.fill?.price ?? "未成交"}">${p.fill ? pct(fret) : "—"}</span>
+                </span>
+              </div>
+              <div class="mp-thesis">${p.thesis || ""}</div>
+              <div class="mp-pick-foot">
+                ${p.priced ? `基准 $${Number(p.modelPrice).toFixed(2)}` : `<span class="mp-nopx">无法定价</span>`}
+                ${p.fill ? ` · 成交 $${Number(p.fill.price).toFixed(2)} (${p.fill.date})`
+                  : p.order ? ` · 挂单中 ${p.order.type === "limit" ? `限价 $${p.order.limitPrice}` : "市价"}`
+                  : (p.priced ? ` · <button class="mp-order" data-mp-order="${c.id}|${p.sym}">挂单</button>` : "")}
+              </div>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }).join("") : `<div class="mp-empty">还没有任何批次。生成第一周的选股后，这里会按周累积。</div>`;
+
+    el.innerHTML = gen + warn + stats + cohorts;
+  }
+
+  // Delegated once on the panel, so it survives every re-render.
+  function wireModelPicks() {
+    const el = $("#sim-picks-panel"); if (!el || el.dataset.wired) return;
+    el.dataset.wired = "1";
+    el.addEventListener("click", e => {
+      if (e.target.id === "mp-gen-btn") { mpGenerate(); return; }
+      const del = e.target.closest("[data-mp-del]");
+      if (del) {
+        const c = mpCohort(del.dataset.mpDel);
+        if (c && mpDeletable(c) && confirm(`删除批次 ${c.id}？仅在生成当天且尚无检查点时可删。`)) {
+          MODEL_PICKS.splice(MODEL_PICKS.indexOf(c), 1);
+          saveToStorage(); renderModelPicks();
+        }
+        return;
+      }
+      const ord = e.target.closest("[data-mp-order]");
+      if (ord) {
+        const [cid, sym] = ord.dataset.mpOrder.split("|");
+        const t = prompt(`${sym} 挂单类型：输入 m = 市价，或直接输入限价价格`, "m");
+        if (t == null) return;
+        if (t.trim().toLowerCase() === "m") mpPlaceOrder(cid, sym, "market", null, null);
+        else {
+          const lp = parseFloat(t);
+          if (isFinite(lp) && lp > 0) mpPlaceOrder(cid, sym, "limit", lp, null);
+        }
+      }
+    });
+  }
+
+  // Sim page sub-tabs. Everything that is not the topbar, the tab bar itself or the
+  // picks panel belongs to the sim book, so the two views toggle without needing the
+  // existing sim markup to be restructured.
+  function setSimSubTab(tab) {
+    simSubTab = tab;
+    const view = $("#sim-view"); if (!view) return;
+    $$("[data-sim-tab]").forEach(b => b.classList.toggle("active", b.dataset.simTab === tab));
+    [...view.children].forEach(ch => {
+      if (ch.classList.contains("page-topbar") || ch.classList.contains("page-subtab-bar")) return;
+      if (ch.id === "sim-picks-panel") { ch.style.display = tab === "picks" ? "" : "none"; return; }
+      ch.dataset.mpPrevDisplay = ch.dataset.mpPrevDisplay ?? ch.style.display;
+      ch.style.display = tab === "picks" ? "none" : (ch.dataset.mpPrevDisplay || "");
+    });
+    if (tab === "picks") { wireModelPicks(); renderModelPicks(); mpRefreshCheckpoints(); }
+    else renderSim();
+  }
+
   // ============ SEARCH / FILTERS / KEYBOARD ============
   function wireControls() {
     // Nav page switching
@@ -4323,6 +4656,11 @@ function rsAdjustGrade(grade, rsResult) {
       });
     });
     wireNavPillDrag();
+
+    // Sim page sub-tabs (模拟仓 / 模型选股)
+    $$("[data-sim-tab]").forEach(btn => {
+      btn.addEventListener("click", () => setSimSubTab(btn.dataset.simTab));
+    });
 
     // Inspirations sub-tabs (Journal / Preparation)
     $$("[data-insp-tab]").forEach(btn => {
@@ -4927,7 +5265,10 @@ function rsAdjustGrade(grade, rsResult) {
         renderSimPending();
       }
 
-      const hasStructural = executed.length > 0 || closedIds.length > 0;
+      const mpFilled = mpFillOrders(results);
+      if (mpFilled && currentPage === "sim" && simSubTab === "picks") renderModelPicks();
+
+      const hasStructural = executed.length > 0 || closedIds.length > 0 || mpFilled;
       if (hasStructural) {
         recordDailyPnl();
         saveToStorage();
@@ -5155,7 +5496,7 @@ function rsAdjustGrade(grade, rsResult) {
     positionNavPill();
     applySidebarActiveColor(page);
     if (page === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
-    if (page === "sim")          renderSim();
+    if (page === "sim")          setSimSubTab(simSubTab);
     if (page === "analytics")    { fetchAndBuildHistory(); }
     if (page === "options")      renderOptions();
     if (page === "market")       fetchMarketData();
