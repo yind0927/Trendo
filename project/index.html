@@ -3641,7 +3641,14 @@
        tray back by exactly its own inset. It bleeds 4px into the head's 20px padding,
        which has room to spare. */
     .panel-head .panel-title { margin-left: -4px; }
-    .panel-head .filters { flex-wrap: wrap; gap: 5px; }
+    /* `.panel-head .filters` carries `margin-left: auto` so the chips sit on the right of
+       the tabs on a wide head. On a phone the head wraps and the chips get their own
+       line, where that auto margin instead eats all the leftover width and shoves them
+       against the right edge — the more chips are hidden, the further out they drift, so
+       the Closed tab (4 chips) looked badly off while Open (6 chips, line full) looked
+       fine. The equivalent reset already existed but was scoped to #sim-view inside the
+       min-width:1025px block, i.e. desktop only, so it never reached this. */
+    .panel-head .filters { flex: 1 1 100%; margin-left: 0; flex-wrap: wrap; gap: 5px; }
     .panel-head .sim-search { order: 3; margin-left: 0; flex: 1 1 100%; }
     .panel-head .sim-search input { width: 100%; }
     .panel-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -5393,8 +5400,8 @@
   </div>
 </div>
 
-<script src="data.js?v=711"></script>
-<script src="desk.js?v=711"></script>
+<script src="data.js?v=712"></script>
+<script src="desk.js?v=712"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
