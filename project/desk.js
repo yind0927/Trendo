@@ -4561,14 +4561,22 @@ function rsAdjustGrade(grade, rsResult) {
       ctx.strokeStyle = scAlpha(P.fg1, 0.09); ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = scRgb(opt.tick || P.accent);
       ctx.fillRect(x + 24, cardY + 26, 22, 3);
-      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(13, 700); ctx.textAlign = "left";
-      ctx.fillText(label, x + 24, cardY + 56);
-      const wide = w > 400;
-      const vSize = wide ? (val.length > 14 ? 27 : 34) : (val.length > 5 ? 25 : 42);
-      ctx.fillStyle = scRgb(opt.val || P.fg1); ctx.font = mono(vSize, 700);
+      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(15, 700); ctx.textAlign = "left";
+      ctx.fillText(label, x + 24, cardY + 57);
+      // Start from the largest size the row height allows and shrink only as far as the
+      // card's own width demands, instead of guessing from character count — the old
+      // length buckets left short values (a 5-char "+3.00") far smaller than they had
+      // room for, and a long one could still overflow a narrow card.
+      const avail = w - 48;
+      let vSize = w > 400 ? 40 : 48;
+      ctx.font = mono(vSize, 700);
+      while (vSize > 20 && ctx.measureText(val).width > avail) {
+        vSize -= 1; ctx.font = mono(vSize, 700);
+      }
+      ctx.fillStyle = scRgb(opt.val || P.fg1);
       ctx.fillText(val, x + 24, cardY + (opt.sub ? cardH - 34 : cardH - 24));
       if (opt.sub) {
-        ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(12, 600);
+        ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(13, 600);
         ctx.fillText(opt.sub, x + 24, cardY + cardH - 13);
       }
     }

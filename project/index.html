@@ -92,6 +92,8 @@
     --mono-weight: 500;
 
     --radius: 12px;
+    /* horizontal inset of a .panel-head's content; see the .panel-head rule below */
+    --panel-inset: 20px;
     --radius-sm: 7px;
     --sb-w: 256px; /* sidebar width; overridden to 60px when collapsed */
 
@@ -879,8 +881,12 @@
 
   /* panel head segmented control — ensure bg-0 active pill shows clearly */
   .panel-title{ background: var(--bg-2) !important; }
+  /* The horizontal inset lives in a variable because a section label sitting above a
+     panel has to indent by exactly this much (plus the panel's 1px border) to line its
+     text up with the Open/Closed control inside. Two hardcoded numbers drift apart the
+     moment one of them is touched. */
   .panel-head{
-    padding: 16px 20px !important;
+    padding: 16px var(--panel-inset) !important;
     background: linear-gradient(180deg, oklch(0.185 0.012 250 / .4) 0%, transparent 100%);
   }
   body[data-theme="light"] .panel-head{
@@ -3610,7 +3616,20 @@
     .ov-card { min-height: 90px; padding: 12px; }
 
     /* ---- Panel / table ---- */
-    .panel-head { padding: 10px 12px 8px; flex-wrap: wrap; gap: 6px; }
+    /* A section label sits flush against `main`'s padding, but the panel below it adds
+       its own 1px border plus --panel-inset, so the Open/Closed segmented control starts
+       further right than the label above it — visibly off on a phone, where the two sit
+       only a few px apart vertically. Indent only the labels that actually precede a
+       panel; the ones above flush grids (#overview et al.) must stay put. */
+    .sim-section-label:has(+ .panel) {
+      padding-left: calc(1px + var(--panel-inset));
+      padding-right: calc(1px + var(--panel-inset));
+    }
+    /* No padding here: the `padding: 16px var(--panel-inset) !important` rule above owns
+       it on every breakpoint. This block used to also declare `padding: 10px 12px 8px`,
+       which never once applied — leaving it in place only invites the next reader to
+       key the label indent above to a 12px that isn't real. */
+    .panel-head { flex-wrap: wrap; gap: 6px; }
     .panel-head .filters { flex-wrap: wrap; gap: 5px; }
     .panel-head .sim-search { order: 3; margin-left: 0; flex: 1 1 100%; }
     .panel-head .sim-search input { width: 100%; }
@@ -4073,6 +4092,55 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .page-enter { animation: page-in .22s cubic-bezier(.22,1,.36,1) both; }
+
+  /* ============ MOBILE MICRO-INTERACTIONS ============ */
+  /* Everything here animates transform or opacity only. Both composite on the GPU, so a
+     tap on a list of thirty rows never costs a layout or a paint — which is the whole
+     reason the previous glass pass had to be walked back. No new backdrop-filters, no
+     animated shadows, no filters on scrolling surfaces. */
+  @media (max-width: 768px) {
+    /* iOS paints its own grey flash on tap. It fights whatever :active state we define
+       and outlives the touch, so suppress it and own the feedback explicitly. */
+    button, a, summary, .hc-card, .journal-card, .wl-card, .filter-chip, .tab,
+    table.holdings tbody tr, table.sim-holdings tbody tr {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Small controls compress noticeably; large surfaces barely — a card scaling as hard
+       as a chip reads as a glitch rather than a press. */
+    .filter-chip, .tab, .btn, .hc-view-toggle, .brief-gen-btn, .brief-refresh,
+    .sim-search-clear, .close {
+      transition: transform .11s cubic-bezier(.2,.8,.2,1);
+    }
+    .filter-chip:active, .tab:active, .btn:active, .hc-view-toggle:active,
+    .brief-gen-btn:active, .brief-refresh:active, .close:active { transform: scale(.93); }
+
+    .hc-card, .journal-card, .wl-card {
+      transition: transform .13s cubic-bezier(.2,.8,.2,1);
+    }
+    .hc-card:active, .journal-card:active, .wl-card:active { transform: scale(.985); }
+
+    /* Table rows deliberately get opacity, not scale: a transform on a <tr> turns it
+       into a containing block, which detaches the sticky first column mid-tap. */
+    table.holdings tbody tr, table.sim-holdings tbody tr { transition: opacity .1s ease; }
+    table.holdings tbody tr:active, table.sim-holdings tbody tr:active { opacity: .58; }
+
+    /* Bottom-sheet modals slide up rather than snapping into place. No fill-mode — the
+       element must be left with no transform once the animation ends, or it becomes a
+       containing block and any position:fixed descendant anchors to it instead. */
+    @keyframes sheet-up { from { transform: translateY(101%); } to { transform: translateY(0); } }
+    @keyframes veil-in  { from { opacity: 0; } to { opacity: 1; } }
+    .modal-backdrop.open { animation: veil-in .16s ease; }
+    .modal-backdrop.open > .modal { animation: sheet-up .3s cubic-bezier(.22,1,.36,1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-enter,
+    .modal-backdrop.open,
+    .modal-backdrop.open > .modal { animation: none !important; }
+    .filter-chip, .tab, .btn, .hc-card, .journal-card, .wl-card,
+    table.holdings tbody tr, table.sim-holdings tbody tr { transition: none !important; }
+  }
 
   /* ── Touch devices: neutralise sticky row/card hover effects ── */
   @media (hover: none) {
@@ -5314,8 +5382,8 @@
   </div>
 </div>
 
-<script src="data.js?v=708"></script>
-<script src="desk.js?v=708"></script>
+<script src="data.js?v=709"></script>
+<script src="desk.js?v=709"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
