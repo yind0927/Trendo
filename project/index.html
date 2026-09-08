@@ -3192,7 +3192,10 @@
   /* ============ HOLDINGS CARD VIEW ============ */
   #holdings-cards, #sim-holdings-cards {
     display: none; /* shown in card mode */
-    flex-direction: column; gap: 8px; padding: 12px 16px 16px;
+    /* Horizontal inset keyed to the panel head above, not a hardcoded 16px: in card mode
+       these cards ARE the panel's content, so their left edge sits directly under the
+       Open/Closed control and the filter chips and has to share their edge. */
+    flex-direction: column; gap: 8px; padding: 12px var(--panel-inset) 16px;
   }
   .hc-card {
     background: var(--bg-2); border: 1px solid var(--line);
@@ -5390,8 +5393,8 @@
   </div>
 </div>
 
-<script src="data.js?v=710"></script>
-<script src="desk.js?v=710"></script>
+<script src="data.js?v=711"></script>
+<script src="desk.js?v=711"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
