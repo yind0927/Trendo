@@ -4545,16 +4545,15 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     // ── stats: 5-card bento grid — a wide hero row, then three even cards ──
-    // Held/In-out/Exits stay neutral (they describe what happened); R and Peak Capture
+    // Held/In-out stay neutral (they describe what happened); R and Peak Capture
     // are coloured by win/loss tone because they judge how well it went, so the eye
-    // lands on quality first. Multi-leg trades get an EXITS card as the fifth — a
-    // visible confirmation that the numbers above are the merged total, not one leg.
+    // lands on quality first. Risk:Reward shows the planned ratio at entry.
     let capture = "—";
     if (pts) {
       const peak = Math.max(...pts.map(p => p.px));
       if (peak > entryPx) capture = `${Math.round((exitPx - entryPx) / (peak - entryPx) * 100)}%`;
     }
-    const legs = h._mergedCount || 1;
+
 
     function scCard(x, cardY, w, cardH, label, val, opt = {}) {
       scRound(ctx, x, cardY, w, cardH, 20);
@@ -4590,8 +4589,10 @@ function rsAdjustGrade(grade, rsResult) {
       { tick: tone, val: tone });
     scCard(SC_PAD + thirdW + gGap, row2Y, thirdW, rowH, "PEAK CAPTURE", capture,
       { tick: P.warn });
-    scCard(SC_PAD + (thirdW + gGap) * 2, row2Y, thirdW, rowH, "EXITS", `${legs}×`,
-      { sub: legs > 1 ? "MERGED" : "SINGLE LEG" });
+    const rrVal = (h.target != null && h.stop != null && h.cost != null && h.target !== h.stop)
+      ? `1 : ${((h.target - h.cost) / (h.cost - h.stop)).toFixed(2)}`
+      : "—";
+    scCard(SC_PAD + (thirdW + gGap) * 2, row2Y, thirdW, rowH, "RISK : REWARD", rrVal);
 
     // ── footer ──
     const fy = SC_H - 58;
