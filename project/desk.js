@@ -4487,7 +4487,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     // ── full-bleed chart: no frame, the path runs off both edges ──
-    const cy = 540, ch = 430, ix = 0;
+    const cy = 540, ch = 400, ix = 0;
     const pts = series && series.length > 1 ? series : null;
     const entryPx = h.cost, exitPx = h.closePrice ?? h.last;
     if (pts) {
@@ -4544,35 +4544,54 @@ function rsAdjustGrade(grade, rsResult) {
       dot(Math.min(X(pts.length - 1), SC_W - 24), Y(vals[vals.length - 1]), tone, 10);
     }
 
-    // ── stats: one editorial strip, hairline rules, no boxes ──
+    // ── stats: 5-card bento grid — a wide hero row, then three even cards ──
+    // Held/In-out/Exits stay neutral (they describe what happened); R and Peak Capture
+    // are coloured by win/loss tone because they judge how well it went, so the eye
+    // lands on quality first. Multi-leg trades get an EXITS card as the fifth — a
+    // visible confirmation that the numbers above are the merged total, not one leg.
     let capture = "—";
     if (pts) {
       const peak = Math.max(...pts.map(p => p.px));
       if (peak > entryPx) capture = `${Math.round((exitPx - entryPx) / (peak - entryPx) * 100)}%`;
     }
-    const cells = [
-      ["HELD",    `${calcTradingDays(h.entry, h.closedAt)}d`],
-      ["IN / OUT", `${price(entryPx)} → ${price(exitPx)}`],
-      ["R", h.rMult != null ? `${h.rMult >= 0 ? "+" : "−"}${Math.abs(h.rMult).toFixed(2)}` : "—"],
-      ["PEAK CAPTURE", capture],
-    ];
-    const sy = 1085;
-    ctx.strokeStyle = scAlpha(P.fg1, 0.13); ctx.lineWidth = 1;
-    [sy - 34, sy + 78].forEach(ry => {
-      ctx.beginPath(); ctx.moveTo(SC_PAD, ry); ctx.lineTo(SC_W - SC_PAD, ry); ctx.stroke();
-    });
-    const colW = (SC_W - SC_PAD * 2) / 4;
-    cells.forEach(([label, val], i) => {
-      const x = SC_PAD + colW * i;
-      if (i) {
-        ctx.strokeStyle = scAlpha(P.fg1, 0.10);
-        ctx.beginPath(); ctx.moveTo(x - 14, sy - 20); ctx.lineTo(x - 14, sy + 64); ctx.stroke();
+    const legs = h._mergedCount || 1;
+
+    function scCard(x, cardY, w, cardH, label, val, opt = {}) {
+      scRound(ctx, x, cardY, w, cardH, 20);
+      ctx.fillStyle = scAlpha(P.bg2, 0.62); ctx.fill();
+      ctx.strokeStyle = scAlpha(P.fg1, 0.09); ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = scRgb(opt.tick || P.accent);
+      ctx.fillRect(x + 24, cardY + 26, 22, 3);
+      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(13, 700); ctx.textAlign = "left";
+      ctx.fillText(label, x + 24, cardY + 56);
+      const wide = w > 400;
+      const vSize = wide ? (val.length > 14 ? 27 : 34) : (val.length > 5 ? 25 : 42);
+      ctx.fillStyle = scRgb(opt.val || P.fg1); ctx.font = mono(vSize, 700);
+      ctx.fillText(val, x + 24, cardY + (opt.sub ? cardH - 34 : cardH - 24));
+      if (opt.sub) {
+        ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(12, 600);
+        ctx.fillText(opt.sub, x + 24, cardY + cardH - 13);
       }
-      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(13, 600);
-      ctx.fillText(label, x, sy + 2);
-      ctx.fillStyle = scRgb(P.fg1); ctx.font = mono(val.length > 12 ? 24 : 30, 600);
-      ctx.fillText(val, x, sy + 46);
-    });
+    }
+
+    const gGap = 18;
+    const gW = SC_W - SC_PAD * 2;
+    const row1Y = 975, rowH = 128, row2Y = row1Y + rowH + gGap;
+    const narrowW = 280, wideW = gW - narrowW - gGap;
+    const thirdW = (gW - gGap * 2) / 3;
+
+    scCard(SC_PAD, row1Y, narrowW, rowH, "HELD",
+      `${calcTradingDays(h.entry, h.closedAt)}d`);
+    scCard(SC_PAD + narrowW + gGap, row1Y, wideW, rowH, "ENTRY → EXIT",
+      `${price(entryPx)} → ${price(exitPx)}`);
+
+    scCard(SC_PAD, row2Y, thirdW, rowH, "R MULTIPLE",
+      h.rMult != null ? `${h.rMult >= 0 ? "+" : "−"}${Math.abs(h.rMult).toFixed(2)}` : "—",
+      { tick: tone, val: tone });
+    scCard(SC_PAD + thirdW + gGap, row2Y, thirdW, rowH, "PEAK CAPTURE", capture,
+      { tick: P.warn });
+    scCard(SC_PAD + (thirdW + gGap) * 2, row2Y, thirdW, rowH, "EXITS", `${legs}×`,
+      { sub: legs > 1 ? "MERGED" : "SINGLE LEG" });
 
     // ── footer ──
     const fy = SC_H - 58;
@@ -5020,9 +5039,13 @@ function rsAdjustGrade(grade, rsResult) {
         if (currentPage === "sim") closeSimDrawer(); else closeDrawer();
       }
       if (e.target?.closest?.("#drawer-share")) {
-        const h = CLOSED_POSITIONS.find(x => tradeKey(x) === tradeKey({
-          sym: selectedSym, entry: selectedEntry, cost: selectedCost }))
-          || mergeClosedForDisplay(CLOSED_POSITIONS).find(x => x.sym === selectedSym);
+        // Must read the MERGED view, same as the drawer itself and the closed table row —
+        // a raw CLOSED_POSITIONS.find() would return whichever single partial-exit leg
+        // happens to come first, not the trade's final total. mergeClosedForDisplay only
+        // collapses legs once the position is fully closed (not in HOLDINGS), which is
+        // exactly the "已平仓" case this button lives in.
+        const key = tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost });
+        const h = mergeClosedForDisplay(CLOSED_POSITIONS, HOLDINGS).find(x => tradeKey(x) === key);
         if (h) openShareCard(h);
       }
       if (e.target?.closest?.("#share-dl"))    scExport("download");
