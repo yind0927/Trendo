@@ -2390,7 +2390,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (activeTab === "open") {
       wireDrawerEdits(h);
       wireDrawerCloseButton();
-      wireAddToPosition(h, HOLDINGS, totalNotional, () => { renderTable(); renderOverview(); });
+      wireAddToPosition(h, false, totalNotional, () => { renderTable(); renderOverview(); openDrawer(h); });
       wireCCRecords(h, false);
     } else {
       wireClosedDrawerEdits(h, false);
@@ -2405,7 +2405,55 @@ function rsAdjustGrade(grade, rsResult) {
     _playDrawerSwipeAnim();
   }
 
-  function wireAddToPosition(h, holdings, notional, onDone) {
+  // ── Entry ledger ──────────────────────────────────────────────────────────
+  // h.entries = [{ type:"open"|"add", date, price, qty }] is the authoritative record of
+  // the entry side. qty and the average cost are DERIVED from it rather than patched
+  // incrementally, so adding a leg and deleting one are the same arithmetic run twice —
+  // which is what deleting used to get wrong: it removed the row and left qty, cost,
+  // size, R and P&L all sitting at their pre-delete values.
+
+  // Every average cost this position has legitimately had, oldest first. A partial exit
+  // stamps the basis that was in force when it happened, so after an add — which moves
+  // the average — the trade's own exit records stop matching h.cost and used to vanish
+  // from the drawer entirely. Replaying the ledger recognises them again, while a
+  // different trade in the same symbol on the same day, having its own cost path, is
+  // still correctly excluded.
+  function costHistory(h) {
+    const out = [];
+    let q = 0, c = 0;
+    for (const e of (h.entries || [])) {
+      const eq = +e.qty || 0, ep = +e.price || 0;
+      if (eq <= 0) continue;
+      c = (c * q + ep * eq) / (q + eq);
+      q += eq;
+      out.push(+c.toFixed(4));
+    }
+    if (h.cost != null) out.push(+Number(h.cost).toFixed(4));
+    return out;
+  }
+  const matchesTrade = (c, h) => c.sym === h.sym && c.entry === h.entry &&
+    costHistory(h).some(v => Math.abs(c.cost - v) < 0.001);
+
+  const soldQtyOf = (h, closedArr) => closedArr
+    .filter(c => c.exitReason === "partial" && matchesTrade(c, h))
+    .reduce((s, c) => s + (+c.qty || 0), 0);
+
+  // Rebuild qty/cost (and everything recomputeHolding derives) from the ledger.
+  function recalcFromEntries(h, notional, isSim) {
+    const entries = Array.isArray(h.entries) ? h.entries : [];
+    const entryQty = entries.reduce((s, e) => s + (+e.qty || 0), 0);
+    if (!entries.length || entryQty <= 0) return false;
+    const sold = soldQtyOf(h, isSim ? SIM_CLOSED : CLOSED_POSITIONS);
+    h.cost = parseFloat(
+      (entries.reduce((s, e) => s + (+e.price || 0) * (+e.qty || 0), 0) / entryQty).toFixed(4));
+    // Shares already sold out of the position come off the top. Without this, deleting an
+    // add-leg would quietly hand the partial exits back and inflate the holding.
+    h.qty = Math.max(0, entryQty - sold);
+    recomputeHolding(h, notional);   // size, P&L, risk1R, rMult, days all follow from these
+    return true;
+  }
+
+  function wireAddToPosition(h, isSim, notional, onDone) {
     const btn = $("#drawer-add-btn");
     if (!btn) return;
     btn.onclick = () => {
@@ -2424,36 +2472,24 @@ function rsAdjustGrade(grade, rsResult) {
       const addDate  = $("#add-date").value || new Date().toISOString().slice(0, 10);
       if (!addPrice || !addQty) { alert("请填写加仓价格和数量"); return; }
 
-      const oldQty  = h.qty;
-      const oldCost = h.cost;
-      const newQty  = oldQty + addQty;
-      const newCost = (oldCost * oldQty + addPrice * addQty) / newQty;
-
-      h.qty  = newQty;
-      h.cost = parseFloat(newCost.toFixed(4));
-      h.size = notional > 0 ? (newQty * h.cost / notional) * 100 : h.size;
-      h.risk1R = h.stop ? h.cost - h.stop : 0;
-
-      if (!Array.isArray(h.entries)) {
-        h.entries = [{ type: "open", date: h.entry, price: oldCost, qty: oldQty }];
+      // Seed the ledger for a position opened before it existed. The opening leg is the
+      // ORIGINAL size, so any shares already sold off have to be added back — h.qty is
+      // what is left today, and seeding with that would under-state the open and then
+      // get double-counted when recalcFromEntries subtracts the exits again.
+      if (!Array.isArray(h.entries) || !h.entries.length) {
+        const sold = soldQtyOf(h, isSim ? SIM_CLOSED : CLOSED_POSITIONS);
+        h.entries = [{ type: "open", date: h.entry, price: h.cost, qty: h.qty + sold }];
       }
       h.entries.push({ type: "add", date: addDate, price: addPrice, qty: addQty });
 
-      recomputeHolding(h, notional);
+      recalcFromEntries(h, notional, isSim);
       saveToStorage();
       closeModal("add-to-modal");
+      // Re-render the whole drawer rather than hand-patching .exec-list. The old patch
+      // rebuilt that list from h.entries alone, which dropped every partial-exit row and
+      // every delete button (leaving records unremovable until the drawer was reopened),
+      // and left cost, quantity, size, R and the level bar showing pre-add values.
       onDone();
-
-      const execList = $(".exec-list", $("#drawer"));
-      if (execList) {
-        execList.innerHTML = h.entries.map(ex => `
-          <div class="exec-item">
-            <span class="exec-type ${ex.type === 'open' ? 'open' : 'add'}">${ex.type === "open" ? "开仓" : "加仓"}</span>
-            <span class="exec-date">${fmt.date(ex.date)}</span>
-            <span class="exec-price mono">$${price(ex.price)}</span>
-            <span class="exec-qty muted">${ex.qty} 股</span>
-          </div>`).join("");
-      }
     };
   }
 
@@ -2504,19 +2540,42 @@ function rsAdjustGrade(grade, rsResult) {
         e.stopPropagation();
         if (btn.dataset.execType === "entry") {
           const idx = parseInt(btn.dataset.execIdx);
-          if (Array.isArray(h.entries) && idx >= 0 && idx < h.entries.length) {
-            h.entries.splice(idx, 1);
-            saveToStorage();
-            reopen();
+          if (!Array.isArray(h.entries) || idx < 0 || idx >= h.entries.length) return;
+          // The ledger is what qty and cost are derived from, so it cannot be emptied —
+          // a position with no entry legs has no size and no basis. Closing or deleting
+          // the position is the way to get rid of the last one.
+          if (h.entries.length === 1) {
+            alert("这是唯一的一条建仓记录，删除后持仓将没有成本和数量。请改用平仓或删除持仓。");
+            return;
           }
+          const removed = h.entries[idx];
+          const notional = isSim ? simNotional : totalNotional;
+          const sold = soldQtyOf(h, closedArr);
+          const remaining = h.entries.reduce((s, e, i) => i === idx ? s : s + (+e.qty || 0), 0);
+          // Refuse a delete that would leave fewer shares than have already been sold —
+          // the result would be a negative position clamped to zero, silently discarding
+          // the exits rather than telling anyone.
+          if (remaining < sold) {
+            alert(`删除后建仓总数 ${remaining} 股将少于已减仓的 ${sold} 股，请先删除对应的减仓记录。`);
+            return;
+          }
+          h.entries.splice(idx, 1);
+          recalcFromEntries(h, notional, isSim);
+          saveToStorage();
+          reopen();
         } else if (btn.dataset.execType === "partial") {
           const closedAt = btn.dataset.execClosedat;
           const qty = parseFloat(btn.dataset.execQty);
+          // Matched through the cost history, not against h.cost alone: an add moves the
+          // average, after which this record's stamped basis is an older one.
           const idx = closedArr.findIndex(c =>
-            c.sym === h.sym && c.entry === h.entry &&
-            Math.abs(c.cost - h.cost) < 0.001 &&
-            c.closedAt === closedAt && Math.abs(c.qty - qty) < 0.001);
-          if (idx !== -1) { closedArr.splice(idx, 1); saveToStorage(); reopen(); }
+            matchesTrade(c, h) && c.closedAt === closedAt && Math.abs(c.qty - qty) < 0.001);
+          if (idx === -1) return;
+          closedArr.splice(idx, 1);
+          // Those shares come back to the position.
+          recalcFromEntries(h, isSim ? simNotional : totalNotional, isSim);
+          saveToStorage();
+          reopen();
         }
       });
     });
@@ -2544,8 +2603,11 @@ function rsAdjustGrade(grade, rsResult) {
     // All raw closed records for this trade (partial exits + the final close), sorted
     // chronologically — used to reconstruct the true per-leg breakdown even when `h`
     // is a merged summary row (multiple exits collapsed into one closed-table row).
+    // Matched through this trade's whole cost history rather than h.cost alone: an add
+    // re-averages the basis, and every exit taken before it carries the older figure —
+    // matching on the current cost made those rows disappear from the drawer.
     const allCloseRecords = closedArr
-      .filter(c => c.sym === h.sym && c.entry === h.entry && Math.abs(c.cost - h.cost) < 0.001)
+      .filter(c => matchesTrade(c, h))
       .sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
     // Partial close records for this symbol (for open positions that have been partially exited)
     const partialCloses = allCloseRecords.filter(c => c.exitReason === "partial");
@@ -9608,7 +9670,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (!isClosed) {
       wireSimDrawerEdits(h);
       wireSimDrawerCloseButton();
-      wireAddToPosition(h, SIM_HOLDINGS, simNotional, () => { renderSimTable(); renderSimOverview(); });
+      wireAddToPosition(h, true, simNotional, () => { renderSimTable(); renderSimOverview(); openSimDrawer(h, simActiveTab); });
       wireCCRecords(h, true);
     } else {
       wireClosedDrawerEdits(h, true);
