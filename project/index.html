@@ -1890,7 +1890,18 @@
             border-left:2px solid var(--accent); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; flex-wrap:wrap; }
   .mp-gen-title { font-size:13px; font-weight:600; }
   .mp-gen-sub { font-size:11.5px; color:var(--fg-3); margin-top:3px; max-width:560px; line-height:1.5; }
-  .mp-gen .btn { margin-left:auto; }
+  .mp-entry { display:flex; gap:8px; align-items:center; flex-basis:100%; flex-wrap:wrap; }
+  .mp-entry .form-input { flex:1; min-width:180px; font-family:var(--f-mono); }
+  .mp-entry .mp-src { flex:0 1 200px; font-family:var(--f-sans); font-size:12px; }
+  .mp-note { font-size:10.5px; color:var(--fg-3); margin-top:8px; line-height:1.5; }
+  .mp-stat-sub2 { font-size:10px; color:var(--fg-3); margin-top:6px; padding-top:6px;
+                  border-top:1px solid var(--line); line-height:1.6; }
+  .mp-extremes { font-size:11px; color:var(--fg-2); margin-top:8px; }
+  .mp-cps { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; padding-top:7px;
+            border-top:1px solid var(--line); }
+  .mp-cp { font-size:10px; color:var(--fg-3); font-family:var(--f-sans); }
+  .mp-cp .num { font-size:11px; margin-left:3px; }
+  .mp-cp.primary { color:var(--fg-1); font-weight:600; }
   .mp-err { color:var(--down); font-size:11.5px; flex-basis:100%; }
   /* Sample size is stated up front, not buried — 10 cohorts is 50 positions but only
      10 independent observations, and an average over that is not evidence yet. */
@@ -5270,8 +5281,8 @@
   </div>
 </div>
 
-<script src="data.js?v=702"></script>
-<script src="desk.js?v=702"></script>
+<script src="data.js?v=703"></script>
+<script src="desk.js?v=703"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
@@ -5292,7 +5303,7 @@ if ("serviceWorker" in navigator) {
   // Backup version check: fetch /sw.js directly and compare CACHE name.
   // Works in Arc and other browsers where SW lifecycle events are unreliable,
   // because this is plain JS with no-store — bypasses all caches unconditionally.
-  const _swVer = "trendo-v702";
+  const _swVer = "trendo-v703";
   setInterval(() => {
     fetch("/sw.js?" + Date.now(), { cache: "no-store" })
       .then(r => r.text())

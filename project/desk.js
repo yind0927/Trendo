@@ -4318,14 +4318,22 @@ function rsAdjustGrade(grade, rsResult) {
 
 
   // ============ MODEL PICKS — forward-test ledger ============
+  // Tickers come from wherever the user sourced them and are typed in by hand. The
+  // ledger's job is to hold that list still and score it honestly afterwards.
+  //
+  // Entry is the OPEN of the first session on or after the pick date. That price is
+  // fully determined the moment the list is written down: it does not depend on when
+  // the app happened to be open, and anyone can verify it against a chart later. A
+  // close, or a live quote sampled whenever a poll fired, would both smuggle timing
+  // discretion into a number that is supposed to measure the source alone.
+  //
   // Separate from the sim book on purpose: nothing here touches SIM_HOLDINGS,
-  // SIM_CLOSED or any sim statistic. See data.js for why this is a forward test
-  // and not a backtest, and why each pick carries two prices.
+  // SIM_CLOSED, SIM_PENDING or any sim statistic.
 
   let simSubTab = "book";
   const MP_CHECKPOINTS = [["d5", 5], ["d10", 10], ["d20", 20], ["d40", 40], ["d65", 65]];
   const MP_PRIMARY = "d20";              // 4 weeks — the headline horizon
-  const MP_MIN_N   = 20;                 // cohorts needed before the numbers mean anything
+  const MP_MIN_N   = 20;                 // cohorts needed before the averages mean anything
 
   function mpIsoWeek(d) {
     const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -4336,171 +4344,128 @@ function rsAdjustGrade(grade, rsResult) {
   }
   const mpThisWeek = () => mpIsoWeek(new Date());
   const mpCohort   = id => MODEL_PICKS.find(c => c.id === id);
+  const mpToday    = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
-  // A cohort may only be deleted the day it was made and before any checkpoint has
-  // landed. After that the record stands — being able to drop the weeks that went
+  // Deletable only on the day it was written and only while still unpriced. Once an
+  // entry price exists the record stands — being able to drop the weeks that went
   // badly would make every number above it meaningless.
   function mpDeletable(c) {
-    if (!c) return false;
-    const sameDay = (c.pickedAt || "").slice(0, 10) === new Date().toISOString().slice(0, 10);
-    const untouched = c.picks.every(p => !Object.keys(p.checkpoints || {}).length);
-    return sameDay && untouched;
+    return !!c && (c.pickedAt || "").slice(0, 10) === new Date().toISOString().slice(0, 10)
+                && c.picks.every(p => p.entryPrice == null);
   }
 
-  // Equal-weight cohort return at a checkpoint. `basis` picks which entry price to
-  // measure from: "model" is the discretion-free reference, "fill" is what the
-  // manually placed order actually got. Unpriced or unfilled names are excluded and
-  // reported as a count rather than silently dropped.
-  function mpCohortReturn(c, key, basis) {
-    let sum = 0, n = 0, missing = 0;
-    for (const p of c.picks) {
-      const entry = basis === "fill" ? p.fill?.price : p.modelPrice;
-      const cp = p.checkpoints?.[key];
-      if (!entry || !cp || cp.px == null) { missing++; continue; }
-      sum += (cp.px - entry) / entry * 100; n++;
-    }
-    return { pct: n ? sum / n : null, n, missing };
-  }
-  function mpBenchReturn(c, key) {
-    const e = c.bench?.modelPrice, cp = c.bench?.checkpoints?.[key];
-    return (e && cp && cp.px != null) ? (cp.px - e) / e * 100 : null;
-  }
+  const mpRet = (from, to) => (from && to != null) ? (to - from) / from * 100 : null;
 
-  // ── Generate this week's cohort ───────────────────────────────────────────
-  async function mpGenerate(force = false) {
+  // Equal-weight cohort return at a checkpoint. Names without an entry price or without
+  // that checkpoint yet are excluded and counted, never treated as zero.
+  function mpCohortReturn(c, key) {
+    const rs = c.picks.map(p => mpRet(p.entryPrice, p.checkpoints?.[key]?.px)).filter(v => v != null);
+    return { pct: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null, n: rs.length };
+  }
+  const mpBenchReturn = (c, key) => mpRet(c.bench?.entryPrice, c.bench?.checkpoints?.[key]?.px);
+
+  // ── Manual entry ──────────────────────────────────────────────────────────
+  // Accepts "AAPL MSFT NVDA" or "AAPL, MSFT, NVDA" — whatever shape it was pasted in.
+  function mpAddCohort(raw, note) {
+    const syms = [...new Set((raw || "").toUpperCase().split(/[^A-Z0-9.\-]+/)
+      .map(s => s.trim()).filter(s => s && s.length <= 6))];
+    if (!syms.length) return { error: "没有识别到有效代码" };
     const weekId = mpThisWeek();
-    if (!force && mpCohort(weekId)) return;
-    const btn = $("#mp-gen-btn");
-    if (btn) { btn.disabled = true; btn.textContent = "生成中…"; }
-    try {
-      const r = await fetch(`/api/market-summary?mode=picks${force ? "&force=1" : ""}`);
-      const data = await r.json();
-      if (!r.ok || !Array.isArray(data.picks) || !data.picks.length)
-        throw new Error(data.error || "选股返回为空");
+    if (mpCohort(weekId)) return { error: `本周（${weekId}）已有批次，一周只记一批` };
 
-      // Lock the reference price now. A pick the quote API cannot price is KEPT with
-      // priced:false — dropping it would quietly bias the ledger toward the names
-      // that happen to have clean data.
-      const syms = data.picks.map(p => p.sym);
-      let px = {};
-      try {
-        const q = await fetch(`/api/quote?stocks=${encodeURIComponent([...syms, "VOO"].join(","))}`);
-        if (q.ok) px = (await q.json()) || {};
-      } catch (_) {}
-      const priceOf = s => {
-        const v = px[s] ?? px[s?.toUpperCase()];
-        return (v && typeof v === "object") ? (v.last ?? v.price ?? null) : (typeof v === "number" ? v : null);
-      };
-
-      const today = new Date().toISOString().slice(0, 10);
-      const cohort = {
-        id: weekId,
-        weekOf: today,
-        pickedAt: new Date().toISOString(),
-        model: data.model || "claude-sonnet-4-6",
-        picks: data.picks.map(p => ({
-          sym: p.sym, name: p.name, thesis: p.thesis, conviction: p.conviction,
-          modelPrice: priceOf(p.sym), modelDate: today, priced: priceOf(p.sym) != null,
-          order: null, fill: null, checkpoints: {},
-        })),
-        bench: { sym: "VOO", modelPrice: priceOf("VOO"), checkpoints: {} },
-      };
-      const existing = MODEL_PICKS.findIndex(c => c.id === weekId);
-      if (existing >= 0) MODEL_PICKS.splice(existing, 1, cohort);
-      else MODEL_PICKS.unshift(cohort);
-      saveToStorage();
-      renderModelPicks();
-    } catch (e) {
-      const el = $("#mp-gen-err");
-      if (el) el.textContent = `生成失败：${e.message}`;
-      if (btn) { btn.disabled = false; btn.textContent = "生成本周选股"; }
-    }
+    MODEL_PICKS.unshift({
+      id: weekId,
+      weekOf: mpToday(),                       // US trading date, not the local one
+      pickedAt: new Date().toISOString(),
+      source: (note || "").slice(0, 80),
+      picks: syms.map(sym => ({
+        sym, name: null,
+        entryPrice: null, entryDate: null,     // filled from the session open, see below
+        checkpoints: {},
+      })),
+      bench: { sym: "VOO", entryPrice: null, entryDate: null, checkpoints: {} },
+    });
+    saveToStorage();
+    return { ok: syms.length };
   }
 
-  // ── Manual order placement, using the sim book's own fill rules ────────────
-  function mpPlaceOrder(cohortId, sym, type, limitPrice, qty) {
-    const c = mpCohort(cohortId); if (!c) return;
-    const p = c.picks.find(x => x.sym === sym); if (!p || p.fill) return;
-    p.order = { type, limitPrice: type === "limit" ? limitPrice : null,
-                qty: qty || null, placedAt: new Date().toISOString() };
-    saveToStorage(); renderModelPicks();
-  }
-
-  // Called from fetchPrices with the same price map the sim book uses, and gated by
-  // the same isUSMarketOpen() — a market order should not fill at 3am off a stale quote.
-  function mpFillOrders(results) {
-    if (!isUSMarketOpen()) return false;
-    let changed = false;
-    for (const c of MODEL_PICKS) {
-      for (const p of c.picks) {
-        if (!p.order || p.fill) continue;
-        const px = results[p.sym]?.last;
-        if (px == null) continue;
-        const hit = p.order.type === "market" ||
-                    (p.order.limitPrice != null && px <= p.order.limitPrice);
-        if (!hit) continue;
-        p.fill = { price: px, date: new Date().toISOString().slice(0, 10) };
-        changed = true;
-      }
-    }
-    return changed;
-  }
-
-  // ── Checkpoints ───────────────────────────────────────────────────────────
-  // Indexed by position in the close series rather than by calendar date: the Nth
-  // trading day after entry is simply the Nth bar, which sidesteps holidays entirely.
-  // Uses adjusted closes where available — a raw-close return spanning an ex-dividend
-  // date is systematically understated (same reason as the VOO monthly benchmark).
-  // Once a checkpoint is written it is never recomputed.
-  async function mpRefreshCheckpoints() {
-    const open = MODEL_PICKS.filter(c =>
-      c.picks.some(p => p.priced && MP_CHECKPOINTS.some(([k]) => !p.checkpoints?.[k])));
-    if (!open.length) return;
+  // ── Entry price + checkpoints, both from the daily bar series ─────────────
+  // Checkpoints are indexed by POSITION in the series rather than by calendar date:
+  // the Nth trading day after entry is simply the Nth bar, so holidays and early
+  // closes need no special handling.
+  // Returns use adjusted closes where available — a raw-close return spanning an
+  // ex-dividend date is systematically understated (same issue as the VOO monthly
+  // benchmark). The entry price stays the RAW open, because that is a real tradable
+  // price; adjclose is a retroactively rescaled construct and would not match a chart.
+  // Nothing already written is ever recomputed.
+  async function mpRefresh() {
+    const pend = MODEL_PICKS.filter(c =>
+      c.picks.some(p => p.entryPrice == null || MP_CHECKPOINTS.some(([k]) => !p.checkpoints?.[k])));
+    if (!pend.length) return;
     let changed = false;
 
-    for (const c of open) {
-      const syms = [...new Set(c.picks.filter(p => p.priced).map(p => p.sym))];
-      if (!syms.length) continue;
+    for (const c of pend) {
+      const syms = [...new Set(c.picks.map(p => p.sym))];
       try {
         const r = await fetch(`/api/history?symbols=${encodeURIComponent([...syms, "VOO"].join(","))}&from=${c.weekOf}`);
         if (!r.ok) continue;
         const j = await r.json();
-        const seriesOf = s => {
-          const src = j.adjResults?.[s] || j.results?.[s];
-          if (!src) return null;
-          return Object.keys(src).sort().map(d => src[d]);
-        };
-        const apply = (target, series) => {
-          if (!series || series.length < 2) return;
+
+        const apply = (t) => {
+          const days = Object.keys(j.results?.[t.sym] || {}).sort();
+          if (!days.length) return;
+          // entry = open of the first session on or after the pick date
+          if (t.entryPrice == null) {
+            const o = j.openResults?.[t.sym]?.[days[0]];
+            if (o != null) { t.entryPrice = o; t.entryDate = days[0]; changed = true; }
+            else return;                       // no open yet — session hasn't started
+          }
+          const src = j.adjResults?.[t.sym] || j.results?.[t.sym];
+          const series = days.map(d => src?.[d]).filter(v => v != null);
           for (const [key, n] of MP_CHECKPOINTS) {
-            if (target.checkpoints[key]) continue;         // frozen once written
+            if (t.checkpoints[key]) continue;  // frozen once written
             if (series.length > n && series[n] != null) {
-              target.checkpoints[key] = { px: series[n] };
-              changed = true;
+              t.checkpoints[key] = { px: series[n] }; changed = true;
             }
           }
+          const lastDay = days[days.length - 1];
+          const lastPx = src?.[lastDay];
+          if (lastPx != null) { t.lastPx = lastPx; t.lastDay = lastDay; changed = true; }
         };
-        for (const p of c.picks) if (p.priced) apply(p, seriesOf(p.sym));
-        if (c.bench) apply(c.bench, seriesOf("VOO"));
-      } catch (_) { /* try again next time the tab opens */ }
+        c.picks.forEach(apply);
+        if (c.bench) apply(c.bench);
+      } catch (_) { /* retried next time the tab is opened */ }
     }
-    if (changed) { saveToStorage(); renderModelPicks(); }
+    if (changed) { saveToStorage(); if (simSubTab === "picks") renderModelPicks(); }
   }
 
   // ── Aggregate ─────────────────────────────────────────────────────────────
+  // Reported at cohort level AND at individual-pick level, plus median beside mean.
+  // A source can look strong at cohort level purely because one name ran; the pick-level
+  // hit rate and the mean/median gap are what expose that.
   function mpStats() {
     const rows = MP_CHECKPOINTS.map(([key, n]) => {
-      const alphas = [];
+      const alphas = [], picks = [];
       for (const c of MODEL_PICKS) {
-        const r = mpCohortReturn(c, key, "model"), b = mpBenchReturn(c, key);
-        if (r.pct == null || b == null) continue;
-        alphas.push(r.pct - b);
+        const b = mpBenchReturn(c, key);
+        if (b == null) continue;
+        const r = mpCohortReturn(c, key);
+        if (r.pct != null) alphas.push(r.pct - b);
+        for (const p of c.picks) {
+          const pr = mpRet(p.entryPrice, p.checkpoints?.[key]?.px);
+          if (pr != null) picks.push(pr - b);
+        }
       }
-      const N = alphas.length;
+      const med = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y);
+        const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
       return {
-        key, weeks: Math.round(n / 5), N,
-        avg: N ? alphas.reduce((a, b) => a + b, 0) / N : null,
-        winRate: N ? alphas.filter(a => a > 0).length / N * 100 : null,
+        key, weeks: Math.round(n / 5), N: alphas.length,
+        avg:  alphas.length ? alphas.reduce((a, b) => a + b, 0) / alphas.length : null,
+        win:  alphas.length ? alphas.filter(a => a > 0).length / alphas.length * 100 : null,
+        pickN: picks.length,
+        pickWin: picks.length ? picks.filter(a => a > 0).length / picks.length * 100 : null,
+        pickMed: med(picks),
+        pickAvg: picks.length ? picks.reduce((a, b) => a + b, 0) / picks.length : null,
       };
     });
     return { rows, cohorts: MODEL_PICKS.length };
@@ -4509,26 +4474,29 @@ function rsAdjustGrade(grade, rsResult) {
   // ── Render ────────────────────────────────────────────────────────────────
   function renderModelPicks() {
     const el = $("#sim-picks-panel"); if (!el) return;
-    const s = mpStats();
-    const weekId = mpThisWeek();
-    const hasThisWeek = !!mpCohort(weekId);
+    const s = mpStats(), weekId = mpThisWeek(), has = !!mpCohort(weekId);
     const pct = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
     const cls = v => v == null ? "muted" : v >= 0 ? "up" : "down";
 
-    const gen = `
+    const entry = `
       <div class="mp-gen">
-        <div>
-          <div class="mp-gen-title">本周选股 · ${weekId}</div>
-          <div class="mp-gen-sub">${hasThisWeek
-            ? "本周批次已锁定。选股在生成的那一刻写死，之后不可修改。"
-            : "向模型索取 5 只股票，锁定当日收盘价后向前跟踪。"}</div>
+        <div style="flex:1;min-width:260px">
+          <div class="mp-gen-title">录入本周选股 · ${weekId}</div>
+          <div class="mp-gen-sub">${has
+            ? "本周批次已录入。入场价取当日开盘价，写入后不可修改。"
+            : "粘贴或输入股票代码，空格或逗号分隔。入场价自动取<b>入场日开盘价</b>，无需手动挂单。"}</div>
         </div>
-        ${hasThisWeek ? "" : `<button class="btn primary" id="mp-gen-btn">生成本周选股</button>`}
+        ${has ? "" : `
+        <div class="mp-entry">
+          <input id="mp-input" class="form-input" placeholder="AAPL MSFT NVDA GOOGL AMZN" autocomplete="off">
+          <input id="mp-src" class="form-input mp-src" placeholder="来源备注（可选）" autocomplete="off">
+          <button class="btn primary" id="mp-add-btn">录入</button>
+        </div>`}
         <div id="mp-gen-err" class="mp-err"></div>
       </div>`;
 
     const warn = s.cohorts < MP_MIN_N ? `
-      <div class="mp-warn">共 ${s.cohorts} 批 · 样本不足，当前数字还不足以判断模型是否有效。
+      <div class="mp-warn">共 ${s.cohorts} 批 · 样本不足，当前数字还不足以判断这个来源是否有效。
       5 只 × ${s.cohorts} 周看起来是 ${s.cohorts * 5} 个仓位，但只有 ${s.cohorts} 个独立观测。</div>` : "";
 
     const stats = `
@@ -4539,97 +4507,101 @@ function rsAdjustGrade(grade, rsResult) {
             <div class="mp-stat${r.key === MP_PRIMARY ? " primary" : ""}">
               <div class="mp-stat-label">${r.weeks} 周${r.key === MP_PRIMARY ? " · 主口径" : ""}</div>
               <div class="mp-stat-val num ${cls(r.avg)}">${pct(r.avg)}</div>
-              <div class="mp-stat-sub">${r.N ? `胜率 ${r.winRate.toFixed(0)}% · N=${r.N}` : "尚无到期批次"}</div>
+              <div class="mp-stat-sub">${r.N ? `批次胜率 ${r.win.toFixed(0)}% · N=${r.N}` : "尚无到期批次"}</div>
+              ${r.pickN ? `<div class="mp-stat-sub2">
+                个股胜率 ${r.pickWin.toFixed(0)}% (${r.pickN} 只)<br>
+                中位 <span class="num ${cls(r.pickMed)}">${pct(r.pickMed)}</span> · 均值 <span class="num ${cls(r.pickAvg)}">${pct(r.pickAvg)}</span>
+              </div>` : ""}
             </div>`).join("")}
         </div>
+        <div class="mp-note">均值远高于中位数，说明超额来自极少数个股，不是稳定的选股能力。</div>
       </div>`;
 
-    const cohorts = MODEL_PICKS.length ? MODEL_PICKS.map(c => {
-      const rm = mpCohortReturn(c, MP_PRIMARY, "model");
-      const rf = mpCohortReturn(c, MP_PRIMARY, "fill");
-      const bm = mpBenchReturn(c, MP_PRIMARY);
-      const unpriced = c.picks.filter(p => !p.priced).length;
+    const body = MODEL_PICKS.length ? MODEL_PICKS.map(c => {
+      const r = mpCohortReturn(c, MP_PRIMARY), b = mpBenchReturn(c, MP_PRIMARY);
+      const alpha = (r.pct != null && b != null) ? r.pct - b : null;
+      const waiting = c.picks.filter(p => p.entryPrice == null).length;
+      const live = c.picks
+        .map(p => ({ sym: p.sym, v: mpRet(p.entryPrice, p.lastPx) }))
+        .filter(x => x.v != null).sort((a, z) => z.v - a.v);
       return `
       <div class="mp-cohort">
         <div class="mp-cohort-hd">
           <div>
             <span class="mp-cohort-id">${c.id}</span>
-            <span class="mp-cohort-date">${c.weekOf} · ${c.model}</span>
+            <span class="mp-cohort-date">${c.weekOf}${c.source ? ` · ${c.source}` : ""}</span>
           </div>
           <div class="mp-cohort-num">
-            <span class="mp-cohort-lbl">模型基准</span>
-            <span class="num ${cls(rm.pct)}">${pct(rm.pct)}</span>
-            <span class="mp-cohort-lbl">实际成交</span>
-            <span class="num ${cls(rf.pct)}">${pct(rf.pct)}</span>
-            <span class="mp-cohort-lbl">VOO</span>
-            <span class="num ${cls(bm)}">${pct(bm)}</span>
+            <span class="mp-cohort-lbl">等权</span><span class="num ${cls(r.pct)}">${pct(r.pct)}</span>
+            <span class="mp-cohort-lbl">VOO</span><span class="num ${cls(b)}">${pct(b)}</span>
+            <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${pct(alpha)}</span>
           </div>
-          ${mpDeletable(c) ? `<button class="mp-del" data-mp-del="${c.id}" title="仅当天且无检查点时可删">✕</button>` : ""}
+          ${mpDeletable(c) ? `<button class="mp-del" data-mp-del="${c.id}" title="仅录入当天、尚未定价时可删">✕</button>` : ""}
         </div>
-        ${unpriced ? `<div class="mp-unpriced">${c.picks.length} 只中 ${unpriced} 只无法定价，已保留在记录中但不计入均值</div>` : ""}
+        ${waiting ? `<div class="mp-unpriced">${waiting} 只等待开盘定价</div>` : ""}
+        ${live.length > 1 ? `<div class="mp-extremes">本批最好 <b>${live[0].sym}</b> <span class="num ${cls(live[0].v)}">${pct(live[0].v)}</span>
+          · 最差 <b>${live[live.length-1].sym}</b> <span class="num ${cls(live[live.length-1].v)}">${pct(live[live.length-1].v)}</span></div>` : ""}
         <div class="mp-picks">
           ${c.picks.map(p => {
-            const cp = p.checkpoints?.[MP_PRIMARY];
-            const mret = (p.modelPrice && cp) ? (cp.px - p.modelPrice) / p.modelPrice * 100 : null;
-            const fret = (p.fill?.price && cp) ? (cp.px - p.fill.price) / p.fill.price * 100 : null;
+            const now = mpRet(p.entryPrice, p.lastPx);
+            const bl  = mpRet(c.bench?.entryPrice, c.bench?.lastPx);
+            const vs  = (now != null && bl != null) ? now - bl : null;
             return `
-            <div class="mp-pick${p.priced ? "" : " unpriced"}">
+            <div class="mp-pick${p.entryPrice == null ? " unpriced" : ""}">
               <div class="mp-pick-top">
                 <span class="mp-sym">${p.sym}</span>
-                <span class="mp-conv" title="模型信心 ${p.conviction}/5">${"●".repeat(p.conviction)}${"○".repeat(5 - p.conviction)}</span>
+                ${p.entryPrice == null ? `<span class="mp-nopx">等待开盘</span>`
+                  : `<span class="mp-pick-foot">开盘入场 $${Number(p.entryPrice).toFixed(2)} · ${p.entryDate}</span>`}
                 <span class="mp-pick-rets">
-                  <span class="num ${cls(mret)}" title="按模型基准价 ${p.modelPrice ?? "—"}">${pct(mret)}</span>
-                  <span class="num ${cls(fret)}" title="按实际成交价 ${p.fill?.price ?? "未成交"}">${p.fill ? pct(fret) : "—"}</span>
+                  <span class="num ${cls(now)}" title="自入场开盘价至今">${pct(now)}</span>
+                  <span class="num ${cls(vs)}" title="同期相对 VOO">${vs == null ? "—" : `${vs >= 0 ? "+" : ""}${vs.toFixed(2)}pp`}</span>
                 </span>
               </div>
-              <div class="mp-thesis">${p.thesis || ""}</div>
-              <div class="mp-pick-foot">
-                ${p.priced ? `基准 $${Number(p.modelPrice).toFixed(2)}` : `<span class="mp-nopx">无法定价</span>`}
-                ${p.fill ? ` · 成交 $${Number(p.fill.price).toFixed(2)} (${p.fill.date})`
-                  : p.order ? ` · 挂单中 ${p.order.type === "limit" ? `限价 $${p.order.limitPrice}` : "市价"}`
-                  : (p.priced ? ` · <button class="mp-order" data-mp-order="${c.id}|${p.sym}">挂单</button>` : "")}
+              <div class="mp-cps">
+                ${MP_CHECKPOINTS.map(([k, n]) => {
+                  const v = mpRet(p.entryPrice, p.checkpoints?.[k]?.px);
+                  return `<span class="mp-cp${k === MP_PRIMARY ? " primary" : ""}">${Math.round(n/5)}周 <span class="num ${cls(v)}">${pct(v)}</span></span>`;
+                }).join("")}
               </div>
             </div>`;
           }).join("")}
         </div>
       </div>`;
-    }).join("") : `<div class="mp-empty">还没有任何批次。生成第一周的选股后，这里会按周累积。</div>`;
+    }).join("") : `<div class="mp-empty">还没有任何批次。录入第一周的代码后，这里会按周累积。</div>`;
 
-    el.innerHTML = gen + warn + stats + cohorts;
+    el.innerHTML = entry + warn + stats + body;
   }
 
-  // Delegated once on the panel, so it survives every re-render.
+  // Delegated once on the panel so it survives every re-render.
   function wireModelPicks() {
     const el = $("#sim-picks-panel"); if (!el || el.dataset.wired) return;
     el.dataset.wired = "1";
-    el.addEventListener("click", e => {
-      if (e.target.id === "mp-gen-btn") { mpGenerate(); return; }
+    el.addEventListener("click", async e => {
+      if (e.target.id === "mp-add-btn") {
+        const inp = $("#mp-input"), src = $("#mp-src"), err = $("#mp-gen-err");
+        const res = mpAddCohort(inp?.value, src?.value);
+        if (res.error) { if (err) err.textContent = res.error; return; }
+        renderModelPicks();
+        await mpRefresh();
+        return;
+      }
       const del = e.target.closest("[data-mp-del]");
       if (del) {
         const c = mpCohort(del.dataset.mpDel);
-        if (c && mpDeletable(c) && confirm(`删除批次 ${c.id}？仅在生成当天且尚无检查点时可删。`)) {
+        if (c && mpDeletable(c) && confirm(`删除批次 ${c.id}？仅在录入当天、尚未定价时可删。`)) {
           MODEL_PICKS.splice(MODEL_PICKS.indexOf(c), 1);
           saveToStorage(); renderModelPicks();
         }
-        return;
       }
-      const ord = e.target.closest("[data-mp-order]");
-      if (ord) {
-        const [cid, sym] = ord.dataset.mpOrder.split("|");
-        const t = prompt(`${sym} 挂单类型：输入 m = 市价，或直接输入限价价格`, "m");
-        if (t == null) return;
-        if (t.trim().toLowerCase() === "m") mpPlaceOrder(cid, sym, "market", null, null);
-        else {
-          const lp = parseFloat(t);
-          if (isFinite(lp) && lp > 0) mpPlaceOrder(cid, sym, "limit", lp, null);
-        }
-      }
+    });
+    el.addEventListener("keydown", e => {
+      if (e.key === "Enter" && e.target.id === "mp-input") $("#mp-add-btn")?.click();
     });
   }
 
   // Sim page sub-tabs. Everything that is not the topbar, the tab bar itself or the
-  // picks panel belongs to the sim book, so the two views toggle without needing the
-  // existing sim markup to be restructured.
+  // picks panel belongs to the sim book, so the two views toggle without the existing
+  // sim markup needing to be restructured.
   function setSimSubTab(tab) {
     simSubTab = tab;
     const view = $("#sim-view"); if (!view) return;
@@ -4640,7 +4612,7 @@ function rsAdjustGrade(grade, rsResult) {
       ch.dataset.mpPrevDisplay = ch.dataset.mpPrevDisplay ?? ch.style.display;
       ch.style.display = tab === "picks" ? "none" : (ch.dataset.mpPrevDisplay || "");
     });
-    if (tab === "picks") { wireModelPicks(); renderModelPicks(); mpRefreshCheckpoints(); }
+    if (tab === "picks") { wireModelPicks(); renderModelPicks(); mpRefresh(); }
     else renderSim();
   }
 
@@ -5265,10 +5237,7 @@ function rsAdjustGrade(grade, rsResult) {
         renderSimPending();
       }
 
-      const mpFilled = mpFillOrders(results);
-      if (mpFilled && currentPage === "sim" && simSubTab === "picks") renderModelPicks();
-
-      const hasStructural = executed.length > 0 || closedIds.length > 0 || mpFilled;
+      const hasStructural = executed.length > 0 || closedIds.length > 0;
       if (hasStructural) {
         recordDailyPnl();
         saveToStorage();

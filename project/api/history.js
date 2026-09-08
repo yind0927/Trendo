@@ -19,6 +19,7 @@ export default async function handler(req, res) {
 
   const results = {};
   const adjResults = {};
+  const openResults = {};
   const volumeResults = {};
 
   await Promise.all(syms.map(async sym => {
@@ -51,8 +52,13 @@ export default async function handler(req, res) {
       // construct only meaningful for return comparisons, never for a real fill price).
       const adjCloses  = chart.indicators?.adjclose?.[0]?.adjclose || [];
       const volumes    = chart.indicators?.quote?.[0]?.volume || [];
+      // Session open. Needed by the Model Picks ledger, whose entry rule is "the open of
+      // the first session on or after the pick date" — a fully determined price with no
+      // execution discretion in it, unlike a close or a live quote read at an arbitrary moment.
+      const opens      = chart.indicators?.quote?.[0]?.open || [];
       const prices     = {};
       const adjPrices  = {};
+      const openPrices = {};
       const vols       = {};
       timestamps.forEach((ts, i) => {
         if (closes[i] == null) return;
@@ -67,16 +73,18 @@ export default async function handler(req, res) {
         const d = new Date(ts * 1000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
         prices[d] = closes[i];
         if (adjCloses[i] != null) adjPrices[d] = adjCloses[i];
+        if (opens[i] != null) openPrices[d] = opens[i];
         if (volumes[i] != null) vols[d] = volumes[i];
       });
       if (Object.keys(prices).length) {
         results[sym] = prices;
         volumeResults[sym] = vols;
         if (Object.keys(adjPrices).length) adjResults[sym] = adjPrices;
+        if (Object.keys(openPrices).length) openResults[sym] = openPrices;
       }
     } catch (_) {}
   }));
 
   res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
-  res.json({ results, adjResults, volumeResults });
+  res.json({ results, adjResults, openResults, volumeResults });
 }
