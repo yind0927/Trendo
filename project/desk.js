@@ -1201,8 +1201,8 @@ function rsAdjustGrade(grade, rsResult) {
   // from an older build, say — is snapped to the default instead of being left to drive
   // polling at a rate no button represents, which would also leave the segmented control
   // showing nothing selected.
-  const REFRESH_CHOICES = [30, 60, 120, 300];
-  const REFRESH_DEFAULT = 60;
+  const REFRESH_CHOICES = [15, 30, 60];
+  const REFRESH_DEFAULT = 30;
   const normRefresh = v => REFRESH_CHOICES.includes(+v) ? +v : REFRESH_DEFAULT;
   let priceIntervalMs = normRefresh(localStorage.getItem("trendo_refresh_interval")) * 1000;
   let _lastMktCtx = null; // cached market context for holdings brief
@@ -4686,6 +4686,8 @@ function rsAdjustGrade(grade, rsResult) {
   // pick up the new horizons on the next refresh, as long as history reaches that far.
   const MP_CHECKPOINTS = [["d5", 5], ["d10", 10], ["d20", 20], ["d30", 30], ["d40", 40], ["d60", 60]];
   const MP_PRIMARY = "d10";              // 2 weeks — the headline horizon
+  const MP_PRIMARY_WEEKS = Math.round(
+    (MP_CHECKPOINTS.find(([k]) => k === MP_PRIMARY)?.[1] || 0) / 5);
   const MP_MIN_N   = 20;                 // cohorts needed before the averages mean anything
 
   function mpIsoWeek(d) {
@@ -4891,6 +4893,26 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mp-note">均值远高于中位数，说明超额来自极少数个股，不是稳定的选股能力。</div>
       </div>`;
 
+    // Cohort-level breakdown across every horizon. The header can only ever show one
+    // number, so without this the six horizons existed solely as a cramped chip row
+    // inside each individual pick — there was no way to read how the BATCH did at 6 or
+    // 12 weeks. Alpha is in pp because it is the gap between two percentages.
+    const hzGrid = c => `
+      <div class="mp-hz-grid">
+        ${MP_CHECKPOINTS.map(([k, n]) => {
+          const r = mpCohortReturn(c, k), b = mpBenchReturn(c, k);
+          const a = (r.pct != null && b != null) ? r.pct - b : null;
+          return `
+          <div class="mp-hz${k === MP_PRIMARY ? " primary" : ""}${r.pct == null ? " pending" : ""}">
+            <div class="mp-hz-lbl">${Math.round(n / 5)} 周${k === MP_PRIMARY ? " · 主口径" : ""}</div>
+            <div class="mp-hz-row"><span>等权</span><span class="num ${cls(r.pct)}">${pct(r.pct)}</span></div>
+            <div class="mp-hz-row"><span>VOO</span><span class="num ${cls(b)}">${pct(b)}</span></div>
+            <div class="mp-hz-row alpha"><span>超额</span><span class="num ${cls(a)}">${
+              a == null ? "—" : `${a >= 0 ? "+" : ""}${a.toFixed(2)}pp`}</span></div>
+          </div>`;
+        }).join("")}
+      </div>`;
+
     const body = MODEL_PICKS.length ? MODEL_PICKS.map(c => {
       const r = mpCohortReturn(c, MP_PRIMARY), b = mpBenchReturn(c, MP_PRIMARY);
       const alpha = (r.pct != null && b != null) ? r.pct - b : null;
@@ -4906,6 +4928,7 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="mp-cohort-date">${c.weekOf}${c.source ? ` · ${c.source}` : ""}</span>
           </div>
           <div class="mp-cohort-num">
+            <span class="mp-cohort-hz">${MP_PRIMARY_WEEKS} 周</span>
             <span class="mp-cohort-lbl">等权</span><span class="num ${cls(r.pct)}">${pct(r.pct)}</span>
             <span class="mp-cohort-lbl">VOO</span><span class="num ${cls(b)}">${pct(b)}</span>
             <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${pct(alpha)}</span>
@@ -4913,6 +4936,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${mpDeletable(c) ? `<button class="mp-del" data-mp-del="${c.id}" title="仅录入当天、尚未定价时可删">✕</button>` : ""}
         </div>
         ${waiting ? `<div class="mp-unpriced">${waiting} 只等待开盘定价</div>` : ""}
+        ${hzGrid(c)}
         ${live.length > 1 ? `<div class="mp-extremes">本批最好 <b>${live[0].sym}</b> <span class="num ${cls(live[0].v)}">${pct(live[0].v)}</span>
           · 最差 <b>${live[live.length-1].sym}</b> <span class="num ${cls(live[live.length-1].v)}">${pct(live[live.length-1].v)}</span></div>` : ""}
         <div class="mp-picks">
@@ -5280,15 +5304,14 @@ function rsAdjustGrade(grade, rsResult) {
     const hasCrypto = [...SIM_HOLDINGS, ...HOLDINGS, ...SIM_PENDING].some(h => h.kind === "crypto");
     let effInterval = priceIntervalMs;
     // Off-hours (market closed, no crypto): every quote is frozen at the last close, so
-    // there is nothing to poll for. 30min — the only thing a fetch can change is the
-    // "updated at" stamp, and re-focus forces a fresh one anyway.
-    if (!isUSMarketOpen() && !hasCrypto) effInterval = Math.max(effInterval, 1800000);
+    // there is nothing to poll for — stretch to 10min.
+    if (!isUSMarketOpen() && !hasCrypto) effInterval = Math.max(effInterval, 600000);
     // Backgrounded tab: nobody is watching the numbers. A dashboard left open on a second
     // monitor / background tab was polling every 30s all session and burning serverless CPU
-    // for a page in view of no one. Stretch to 15min while hidden — pending orders still fill
+    // for a page in view of no one. Stretch to 5min while hidden — pending orders still fill
     // (background order-check worker + the visibilitychange handler forces an immediate
     // catch-up fetch the moment the tab is foregrounded again).
-    if (document.hidden) effInterval = Math.max(effInterval, 900000);
+    if (document.hidden) effInterval = Math.max(effInterval, 300000);
     if (now - lastPriceFetch >= effInterval) {
       lastPriceFetch = now;
       fetchPrices();
