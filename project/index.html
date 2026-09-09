@@ -463,6 +463,9 @@
     box-shadow: 0 1px 0 0 oklch(1 0 0 / .04);
   }
   .drawer-top{ display:flex; align-items: center; gap: 12px; }
+  /* Transparent on desktop: the badge, counter and buttons stay direct flex children of
+     .drawer-top, so the wide layout is untouched. The mobile block re-materialises them. */
+  .drawer-meta, .drawer-btns{ display: contents; }
   .drawer-top .tk .avatar{ width: 38px; height: 38px; font-size: 12px; border-radius: 8px;}
   .drawer-top .tk .sym{ font-size: 17px; }
   .drawer-top .tk .nm{ font-size: 11px; }
@@ -540,7 +543,7 @@
   /* level bar: entry - stop - now - target */
   .levelbar{
     margin: 12px 0 4px;
-    position: relative; height: 36px;
+    position: relative; height: 56px;   /* 36 + the cost label's second tier */
   }
   .levelbar .track{
     position: absolute; left: 0; right: 0; top: 17px; height: 3px;
@@ -563,6 +566,20 @@
   }
   .levelbar .marker .tag.above{ bottom: 18px; }
   .levelbar .marker .tag.below{ top: 18px; color: var(--fg-2);}
+  /* Stop and target are always the outermost markers by construction, and the scale pads
+     the range by only 2%, so their nodes sit almost on the ends of the track. A label
+     centred on such a node spills half its width past the bar and gets clipped by the
+     drawer's padding — 21px and 17px at 390px, and still 11px and 2px on a wide drawer.
+     Anchor these two to grow inward from the node rather than straddle it; the node keeps
+     its exact position on the track, only the label moves. */
+  .levelbar .marker.stop   .tag{ left: 50%; right: auto; }
+  .levelbar .marker.target .tag{ right: 50%; left: auto; }
+  /* Stop, cost and target all label downward, and stop sits close to cost whenever the
+     stop is tight — at any width those two labels then overlap, whichever way they are
+     anchored. Give cost its own tier so no two labels on this side can ever collide
+     (stop and target are the extremes, so they cannot reach each other). Current price
+     labels upward and never competes for this space. */
+  .levelbar .marker.entry .tag.below{ top: 37px; }
 
   /* thesis */
   .thesis{
@@ -3736,8 +3753,32 @@
     .drawer { width: 100vw; border-left: none; }
     .drawer-head { padding: 14px 14px 12px; padding-top: calc(14px + env(safe-area-inset-top)); }
     .drawer-body { padding: 10px; gap: 8px; }
-    /* Force date to its own line so pct/pnl/R are always on the same row */
-    .hero-price .hero-date { flex-basis: 100%; margin-left: 0; }
+
+    /* Header on a phone: identity + buttons on row one, status badge and the position
+       counter on row two. As a single nowrap row the six items left the name block about
+       70px, so a normal company name broke into three lines and dragged the whole header
+       taller than the price below it. */
+    .drawer-top{ flex-wrap: wrap; gap: 10px; }
+    .drawer-idname{ flex: 1; min-width: 0; }          /* min-width:0 or flex won't shrink text */
+    .drawer-idname .muted{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .drawer-btns{
+      display: flex; align-items: center; gap: 8px;
+      order: 1; margin-left: auto; flex-shrink: 0;
+    }
+    /* One auto margin per row, on the group. Each button carrying its own margin-left:auto
+       is what used to fling them apart with dead space between. */
+    .drawer-btns .close{ margin-left: 0; width: 36px; height: 36px; border-radius: 9px; }
+    .drawer-meta{
+      display: flex; align-items: center; gap: 8px;
+      order: 2; flex-basis: 100%;
+    }
+    .drawer-meta .statlight{ margin-left: 0; }
+
+    /* Price gets its own line — at 28px it is most of the row's width anyway, and the
+       four figures beside it were wrapping unevenly across three lines. */
+    .hero-price{ gap: 10px 12px; }
+    .hero-price .p{ flex-basis: 100%; }
+    .hero-price .hero-date{ flex-basis: auto; margin-left: auto; }
     .drawer-section { padding: 13px; }
     .plan-prices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .plan-price-item { padding: 7px 8px; }
@@ -5470,8 +5511,8 @@
   </div>
 </div>
 
-<script src="data.js?v=718"></script>
-<script src="desk.js?v=718"></script>
+<script src="data.js?v=719"></script>
+<script src="desk.js?v=719"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

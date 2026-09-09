@@ -2625,7 +2625,12 @@ function rsAdjustGrade(grade, rsResult) {
     const displayPrice = isClosed ? (h.closePrice ?? h.last) : h.last;
     const pnlAmt = isClosed ? (h.pnlFinal ?? h.pnlDollar) : h.pnlDollar;
     const dispDays = calcTradingDays(h.entry, isClosed ? h.closedAt : undefined);
-    const pnlPct = isClosed ? h.pnlPct : h.pnlPct;
+    // Derived from the amount actually being displayed rather than read off h.pnlPct —
+    // same arithmetic the field itself is built from (recomputeHolding for open rows,
+    // mergeClosedForDisplay for merged ones), so the number is unchanged, but a record
+    // that predates the field renders 0% instead of "−NaN%". The ternary this replaces
+    // had two identical branches.
+    const pnlPct = (h.cost > 0 && h.qty > 0) ? pnlAmt / (h.cost * h.qty) : (h.pnlPct || 0);
     const pnlSign = fmt.sign(pnlAmt);
     return `
       <div class="drawer-head">
@@ -2636,18 +2641,26 @@ function rsAdjustGrade(grade, rsResult) {
               ${h.sym.slice(0, h.kind === "crypto" ? 3 : 4)}
             </div>
           </div>
-          <div>
+          <div class="drawer-idname">
             <div class="mono" style="font-size:17px;font-weight:600">${h.sym}</div>
             <div class="muted" style="font-size:11.5px">${h.name} · ${kindLabel}</div>
           </div>
-          <span class="statlight" style="color:${badgeColor}; background: ${mkAlpha(badgeColor, 15)};">
-            <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
-          </span>
-          <span id="drawer-nav-counter" class="drawer-nav-counter" style="display:none"></span>
-          ${isClosed && !isSim ? `<button class="close" id="drawer-share" title="分享这笔交易">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>
-          </button>` : ""}
-          <button class="close" id="drawer-close" title="关闭 (Esc)">✕</button>
+          <!-- .drawer-meta and .drawer-btns are display:contents on desktop, so the flex
+               row there is exactly as it always was. On a phone they become real groups,
+               which is what lets the badge drop to its own line and the icon buttons stay
+               together instead of each claiming its own auto margin. -->
+          <div class="drawer-meta">
+            <span class="statlight" style="color:${badgeColor}; background: ${mkAlpha(badgeColor, 15)};">
+              <span class="dot" style="background:${badgeColor}"></span>${badgeTxt}
+            </span>
+            <span id="drawer-nav-counter" class="drawer-nav-counter" style="display:none"></span>
+          </div>
+          <div class="drawer-btns">
+            ${isClosed && !isSim ? `<button class="close" id="drawer-share" title="分享这笔交易">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>
+            </button>` : ""}
+            <button class="close" id="drawer-close" title="关闭 (Esc)">✕</button>
+          </div>
         </div>
         <div class="hero-price">
           <span class="p">$${price(displayPrice)}</span>
