@@ -3537,7 +3537,7 @@
       position: fixed;
       bottom: calc(28px + env(safe-area-inset-bottom));
       left: 50%; right: auto; top: auto;
-      width: calc(100% - 32px); max-width: 440px;
+      width: calc(100% - 56px); max-width: 400px;
       margin: 0; padding: 5px;
       border-left: none; border-top: none;
       border: none;                      /* the rim is drawn by ::before, see below */
@@ -3608,11 +3608,16 @@
        painted specular gradient reads the same and costs nothing while scrolling.
        Neutral white rather than accent-tinted, which is what iOS actually does — the
        colour comes from the icon on top, not from the capsule. */
+    /* A circle, not a capsule: width, height and top all come from positionNavPill(),
+       which sizes it to min(slot width, bar inner height) and centres it in both axes.
+       Stretching it to the slot's full width the way `top:5px;bottom:5px;width:<slot>`
+       used to made it an upright ellipse, because a tab slot is narrower than the bar
+       is tall. Nothing here may set height — CSS does not know the slot width. */
     .nav-pill {
       display: block;
       position: absolute;
-      top: 5px; bottom: 5px; left: 0;
-      width: 0;
+      top: 0; left: 0;
+      width: 0; height: 0;
       border-radius: 999px;
       pointer-events: none;
       z-index: 0;
@@ -5465,8 +5470,8 @@
   </div>
 </div>
 
-<script src="data.js?v=717"></script>
-<script src="desk.js?v=717"></script>
+<script src="data.js?v=718"></script>
+<script src="desk.js?v=718"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

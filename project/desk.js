@@ -4316,15 +4316,27 @@ function rsAdjustGrade(grade, rsResult) {
 
   const isMobileNav = () => window.matchMedia("(max-width: 768px)").matches;
 
+  // The lens is a circle. Its diameter is whichever is smaller — the tab slot's width or
+  // the bar's inner height — so it always fits, and it is centred in the slot rather than
+  // filling it. `bar.clientHeight` already excludes the border, and the 5px padding is
+  // read off the bar so the two can't drift if that padding is ever changed in CSS.
+  function navPillGeom(bar, slot) {
+    const padY = parseFloat(getComputedStyle(bar).paddingTop) || 0;
+    const d = Math.min(slot.offsetWidth, bar.clientHeight - padY * 2);
+    return { d, x: slot.offsetLeft + (slot.offsetWidth - d) / 2, top: (bar.clientHeight - d) / 2 };
+  }
+
   function positionNavPill(animate = true) {
     const els = navPillEls();
     if (!els || !isMobileNav()) return;
-    const { pill, links } = els;
+    const { bar, pill, links } = els;
     const active = links.find(a => a.classList.contains("active")) || links[0];
     if (!active.offsetWidth) return;           // bar not laid out yet
     if (!animate) pill.classList.add("dragging");
-    pill.style.width = active.offsetWidth + "px";
-    pill.style.transform = `translate3d(${active.offsetLeft}px,0,0)`;
+    const g = navPillGeom(bar, active);
+    pill.style.width = pill.style.height = g.d + "px";
+    pill.style.top = g.top + "px";
+    pill.style.transform = `translate3d(${g.x}px,0,0)`;
     if (!animate) { void pill.offsetWidth; pill.classList.remove("dragging"); }
   }
 
@@ -4355,7 +4367,11 @@ function rsAdjustGrade(grade, rsResult) {
       // NB: never preventDefault() a pointermove — Chromium responds by firing
       // pointercancel and cutting the pointer stream dead. Scrolling is already
       // held off by `touch-action: none` on the bar and its links.
-      const min = links[0].offsetLeft, max = links[links.length - 1].offsetLeft;
+      // Clamp to the CENTRED resting positions of the first and last slots, not to their
+      // left edges — the lens is now narrower than a slot, so clamping to the edges would
+      // let it drift half a slot past either end of the bar.
+      const min = navPillGeom(bar, links[0]).x;
+      const max = navPillGeom(bar, links[links.length - 1]).x;
       const x = Math.max(min, Math.min(max, baseX + dx));
       // slight lift while held — the lens reads as picked up, then springs back
       pill.style.transform = `translate3d(${x}px,0,0) scale(1.06)`;
@@ -4385,8 +4401,11 @@ function rsAdjustGrade(grade, rsResult) {
       dragging = true;
       _navDragMoved = false;
       startX = e.clientX;
-      baseX = active.offsetLeft;
-      pillW = active.offsetWidth;
+      // Start from where the lens actually sits (centred in the slot) and use its real
+      // diameter, so idxAt's centre maths and the drag origin agree with what is drawn.
+      const g = navPillGeom(bar, active);
+      baseX = g.x;
+      pillW = g.d;
       curIdx = links.indexOf(active);
       pill.classList.add("dragging");
       window.addEventListener("pointermove", onMove);
