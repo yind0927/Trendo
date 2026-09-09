@@ -2838,7 +2838,7 @@
   /* Mobile: the navbar becomes a fixed bottom tab bar at 768px, so the rule needs
      clearance or it sits underneath it and never reads as "the end". */
   @media (max-width: 768px) {
-    .page-end { padding: 24px 16px calc(116px + env(safe-area-inset-bottom)); }
+    .page-end { padding: 24px 16px calc(126px + env(safe-area-inset-bottom)); }
   }
 
   /* ── 周几盈亏分布（日历卡片底部） */
@@ -3633,10 +3633,14 @@
     /* while the finger is down the lens tracks it 1:1 — no easing in the way */
     .nav-pill.dragging { transition: none; }
 
+    /* Vertical padding here is what sets the bar's height: 5px navbar padding + this +
+       the icon, so 19px gives a ~72px capsule. Anything that reserves space for the bar
+       (main / the other view containers / .page-end padding-bottom) has to move with it
+       or the last rows of content end up behind the glass. */
     .navlink {
       flex: 1; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; padding: 14px 4px;
-      border-radius: 22px; font-size: 0; letter-spacing: 0;
+      justify-content: center; padding: 19px 4px;
+      border-radius: 26px; font-size: 0; letter-spacing: 0;
       -webkit-tap-highlight-color: transparent;
       transition: background 0.15s ease;
       cursor: pointer;
@@ -3661,7 +3665,7 @@
     .navlink.active .nav-icon { transform: scale(1.12); stroke-width: 2.15; filter: none; }
 
     /* ---- Main layout ---- */
-    main { padding: 12px 12px calc(108px + env(safe-area-inset-bottom)); gap: 10px; }
+    main { padding: 12px 12px calc(118px + env(safe-area-inset-bottom)); gap: 10px; }
 
     /* ---- Overview strip ---- */
     /* 6 cards, single column on mobile — a multi-column grid here just leaves odd cards
@@ -3749,14 +3753,14 @@
     .form-2col { grid-template-columns: 1fr; gap: 0; }
 
     /* ---- Sim view ---- */
-    #sim-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
+    #sim-view { padding: 12px 12px calc(126px + env(safe-area-inset-bottom)); }
     #sim-overview { grid-template-columns: repeat(2, 1fr); }
     .panel-wrap.sim-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     /* sim-holdings first-column sticky + padding handled by the shared table rule above */
 
     /* ---- Inspirations / Options ---- */
-    #inspirations-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
-    #options-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
+    #inspirations-view { padding: 12px 12px calc(126px + env(safe-area-inset-bottom)); }
+    #options-view { padding: 12px 12px calc(126px + env(safe-area-inset-bottom)); }
     .j-statsbar { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg-1); }
     .j-statsbar-sep { display: none; }
     .j-statsbar-item { flex: unset; padding: 9px 10px; box-shadow: 1px 0 0 0 var(--line), 0 1px 0 0 var(--line); background: var(--bg-1); }
@@ -3767,7 +3771,7 @@
     .jc-tag-chip { font-size: 10.5px; padding: 2px 7px; }
 
     /* ---- Analytics ---- */
-    #analytics-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
+    #analytics-view { padding: 12px 12px calc(126px + env(safe-area-inset-bottom)); }
     .analytics-card { padding: 12px 13px; }
     .analytics-card-title { font-size: 10.5px; }
     .analytics-chart-row { flex-direction: column; gap: 8px; margin-bottom: 10px; }
@@ -3965,7 +3969,7 @@
   .mkt-refresh-btn:hover { color: var(--fg-0); border-color: var(--fg-2); }
 
   @media (max-width: 768px) {
-    #market-view { padding: 12px 12px calc(116px + env(safe-area-inset-bottom)); }
+    #market-view { padding: 12px 12px calc(126px + env(safe-area-inset-bottom)); }
     .mkt-row { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
     .mkt-card { padding: 12px 12px 10px; gap: 8px; }
     .mkt-card-val { font-size: 30px; }
@@ -5461,8 +5465,8 @@
   </div>
 </div>
 
-<script src="data.js?v=716"></script>
-<script src="desk.js?v=716"></script>
+<script src="data.js?v=717"></script>
+<script src="desk.js?v=717"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
