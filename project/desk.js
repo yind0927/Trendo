@@ -8786,6 +8786,13 @@ function rsAdjustGrade(grade, rsResult) {
         txt: `现价 $${price(last)} · 还需${dir === "buy" ? "跌" : "涨"} ${gap.toFixed(1)}% 到 $${price(lim)}` };
     };
 
+    // Only a state that needs attention takes a row of its own. A limit waiting for its
+    // price, or a session that has not opened yet, is the ordinary condition and should
+    // not make every card taller — that detail still reaches the card's tooltip, so the
+    // height is all that is given up.
+    const stateRow = st => st.cls === "wait" ? ""
+      : `<span class="pending-order-state ${st.cls}">${st.txt}</span>`;
+
     const openCards = SIM_PENDING.map(order => {
       const typeLabel = order.orderType === "market" ? "市价单" : "限价单";
       const typeCls   = order.orderType === "market" ? "market" : "limit";
@@ -8794,12 +8801,12 @@ function rsAdjustGrade(grade, rsResult) {
         ? `止损 $${order.stop} / 止盈 $${order.target}` : "";
       const st = fillState(order, "buy");
       return `
-        <div class="pending-order-card" data-pending-id="${order.id}">
+        <div class="pending-order-card" data-pending-id="${order.id}" title="${st.txt}">
           <span class="pending-order-badge ${typeCls}">${typeLabel}</span>
           <span class="pending-order-sym">${order.sym}</span>
           <span class="pending-order-detail">${priceHint}${order.qty}股 ${stopTarget}</span>
           <button class="pending-order-cancel" data-cancel-id="${order.id}" data-cancel-type="open" title="取消挂单">✕</button>
-          <span class="pending-order-state ${st.cls}">${st.txt}</span>
+          ${stateRow(st)}
         </div>`;
     });
 
@@ -8809,13 +8816,13 @@ function rsAdjustGrade(grade, rsResult) {
       const priceHint = order.orderType === "limit" ? `限价 ≥$${order.limitPrice?.toFixed(2)} · ` : "";
       const st = fillState(order, "sell");
       return `
-        <div class="pending-order-card" data-pending-id="${order.id}">
+        <div class="pending-order-card" data-pending-id="${order.id}" title="${st.txt}">
           <span class="pending-order-badge close-order">平仓</span>
           <span class="pending-order-badge ${typeCls}" style="margin-left:2px">${typeLabel}</span>
           <span class="pending-order-sym">${order.sym}</span>
           <span class="pending-order-detail">${priceHint}${order.qty}股</span>
           <button class="pending-order-cancel" data-cancel-id="${order.id}" data-cancel-type="close" title="取消平仓挂单">✕</button>
-          <span class="pending-order-state ${st.cls}">${st.txt}</span>
+          ${stateRow(st)}
         </div>`;
     });
 
