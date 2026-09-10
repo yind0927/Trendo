@@ -11115,6 +11115,11 @@ function rsAdjustGrade(grade, rsResult) {
       tradeMap.get(key).push(h);
     }
 
+    // A trade whose key is still in the book has shares left; anything else is fully
+    // out. exitReason on a single record cannot answer this — it describes one exit, not
+    // whether the position survived it.
+    const stillOpenKeys = new Set((isSimMode ? SIM_HOLDINGS : HOLDINGS).map(tradeKey));
+
     const rows = [];
     const pureLossRows = []; // trades where price never exceeded entry cost
     for (const [, records] of tradeMap) {
@@ -11146,7 +11151,8 @@ function rsAdjustGrade(grade, rsResult) {
       const isPartial   = records.length > 1;
 
       rows.push({ h: { ...h0, closedAt: closeDate }, peakPnl, actualPnl, leftOnTable, efficiency, isPartial,
-                  trancheCnt: records.length, records, totalQty });
+                  trancheCnt: records.length, records, totalQty,
+                  stillOpen: stillOpenKeys.has(`${h0.sym}|${h0.entry || ""}|${h0.cost ?? ""}`) });
     }
 
     const _loading = isSimMode ? simHistLoading : histLoading;
@@ -11228,16 +11234,20 @@ function rsAdjustGrade(grade, rsResult) {
       <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
     </div>`;
 
-    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt, records, totalQty }, rowIdx) => {
+    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt, records, totalQty, stillOpen }, rowIdx) => {
       const hiddenCls = (limit && rowIdx >= limit) ? ' eq-row-hidden' : '';
       const actualW   = Math.max(0, Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100));
       const actualCls = actualPnl >= 0 ? "up" : "down";
       const chip      = effCls(efficiency);
-      const trancheTag = isPartial ? `<span style="font-size:9.5px;color:var(--fg-3);margin-left:6px">${trancheCnt}次出场</span>` : "";
+      const trancheTag = isPartial ? `<span class="eq-tranche">${trancheCnt}次出场</span>` : "";
+      // Peak capture on a trade still partly held is an interim figure — the remaining
+      // shares can still change it — so the row says which kind it is.
+      const stateTag = `<span class="eq-state${stillOpen ? " partial" : ""}">${
+        stillOpen ? "部分平仓" : "全平仓"}</span>`;
       return `<div class="eq-row${hiddenCls}">
         <div class="eq-row-header">
           <div>
-            <span class="eq-sym">${h.sym}</span>${trancheTag}
+            <span class="eq-sym">${h.sym}</span>${stateTag}${trancheTag}
             <span class="eq-dates">${h.entry?.slice(0,10)} → ${h.closedAt?.slice(0,10)}</span>
           </div>
           <span class="eq-eff-chip ${chip}">${effLabel(efficiency)}</span>
@@ -13693,8 +13703,6 @@ function rsAdjustGrade(grade, rsResult) {
   // first value, so a 400-calendar-day window (~276 sessions) can only be replayed for
   // the ~76 sessions after that. The card states the span it actually covers rather
   // than implying it goes back further.
-  const PHASE_CONFIRM_DAYS = 3;
-
   const PHASE_SESSIONS = 252;          // one trading year
 
   function buildPhaseHistory(vooCloses, vooDates, vixByDate, maxSessions) {
@@ -13726,17 +13734,13 @@ function rsAdjustGrade(grade, rsResult) {
       else segs.push({ id: d.id, label: d.label, color: d.color, from: d.date, end: d.date, days: [d] });
     });
 
-    // A transition is only logged once the new phase has held. Without this the log
-    // fills with one-day flips around a threshold — real in the data, meaningless as
-    // events. The ribbon still shows them, because a flickering band IS the information
-    // that the boundary is unstable there.
+    // Every phase change is logged, including one-day flips around a threshold. A
+    // confirmation delay would report a turn later than it happened, and the point of
+    // this list is to be timely; a stretch that lasted a single session says so in its
+    // own duration column, so a reader can weigh it without the list hiding it.
     const transitions = [];
-    let whipsaws = 0;
     for (let i = 1; i < segs.length; i++) {
-      const seg = segs[i];
-      if (seg.days.length < PHASE_CONFIRM_DAYS && i < segs.length - 1) { whipsaws++; continue; }
-      const prev = [...segs.slice(0, i)].reverse()
-        .find(sg => sg.days.length >= PHASE_CONFIRM_DAYS || sg === segs[0]) || segs[i - 1];
+      const seg = segs[i], prev = segs[i - 1];
       if (prev.id === seg.id) continue;
       const f = seg.days[0];
       // Name the condition that actually flipped, with the number, so the entry can be
@@ -13762,7 +13766,7 @@ function rsAdjustGrade(grade, rsResult) {
       const last = months[months.length - 1];
       if (last && last.m === m) last.n++; else months.push({ m, n: 1 });
     });
-    return { days, segs, transitions, whipsaws, current: cur, months,
+    return { days, segs, transitions, current: cur, months,
              span: { from: days[0].date, to: days[days.length - 1].date } };
   }
 
@@ -13968,7 +13972,7 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         ${legend}
         <div class="mkp-sub"><span>阶段转换</span><em>Transitions</em>${
-          ph.whipsaws ? `<span class="mkp-filtered">已过滤 ${ph.whipsaws} 次不足 ${PHASE_CONFIRM_DAYS} 日的抖动</span>` : ""}</div>
+          ph.transitions.length ? `<span class="mkp-filtered">${ph.transitions.length} 次</span>` : ""}</div>
         <div class="mkp-trs">${trans}</div>
         <div class="mkp-sub"><span>距阶段转换还有多远</span><em>Distance to Transition</em></div>
         <div class="mkp-th">${mkThresholdsHTML(axes)}</div>
