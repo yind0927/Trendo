@@ -10198,7 +10198,20 @@ function rsAdjustGrade(grade, rsResult) {
     if (labelEl) {
       labelEl.style.display = hasAny ? "" : "none";
       const countEl = $("#sim-trade-log-count");
-      if (countEl) countEl.textContent = (SIM_HOLDINGS.length + groupTrades(SIM_CLOSED).length) + " 笔";
+      // A partially-closed position is ONE trade, but it appears on both sides: the
+      // remaining shares sit in SIM_HOLDINGS while the shares already sold have a record
+      // in SIM_CLOSED, and groupTrades keeps a group for them. Adding the two lengths
+      // therefore counted such a trade twice. Closed groups whose trade is still open are
+      // dropped here — the same rule mergeClosedForDisplay applies for the closed table.
+      const openKeys = new Set(SIM_HOLDINGS.map(tradeKey));
+      const closedTrades = groupTrades(SIM_CLOSED).filter(t => !openKeys.has(tradeKey(t)));
+      const trades  = SIM_HOLDINGS.length + closedTrades.length;
+      // Rows below are exit EVENTS, so a trade scaled out of spans several of them. State
+      // both when they differ rather than leave a count that does not match what is on
+      // screen looking broken.
+      const records = SIM_HOLDINGS.length + SIM_CLOSED.length;
+      if (countEl) countEl.textContent =
+        records > trades ? `${trades} 笔 · ${records} 条记录` : `${trades} 笔`;
       const toggleBtn = $("#sim-trade-log-toggle", labelEl);
       if (toggleBtn) {
         toggleBtn.classList.toggle("collapsed", simTradeLogCollapsed);
