@@ -1827,6 +1827,42 @@ function rsAdjustGrade(grade, rsResult) {
     document.body.classList.toggle("modal-open", !!document.querySelector(".modal-backdrop.open"));
   }
 
+  // One rule for every modal instead of a per-modal handler: a click that lands on the
+  // backdrop itself — never on the panel or anything inside it — dismisses it. Bound once
+  // in the capture phase on document, so modals added later are covered without wiring.
+  // Tracking where the press STARTED matters: releasing outside the panel after starting a
+  // drag inside it (selecting text, dragging a slider) targets the backdrop on mouseup and
+  // would otherwise close the dialog mid-gesture.
+  let _mdDownOnBackdrop = false;
+  document.addEventListener("pointerdown", e => {
+    _mdDownOnBackdrop = !!(e.target instanceof Element)
+      && e.target.classList.contains("modal-backdrop");
+  }, true);
+  document.addEventListener("click", e => {
+    if (!(e.target instanceof Element) || !e.target.classList.contains("modal-backdrop")) return;
+    if (!_mdDownOnBackdrop) return;
+    _mdDownOnBackdrop = false;
+    // The options module drives its own modal with inline display rather than .open.
+    if (e.target.classList.contains("open")) closeModal(e.target.id);
+    else if (e.target.style.display && e.target.style.display !== "none") {
+      e.target.style.display = "none"; syncMarqueeState();
+    }
+  });
+
+  // Ticker symbols are upper-case everywhere they are stored, compared and sent upstream,
+  // so the field shows them that way as it is typed. autocapitalize only hints the mobile
+  // keyboard and does nothing to pasted text or a desktop keyboard, which is how a
+  // lower-case symbol used to reach a lookup that would not match it.
+  document.addEventListener("input", e => {
+    const el = e.target;
+    if (!(el instanceof HTMLInputElement) || !el.matches("[data-upper]")) return;
+    const up = el.value.toUpperCase();
+    if (up === el.value) return;
+    const { selectionStart: s, selectionEnd: t } = el;
+    el.value = up;
+    try { el.setSelectionRange(s, t); } catch (_) { /* not a text-selectable input */ }
+  });
+
   // ============ TAB & DATA ROUTING ============
   function getTableData() {
     return activeTab === "open" ? HOLDINGS : mergeClosedForDisplay(CLOSED_POSITIONS, HOLDINGS);
@@ -5925,6 +5961,123 @@ function rsAdjustGrade(grade, rsResult) {
       if (usMarketHolidays(etYear).includes(etDate)) return false;
     } catch (_) {}
     return true;
+  }
+
+  // ── Catch-up fills for sessions the app was not open for ──────────────────
+  // Orders only ever filled while the page was polling: the background worker that was
+  // meant to do it (api/order-check.js) has never been referenced by a cron in
+  // vercel.json, so an order placed in the evening simply sat there through the next
+  // session unless the app happened to be open during it.
+  //
+  // Rather than depend on scheduling, replay the missed sessions from the daily bars.
+  // Every rule below resolves to a price that was fully determined by the market and can
+  // be checked against a chart afterwards — no discretion about when the app happened to
+  // look:
+  //   market buy  → the session's OPEN
+  //   limit buy   → only if that session's LOW touched the limit; fills at min(open, limit),
+  //                 because an open already through the limit is a better fill you'd have got
+  //   market sell → the session's OPEN
+  //   limit sell  → only if the session's HIGH touched it; fills at max(open, limit)
+  // Only sessions that have CLOSED are replayed; the current one belongs to live polling.
+  let _catchUpRunning = false;
+  async function catchUpPendingOrders() {
+    if (_catchUpRunning) return;
+    if (!SIM_PENDING.length && !SIM_CLOSE_PENDING.length) return;
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    const stale = [...SIM_PENDING, ...SIM_CLOSE_PENDING].filter(o => o.entryDate && o.entryDate < today);
+    if (!stale.length) return;
+    _catchUpRunning = true;
+    try {
+      const syms = [...new Set(stale.map(o => _histYahooSym({ sym: o.sym, kind: o.kind })))];
+      const from = stale.map(o => o.entryDate).sort()[0];
+      const r = await fetch(
+        `/api/history?symbols=${encodeURIComponent(syms.join(","))}&from=${from}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      let filled = 0;
+
+      // Sessions on or after `from`, oldest first, each with open/low/high/close.
+      const sessionsFor = sym => {
+        const closes = j.results?.[sym]; if (!closes) return [];
+        const opens = j.openResults?.[sym] || {};
+        const ranges = j.rangeResults?.[sym] || {};
+        return Object.keys(closes).sort()
+          .filter(d => d < today)                    // completed sessions only
+          .map(d => ({ d, open: opens[d] ?? closes[d], close: closes[d],
+                       lo: ranges[d]?.[0], hi: ranges[d]?.[1] }));
+      };
+
+      // ── entry orders ──
+      for (const order of [...SIM_PENDING]) {
+        if (!order.entryDate || order.entryDate >= today) continue;
+        if (SIM_HOLDINGS.find(h => h.sym === order.sym)) continue;   // already open
+        const key = _histYahooSym({ sym: order.sym, kind: order.kind });
+        const hit = sessionsFor(key).filter(s => s.d >= order.entryDate).find(s => {
+          if (order.orderType === "market") return s.open != null;
+          return s.lo != null && s.lo <= order.limitPrice;
+        });
+        if (!hit) continue;
+        const px = order.orderType === "market"
+          ? hit.open
+          : Math.min(hit.open ?? order.limitPrice, order.limitPrice);
+        if (!(px > 0)) continue;
+
+        const size = simNotional > 0 ? (order.qty * px / simNotional) * 100 : 2.5;
+        const pos = {
+          sym: order.sym, name: order.name || order.sym, kind: order.kind,
+          qty: order.qty, cost: px, last: px, prevClose: px,
+          stop: order.stop, target: order.target,
+          entry: hit.d,                                  // the session it actually filled in
+          size, earnings: order.earnings, holdEarn: false,
+          setup: order.orderType === "market" ? "市价单" : `限价单 @${order.limitPrice}`,
+          thesis: "", status: "ok", pnlPct: 0, pnlDollar: 0,
+          risk1R: order.stop ? px - order.stop : 0,
+          rMult: 0, days: calcTradingDays(hit.d), spark: [px],
+          bx: order.bx,
+          ...(order.entryATR > 0 && { entryATR: order.entryATR }),
+        };
+        recomputeHolding(pos, simNotional);
+        SIM_HOLDINGS.push(pos);
+        const i = SIM_PENDING.findIndex(p => p.id === order.id);
+        if (i !== -1) SIM_PENDING.splice(i, 1);
+        filled++;
+      }
+
+      // ── close orders ──
+      for (const order of [...SIM_CLOSE_PENDING]) {
+        if (!order.entryDate || order.entryDate >= today) continue;
+        const pos = SIM_HOLDINGS.find(h => h.sym === order.sym);
+        if (!pos) {                                     // nothing left to sell
+          const i = SIM_CLOSE_PENDING.findIndex(p => p.id === order.id);
+          if (i !== -1) SIM_CLOSE_PENDING.splice(i, 1);
+          continue;
+        }
+        const key = _histYahooSym({ sym: order.sym, kind: order.kind });
+        const hit = sessionsFor(key).filter(s => s.d >= order.entryDate).find(s => {
+          if (order.orderType === "market") return s.open != null;
+          return s.hi != null && s.hi >= order.limitPrice;
+        });
+        if (!hit) continue;
+        const px = order.orderType === "market"
+          ? hit.open
+          : Math.max(hit.open ?? order.limitPrice, order.limitPrice);
+        if (!(px > 0)) continue;
+        const prevCtx = pendingCloseCtx;
+        pendingCloseCtx = "sim";
+        closePosition(order.sym, px, hit.d, order.qty);
+        pendingCloseCtx = prevCtx;
+        const i = SIM_CLOSE_PENDING.findIndex(p => p.id === order.id);
+        if (i !== -1) SIM_CLOSE_PENDING.splice(i, 1);
+        filled++;
+      }
+
+      if (filled) {
+        recordDailyPnl();
+        saveToStorage();
+        renderSimPending(); renderSimTable(); renderSimOverview();
+      }
+    } catch (_) { /* retried on the next load or tab focus */ }
+    finally { _catchUpRunning = false; }
   }
 
   async function fetchPrices() {
@@ -14748,6 +14901,8 @@ function rsAdjustGrade(grade, rsResult) {
       if (syncKey) syncOnStartup();
       // Force immediate price refresh so pending orders execute as soon as the tab is active
       lastPriceFetch = 0;
+      // ...and replay any whole session that went by while nothing was polling.
+      catchUpPendingOrders();
     }
   });
   // Push to cloud on page close so pending orders reach Redis even if the 2s
@@ -14768,5 +14923,8 @@ function rsAdjustGrade(grade, rsResult) {
   if (_lastPage && _lastPage !== "desk") switchPage(_lastPage);
 
   tick(); setInterval(tick, 1000);
+  // Sessions that passed while the app was closed are replayed from the daily bars once
+  // on load; live polling covers the current session from here on.
+  catchUpPendingOrders();
 
 })();

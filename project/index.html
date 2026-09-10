@@ -4895,7 +4895,7 @@
     <!-- AI Analysis Search Bar -->
     <div class="wl-analyze-wrap">
       <form id="wl-analyze-form" class="wl-analyze-form" autocomplete="off">
-        <input id="wl-analyze-sym" class="wl-analyze-input"
+        <input id="wl-analyze-sym" class="wl-analyze-input" data-upper
                placeholder="输入股票代码进行 AI 分析… e.g. AAPL"
                autocapitalize="characters" spellcheck="false" maxlength="10" />
         <button type="submit" class="wl-analyze-btn" id="wl-analyze-btn">
@@ -4921,7 +4921,8 @@
     <div id="wl-form-body" style="display:none;max-width:960px;margin:0 auto;padding:0 20px 8px">
       <form id="wl-add-form" class="wl-add-form">
         <div class="wl-form-row">
-          <input id="wl-sym"   class="form-input" placeholder="代码 e.g. TSLA" required style="width:90px"/>
+          <input id="wl-sym"   class="form-input" placeholder="代码 e.g. TSLA" required data-upper
+                 autocapitalize="characters" spellcheck="false" style="width:90px"/>
           <input id="wl-name"  class="form-input" placeholder="名称" style="flex:1"/>
           <input id="wl-price" class="form-input" type="number" placeholder="参考价" step="0.01" style="width:85px"/>
           <button type="submit" class="btn primary" style="flex-shrink:0">添加</button>
@@ -5160,7 +5161,8 @@
       <div class="form-2col">
         <div class="form-row">
           <label>代码</label>
-          <input type="text" id="form-ticker" placeholder="AAPL" maxlength="10" required/>
+          <input type="text" id="form-ticker" placeholder="AAPL" maxlength="10" required data-upper
+                 autocapitalize="characters" spellcheck="false"/>
         </div>
         <div class="form-row">
           <label>公司名称</label>
@@ -5477,7 +5479,7 @@
       <div class="form-2col">
         <div class="form-row">
           <label>股票代号</label>
-          <input type="text" id="poster-sym" required placeholder="NVDA" autocapitalize="characters"
+          <input type="text" id="poster-sym" required placeholder="NVDA" data-upper autocapitalize="characters"
                  spellcheck="false" class="form-input"/>
         </div>
         <div class="form-row">
@@ -5629,8 +5631,8 @@
   </div>
 </div>
 
-<script src="data.js?v=721"></script>
-<script src="desk.js?v=721"></script>
+<script src="data.js?v=722"></script>
+<script src="desk.js?v=722"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
