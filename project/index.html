@@ -3988,28 +3988,35 @@
   /* One rounded frame around both bands + the tick row, so they read as a single axis
      instead of three stacked strips. No gaps anywhere inside: the ribbon and the VIX band
      share a flex basis of one unit per trading day, and any gap would desynchronise them. */
-  .mkp-bars { border:1px solid var(--line); border-radius:9px; overflow:hidden;
-    background:var(--bg-2); }
-  /* No text inside the band — a year of sessions leaves most segments too narrow for
+  /* Label column + track column. Both bands and the tick row are rows of this one grid,
+     so they share a left edge and a width exactly; the vertical gap between them costs
+     nothing in alignment, which is what lets them read as separate bars instead of one
+     fused block. */
+  .mkp-bars { display:grid; grid-template-columns:32px 1fr; gap:7px 9px; align-items:center; }
+  .mkp-bar-k { font-size:9px; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--fg-3); text-align:right; }
+  /* No text inside the bands — a year of sessions leaves most segments too narrow for
      any, and the durations read better in the transition list. */
-  .mkp-ribbon { display:flex; height:30px; }
+  .mkp-ribbon { display:flex; height:30px; border-radius:7px; overflow:hidden;
+    box-shadow:0 1px 2px oklch(0 0 0 / .3), inset 0 0 0 1px oklch(0 0 0 / .28); }
   .mkp-seg { position:relative; min-width:2px;
-    box-shadow:inset 0 1px 0 oklch(1 0 0 / .18), inset 0 -2px 4px -2px oklch(0 0 0 / .35); }
-  .mkp-seg + .mkp-seg { border-left:1px solid oklch(0 0 0 / .4); }
+    background-image:linear-gradient(180deg, oklch(1 0 0 / .16), oklch(0 0 0 / .14)); }
+  .mkp-seg + .mkp-seg { box-shadow:inset 1px 0 0 oklch(0 0 0 / .45); }
   /* The stretch still running gets a lit right edge — the "you are here" mark. */
   .mkp-seg.now::after { content:""; position:absolute; top:0; bottom:0; right:0; width:2px;
-    background:oklch(1 0 0 / .85); box-shadow:0 0 6px oklch(1 0 0 / .6); }
-  .mkp-band { display:flex; height:7px; box-shadow:inset 0 2px 3px -2px oklch(0 0 0 / .55); }
-  .mkp-ticks { display:flex; height:16px; border-top:1px solid var(--line); background:var(--bg-1); }
+    background:oklch(1 0 0 / .9); box-shadow:0 0 7px oklch(1 0 0 / .65); }
+  .mkp-band { display:flex; height:9px; border-radius:5px; overflow:hidden;
+    box-shadow:inset 0 0 0 1px oklch(0 0 0 / .28); }
+  .mkp-ticks { display:flex; height:13px; }
   .mkp-tick { position:relative; overflow:hidden; display:flex; align-items:center; }
-  .mkp-tick + .mkp-tick { border-left:1px solid var(--line); }
+  .mkp-tick + .mkp-tick { box-shadow:inset 1px 0 0 var(--line); }
   .mkp-tick i { font-style:normal; font-family:var(--f-mono); font-size:9px;
     color:var(--fg-3); padding-left:4px; white-space:nowrap; }
 
   /* One row for both bands: round dots read as phases, squares as VIX levels. */
-  .mkp-legend { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:9px; }
-  .mkp-legend-g { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .mkp-legend-k { font-size:9px; color:var(--fg-3); letter-spacing:.09em; text-transform:uppercase; }
+  .mkp-legend { display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    margin:11px 0 0 41px; }
+  .mkp-legend-g { display:inline-flex; align-items:center; gap:9px; flex-wrap:wrap; }
   .mkp-key { display:inline-flex; align-items:center; gap:4px; font-size:9.5px;
     color:var(--fg-2); font-family:var(--f-mono); }
   .mkp-key i { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
@@ -4054,7 +4061,8 @@
   @media (max-width: 768px) {
     .mkp-scope { margin-left:0; flex-basis:100%; text-align:left; }
     .mkp-scope i { display:inline; margin-left:6px; }
-    .mkp-legend { gap:12px; }
+    .mkp-bars { grid-template-columns:26px 1fr; gap:6px 7px; }
+    .mkp-legend { gap:11px; margin-left:33px; }
     .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
     .mkp-tr-why { grid-column:1 / -1; }
     .mkp-th-row { grid-template-columns:100px 66px; row-gap:2px; }
@@ -4108,7 +4116,7 @@
   .mkt-axis-gate.ok { color: var(--up); }
   .mkt-axis-gate.block { color: var(--down); }
   .mkt-axis-gate.dim { color: var(--fg-3); }
-  .mkt-playbook-ref { margin-top: 16px; }
+  .mkt-playbook-ref { margin-top: 16px; margin-bottom: 20px; }
   .mkt-playbook-ref summary { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 8px 0; list-style: revert; }
   .mkt-playbook-ref summary:hover { color: var(--fg-2); }
   .mkt-playbook-ref[class] details > .mkt-playbook { margin-top: 10px; }
@@ -5753,8 +5761,8 @@
   </div>
 </div>
 
-<script src="data.js?v=731"></script>
-<script src="desk.js?v=731"></script>
+<script src="data.js?v=732"></script>
+<script src="desk.js?v=732"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

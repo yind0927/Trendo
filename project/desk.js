@@ -13021,7 +13021,7 @@ function rsAdjustGrade(grade, rsResult) {
       currentratio:["流动比率", "流动资产除以流动负债，衡量公司在12个月内偿还短期债务的能力。", "> 2.5  充裕但可能资金利用率低\n1.5–2.5  健康\n1.0–1.5  偏紧，需关注现金流\n< 1.0   短期偿付有压力"],
       rsi14:       ["RSI 14日", "相对强弱指数，采用Wilder平滑法计算14日涨跌幅的比率。反映短中期价格动量，>70超买区，<30超卖区。", "70–100  超买区，注意回调风险\n55–70   强势动量区\n45–55   中性震荡\n30–45   偏弱动量\n0–30    超卖区，可能反弹"],
       ema50:       ["EMA 50日", "50日指数移动均线，对近期价格赋予更高权重，是判断短中期趋势的关键参考线。", "价格 > EMA50  短中期趋势偏多\n价格 ≈ EMA50  支撑/压力位测试\n价格 < EMA50  短期趋势偏弱"],
-      ema200:      ["EMA 200日", "200日指数移动均线，是判断长期牛熊结构的核心分界线。机构投资者普遍以此作为仓位参考依据。", "价格 > EMA200  长期牛市结构\nEMA50上穿EMA200  金叉，多头信号\nEMA50下穿EMA200  死叉，空头信号\n价格 < EMA200  长期趋势偏空"],
+      ema200:      ["EMA 200日", "200日指数移动均线，是判断长期牛熊结构的核心分界线。机构投资者普遍以此作为仓位参考依据。", "价格 > EMA200  长期牛市结构\nEMA50 上穿 EMA200  多头信号\nEMA50 下穿 EMA200  空头信号\n价格 < EMA200  长期趋势偏空"],
       quickratio:  ["速动比率", "（流动资产 − 存货）除以流动负债。排除了变现能力最弱的存货，比流动比率更保守，适用于存货周转慢的行业。", "> 1.5  充裕\n1.0–1.5  合格\n0.7–1.0  偏紧\n< 0.7   短期流动性压力较大"],
       beta:        ["Beta 系数", "股票相对大盘（S&P 500）的波动敏感度。Beta越高，涨跌幅通常越剧烈，适合不同风险偏好的投资者选择。", "< 0.5   低波动，防御型\n0.5–0.9  稳健，低于市场敏感度\n1.0      与大盘同步\n1.0–1.5  进攻型，放大涨跌\n> 1.5    高波动，高风险高回报"],
       divyield:    ["股息率", "年化每股股息除以股价，反映股东直接收益回报。高股息往往出现在成熟、稳定的行业；成长股通常不分红而选择再投资。", "0%       无分红，再投资扩张\n0.5–1.5%  象征性分红\n1.5–3%   合理回报\n3–5%     较高股息收益\n> 5%     高股息，需核实可持续性"],
@@ -13603,7 +13603,7 @@ function rsAdjustGrade(grade, rsResult) {
     const axisA = [
       { label: "做多", color: "var(--up)", cond: "价格 > EMA50 > EMA200", action: "有做多资格，正常布局" },
       { label: "中性", color: "var(--warn)", cond: "价格在 EMA50/EMA200 之间回调", action: "少开新仓，持有已有仓位" },
-      { label: "做空", color: "var(--down)", cond: "EMA50/EMA200 死叉 或 价格 < EMA200", action: "禁止新多仓，严格执行止损" },
+      { label: "做空", color: "var(--down)", cond: "EMA50 下穿 EMA200 或 价格 < EMA200", action: "禁止新多仓，严格执行止损" },
     ];
     const axisB = [
       { label: "贪婪", color: "var(--up)",     cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
@@ -13743,7 +13743,7 @@ function rsAdjustGrade(grade, rsResult) {
       // checked against a chart instead of being taken on faith.
       let why;
       if (seg.id === "headwind")
-        why = f.ma50 < f.ma200 ? `EMA50 (${f.ma50}) 跌破 EMA200 (${f.ma200})`
+        why = f.ma50 < f.ma200 ? `EMA50 (${f.ma50}) 下穿 EMA200 (${f.ma200})`
                                : `VOO ${price(f.px)} 跌破 EMA200 (${f.ma200})`;
       else if (seg.id === "tailwind")
         why = `VOO ${price(f.px)} > EMA50 (${f.ma50}) > EMA200 (${f.ma200})`;
@@ -13777,7 +13777,7 @@ function rsAdjustGrade(grade, rsResult) {
     const deathCross = ma50 < ma200;
     if (deathCross || price < ma200)
       return { id: "headwind", label: "做空", color: "var(--down)",
-        desc: deathCross ? "EMA50/EMA200 死叉，长期趋势走弱" : "价格跌破 EMA200，回避新多单", eligible: false };
+        desc: deathCross ? "EMA50 下穿 EMA200，长期趋势走弱" : "价格跌破 EMA200，回避新多单", eligible: false };
     if (price > ma50 && ma50 > ma200)
       return { id: "tailwind", label: "做多", color: "var(--up)", desc: "价格 > EMA50 > EMA200，多头结构完整", eligible: true };
     return { id: "neutral", label: "中性", color: "var(--warn)", desc: "价格在均线间回调，方向待确认", eligible: true };
@@ -13858,10 +13858,10 @@ function rsAdjustGrade(grade, rsResult) {
           gapPct(price, ma50), "跌破转中性");
     if (price != null && ma200 != null)
       row("VOO vs EMA200", `${gapPct(price, ma200) >= 0 ? "+" : "−"}${Math.abs(gapPct(price, ma200)).toFixed(1)}%`,
-          gapPct(price, ma200), "跌破转逆风");
+          gapPct(price, ma200), "跌破转做空");
     if (ma50 != null && ma200 != null)
       row("EMA50 vs EMA200", `${gapPct(ma50, ma200) >= 0 ? "+" : "−"}${Math.abs(gapPct(ma50, ma200)).toFixed(1)}%`,
-          gapPct(ma50, ma200), "死叉转逆风");
+          gapPct(ma50, ma200), "下穿转做空");
     if (vix) {
       // Nearest VIX band edge — which one matters depends on where VIX sits now.
       const edges = [15, 20, 30, 50];
@@ -13912,6 +13912,7 @@ function rsAdjustGrade(grade, rsResult) {
     // full/normal/reduced/minimal/panic), so every VIX above 15 fell through to red.
     const hasVix = ph.days.some(d => d.vix != null);
     const vixBand = hasVix ? `
+      <span class="mkp-bar-k">VIX</span>
       <div class="mkp-band" aria-hidden="true">${ph.days.map(d => `
         <span style="flex:1;background:${d.vix != null ? getRiskAxis(d.vix).color : "var(--bg-3)"}"></span>`).join("")}</div>` : "";
 
@@ -13925,10 +13926,11 @@ function rsAdjustGrade(grade, rsResult) {
       .filter(([id]) => ph.segs.some(sg => sg.id === id))
       .map(([id, t]) => `<span class="mkp-key"><i style="background:${
         ph.segs.find(sg => sg.id === id).color}"></i>${t}</span>`).join("");
+    // Group captions moved onto the bands themselves, so the legend is just the keys.
     const legend = `
       <div class="mkp-legend">
-        <span class="mkp-legend-g"><span class="mkp-legend-k">阶段</span>${phaseKeys}</span>
-        ${hasVix ? `<span class="mkp-legend-g"><span class="mkp-legend-k">VIX</span>${
+        <span class="mkp-legend-g">${phaseKeys}</span>
+        ${hasVix ? `<span class="mkp-legend-g">${
           [[14, "<15"], [17, "15–20"], [25, "20–30"], [40, "≥30"]].map(([v, t]) =>
             `<span class="mkp-key"><i class="sq" style="background:${getRiskAxis(v).color}"></i>${t}</span>`).join("")
         }</span>` : ""}
@@ -13953,16 +13955,22 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mkp-held"><b>${held}</b> 个交易日</span>
           <span class="mkp-scope">${scope} · ${total} 个交易日<i>${ph.span.from} → ${ph.span.to}</i></span>
         </div>
+        <!-- A grid, so the two bands and the tick row share one left edge and one width.
+             Vertical gaps between them cost nothing in alignment — only horizontal gaps
+             would desynchronise the columns — so the bands can breathe and still line up
+             session for session. -->
         <div class="mkp-bars">
+          <span class="mkp-bar-k">阶段</span>
           <div class="mkp-ribbon">${ribbon}</div>
           ${vixBand}
+          <span></span>
           ${monthTicks}
         </div>
         ${legend}
         <div class="mkp-sub"><span>阶段转换</span><em>Transitions</em>${
           ph.whipsaws ? `<span class="mkp-filtered">已过滤 ${ph.whipsaws} 次不足 ${PHASE_CONFIRM_DAYS} 日的抖动</span>` : ""}</div>
         <div class="mkp-trs">${trans}</div>
-        <div class="mkp-sub"><span>距翻转还有多远</span><em>Distance to Flip</em></div>
+        <div class="mkp-sub"><span>距阶段转换还有多远</span><em>Distance to Transition</em></div>
         <div class="mkp-th">${mkThresholdsHTML(axes)}</div>
         <div class="mkp-note">均线是回看的，阶段只能事后确认 —— 这里说明现在处在什么阶段、已经多久，不预测下一阶段。</div>
       </div>`;
