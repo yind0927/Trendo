@@ -11067,6 +11067,39 @@ function rsAdjustGrade(grade, rsResult) {
     }
   };
 
+  // The actual fills behind a row. Efficiency compares a peak against a result without
+  // ever showing the prices that produced either, so a row could not be checked against
+  // a chart. Every leg is listed on both sides — scaling in and out is the normal case,
+  // and an average alone hides the shape of it.
+  function eqLegsHTML(h, records, totalQty) {
+    const leg = (px, qty, date) =>
+      `<span class="eq-leg"><span class="num">$${price(px)}</span>${
+        qty != null ? `<span class="eq-leg-qty">×${qty}</span>` : ""}${
+        date ? `<span class="eq-leg-date">${date.slice(5, 10)}</span>` : ""}</span>`;
+
+    const entries = Array.isArray(h.entries) && h.entries.length ? h.entries : null;
+    const inLegs = entries
+      ? entries.map(e => leg(e.price, e.qty, e.date)).join("")
+      : leg(h.cost, totalQty, h.entry);
+    // h.cost is already the weighted average the P&L was computed from, so it is stated
+    // rather than recomputed — the two can never disagree here.
+    const inAvg = entries && entries.length > 1
+      ? `<span class="eq-leg-avg">均 $${price(h.cost)}</span>` : "";
+
+    const outs = [...records].sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || ""));
+    const outLegs = outs.map(r => leg(r.closePrice ?? r.last, r.qty, r.closedAt)).join("");
+    const outQty = outs.reduce((n, r) => n + (r.qty || 0), 0);
+    const outAvg = outs.length > 1 && outQty > 0
+      ? `<span class="eq-leg-avg">均 $${price(
+          outs.reduce((sum, r) => sum + (r.closePrice ?? r.last ?? 0) * (r.qty || 0), 0) / outQty)}</span>`
+      : "";
+
+    return `<div class="eq-legs">
+      <div class="eq-legs-row"><span class="eq-legs-k">入场</span>${inLegs}${inAvg}</div>
+      <div class="eq-legs-row"><span class="eq-legs-k">出场</span>${outLegs}${outAvg}</div>
+    </div>`;
+  }
+
   function exitQualityHTML(closedArr, { limit } = {}) {
     const closed = closedArr ?? CLOSED_POSITIONS;
     const isSimMode = closedArr != null && closedArr !== CLOSED_POSITIONS;
@@ -11112,7 +11145,8 @@ function rsAdjustGrade(grade, rsResult) {
       const efficiency  = Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100);
       const isPartial   = records.length > 1;
 
-      rows.push({ h: { ...h0, closedAt: closeDate }, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt: records.length });
+      rows.push({ h: { ...h0, closedAt: closeDate }, peakPnl, actualPnl, leftOnTable, efficiency, isPartial,
+                  trancheCnt: records.length, records, totalQty });
     }
 
     const _loading = isSimMode ? simHistLoading : histLoading;
@@ -11194,7 +11228,7 @@ function rsAdjustGrade(grade, rsResult) {
       <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
     </div>`;
 
-    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt }, rowIdx) => {
+    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt, records, totalQty }, rowIdx) => {
       const hiddenCls = (limit && rowIdx >= limit) ? ' eq-row-hidden' : '';
       const actualW   = Math.max(0, Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100));
       const actualCls = actualPnl >= 0 ? "up" : "down";
@@ -11208,6 +11242,7 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
           <span class="eq-eff-chip ${chip}">${effLabel(efficiency)}</span>
         </div>
+        ${eqLegsHTML(h, records, totalQty)}
         <div class="eq-bar-row">
           <span class="eq-bar-label">峰值</span>
           <div class="eq-bar-track"><div class="eq-bar-fill peak" style="width:100%"></div></div>
@@ -13628,6 +13663,94 @@ function rsAdjustGrade(grade, rsResult) {
     return +ema.toFixed(2);
   }
 
+  // EMA at EVERY point, not just the last one. calcEMA collapses the series to a single
+  // number, which is all the "what is the market doing today" cards need; replaying the
+  // direction axis over history needs the value the average had on each past day.
+  // Aligned with `closes`, null until the seed window is full.
+  function calcEMASeries(closes, period) {
+    const out = new Array(closes?.length || 0).fill(null);
+    if (!closes || closes.length < period) return out;
+    const k = 2 / (period + 1);
+    let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    out[period - 1] = ema;
+    for (let i = period; i < closes.length; i++) {
+      ema = closes[i] * k + ema * (1 - k);
+      out[i] = ema;
+    }
+    return out;
+  }
+
+  // ── Phase history ─────────────────────────────────────────────────────────
+  // The direction axis is the phase backbone on purpose. All three axes are pure
+  // functions of that day's inputs, so any of them can be replayed — but VIX and
+  // sentiment cross their thresholds constantly (19.8 → 20.2 → 19.9 is three "phase
+  // changes" in a week while nothing happened), and a ribbon driven by the combined
+  // state would be mostly noise. Direction moves on moving averages: slow, few
+  // transitions a year, and it is what "market phase" conventionally means. The faster
+  // axes ride along as texture rather than defining the boundaries.
+  //
+  // Coverage is limited by EMA200: it needs 200 trading days before it produces its
+  // first value, so a 400-calendar-day window (~276 sessions) can only be replayed for
+  // the ~76 sessions after that. The card states the span it actually covers rather
+  // than implying it goes back further.
+  const PHASE_CONFIRM_DAYS = 3;
+
+  function buildPhaseHistory(vooCloses, vooDates, vixByDate) {
+    if (!vooCloses?.length) return null;
+    const e50 = calcEMASeries(vooCloses, 50);
+    const e200 = calcEMASeries(vooCloses, 200);
+    const days = [];
+    for (let i = 0; i < vooCloses.length; i++) {
+      if (e200[i] == null) continue;                 // no 200MA yet — not replayable
+      const d = getDirectionAxis(vooCloses[i], +e50[i].toFixed(2), +e200[i].toFixed(2));
+      const vix = vixByDate?.[vooDates[i]] ?? null;
+      days.push({
+        date: vooDates[i], px: vooCloses[i],
+        ma50: +e50[i].toFixed(2), ma200: +e200[i].toFixed(2),
+        id: d.id, label: d.label, color: d.color,
+        risk: vix != null ? getRiskAxis(vix).id : null, vix,
+      });
+    }
+    if (!days.length) return null;
+
+    // Segments of consecutive same-phase days — what the ribbon draws.
+    const segs = [];
+    days.forEach(d => {
+      const last = segs[segs.length - 1];
+      if (last && last.id === d.id) { last.days.push(d); last.end = d.date; }
+      else segs.push({ id: d.id, label: d.label, color: d.color, from: d.date, end: d.date, days: [d] });
+    });
+
+    // A transition is only logged once the new phase has held. Without this the log
+    // fills with one-day flips around a threshold — real in the data, meaningless as
+    // events. The ribbon still shows them, because a flickering band IS the information
+    // that the boundary is unstable there.
+    const transitions = [];
+    let whipsaws = 0;
+    for (let i = 1; i < segs.length; i++) {
+      const seg = segs[i];
+      if (seg.days.length < PHASE_CONFIRM_DAYS && i < segs.length - 1) { whipsaws++; continue; }
+      const prev = [...segs.slice(0, i)].reverse()
+        .find(sg => sg.days.length >= PHASE_CONFIRM_DAYS || sg === segs[0]) || segs[i - 1];
+      if (prev.id === seg.id) continue;
+      const f = seg.days[0];
+      // Name the condition that actually flipped, with the number, so the entry can be
+      // checked against a chart instead of being taken on faith.
+      let why;
+      if (seg.id === "headwind")
+        why = f.ma50 < f.ma200 ? `EMA50 (${f.ma50}) 跌破 EMA200 (${f.ma200})`
+                               : `VOO ${price(f.px)} 跌破 EMA200 (${f.ma200})`;
+      else if (seg.id === "tailwind")
+        why = `VOO ${price(f.px)} > EMA50 (${f.ma50}) > EMA200 (${f.ma200})`;
+      else
+        why = `VOO ${price(f.px)} 回到 EMA50 (${f.ma50}) 与 EMA200 (${f.ma200}) 之间`;
+      transitions.push({ date: f.date, from: prev.label, to: seg.label, color: seg.color, why });
+    }
+
+    const cur = segs[segs.length - 1];
+    return { days, segs, transitions, whipsaws, current: cur, span: { from: days[0].date, to: days[days.length - 1].date } };
+  }
+
   // 轴A：方向（趋势）—— VOO 价格 vs EMA50 / EMA200。决定"有没有做多资格"。
   function getDirectionAxis(price, ma50, ma200) {
     if (price == null || ma50 == null)
@@ -13700,6 +13823,105 @@ function rsAdjustGrade(grade, rsResult) {
     return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 };
   }
 
+  // How far each axis is from the threshold that would flip it. Needs no history and is
+  // the only forward-looking piece here: a phase label sitting 0.4% from its boundary is
+  // far more fragile than the same label 8% clear of it, and nothing on the page said so.
+  function mkThresholdsHTML({ price, ma50, ma200, vix, fg, rsi }) {
+    const rows = [];
+    const gapPct = (v, ref) => (v - ref) / ref * 100;
+    const row = (name, txt, gap, note, invert = false) => {
+      // "close" is about magnitude, not direction — near either side means unstable.
+      const near = gap != null && Math.abs(gap) < 2.5;
+      rows.push(`<div class="mkp-th-row${near ? " near" : ""}">
+        <span class="mkp-th-name">${name}</span>
+        <span class="mkp-th-val num ${gap == null ? "muted" : (invert ? gap < 0 : gap > 0) ? "up" : "down"}">${txt}</span>
+        <span class="mkp-th-note">${note}</span>
+      </div>`);
+    };
+    if (price != null && ma50 != null)
+      row("VOO vs EMA50", `${gapPct(price, ma50) >= 0 ? "+" : "−"}${Math.abs(gapPct(price, ma50)).toFixed(1)}%`,
+          gapPct(price, ma50), "跌破转中性");
+    if (price != null && ma200 != null)
+      row("VOO vs EMA200", `${gapPct(price, ma200) >= 0 ? "+" : "−"}${Math.abs(gapPct(price, ma200)).toFixed(1)}%`,
+          gapPct(price, ma200), "跌破转逆风");
+    if (ma50 != null && ma200 != null)
+      row("EMA50 vs EMA200", `${gapPct(ma50, ma200) >= 0 ? "+" : "−"}${Math.abs(gapPct(ma50, ma200)).toFixed(1)}%`,
+          gapPct(ma50, ma200), "死叉转逆风");
+    if (vix) {
+      // Nearest VIX band edge — which one matters depends on where VIX sits now.
+      const edges = [15, 20, 30, 50];
+      const e = edges.reduce((b2, x) => Math.abs(x - vix) < Math.abs(b2 - vix) ? x : b2, edges[0]);
+      const d = vix - e;
+      row("VIX vs " + e, `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}`, -d,
+          vix < e ? `涨破降到 ${getRiskAxis(e).posMax}% 仓位` : `跌破升到 ${getRiskAxis(e - 0.01).posMax}% 仓位`, true);
+    }
+    if (fg != null) {
+      const edges = [25, 40, 60, 75];
+      const e = edges.reduce((b2, x) => Math.abs(x - fg) < Math.abs(b2 - fg) ? x : b2, edges[0]);
+      row("FGI vs " + e, `${fg - e >= 0 ? "+" : "−"}${Math.abs(fg - e).toFixed(0)}`, null,
+          e >= 60 ? "涨破触发止盈倾斜" : "跌破触发加仓倾斜");
+    }
+    if (rsi) {
+      const edges = [45, 65, 72];
+      const e = edges.reduce((b2, x) => Math.abs(x - rsi) < Math.abs(b2 - rsi) ? x : b2, edges[0]);
+      row("RSI vs " + e, `${rsi - e >= 0 ? "+" : "−"}${Math.abs(rsi - e).toFixed(1)}`, null,
+          e >= 65 ? "涨破视为过热" : "跌破视为偏冷");
+    }
+    return rows.join("");
+  }
+
+  function mkPhaseHTML(ph, axes) {
+    if (!ph) {
+      return `<div class="mkt-card mkt-phase">
+        ${atitle("阶段轨迹", "Regime Trail")}
+        <div class="mkp-empty">历史数据不足以回放阶段（EMA200 需要 200 个交易日才有第一个值）。</div>
+      </div>`;
+    }
+    const total = ph.days.length;
+    const cur = ph.current;
+    const held = cur.days.length;
+    // Ribbon segments are sized by their share of the replayed window, so the band is a
+    // true timeline rather than equal-width blocks.
+    const ribbon = ph.segs.map(sg => `
+      <span class="mkp-seg" style="flex:${sg.days.length};background:${sg.color}"
+            title="${sg.label} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日"></span>`).join("");
+    // VIX bands under the same axis: texture, not a phase definer.
+    const riskStripe = ph.days.some(d => d.risk) ? `
+      <div class="mkp-stripe">${ph.days.map(d => {
+        const c = d.risk === "full" ? "var(--up)" : d.risk === "high" ? "var(--warn)"
+                : d.risk === "half" ? "var(--orange)" : d.risk ? "var(--down)" : "transparent";
+        return `<span style="flex:1;background:${c}"></span>`;
+      }).join("")}</div>
+      <div class="mkp-stripe-cap">下方细条 = 当日 VIX 档位（绿 &lt;15 · 黄 15–20 · 橙 20–30 · 红 ≥30）</div>` : "";
+
+    const trans = ph.transitions.length
+      ? ph.transitions.slice().reverse().map(t => `
+        <div class="mkp-tr">
+          <span class="mkp-tr-date num">${t.date}</span>
+          <span class="mkp-tr-move" style="color:${t.color}">${t.from} → ${t.to}</span>
+          <span class="mkp-tr-why">${t.why}</span>
+        </div>`).join("")
+      : `<div class="mkp-tr-none">这段窗口内没有确认的阶段转换 —— 全程都在${cur.label}区。</div>`;
+
+    return `
+      <div class="mkt-card mkt-phase">
+        ${atitle("阶段轨迹", "Regime Trail")}
+        <div class="mkp-head">
+          <span class="mkp-now" style="color:${cur.color}">当前 · ${cur.label}区</span>
+          <span class="mkp-held">已持续 ${held} 个交易日</span>
+          <span class="mkp-span">回放 ${total} 个交易日（${ph.span.from} → ${ph.span.to}）</span>
+        </div>
+        <div class="mkp-ribbon">${ribbon}</div>
+        ${riskStripe}
+        <div class="mkp-sub">阶段转换 · Transitions${
+          ph.whipsaws ? `<span class="mkp-filtered">已过滤 ${ph.whipsaws} 次不足 ${PHASE_CONFIRM_DAYS} 日的抖动</span>` : ""}</div>
+        ${trans}
+        <div class="mkp-sub">距翻转还有多远 · Distance to Flip</div>
+        <div class="mkp-th">${mkThresholdsHTML(axes)}</div>
+        <div class="mkp-note">均线是回看的，阶段只能事后确认——这里说明现在处在什么阶段、已经多久，不预测下一阶段。</div>
+      </div>`;
+  }
+
   function mkAxesHTML(axes) {
     if (!axes) return "";
     const { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 } = axes;
@@ -13740,7 +13962,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -13760,6 +13982,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       <div class="mkt-module-sep"></div>
       ${mkAxesHTML(axes)}
+      ${mkPhaseHTML(phase, axes || {})}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
@@ -13815,6 +14038,7 @@ function rsAdjustGrade(grade, rsResult) {
       let rsi = 0, rsiPrev = null;
       // VOO price + moving averages for the direction axis (轴A)
       let benchPrice = null, benchMA50 = null, benchMA200 = null;
+      let vooDates = null, vooCloses = null, vixByDate = null;
       if (histRes.status === "fulfilled" && histRes.value?.results?.["VOO"]) {
         const raw = histRes.value.results["VOO"];
         const closes = Object.keys(raw).sort().map(k => raw[k]);
@@ -13827,7 +14051,12 @@ function rsAdjustGrade(grade, rsResult) {
         benchPrice = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
         benchMA50  = calcEMA(closes, 50);
         benchMA200 = calcEMA(closes, 200);
+        vooDates   = Object.keys(raw).sort();
+        vooCloses  = closes;
       }
+      // VIX by trading day, for the band stripe under the ribbon.
+      if (histRes.status === "fulfilled" && histRes.value?.results?.["^VIX"])
+        vixByDate = histRes.value.results["^VIX"];
 
       // VIX / VXN EMA10 + trend direction
       const calcEMA10Trend = (results, sym) => {
@@ -13879,7 +14108,8 @@ function rsAdjustGrade(grade, rsResult) {
       }
 
       const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend });
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes });
+      const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate);
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,

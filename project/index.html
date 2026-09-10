@@ -2714,6 +2714,17 @@
   .eq-eff-chip.high { background: var(--up-dim); color: var(--up); }
   .eq-eff-chip.mid { background: color-mix(in oklch, var(--warn) 15%, transparent); color: var(--warn); }
   .eq-eff-chip.low { background: var(--down-dim); color: var(--down); }
+  /* Fills behind an exit-quality row: every leg on both sides, wrapping on a phone. */
+  .eq-legs { margin: 6px 0 8px; display: flex; flex-direction: column; gap: 3px; }
+  .eq-legs-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 10.5px; }
+  .eq-legs-k { color: var(--fg-3); flex-shrink: 0; min-width: 26px; }
+  .eq-leg { display: inline-flex; align-items: baseline; gap: 3px;
+    background: var(--bg-2); border-radius: 4px; padding: 1px 6px; }
+  .eq-leg .num { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-1); }
+  .eq-leg-qty { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-3); }
+  .eq-leg-date { font-family: var(--f-mono); font-size: 9px; color: var(--fg-3); }
+  .eq-leg-avg { font-family: var(--f-mono); font-size: 10px; color: var(--fg-2); margin-left: 2px; }
+
   .eq-bar-row { display: grid; grid-template-columns: 36px 1fr 72px; align-items: center; gap: 8px; margin-bottom: 4px; }
   .eq-bar-label { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); text-align: right; }
   .eq-bar-track { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
@@ -3959,6 +3970,42 @@
   .mkt-bar-track { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 6px; }
   .mkt-seg { height: 100%; flex-shrink: 0; }
   .mkt-bar-ptr { position: absolute; top: 0; transform: translateX(-50%); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 7px solid var(--fg-0); }
+  /* ── Regime Trail ── */
+  .mkt-phase { margin-bottom: 20px; }
+  .mkp-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:12px 0 10px; }
+  .mkp-now { font-size:15px; font-weight:700; }
+  .mkp-held { font-family:var(--f-mono); font-size:12px; color:var(--fg-2); }
+  .mkp-span { font-family:var(--f-mono); font-size:10.5px; color:var(--fg-3); margin-left:auto; }
+  /* Segments are flex-sized by their day count, so the band reads as a real timeline. */
+  .mkp-ribbon { display:flex; height:22px; border-radius:6px; overflow:hidden; gap:1px; }
+  .mkp-seg { min-width:2px; }
+  .mkp-stripe { display:flex; height:5px; border-radius:3px; overflow:hidden; margin-top:3px; }
+  .mkp-stripe-cap { font-size:9.5px; color:var(--fg-3); margin-top:5px; }
+  .mkp-sub { font-size:11px; font-weight:600; color:var(--fg-2); margin:16px 0 8px;
+    display:flex; align-items:center; gap:8px; }
+  .mkp-filtered { font-size:10px; font-weight:400; color:var(--fg-3); }
+  .mkp-tr { display:flex; align-items:baseline; gap:10px; padding:6px 0;
+    border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .mkp-tr:last-of-type { border-bottom:none; }
+  .mkp-tr-date { font-size:11px; color:var(--fg-3); flex-shrink:0; }
+  .mkp-tr-move { font-size:12px; font-weight:700; flex-shrink:0; }
+  .mkp-tr-why { font-size:10.5px; color:var(--fg-3); font-family:var(--f-mono); }
+  .mkp-tr-none { font-size:11px; color:var(--fg-3); padding:4px 0; }
+  .mkp-th-row { display:flex; align-items:baseline; gap:10px; padding:5px 0; }
+  .mkp-th-row.near { background:color-mix(in oklch, var(--warn) 10%, transparent);
+    border-radius:5px; padding-left:6px; padding-right:6px; }
+  .mkp-th-name { font-size:11px; color:var(--fg-2); min-width:118px; }
+  .mkp-th-val { font-family:var(--f-mono); font-size:12.5px; font-weight:700; min-width:62px; }
+  .mkp-th-note { font-size:10.5px; color:var(--fg-3); }
+  .mkp-note { font-size:10px; color:var(--fg-3); margin-top:12px; line-height:1.6;
+    padding-top:10px; border-top:1px solid var(--line); }
+  .mkp-empty { font-size:11.5px; color:var(--fg-3); padding:14px 0; }
+  @media (max-width: 768px) {
+    .mkp-span { margin-left:0; flex-basis:100%; }
+    .mkp-th-name { min-width:96px; }
+    .mkp-th-note { flex-basis:100%; margin-left:96px; }
+  }
+
   .mkt-playbook { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
   .mkt-playbook-title { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--fg-2); text-transform: uppercase; margin-bottom: 10px; }
   .mkt-pb-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
@@ -5651,8 +5698,8 @@
   </div>
 </div>
 
-<script src="data.js?v=728"></script>
-<script src="desk.js?v=728"></script>
+<script src="data.js?v=729"></script>
+<script src="desk.js?v=729"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
