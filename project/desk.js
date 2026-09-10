@@ -13695,13 +13695,16 @@ function rsAdjustGrade(grade, rsResult) {
   // than implying it goes back further.
   const PHASE_CONFIRM_DAYS = 3;
 
-  function buildPhaseHistory(vooCloses, vooDates, vixByDate) {
+  function buildPhaseHistory(vooCloses, vooDates, vixByDate, ytdFrom) {
     if (!vooCloses?.length) return null;
     const e50 = calcEMASeries(vooCloses, 50);
     const e200 = calcEMASeries(vooCloses, 200);
     const days = [];
     for (let i = 0; i < vooCloses.length; i++) {
       if (e200[i] == null) continue;                 // no 200MA yet — not replayable
+      // The request reaches ~300 days before Jan 1 purely so EMA200 is already valid on
+      // the year's first session; those warm-up days are not part of the trail.
+      if (ytdFrom && vooDates[i] < ytdFrom) continue;
       const d = getDirectionAxis(vooCloses[i], +e50[i].toFixed(2), +e200[i].toFixed(2));
       const vix = vixByDate?.[vooDates[i]] ?? null;
       days.push({
@@ -13748,7 +13751,16 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     const cur = segs[segs.length - 1];
-    return { days, segs, transitions, whipsaws, current: cur, span: { from: days[0].date, to: days[days.length - 1].date } };
+    // Month buckets share the ribbon's flex basis, so the tick row lines up with it
+    // exactly rather than being positioned by hand.
+    const months = [];
+    days.forEach(d => {
+      const m = d.date.slice(0, 7);
+      const last = months[months.length - 1];
+      if (last && last.m === m) last.n++; else months.push({ m, n: 1 });
+    });
+    return { days, segs, transitions, whipsaws, current: cur, months,
+             span: { from: days[0].date, to: days[days.length - 1].date } };
   }
 
   // 轴A：方向（趋势）—— VOO 价格 vs EMA50 / EMA200。决定"有没有做多资格"。
@@ -13870,35 +13882,49 @@ function rsAdjustGrade(grade, rsResult) {
     return rows.join("");
   }
 
-  function mkPhaseHTML(ph, axes) {
+  function mkPhaseHTML(ph, axes, scope = "YTD") {
     if (!ph) {
       return `<div class="mkt-card mkt-phase">
         ${atitle("阶段轨迹", "Regime Trail")}
         <div class="mkp-empty">历史数据不足以回放阶段（EMA200 需要 200 个交易日才有第一个值）。</div>
       </div>`;
     }
-    const total = ph.days.length;
-    const cur = ph.current;
-    const held = cur.days.length;
-    // Ribbon segments are sized by their share of the replayed window, so the band is a
-    // true timeline rather than equal-width blocks.
+    const cur = ph.current, held = cur.days.length, total = ph.days.length;
+
+    // Both bands are laid out from the SAME flex basis — one unit per trading day — so
+    // they line up column for column. The ribbon groups days into phase segments and the
+    // VIX band draws one cell per day; the two only agree because neither uses gaps and
+    // both sum to the same number of units.
     const ribbon = ph.segs.map(sg => `
       <span class="mkp-seg" style="flex:${sg.days.length};background:${sg.color}"
-            title="${sg.label} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日"></span>`).join("");
-    // VIX bands under the same axis: texture, not a phase definer.
-    const riskStripe = ph.days.some(d => d.risk) ? `
-      <div class="mkp-stripe">${ph.days.map(d => {
-        const c = d.risk === "full" ? "var(--up)" : d.risk === "high" ? "var(--warn)"
-                : d.risk === "half" ? "var(--orange)" : d.risk ? "var(--down)" : "transparent";
-        return `<span style="flex:1;background:${c}"></span>`;
-      }).join("")}</div>
-      <div class="mkp-stripe-cap">下方细条 = 当日 VIX 档位（绿 &lt;15 · 黄 15–20 · 橙 20–30 · 红 ≥30）</div>` : "";
+            title="${sg.label} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日">
+        <span class="mkp-seg-txt">${sg.label} ${sg.days.length}d</span>
+      </span>`).join("");
+
+    // Colour comes from getRiskAxis itself. It used to be a second hand-written mapping
+    // here, keyed on ids that did not exist (full/high/half vs the real
+    // full/normal/reduced/minimal/panic), so every VIX above 15 fell through to red.
+    const hasVix = ph.days.some(d => d.vix != null);
+    const vixBand = hasVix ? `
+      <div class="mkp-band" aria-hidden="true">${ph.days.map(d => `
+        <span style="flex:1;background:${d.vix != null ? getRiskAxis(d.vix).color : "var(--bg-3)"}"></span>`).join("")}</div>` : "";
+
+    const monthTicks = `
+      <div class="mkp-ticks">${ph.months.map(m => `
+        <span class="mkp-tick" style="flex:${m.n}"><i>${+m.m.slice(5)}月</i></span>`).join("")}</div>`;
+
+    const vixLegend = hasVix ? `
+      <div class="mkp-legend">
+        <span class="mkp-legend-k">VIX 档位</span>
+        ${[[14, "<15"], [17, "15–20"], [25, "20–30"], [40, "≥30"]].map(([v, t]) =>
+          `<span class="mkp-key"><i style="background:${getRiskAxis(v).color}"></i>${t}</span>`).join("")}
+      </div>` : "";
 
     const trans = ph.transitions.length
       ? ph.transitions.slice().reverse().map(t => `
         <div class="mkp-tr">
           <span class="mkp-tr-date num">${t.date}</span>
-          <span class="mkp-tr-move" style="color:${t.color}">${t.from} → ${t.to}</span>
+          <span class="mkp-tr-move"><i style="background:${t.color}"></i>${t.from} → ${t.to}</span>
           <span class="mkp-tr-why">${t.why}</span>
         </div>`).join("")
       : `<div class="mkp-tr-none">这段窗口内没有确认的阶段转换 —— 全程都在${cur.label}区。</div>`;
@@ -13907,18 +13933,23 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="mkt-card mkt-phase">
         ${atitle("阶段轨迹", "Regime Trail")}
         <div class="mkp-head">
-          <span class="mkp-now" style="color:${cur.color}">当前 · ${cur.label}区</span>
-          <span class="mkp-held">已持续 ${held} 个交易日</span>
-          <span class="mkp-span">回放 ${total} 个交易日（${ph.span.from} → ${ph.span.to}）</span>
+          <span class="mkp-dot" style="background:${cur.color}"></span>
+          <span class="mkp-now" style="color:${cur.color}">${cur.label}区</span>
+          <span class="mkp-held"><b>${held}</b> 个交易日</span>
+          <span class="mkp-scope">${scope} · ${total} 个交易日<i>${ph.span.from} → ${ph.span.to}</i></span>
         </div>
-        <div class="mkp-ribbon">${ribbon}</div>
-        ${riskStripe}
-        <div class="mkp-sub">阶段转换 · Transitions${
+        <div class="mkp-bars">
+          <div class="mkp-ribbon">${ribbon}</div>
+          ${vixBand}
+          ${monthTicks}
+        </div>
+        ${vixLegend}
+        <div class="mkp-sub"><span>阶段转换</span><em>Transitions</em>${
           ph.whipsaws ? `<span class="mkp-filtered">已过滤 ${ph.whipsaws} 次不足 ${PHASE_CONFIRM_DAYS} 日的抖动</span>` : ""}</div>
-        ${trans}
-        <div class="mkp-sub">距翻转还有多远 · Distance to Flip</div>
+        <div class="mkp-trs">${trans}</div>
+        <div class="mkp-sub"><span>距翻转还有多远</span><em>Distance to Flip</em></div>
         <div class="mkp-th">${mkThresholdsHTML(axes)}</div>
-        <div class="mkp-note">均线是回看的，阶段只能事后确认——这里说明现在处在什么阶段、已经多久，不预测下一阶段。</div>
+        <div class="mkp-note">均线是回看的，阶段只能事后确认 —— 这里说明现在处在什么阶段、已经多久，不预测下一阶段。</div>
       </div>`;
   }
 
@@ -13962,7 +13993,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -13982,7 +14013,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       <div class="mkt-module-sep"></div>
       ${mkAxesHTML(axes)}
-      ${mkPhaseHTML(phase, axes || {})}
+      ${mkPhaseHTML(phase, axes || {}, phaseScope)}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
@@ -14008,8 +14039,15 @@ function rsAdjustGrade(grade, rsResult) {
     if (!el) return;
     el.innerHTML = `<div class="mkt-loading"><span>Loading market data…</span></div>`;
     try {
-      // 400 calendar days ≈ 270 trading days — enough for VOO 200MA (direction axis).
-      const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 400); return d.toISOString().slice(0, 10); })();
+      // The regime trail runs year-to-date, and EMA200 needs 200 sessions before it
+      // produces its first value — so the window starts ~300 calendar days BEFORE Jan 1
+      // purely as warm-up. Without that head start the trail could only begin in April.
+      const ytdFrom  = mpToday().slice(0, 4) + "-01-01";
+      const fromDate = (() => {
+        const d = new Date(ytdFrom + "T00:00:00Z");
+        d.setUTCDate(d.getUTCDate() - 300);
+        return d.toISOString().slice(0, 10);
+      })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
@@ -14108,8 +14146,15 @@ function rsAdjustGrade(grade, rsResult) {
       }
 
       const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend });
-      const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate);
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase });
+      // Early in January YTD is a handful of sessions and the ribbon says nothing, so it
+      // falls back to a trailing window and labels itself accordingly.
+      let phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, ytdFrom);
+      let phaseScope = "YTD";
+      if (!phase || phase.days.length < 30) {
+        const back = buildPhaseHistory(vooCloses, vooDates, vixByDate, null);
+        if (back && back.days.length > (phase?.days.length || 0)) { phase = back; phaseScope = "近 " + back.days.length + " 个交易日"; }
+      }
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,
