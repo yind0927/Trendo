@@ -2021,8 +2021,21 @@
   .mp-stat-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--fg-2); font-weight:500; }
   .mp-stat-val { font-size:18px; font-weight:700; letter-spacing:-.02em; margin-top:4px; }
   .mp-stat-sub { font-size:10px; color:var(--fg-3); margin-top:2px; }
-  .mp-cohort { background:var(--bg-1); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:12px; }
-  .mp-cohort-hd { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  /* Padding moves off the container and onto summary/body: the summary is the whole
+     click target when collapsed, so it has to reach the card's edges. */
+  .mp-cohort { background:var(--bg-1); border:1px solid var(--line); border-radius:var(--radius);
+    margin-bottom:12px; overflow:hidden; }
+  .mp-cohort-hd { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:14px 16px; cursor:pointer; list-style:none; }
+  .mp-cohort-hd::-webkit-details-marker { display:none; }
+  .mp-cohort-hd:hover { background:var(--bg-2); }
+  .mp-cohort > *:not(.mp-cohort-hd) { padding-left:16px; padding-right:16px; }
+  .mp-cohort > *:last-child:not(.mp-cohort-hd) { padding-bottom:14px; }
+  .mp-cohort-arrow { font-size:10px; color:var(--fg-3); transition:transform .18s ease; flex-shrink:0; }
+  .mp-cohort[open] .mp-cohort-arrow { transform:rotate(90deg); }
+  /* Pick count and the still-unpriced tally, so a shut batch says whether it is settled. */
+  .mp-cohort-count { font-family:var(--f-mono); font-size:10.5px; color:var(--fg-3); }
+  .mp-cohort-waiting { color:var(--warn); }
   .mp-cohort-id { font-family:var(--f-mono); font-size:13px; font-weight:700; }
   .mp-cohort-date { font-size:11px; color:var(--fg-3); margin-left:8px; }
   .mp-cohort-num { margin-left:auto; display:flex; align-items:baseline; gap:6px; font-family:var(--f-mono); font-size:13px; }
@@ -5639,8 +5652,8 @@
   </div>
 </div>
 
-<script src="data.js?v=724"></script>
-<script src="desk.js?v=724"></script>
+<script src="data.js?v=725"></script>
+<script src="desk.js?v=725"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

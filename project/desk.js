@@ -5169,6 +5169,10 @@ function rsAdjustGrade(grade, rsResult) {
   const MP_PRIMARY_WEEKS = Math.round(
     (MP_CHECKPOINTS.find(([k]) => k === MP_PRIMARY)?.[1] || 0) / 5);
   const MP_MIN_N   = 20;                 // cohorts needed before the averages mean anything
+  // Which cohorts the user has opened. renderModelPicks rebuilds the panel's innerHTML
+  // on every refresh, so without this an expanded batch would snap shut the moment a
+  // checkpoint filled in — the same trap the monthly backtest hit in v598.
+  const _mpOpen = new Set();
 
   function mpIsoWeek(d) {
     const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -5400,13 +5404,20 @@ function rsAdjustGrade(grade, rsResult) {
       const live = c.picks
         .map(p => ({ sym: p.sym, v: mpRet(p.entryPrice, p.lastPx) }))
         .filter(x => x.v != null).sort((a, z) => z.v - a.v);
+      // Collapsed by default. The summary keeps everything the old always-open header
+      // showed — batch, date, source and the headline trio — and adds the pick count and
+      // the still-unpriced count, so a shut cohort still answers "how did this week do
+      // and is it fully priced yet" without being opened.
       return `
-      <div class="mp-cohort">
-        <div class="mp-cohort-hd">
+      <details class="mp-cohort" data-mp-cohort="${c.id}"${_mpOpen.has(c.id) ? " open" : ""}>
+        <summary class="mp-cohort-hd">
+          <span class="mp-cohort-arrow">▸</span>
           <div>
             <span class="mp-cohort-id">${c.id}</span>
             <span class="mp-cohort-date">${c.weekOf}${c.source ? ` · ${c.source}` : ""}</span>
           </div>
+          <span class="mp-cohort-count">${c.picks.length} 只${
+            waiting ? ` · <span class="mp-cohort-waiting">${waiting} 待定价</span>` : ""}</span>
           <div class="mp-cohort-num">
             <span class="mp-cohort-hz">${MP_PRIMARY_WEEKS} 周</span>
             <span class="mp-cohort-lbl">等权</span><span class="num ${cls(r.pct)}">${pct(r.pct)}</span>
@@ -5414,8 +5425,7 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${pct(alpha)}</span>
           </div>
           ${mpDeletable(c) ? `<button class="mp-del" data-mp-del="${c.id}" title="仅录入当天、尚未定价时可删">✕</button>` : ""}
-        </div>
-        ${waiting ? `<div class="mp-unpriced">${waiting} 只等待开盘定价</div>` : ""}
+        </summary>
         ${hzGrid(c)}
         ${live.length > 1 ? `<div class="mp-extremes">本批最好 <b>${live[0].sym}</b> <span class="num ${cls(live[0].v)}">${pct(live[0].v)}</span>
           · 最差 <b>${live[live.length-1].sym}</b> <span class="num ${cls(live[live.length-1].v)}">${pct(live[live.length-1].v)}</span></div>` : ""}
@@ -5445,7 +5455,7 @@ function rsAdjustGrade(grade, rsResult) {
             </div>`;
           }).join("")}
         </div>
-      </div>`;
+      </details>`;
     }).join("") : `<div class="mp-empty">还没有任何批次。录入第一周的代码后，这里会按周累积。</div>`;
 
     el.innerHTML = entry + warn + stats + body;
@@ -5455,6 +5465,16 @@ function rsAdjustGrade(grade, rsResult) {
   function wireModelPicks() {
     const el = $("#sim-picks-panel"); if (!el || el.dataset.wired) return;
     el.dataset.wired = "1";
+    // `toggle` does not bubble, so it is captured rather than listened for on the panel.
+    el.addEventListener("toggle", e => {
+      const d = e.target.closest?.("[data-mp-cohort]"); if (!d) return;
+      d.open ? _mpOpen.add(d.dataset.mpCohort) : _mpOpen.delete(d.dataset.mpCohort);
+    }, true);
+    // A delete button inside <summary> would otherwise toggle the batch open on its way
+    // through — the click still reaches the handler below, only the default is dropped.
+    el.addEventListener("click", e => {
+      if (e.target.closest(".mp-del")) e.preventDefault();
+    }, true);
     el.addEventListener("click", async e => {
       if (e.target.id === "mp-add-btn") {
         const inp = $("#mp-input"), src = $("#mp-src"), err = $("#mp-gen-err");
