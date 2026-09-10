@@ -4488,18 +4488,27 @@ function rsAdjustGrade(grade, rsResult) {
 
   // Daily closes across the holding period. The real price path is the point of the
   // card — a bare P&L number says nothing about how the trade actually went.
+  // Returns { pts, voo } — VOO rides along in the same request so a card can report how
+  // the trade did against simply holding the index over the identical window. It is only
+  // ever used as a fallback slot, so a trade with a stop and a target renders exactly as
+  // it did before.
   async function scFetchSeries(h) {
     try {
-      const r = await fetch(`/api/history?symbols=${encodeURIComponent(h.sym)}&from=${h.entry}`);
+      const r = await fetch(
+        `/api/history?symbols=${encodeURIComponent(h.sym)},VOO&from=${h.entry}`);
       if (!r.ok) return null;
       const j = await r.json();
-      const src = j.results?.[h.sym];
-      if (!src) return null;
       const end = h.closedAt || "9999";
-      return Object.keys(src).sort()
+      const upto = src => !src ? null : Object.keys(src).sort()
         .filter(d => d <= end)
         .map(d => ({ d, px: src[d] }))
         .filter(p => p.px != null);
+      const pts = upto(j.results?.[h.sym]);
+      if (!pts) return null;
+      // Dividend-adjusted for VOO: this is a return comparison, and a plain close silently
+      // drops the dividends over a multi-month hold (same reasoning as the VOO benchmark
+      // in the monthly backtest).
+      return { pts, voo: upto(j.adjResults?.VOO || j.results?.VOO) };
     } catch (_) { return null; }
   }
 
@@ -4600,7 +4609,8 @@ function rsAdjustGrade(grade, rsResult) {
 
     // ── full-bleed chart: no frame, the path runs off both edges ──
     const cy = 540, ch = 400, ix = 0;
-    const pts = series && series.length > 1 ? series : null;
+    const pts    = series?.pts?.length > 1 ? series.pts : null;
+    const vooPts = series?.voo?.length > 1 ? series.voo : null;
     const entryPx = h.cost, exitPx = h.closePrice ?? h.last;
     if (pts) {
       const vals = pts.map(p => p.px);
@@ -4654,6 +4664,21 @@ function rsAdjustGrade(grade, rsResult) {
       // the path bleeds off both edges, but the end markers stay fully inside the frame
       dot(Math.max(X(0), 22), Y(vals[0]), P.fg2, 8);
       dot(Math.min(X(pts.length - 1), SC_W - 24), Y(vals[vals.length - 1]), tone, 10);
+    } else {
+      // No daily bars for this symbol — a delisted ticker, or a market the history
+      // source does not cover. Leaving the band empty reads as a broken render, so the
+      // space goes to the two prices the trade is actually about, at chart scale.
+      const my = cy + ch / 2;
+      ctx.textAlign = "center";
+      ctx.fillStyle = scRgb(P.fg3); ctx.font = sans(19, 700);
+      ctx.fillText("ENTRY", SC_W * 0.26, my - 46);
+      ctx.fillText("EXIT",  SC_W * 0.74, my - 46);
+      ctx.font = mono(66, 700);
+      ctx.fillStyle = scRgb(P.fg1); ctx.fillText(price(entryPx), SC_W * 0.26, my + 22);
+      ctx.fillStyle = scRgb(tone);  ctx.fillText(price(exitPx),  SC_W * 0.74, my + 22);
+      ctx.fillStyle = scAlpha(P.fg3, 0.5); ctx.font = mono(46);
+      ctx.fillText("→", SC_W / 2, my + 16);
+      ctx.textAlign = "left";
     }
 
     // ── stats: 5-card bento grid — a wide hero row, then three even cards ──
@@ -4704,15 +4729,65 @@ function rsAdjustGrade(grade, rsResult) {
     scCard(SC_PAD + narrowW + gGap, row1Y, wideW, rowH, "ENTRY → EXIT",
       `${price(entryPx)} → ${price(exitPx)}`);
 
-    scCard(SC_PAD, row2Y, thirdW, rowH, "R MULTIPLE",
-      h.rMult != null ? `${h.rMult >= 0 ? "+" : "−"}${Math.abs(h.rMult).toFixed(2)}` : "—",
-      { tick: tone, val: tone });
-    scCard(SC_PAD + thirdW + gGap, row2Y, thirdW, rowH, "PEAK CAPTURE", capture,
-      { tick: P.warn });
-    const rrVal = (h.target != null && h.stop != null && h.cost != null && h.target !== h.stop)
-      ? `1 : ${((h.target - h.cost) / (h.cost - h.stop)).toFixed(2)}`
-      : "—";
-    scCard(SC_PAD + (thirdW + gGap) * 2, row2Y, thirdW, rowH, "RISK : REWARD", rrVal);
+    // Row 2 is three slots filled by the first three candidates that actually have data,
+    // in this order. A trade with a stop and a target yields R MULTIPLE / PEAK CAPTURE /
+    // RISK : REWARD — exactly what it rendered before. A trade with neither (a poster for
+    // something traded off-platform, where only dates and prices are known) would
+    // otherwise show two dashes out of five; the fallbacks below are all derived from the
+    // real price path, so the card stays truthful rather than blank.
+    const pctOf = (from, to) => (to - from) / from * 100;
+    const signed = v => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%`;
+    const peakPx = pts ? Math.max(...pts.map(p => p.px)) : null;
+
+    let maxDD = null;
+    if (pts) {
+      let run = pts[0].px, worst = 0;
+      for (const p of pts) { run = Math.max(run, p.px); worst = Math.min(worst, pctOf(run, p.px)); }
+      maxDD = worst;
+    }
+    let vsVoo = null;
+    if (vooPts) {
+      const vr = pctOf(vooPts[0].px, vooPts[vooPts.length - 1].px);
+      vsVoo = pctOf(entryPx, exitPx) - vr;
+    }
+
+    const slots = [
+      h.rMult != null && ["R MULTIPLE",
+        `${h.rMult >= 0 ? "+" : "−"}${Math.abs(h.rMult).toFixed(2)}`, { tick: tone, val: tone }],
+      capture !== "—" && ["PEAK CAPTURE", capture, { tick: P.warn }],
+      (h.stop != null && h.target != null && h.cost != null && h.target !== h.stop) &&
+        ["RISK : REWARD", `1 : ${((h.target - h.cost) / (h.cost - h.stop)).toFixed(2)}`, {}],
+      (peakPx != null && peakPx > entryPx) &&
+        ["MAX GAIN", signed(pctOf(entryPx, peakPx)), { tick: P.warn }],
+      vsVoo != null && ["VS VOO", `${vsVoo >= 0 ? "+" : "−"}${Math.abs(vsVoo).toFixed(1)}pp`,
+        { tick: vsVoo >= 0 ? P.up : P.down, val: vsVoo >= 0 ? P.up : P.down }],
+      maxDD != null && maxDD < 0 && ["DRAWDOWN", signed(maxDD), { tick: P.down }],
+      // The last two need nothing but what was typed, so a symbol with no daily bars at
+      // all still gets a populated row.
+      ["PER SHARE", `${exitPx >= entryPx ? "+" : "−"}${price(Math.abs(exitPx - entryPx))}`,
+        { tick: tone, val: tone }],
+      (() => {
+        // Annualised, on calendar days — a 3-day scalp compounds to a meaningless number,
+        // so it only offers itself once the hold is long enough for the figure to mean
+        // something, and it is clamped rather than printing six digits.
+        const dayMs = 86400000;
+        const cd = Math.round((new Date(h.closedAt) - new Date(h.entry)) / dayMs);
+        if (!(cd >= 10) || !(entryPx > 0)) return null;
+        const r = (exitPx - entryPx) / entryPx;
+        if (r <= -1) return null;
+        const a = (Math.pow(1 + r, 365 / cd) - 1) * 100;
+        const shown = Math.max(-999, Math.min(999, a));
+        return ["ANNUALIZED", `${shown >= 0 ? "+" : "−"}${Math.abs(shown).toFixed(0)}%`,
+          { tick: tone, val: tone }];
+      })(),
+    ].filter(Boolean).slice(0, 3);
+
+    // Lay out however many slots survived rather than always carving into thirds: two
+    // candidates become two half-width cards. Padding the row with filler would put
+    // invented figures on a share image just to fill space.
+    const slotW = (gW - gGap * (slots.length - 1)) / slots.length;
+    slots.forEach(([label, val, opt], i) =>
+      scCard(SC_PAD + (slotW + gGap) * i, row2Y, slotW, rowH, label, val, opt));
 
     // ── footer ──
     const fy = SC_H - 58;
@@ -4757,6 +4832,170 @@ function rsAdjustGrade(grade, rsResult) {
     const a = document.createElement("a");
     a.href = url; a.download = name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // ============ MANUAL POSTER — share image for an off-platform trade ============
+  // Deliberately holds NO state. The form builds a plain object, hands it to the same
+  // renderer the book's own trades use, and drops it. Nothing is written to
+  // CLOSED_POSITIONS or to any other array, so no aggregate — win rate, Analytics,
+  // monthly backtest, exit quality, the P&L calendar — can ever see it. That isolation
+  // is structural rather than a filter someone has to remember to apply at each of those
+  // call sites, which is the failure mode that put wrong win rates on screen in v596.
+
+  const _pq = id => document.getElementById(id);
+  // Yahoo wants the -USD suffix for crypto; computeEntryRS and computeFrozenMonth already
+  // hit this, so the poster uses the same mapping rather than inventing a third one.
+  const posterYahooSym = (sym, kind) =>
+    kind === "crypto" && !/-USD$/i.test(sym) ? `${sym}-USD` : sym;
+
+  function posterSetStatus(msg, cls = "") {
+    const el = _pq("poster-status"); if (!el) return;
+    el.textContent = msg || "";
+    el.className = "poster-status" + (cls ? " " + cls : "");
+  }
+
+  let _posterBars = null;   // { sym, from, results, ranges } for the last successful fetch
+
+  // Pull the daily bars once, then use them for BOTH prefill and range validation, so the
+  // two can never disagree about what the market actually did that day.
+  async function posterFetchBars() {
+    const raw = (_pq("poster-sym").value || "").trim().toUpperCase();
+    const kind = _pq("poster-kind").value;
+    const from = _pq("poster-entry-date").value;
+    const to   = _pq("poster-exit-date").value;
+    if (!raw || !from) { posterSetStatus("先填代号和入场日期", "err"); return null; }
+    if (to && to < from) { posterSetStatus("出场日期早于入场日期", "err"); return null; }
+    const sym = posterYahooSym(raw, kind);
+    posterSetStatus("读取中…");
+    try {
+      const r = await fetch(`/api/history?symbols=${encodeURIComponent(sym)}&from=${from}`);
+      if (!r.ok) { posterSetStatus(`行情接口返回 ${r.status}`, "err"); return null; }
+      const j = await r.json();
+      const results = j.results?.[sym];
+      if (!results || !Object.keys(results).length) {
+        posterSetStatus(`没有 ${sym} 的历史数据，价格请手动填写`, "err");
+        _posterBars = null;
+        return null;
+      }
+      _posterBars = { sym, from, results, ranges: j.rangeResults?.[sym] || null };
+      return _posterBars;
+    } catch (_) {
+      posterSetStatus("读取失败，价格请手动填写", "err");
+      return null;
+    }
+  }
+
+  // The close of the named day, or of the first session on or after it — a date that fell
+  // on a weekend or a holiday still resolves to a real bar instead of failing.
+  function posterCloseOn(bars, date) {
+    if (!bars || !date) return null;
+    const days = Object.keys(bars.results).sort();
+    const d = days.find(x => x >= date);
+    return d ? { date: d, px: bars.results[d] } : null;
+  }
+
+  function posterValidatePrice(which) {
+    const el = _pq(which === "entry" ? "poster-entry-px" : "poster-exit-px");
+    const warnEl = _pq(which === "entry" ? "poster-entry-warn" : "poster-exit-warn");
+    if (!el || !warnEl) return;
+    warnEl.textContent = "";
+    const v = parseFloat(el.value);
+    const date = _pq(which === "entry" ? "poster-entry-date" : "poster-exit-date").value;
+    if (!Number.isFinite(v) || !date || !_posterBars?.ranges) return;
+    const days = Object.keys(_posterBars.results).sort();
+    const d = days.find(x => x >= date);
+    const range = d && _posterBars.ranges[d];
+    if (!range) return;
+    const [lo, hi] = range;
+    // A soft warning, never a block: a real fill can sit outside the regular session's
+    // range (pre/post market, an option assignment), and it is the user's trade either
+    // way. The point is to catch a typo before it becomes a share image that anyone can
+    // check against a chart.
+    if (v < lo * 0.995 || v > hi * 1.005) {
+      warnEl.textContent = `${d} 当天区间为 ${price(lo)} – ${price(hi)}，这个价格不在其中`;
+    }
+  }
+
+  async function posterPrefill() {
+    const bars = await posterFetchBars();
+    if (!bars) return;
+    const eDate = _pq("poster-entry-date").value;
+    const xDate = _pq("poster-exit-date").value;
+    const e = posterCloseOn(bars, eDate);
+    const x = xDate ? posterCloseOn(bars, xDate) : null;
+    if (e) _pq("poster-entry-px").value = +e.px.toFixed(4);
+    if (x) _pq("poster-exit-px").value  = +x.px.toFixed(4);
+    const parts = [];
+    if (e) parts.push(`入场 ${e.date}`);
+    if (x) parts.push(`出场 ${x.date}`);
+    posterSetStatus(parts.length ? `已按收盘价带出（${parts.join(" · ")}）` : "没有对应日期的行情", parts.length ? "ok" : "err");
+    posterValidatePrice("entry");
+    posterValidatePrice("exit");
+  }
+
+  function openPosterModal() {
+    _posterBars = null;
+    _pq("poster-form")?.reset();
+    _pq("poster-entry-warn").textContent = "";
+    _pq("poster-exit-warn").textContent = "";
+    posterSetStatus("");
+    openModal("poster-modal");
+  }
+
+  // Build the throwaway object the share renderer expects. Field names mirror a closed
+  // holding exactly, which is why scDraw needs no branch for this: it cannot tell the
+  // difference, and there is no "manual" flag to leak into the image.
+  function posterSubmit(e) {
+    e.preventDefault();
+    const raw  = (_pq("poster-sym").value || "").trim().toUpperCase();
+    const kind = _pq("poster-kind").value;
+    const cost = parseFloat(_pq("poster-entry-px").value);
+    const exit = parseFloat(_pq("poster-exit-px").value);
+    const entryDate = _pq("poster-entry-date").value;
+    const exitDate  = _pq("poster-exit-date").value;
+    if (!raw || !Number.isFinite(cost) || !Number.isFinite(exit) || !entryDate || !exitDate) {
+      posterSetStatus("代号、两个日期和两个价格都要填", "err"); return;
+    }
+    if (exitDate < entryDate) { posterSetStatus("出场日期早于入场日期", "err"); return; }
+    if (cost <= 0) { posterSetStatus("入场价必须大于 0", "err"); return; }
+
+    const num = id => { const v = parseFloat(_pq(id).value); return Number.isFinite(v) ? v : null; };
+    const stop = num("poster-stop"), target = num("poster-target");
+    const qty  = num("poster-qty") || 1;         // 1 keeps the percentage maths honest when
+                                                 // no size was given; the $ amount is opt-in
+    const risk1R = (stop != null && cost > stop) ? cost - stop : 0;
+
+    const h = {
+      sym: posterYahooSym(raw, kind), name: (_pq("poster-name").value || "").trim() || raw,
+      kind, cost, closePrice: exit, last: exit,
+      qty, stop, target,
+      entry: entryDate, closedAt: exitDate,
+      risk1R,
+      rMult: risk1R > 0 ? (exit - cost) / risk1R : null,
+      pnlFinal:  Math.round((exit - cost) * qty),
+      pnlDollar: Math.round((exit - cost) * qty),
+      pnlPct: (exit - cost) / cost,
+      days: calcTradingDays(entryDate, exitDate),
+    };
+    closeModal("poster-modal");
+    openShareCard(h);
+  }
+
+  function wirePoster() {
+    _pq("poster-open-btn")?.addEventListener("click", openPosterModal);
+    _pq("poster-close")?.addEventListener("click",  () => closeModal("poster-modal"));
+    _pq("poster-cancel")?.addEventListener("click", () => closeModal("poster-modal"));
+    _pq("poster-fetch")?.addEventListener("click", posterPrefill);
+    _pq("poster-form")?.addEventListener("submit", posterSubmit);
+    _pq("poster-entry-px")?.addEventListener("blur", () => posterValidatePrice("entry"));
+    _pq("poster-exit-px")?.addEventListener("blur",  () => posterValidatePrice("exit"));
+    // Filling in the dates is the moment the prices become knowable, so fetch then rather
+    // than making the button the only path to it.
+    ["poster-entry-date", "poster-exit-date"].forEach(id =>
+      _pq(id)?.addEventListener("change", () => {
+        if (_pq("poster-sym").value.trim() && _pq("poster-entry-date").value
+            && _pq("poster-exit-date").value) posterPrefill();
+      }));
   }
 
   // ============ MODEL PICKS — forward-test ledger ============
@@ -14336,6 +14575,7 @@ function rsAdjustGrade(grade, rsResult) {
   wireControls();
   wireTweaks();
   wireTableTabs();
+  wirePoster();
   wireNewPositionModal();
   $("#add-to-close")?.addEventListener("click",  () => closeModal("add-to-modal"));
   $("#add-to-cancel")?.addEventListener("click", () => closeModal("add-to-modal"));

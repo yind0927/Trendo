@@ -21,6 +21,7 @@ export default async function handler(req, res) {
   const adjResults = {};
   const openResults = {};
   const volumeResults = {};
+  const rangeResults = {};
 
   await Promise.all(syms.map(async sym => {
     try {
@@ -56,9 +57,15 @@ export default async function handler(req, res) {
       // the first session on or after the pick date" — a fully determined price with no
       // execution discretion in it, unlike a close or a live quote read at an arbitrary moment.
       const opens      = chart.indicators?.quote?.[0]?.open || [];
+      // Session range. The manual-poster form checks a hand-typed fill price against the
+      // day it claims to be from — a price outside that day's range makes a share image
+      // that anyone can disprove against a chart.
+      const highs      = chart.indicators?.quote?.[0]?.high || [];
+      const lows       = chart.indicators?.quote?.[0]?.low  || [];
       const prices     = {};
       const adjPrices  = {};
       const openPrices = {};
+      const rangePrices= {};
       const vols       = {};
       timestamps.forEach((ts, i) => {
         if (closes[i] == null) return;
@@ -74,6 +81,7 @@ export default async function handler(req, res) {
         prices[d] = closes[i];
         if (adjCloses[i] != null) adjPrices[d] = adjCloses[i];
         if (opens[i] != null) openPrices[d] = opens[i];
+        if (highs[i] != null && lows[i] != null) rangePrices[d] = [lows[i], highs[i]];
         if (volumes[i] != null) vols[d] = volumes[i];
       });
       if (Object.keys(prices).length) {
@@ -81,10 +89,11 @@ export default async function handler(req, res) {
         volumeResults[sym] = vols;
         if (Object.keys(adjPrices).length) adjResults[sym] = adjPrices;
         if (Object.keys(openPrices).length) openResults[sym] = openPrices;
+        if (Object.keys(rangePrices).length) rangeResults[sym] = rangePrices;
       }
     } catch (_) {}
   }));
 
   res.setHeader("Cache-Control", "s-maxage=1800, stale-while-revalidate=3600");
-  res.json({ results, adjResults, openResults, volumeResults });
+  res.json({ results, adjResults, openResults, volumeResults, rangeResults });
 }

@@ -895,6 +895,26 @@
   /* filter chip sharpen */
   .filter-chip{ border-radius: 4px !important; font-size: 10.5px !important; letter-spacing: 0.04em !important; font-weight: 600 !important;}
   .filter-chip.active{ box-shadow: inset 0 0 0 1px var(--accent-line), 0 0 16px -4px var(--accent-dim); }
+  /* Sits in the closed-tab filter row but is an action, not a filter — dashed rim so it
+     never reads as a selectable state alongside 全部/盈利/亏损/持平. */
+  .filter-chip.poster-chip{
+    border-style: dashed; color: var(--fg-2); margin-left: 4px;
+  }
+  .filter-chip.poster-chip:hover{ color: var(--accent); border-color: var(--accent-line); }
+
+  /* ── Manual poster form ── */
+  .poster-hint{ font-size: 11.5px; line-height: 1.6; color: var(--fg-3); margin: 0 0 14px; }
+  .poster-fetch-row{ display: flex; align-items: center; gap: 10px; margin: 2px 0 12px; flex-wrap: wrap; }
+  .poster-status{ font-size: 11px; color: var(--fg-3); font-family: var(--f-mono); }
+  .poster-status.err{ color: var(--down); }
+  .poster-status.ok{ color: var(--up); }
+  .poster-optional{
+    font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--fg-3); margin: 14px 0 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .poster-optional::after{ content: ""; flex: 1; height: 1px; background: var(--line); }
+  .poster-warn{ display: block; font-size: 10.5px; color: var(--warn); margin-top: 4px; line-height: 1.5; }
 
   /* panel head segmented control — ensure bg-0 active pill shows clearly */
   .panel-title{ background: var(--bg-2) !important; }
@@ -4645,6 +4665,7 @@
         <button class="filter-chip" data-filter-closed="profit">盈利 <span class="c" id="c-cl-profit">0</span></button>
         <button class="filter-chip" data-filter-closed="loss">亏损 <span class="c" id="c-cl-loss">0</span></button>
         <button class="filter-chip" data-filter-closed="even">持平 <span class="c" id="c-cl-even">0</span></button>
+        <button class="filter-chip poster-chip" id="poster-open-btn" title="为平台外完成的交易生成一张海报">+ 手动海报</button>
       </div>
     </div>
     <div style="overflow-x:auto;">
@@ -5415,6 +5436,87 @@
   </div>
 </div>
 
+<!-- Manual poster: a share image for a trade that was never recorded in the book.
+     Nothing typed here is persisted or read by any statistic — the form builds a
+     throwaway object, hands it to the same share-card renderer, and forgets it. -->
+<div id="poster-modal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>手动海报</h2>
+      <button class="modal-close" id="poster-close">✕</button>
+    </div>
+    <p class="poster-hint">为不在平台里的交易生成分享图。只需代号和两个日期，价格会按当日收盘自动带出，可改成你的实际成交价。此处填写的内容不会存入任何记录，也不参与胜率等统计。</p>
+    <form id="poster-form">
+      <div class="form-2col">
+        <div class="form-row">
+          <label>股票代号</label>
+          <input type="text" id="poster-sym" required placeholder="NVDA" autocapitalize="characters"
+                 spellcheck="false" class="form-input"/>
+        </div>
+        <div class="form-row">
+          <label>类型</label>
+          <select id="poster-kind" class="form-input">
+            <option value="equity">美股</option>
+            <option value="etf">ETF</option>
+            <option value="crypto">加密</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>入场日期</label>
+          <input type="date" id="poster-entry-date" required class="form-input"/>
+        </div>
+        <div class="form-row">
+          <label>出场日期</label>
+          <input type="date" id="poster-exit-date" required class="form-input"/>
+        </div>
+      </div>
+
+      <div class="poster-fetch-row">
+        <button type="button" class="btn" id="poster-fetch">按日期带出价格</button>
+        <span class="poster-status" id="poster-status"></span>
+      </div>
+
+      <div class="form-2col">
+        <div class="form-row">
+          <label>入场价</label>
+          <input type="number" id="poster-entry-px" step="0.0001" required placeholder="0.00" class="form-input"/>
+          <span class="poster-warn" id="poster-entry-warn"></span>
+        </div>
+        <div class="form-row">
+          <label>出场价</label>
+          <input type="number" id="poster-exit-px" step="0.0001" required placeholder="0.00" class="form-input"/>
+          <span class="poster-warn" id="poster-exit-warn"></span>
+        </div>
+      </div>
+
+      <div class="poster-optional">选填 · 填了会多出对应的数据格</div>
+      <div class="form-2col">
+        <div class="form-row">
+          <label>止损价</label>
+          <input type="number" id="poster-stop" step="0.0001" placeholder="用于 R 倍数" class="form-input"/>
+        </div>
+        <div class="form-row">
+          <label>止盈价</label>
+          <input type="number" id="poster-target" step="0.0001" placeholder="用于盈亏比" class="form-input"/>
+        </div>
+        <div class="form-row">
+          <label>股数</label>
+          <input type="number" id="poster-qty" step="1" min="1" placeholder="用于显示盈亏金额" class="form-input"/>
+        </div>
+        <div class="form-row">
+          <label>公司名</label>
+          <input type="text" id="poster-name" placeholder="留空则自动带出" class="form-input"/>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" id="poster-cancel" class="btn">取消</button>
+        <button type="submit" class="btn primary">生成海报</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Covered Call premium record -->
 <div id="cc-modal" class="modal-backdrop">
   <div class="modal">
@@ -5511,8 +5613,8 @@
   </div>
 </div>
 
-<script src="data.js?v=719"></script>
-<script src="desk.js?v=719"></script>
+<script src="data.js?v=720"></script>
+<script src="desk.js?v=720"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
