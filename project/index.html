@@ -1895,11 +1895,19 @@
   .sim-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); font-weight: 500; }
   .sim-card-value { font-size: 26px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.02em; }
   .sim-card-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
+  /* wrap:false on the first row, with the state line forced onto its own row below */
   .pending-order-card {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px;
     padding: 8px 12px; margin-bottom: 6px;
   }
+  .pending-order-state {
+    flex-basis: 100%; font-family: var(--f-mono); font-size: 10.5px;
+    margin-top: 2px;
+  }
+  .pending-order-state.wait  { color: var(--fg-3); }
+  .pending-order-state.ready { color: var(--up); }
+  .pending-order-state.warn  { color: var(--warn); }
   .pending-order-badge {
     font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
     text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0;
@@ -4692,7 +4700,7 @@
         <button class="filter-chip" data-filter-closed="profit">盈利 <span class="c" id="c-cl-profit">0</span></button>
         <button class="filter-chip" data-filter-closed="loss">亏损 <span class="c" id="c-cl-loss">0</span></button>
         <button class="filter-chip" data-filter-closed="even">持平 <span class="c" id="c-cl-even">0</span></button>
-        <button class="filter-chip poster-chip" id="poster-open-btn" title="为平台外完成的交易生成一张海报">+ 手动海报</button>
+        <button class="filter-chip poster-chip" id="poster-open-btn" title="为平台外完成的交易生成一张海报">添加平仓海报</button>
       </div>
     </div>
     <div style="overflow-x:auto;">
@@ -5631,8 +5639,8 @@
   </div>
 </div>
 
-<script src="data.js?v=722"></script>
-<script src="desk.js?v=722"></script>
+<script src="data.js?v=723"></script>
+<script src="desk.js?v=723"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

@@ -5979,17 +5979,25 @@ function rsAdjustGrade(grade, rsResult) {
   //   market sell → the session's OPEN
   //   limit sell  → only if the session's HIGH touched it; fills at max(open, limit)
   // Only sessions that have CLOSED are replayed; the current one belongs to live polling.
+  // Last quote seen for a symbol that has an order waiting on it. Pending symbols are
+  // not in SIM_HOLDINGS, so there is nowhere else to read a current price from.
+  const _pendQuotes = {};
   let _catchUpRunning = false;
   async function catchUpPendingOrders() {
     if (_catchUpRunning) return;
     if (!SIM_PENDING.length && !SIM_CLOSE_PENDING.length) return;
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-    const stale = [...SIM_PENDING, ...SIM_CLOSE_PENDING].filter(o => o.entryDate && o.entryDate < today);
+    // Orders written before entryDate was recorded fall back to the day they were
+    // created, so a legacy order is replayed rather than sitting pending forever.
+    const dateOf = o => o.entryDate || (o.createdAt || "").slice(0, 10) || null;
+    const stale = [...SIM_PENDING, ...SIM_CLOSE_PENDING].filter(o => {
+      const d = dateOf(o); return d && d < today;
+    });
     if (!stale.length) return;
     _catchUpRunning = true;
     try {
       const syms = [...new Set(stale.map(o => _histYahooSym({ sym: o.sym, kind: o.kind })))];
-      const from = stale.map(o => o.entryDate).sort()[0];
+      const from = stale.map(dateOf).sort()[0];
       const r = await fetch(
         `/api/history?symbols=${encodeURIComponent(syms.join(","))}&from=${from}`);
       if (!r.ok) return;
@@ -6009,10 +6017,11 @@ function rsAdjustGrade(grade, rsResult) {
 
       // ── entry orders ──
       for (const order of [...SIM_PENDING]) {
-        if (!order.entryDate || order.entryDate >= today) continue;
+        const od = dateOf(order);
+        if (!od || od >= today) continue;
         if (SIM_HOLDINGS.find(h => h.sym === order.sym)) continue;   // already open
         const key = _histYahooSym({ sym: order.sym, kind: order.kind });
-        const hit = sessionsFor(key).filter(s => s.d >= order.entryDate).find(s => {
+        const hit = sessionsFor(key).filter(s => s.d >= od).find(s => {
           if (order.orderType === "market") return s.open != null;
           return s.lo != null && s.lo <= order.limitPrice;
         });
@@ -6045,7 +6054,8 @@ function rsAdjustGrade(grade, rsResult) {
 
       // ── close orders ──
       for (const order of [...SIM_CLOSE_PENDING]) {
-        if (!order.entryDate || order.entryDate >= today) continue;
+        const od = dateOf(order);
+        if (!od || od >= today) continue;
         const pos = SIM_HOLDINGS.find(h => h.sym === order.sym);
         if (!pos) {                                     // nothing left to sell
           const i = SIM_CLOSE_PENDING.findIndex(p => p.id === order.id);
@@ -6053,7 +6063,7 @@ function rsAdjustGrade(grade, rsResult) {
           continue;
         }
         const key = _histYahooSym({ sym: order.sym, kind: order.kind });
-        const hit = sessionsFor(key).filter(s => s.d >= order.entryDate).find(s => {
+        const hit = sessionsFor(key).filter(s => s.d >= od).find(s => {
           if (order.orderType === "market") return s.open != null;
           return s.hi != null && s.hi >= order.limitPrice;
         });
@@ -6192,6 +6202,17 @@ function rsAdjustGrade(grade, rsResult) {
       });
       if (optSpotChanged && currentPage === "options") renderOptions();
 
+      // Remember the last quote seen for every pending symbol, so the queue can say why
+      // an order has not filled. Without this the card shows a limit price and nothing
+      // else — a limit simply not reached looks identical to a broken fill.
+      let pendQuoteMoved = false;
+      [...SIM_PENDING, ...SIM_CLOSE_PENDING].forEach(o => {
+        const q = results[o.sym];
+        if (q?.last == null) return;
+        if (_pendQuotes[o.sym]?.last !== q.last) pendQuoteMoved = true;
+        _pendQuotes[o.sym] = { last: q.last, at: Date.now() };
+      });
+
       // Auto-execute pending orders
       const executed = [];
       SIM_PENDING.forEach(order => {
@@ -6236,6 +6257,8 @@ function rsAdjustGrade(grade, rsResult) {
           if (idx !== -1) SIM_PENDING.splice(idx, 1);
         });
         renderSimPending();
+      } else if (pendQuoteMoved) {
+        renderSimPending();   // keep the "still needs to fall X%" line live
       }
 
       // Execute pending close orders
@@ -8746,29 +8769,45 @@ function rsAdjustGrade(grade, rsResult) {
       ? `<span class="pending-mkt-badge open">开盘中</span>`
       : `<span class="pending-mkt-badge closed">休市</span>`;
 
+    // Why this order has not filled, in the order the fill logic actually checks. An
+    // unfilled order used to look exactly like a broken one; most of the time the answer
+    // is simply that a limit has not been reached, and the card can just say so.
+    const fillState = (order, dir) => {
+      const q = _pendQuotes[order.sym];
+      if (!mktOpen) return { cls: "wait", txt: "休市 · 开盘后成交" };
+      if (!q) return { cls: "warn", txt: "暂无行情数据，无法判断是否成交" };
+      const last = q.last;
+      if (order.orderType === "market") return { cls: "ready", txt: `现价 $${price(last)} · 下次刷新成交` };
+      const lim = order.limitPrice;
+      const hit = dir === "buy" ? last <= lim : last >= lim;
+      if (hit) return { cls: "ready", txt: `现价 $${price(last)} 已触发 · 下次刷新成交` };
+      const gap = Math.abs((last - lim) / last * 100);
+      return { cls: "wait",
+        txt: `现价 $${price(last)} · 还需${dir === "buy" ? "跌" : "涨"} ${gap.toFixed(1)}% 到 $${price(lim)}` };
+    };
+
     const openCards = SIM_PENDING.map(order => {
       const typeLabel = order.orderType === "market" ? "市价单" : "限价单";
       const typeCls   = order.orderType === "market" ? "market" : "limit";
-      const priceHint = order.orderType === "limit"
-        ? `限价 $${order.limitPrice?.toFixed(2)} · `
-        : mktOpen ? "等待成交 · " : "等待开盘 · ";
+      const priceHint = order.orderType === "limit" ? `限价 $${order.limitPrice?.toFixed(2)} · ` : "";
       const stopTarget = order.stop && order.target
         ? `止损 $${order.stop} / 止盈 $${order.target}` : "";
+      const st = fillState(order, "buy");
       return `
         <div class="pending-order-card" data-pending-id="${order.id}">
           <span class="pending-order-badge ${typeCls}">${typeLabel}</span>
           <span class="pending-order-sym">${order.sym}</span>
           <span class="pending-order-detail">${priceHint}${order.qty}股 ${stopTarget}</span>
           <button class="pending-order-cancel" data-cancel-id="${order.id}" data-cancel-type="open" title="取消挂单">✕</button>
+          <span class="pending-order-state ${st.cls}">${st.txt}</span>
         </div>`;
     });
 
     const closeCards = SIM_CLOSE_PENDING.map(order => {
       const typeLabel = order.orderType === "market" ? "市价单" : "限价单";
       const typeCls   = order.orderType === "market" ? "market" : "limit";
-      const priceHint = order.orderType === "limit"
-        ? `限价 ≥$${order.limitPrice?.toFixed(2)} · `
-        : "下次更新自动成交 · ";
+      const priceHint = order.orderType === "limit" ? `限价 ≥$${order.limitPrice?.toFixed(2)} · ` : "";
+      const st = fillState(order, "sell");
       return `
         <div class="pending-order-card" data-pending-id="${order.id}">
           <span class="pending-order-badge close-order">平仓</span>
@@ -8776,6 +8815,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="pending-order-sym">${order.sym}</span>
           <span class="pending-order-detail">${priceHint}${order.qty}股</span>
           <button class="pending-order-cancel" data-cancel-id="${order.id}" data-cancel-type="close" title="取消平仓挂单">✕</button>
+          <span class="pending-order-state ${st.cls}">${st.txt}</span>
         </div>`;
     });
 
