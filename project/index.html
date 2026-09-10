@@ -915,6 +915,33 @@
   }
   .poster-optional::after{ content: ""; flex: 1; height: 1px; background: var(--line); }
   .poster-warn{ display: block; font-size: 10.5px; color: var(--warn); margin-top: 4px; line-height: 1.5; }
+  .poster-leg-head{ display: flex; align-items: center; gap: 10px; margin: 16px 0 8px; }
+  .poster-leg-title{ font-size: 12px; font-weight: 600; color: var(--fg-1); }
+  .poster-avg{ font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); }
+  .poster-leg-add{
+    all: unset; cursor: pointer; margin-left: auto;
+    font-size: 11px; color: var(--accent); padding: 3px 9px;
+    border: 1px dashed var(--accent-line); border-radius: 999px;
+  }
+  .poster-leg-add:hover{ background: var(--accent-dim); }
+  .poster-legs{ display: flex; flex-direction: column; gap: 6px; }
+  /* date | price | qty | remove. min-width:0 on the inputs or the grid refuses to shrink
+     below their intrinsic width and the row overflows the modal on a phone. */
+  .poster-leg{ display: grid; grid-template-columns: 1.35fr 1fr 0.85fr 28px; gap: 6px; align-items: start; }
+  .poster-leg > *{ min-width: 0; }
+  .poster-leg .form-input{ font-size: 12px; padding: 7px 8px; }
+  .poster-leg-del{
+    all: unset; cursor: pointer; color: var(--fg-3); text-align: center;
+    height: 32px; line-height: 32px; border-radius: 6px; font-size: 13px;
+  }
+  .poster-leg-del:hover{ color: var(--down); background: var(--bg-3); }
+  .poster-leg-del[disabled]{ opacity: .25; cursor: default; }
+  .poster-leg-warn{ grid-column: 1 / -1; font-size: 10.5px; color: var(--warn); line-height: 1.5; }
+  .poster-leg-labels{
+    display: grid; grid-template-columns: 1.35fr 1fr 0.85fr 28px; gap: 6px;
+    font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: 2px;
+  }
 
   /* panel head segmented control — ensure bg-0 active pill shows clearly */
   .panel-title{ background: var(--bg-2) !important; }
@@ -5445,7 +5472,7 @@
       <h2>手动海报</h2>
       <button class="modal-close" id="poster-close">✕</button>
     </div>
-    <p class="poster-hint">为不在平台里的交易生成分享图。只需代号和两个日期，价格会按当日收盘自动带出，可改成你的实际成交价。此处填写的内容不会存入任何记录，也不参与胜率等统计。</p>
+    <p class="poster-hint">为不在平台里的交易生成分享图。分批进出就多加几行，海报按数量加权算出平均价。价格填好日期后会按当日收盘自动带出，可改成你的实际成交价。此处填写的内容不会存入任何记录，也不参与胜率等统计。</p>
     <form id="poster-form">
       <div class="form-2col">
         <div class="form-row">
@@ -5461,32 +5488,25 @@
             <option value="crypto">加密</option>
           </select>
         </div>
-        <div class="form-row">
-          <label>入场日期</label>
-          <input type="date" id="poster-entry-date" required class="form-input"/>
-        </div>
-        <div class="form-row">
-          <label>出场日期</label>
-          <input type="date" id="poster-exit-date" required class="form-input"/>
-        </div>
       </div>
+
+      <div class="poster-leg-head">
+        <span class="poster-leg-title">入场记录</span>
+        <span class="poster-avg" id="poster-entry-avg"></span>
+        <button type="button" class="poster-leg-add" data-leg-add="entry">+ 加一笔</button>
+      </div>
+      <div class="poster-legs" id="poster-entry-legs"></div>
+
+      <div class="poster-leg-head">
+        <span class="poster-leg-title">出场记录</span>
+        <span class="poster-avg" id="poster-exit-avg"></span>
+        <button type="button" class="poster-leg-add" data-leg-add="exit">+ 加一笔</button>
+      </div>
+      <div class="poster-legs" id="poster-exit-legs"></div>
 
       <div class="poster-fetch-row">
         <button type="button" class="btn" id="poster-fetch">按日期带出价格</button>
         <span class="poster-status" id="poster-status"></span>
-      </div>
-
-      <div class="form-2col">
-        <div class="form-row">
-          <label>入场价</label>
-          <input type="number" id="poster-entry-px" step="0.0001" required placeholder="0.00" class="form-input"/>
-          <span class="poster-warn" id="poster-entry-warn"></span>
-        </div>
-        <div class="form-row">
-          <label>出场价</label>
-          <input type="number" id="poster-exit-px" step="0.0001" required placeholder="0.00" class="form-input"/>
-          <span class="poster-warn" id="poster-exit-warn"></span>
-        </div>
       </div>
 
       <div class="poster-optional">选填 · 填了会多出对应的数据格</div>
@@ -5499,13 +5519,9 @@
           <label>止盈价</label>
           <input type="number" id="poster-target" step="0.0001" placeholder="用于盈亏比" class="form-input"/>
         </div>
-        <div class="form-row">
-          <label>股数</label>
-          <input type="number" id="poster-qty" step="1" min="1" placeholder="用于显示盈亏金额" class="form-input"/>
-        </div>
-        <div class="form-row">
+        <div class="form-row" style="grid-column:1/-1">
           <label>公司名</label>
-          <input type="text" id="poster-name" placeholder="留空则自动带出" class="form-input"/>
+          <input type="text" id="poster-name" placeholder="留空则用代号" class="form-input"/>
         </div>
       </div>
 
@@ -5613,8 +5629,8 @@
   </div>
 </div>
 
-<script src="data.js?v=720"></script>
-<script src="desk.js?v=720"></script>
+<script src="data.js?v=721"></script>
+<script src="desk.js?v=721"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

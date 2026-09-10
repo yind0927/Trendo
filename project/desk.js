@@ -4726,8 +4726,14 @@ function rsAdjustGrade(grade, rsResult) {
 
     scCard(SC_PAD, row1Y, narrowW, rowH, "HELD",
       `${calcTradingDays(h.entry, h.closedAt)}d`);
+    // A trade scaled into or out of shows averages, so it says so — a reader would
+    // otherwise take these for the two prices of a single round trip.
+    const lg = h._legs;
+    const legSub = lg && (lg.entries > 1 || lg.exits > 1)
+      ? `AVG OF ${lg.entries} ${lg.entries > 1 ? "ENTRIES" : "ENTRY"} · ${lg.exits} ${lg.exits > 1 ? "EXITS" : "EXIT"}`
+      : null;
     scCard(SC_PAD + narrowW + gGap, row1Y, wideW, rowH, "ENTRY → EXIT",
-      `${price(entryPx)} → ${price(exitPx)}`);
+      `${price(entryPx)} → ${price(exitPx)}`, legSub ? { sub: legSub } : {});
 
     // Row 2 is three slots filled by the first three candidates that actually have data,
     // in this order. A trade with a stop and a target yields R MULTIPLE / PEAK CAPTURE /
@@ -4854,21 +4860,99 @@ function rsAdjustGrade(grade, rsResult) {
     el.className = "poster-status" + (cls ? " " + cls : "");
   }
 
-  let _posterBars = null;   // { sym, from, results, ranges } for the last successful fetch
+  let _posterBars = null;   // { sym, results, ranges } for the last successful fetch
 
-  // Pull the daily bars once, then use them for BOTH prefill and range validation, so the
-  // two can never disagree about what the market actually did that day.
+  // ── Legs ──────────────────────────────────────────────────────────────────
+  // A trade scaled into and out of is the normal case, not the exception. Each leg
+  // carries its own date, price and size; the poster reports the size-weighted average
+  // of each side. Weighting matters: 100 shares at $100 and 10 at $200 average to $109,
+  // not to $150, and a plain mean of the prices would overstate the cost basis badly
+  // enough to move every figure on the card.
+  const posterLegRow = () => {
+    const row = document.createElement("div");
+    row.className = "poster-leg";
+    row.innerHTML = `
+      <input type="date" class="form-input" data-leg="date"/>
+      <input type="number" step="0.0001" class="form-input" data-leg="px" placeholder="价格"/>
+      <input type="number" step="1" min="1" class="form-input" data-leg="qty" placeholder="股数"/>
+      <button type="button" class="poster-leg-del" title="删除这一笔">✕</button>
+      <span class="poster-leg-warn"></span>`;
+    return row;
+  };
+
+  function posterAddLeg(side, focus = true) {
+    const box = _pq(`poster-${side}-legs`); if (!box) return;
+    const row = posterLegRow();
+    box.appendChild(row);
+    posterSyncLegControls(side);
+    if (focus) row.querySelector('[data-leg="date"]')?.focus();
+  }
+
+  // The last remaining row on a side can't be removed — a trade with no entries has no
+  // basis and nothing to render.
+  function posterSyncLegControls(side) {
+    const rows = [..._pq(`poster-${side}-legs`).querySelectorAll(".poster-leg")];
+    rows.forEach(r => { r.querySelector(".poster-leg-del").disabled = rows.length === 1; });
+  }
+
+  function posterReadLegs(side) {
+    return [..._pq(`poster-${side}-legs`).querySelectorAll(".poster-leg")].map(row => {
+      const get = k => row.querySelector(`[data-leg="${k}"]`);
+      const px  = parseFloat(get("px").value);
+      const qty = parseFloat(get("qty").value);
+      return {
+        row, date: get("date").value,
+        px:  Number.isFinite(px) ? px : null,
+        // Blank size means "weight this leg the same as the others" — a plain average,
+        // which is right when the legs were the same size and is at least predictable
+        // when they weren't. Sizes are what make the average correct, so the summary
+        // line below says which of the two is in force.
+        qty: Number.isFinite(qty) && qty > 0 ? qty : null,
+      };
+    });
+  }
+
+  // Size-weighted mean, falling back to equal weight for legs with no size given.
+  function posterAvg(legs) {
+    const valid = legs.filter(l => l.px != null && l.px > 0);
+    if (!valid.length) return null;
+    const weighted = valid.some(l => l.qty != null);
+    const w = l => l.qty != null ? l.qty : 1;
+    const sumW = valid.reduce((s, l) => s + w(l), 0);
+    return {
+      px: valid.reduce((s, l) => s + l.px * w(l), 0) / sumW,
+      qty: valid.reduce((s, l) => s + (l.qty || 0), 0),
+      n: valid.length,
+      weighted,
+      dates: valid.map(l => l.date).filter(Boolean).sort(),
+    };
+  }
+
+  function posterUpdateAvgs() {
+    [["entry", "入场"], ["exit", "出场"]].forEach(([side]) => {
+      const a = posterAvg(posterReadLegs(side));
+      const el = _pq(`poster-${side}-avg`);
+      if (!el) return;
+      el.textContent = !a ? ""
+        : a.n === 1 ? ""
+        : `${a.n} 笔 · 均价 ${price(a.px)}${a.weighted ? ` · 按 ${a.qty} 股加权` : " · 等权（未填股数）"}`;
+    });
+  }
+
+  // ── Market data ───────────────────────────────────────────────────────────
+  const posterAllDates = () =>
+    [...posterReadLegs("entry"), ...posterReadLegs("exit")]
+      .map(l => l.date).filter(Boolean).sort();
+
   async function posterFetchBars() {
     const raw = (_pq("poster-sym").value || "").trim().toUpperCase();
     const kind = _pq("poster-kind").value;
-    const from = _pq("poster-entry-date").value;
-    const to   = _pq("poster-exit-date").value;
-    if (!raw || !from) { posterSetStatus("先填代号和入场日期", "err"); return null; }
-    if (to && to < from) { posterSetStatus("出场日期早于入场日期", "err"); return null; }
+    const dates = posterAllDates();
+    if (!raw || !dates.length) { posterSetStatus("先填代号和至少一个日期", "err"); return null; }
     const sym = posterYahooSym(raw, kind);
     posterSetStatus("读取中…");
     try {
-      const r = await fetch(`/api/history?symbols=${encodeURIComponent(sym)}&from=${from}`);
+      const r = await fetch(`/api/history?symbols=${encodeURIComponent(sym)}&from=${dates[0]}`);
       if (!r.ok) { posterSetStatus(`行情接口返回 ${r.status}`, "err"); return null; }
       const j = await r.json();
       const results = j.results?.[sym];
@@ -4877,7 +4961,7 @@ function rsAdjustGrade(grade, rsResult) {
         _posterBars = null;
         return null;
       }
-      _posterBars = { sym, from, results, ranges: j.rangeResults?.[sym] || null };
+      _posterBars = { sym, results, ranges: j.rangeResults?.[sym] || null };
       return _posterBars;
     } catch (_) {
       posterSetStatus("读取失败，价格请手动填写", "err");
@@ -4885,84 +4969,91 @@ function rsAdjustGrade(grade, rsResult) {
     }
   }
 
-  // The close of the named day, or of the first session on or after it — a date that fell
-  // on a weekend or a holiday still resolves to a real bar instead of failing.
-  function posterCloseOn(bars, date) {
+  // The bar for that day, or the first session on or after it, so a date that landed on
+  // a weekend or a holiday still resolves instead of silently failing.
+  const posterBarOn = (bars, date) => {
     if (!bars || !date) return null;
-    const days = Object.keys(bars.results).sort();
-    const d = days.find(x => x >= date);
-    return d ? { date: d, px: bars.results[d] } : null;
-  }
+    const d = Object.keys(bars.results).sort().find(x => x >= date);
+    return d ? { date: d, px: bars.results[d], range: bars.ranges?.[d] || null } : null;
+  };
 
-  function posterValidatePrice(which) {
-    const el = _pq(which === "entry" ? "poster-entry-px" : "poster-exit-px");
-    const warnEl = _pq(which === "entry" ? "poster-entry-warn" : "poster-exit-warn");
-    if (!el || !warnEl) return;
-    warnEl.textContent = "";
-    const v = parseFloat(el.value);
-    const date = _pq(which === "entry" ? "poster-entry-date" : "poster-exit-date").value;
-    if (!Number.isFinite(v) || !date || !_posterBars?.ranges) return;
-    const days = Object.keys(_posterBars.results).sort();
-    const d = days.find(x => x >= date);
-    const range = d && _posterBars.ranges[d];
-    if (!range) return;
-    const [lo, hi] = range;
-    // A soft warning, never a block: a real fill can sit outside the regular session's
-    // range (pre/post market, an option assignment), and it is the user's trade either
-    // way. The point is to catch a typo before it becomes a share image that anyone can
-    // check against a chart.
+  function posterValidateRow(row) {
+    const warn = row.querySelector(".poster-leg-warn");
+    if (!warn) return;
+    warn.textContent = "";
+    const date = row.querySelector('[data-leg="date"]').value;
+    const v = parseFloat(row.querySelector('[data-leg="px"]').value);
+    if (!Number.isFinite(v) || !date || !_posterBars) return;
+    const bar = posterBarOn(_posterBars, date);
+    if (!bar?.range) return;
+    const [lo, hi] = bar.range;
+    // A warning, never a block: a real fill can sit outside the regular session (pre- or
+    // post-market, an assignment). The point is to catch a typo before it becomes an
+    // image anyone can disprove against a chart.
     if (v < lo * 0.995 || v > hi * 1.005) {
-      warnEl.textContent = `${d} 当天区间为 ${price(lo)} – ${price(hi)}，这个价格不在其中`;
+      warn.textContent = `${bar.date} 当天区间为 ${price(lo)} – ${price(hi)}，这个价格不在其中`;
     }
   }
+
+  const posterValidateAll = () =>
+    document.querySelectorAll("#poster-modal .poster-leg").forEach(posterValidateRow);
 
   async function posterPrefill() {
     const bars = await posterFetchBars();
     if (!bars) return;
-    const eDate = _pq("poster-entry-date").value;
-    const xDate = _pq("poster-exit-date").value;
-    const e = posterCloseOn(bars, eDate);
-    const x = xDate ? posterCloseOn(bars, xDate) : null;
-    if (e) _pq("poster-entry-px").value = +e.px.toFixed(4);
-    if (x) _pq("poster-exit-px").value  = +x.px.toFixed(4);
-    const parts = [];
-    if (e) parts.push(`入场 ${e.date}`);
-    if (x) parts.push(`出场 ${x.date}`);
-    posterSetStatus(parts.length ? `已按收盘价带出（${parts.join(" · ")}）` : "没有对应日期的行情", parts.length ? "ok" : "err");
-    posterValidatePrice("entry");
-    posterValidatePrice("exit");
+    let filled = 0, missing = 0;
+    ["entry", "exit"].forEach(side =>
+      posterReadLegs(side).forEach(l => {
+        if (!l.date) return;
+        const bar = posterBarOn(bars, l.date);
+        if (!bar) { missing++; return; }
+        // Only ever fills a blank. Overwriting a price already typed would quietly
+        // replace a real fill with the day's close.
+        const el = l.row.querySelector('[data-leg="px"]');
+        if (!el.value) { el.value = +bar.px.toFixed(4); filled++; }
+      }));
+    posterSetStatus(
+      filled ? `已按收盘价带出 ${filled} 笔${missing ? `，${missing} 笔无对应行情` : ""}`
+             : missing ? `${missing} 笔没有对应日期的行情` : "所有价格都已填写，未覆盖",
+      filled ? "ok" : missing ? "err" : "");
+    posterValidateAll();
+    posterUpdateAvgs();
   }
 
   function openPosterModal() {
     _posterBars = null;
     _pq("poster-form")?.reset();
-    _pq("poster-entry-warn").textContent = "";
-    _pq("poster-exit-warn").textContent = "";
+    ["entry", "exit"].forEach(side => {
+      _pq(`poster-${side}-legs`).innerHTML = "";
+      posterAddLeg(side, false);
+      _pq(`poster-${side}-avg`).textContent = "";
+    });
     posterSetStatus("");
     openModal("poster-modal");
   }
 
   // Build the throwaway object the share renderer expects. Field names mirror a closed
-  // holding exactly, which is why scDraw needs no branch for this: it cannot tell the
-  // difference, and there is no "manual" flag to leak into the image.
+  // holding exactly, which is why scDraw needs no branch for this.
   function posterSubmit(e) {
     e.preventDefault();
     const raw  = (_pq("poster-sym").value || "").trim().toUpperCase();
     const kind = _pq("poster-kind").value;
-    const cost = parseFloat(_pq("poster-entry-px").value);
-    const exit = parseFloat(_pq("poster-exit-px").value);
-    const entryDate = _pq("poster-entry-date").value;
-    const exitDate  = _pq("poster-exit-date").value;
-    if (!raw || !Number.isFinite(cost) || !Number.isFinite(exit) || !entryDate || !exitDate) {
-      posterSetStatus("代号、两个日期和两个价格都要填", "err"); return;
-    }
+    const inA  = posterAvg(posterReadLegs("entry"));
+    const outA = posterAvg(posterReadLegs("exit"));
+    if (!raw) { posterSetStatus("填一下股票代号", "err"); return; }
+    if (!inA || !outA) { posterSetStatus("入场和出场各至少要有一笔带价格的记录", "err"); return; }
+    if (!inA.dates.length || !outA.dates.length) { posterSetStatus("每一笔都要填日期", "err"); return; }
+    const entryDate = inA.dates[0];                        // first buy
+    const exitDate  = outA.dates[outA.dates.length - 1];   // last sell
     if (exitDate < entryDate) { posterSetStatus("出场日期早于入场日期", "err"); return; }
-    if (cost <= 0) { posterSetStatus("入场价必须大于 0", "err"); return; }
+    if (inA.px <= 0) { posterSetStatus("入场价必须大于 0", "err"); return; }
 
+    const cost = inA.px, exit = outA.px;
     const num = id => { const v = parseFloat(_pq(id).value); return Number.isFinite(v) ? v : null; };
     const stop = num("poster-stop"), target = num("poster-target");
-    const qty  = num("poster-qty") || 1;         // 1 keeps the percentage maths honest when
-                                                 // no size was given; the $ amount is opt-in
+    // Sizes drive the dollar amount, which is opt-in on the card; with none given, 1
+    // keeps every percentage figure correct and only the amount meaningless.
+    const qty = inA.qty || 1;
     const risk1R = (stop != null && cost > stop) ? cost - stop : 0;
 
     const h = {
@@ -4976,6 +5067,8 @@ function rsAdjustGrade(grade, rsResult) {
       pnlDollar: Math.round((exit - cost) * qty),
       pnlPct: (exit - cost) / cost,
       days: calcTradingDays(entryDate, exitDate),
+      // Read by the card so an averaged price is never presented as a single fill.
+      _legs: { entries: inA.n, exits: outA.n },
     };
     closeModal("poster-modal");
     openShareCard(h);
@@ -4987,15 +5080,33 @@ function rsAdjustGrade(grade, rsResult) {
     _pq("poster-cancel")?.addEventListener("click", () => closeModal("poster-modal"));
     _pq("poster-fetch")?.addEventListener("click", posterPrefill);
     _pq("poster-form")?.addEventListener("submit", posterSubmit);
-    _pq("poster-entry-px")?.addEventListener("blur", () => posterValidatePrice("entry"));
-    _pq("poster-exit-px")?.addEventListener("blur",  () => posterValidatePrice("exit"));
-    // Filling in the dates is the moment the prices become knowable, so fetch then rather
-    // than making the button the only path to it.
-    ["poster-entry-date", "poster-exit-date"].forEach(id =>
-      _pq(id)?.addEventListener("change", () => {
-        if (_pq("poster-sym").value.trim() && _pq("poster-entry-date").value
-            && _pq("poster-exit-date").value) posterPrefill();
-      }));
+
+    const modal = _pq("poster-modal"); if (!modal) return;
+    // Delegated: leg rows come and go, so nothing here may bind to a specific row.
+    modal.addEventListener("click", e => {
+      const add = e.target.closest("[data-leg-add]");
+      if (add) { posterAddLeg(add.dataset.legAdd); return; }
+      const del = e.target.closest(".poster-leg-del");
+      if (del && !del.disabled) {
+        const side = del.closest("#poster-entry-legs") ? "entry" : "exit";
+        del.closest(".poster-leg").remove();
+        posterSyncLegControls(side);
+        posterUpdateAvgs();
+      }
+    });
+    modal.addEventListener("input", e => {
+      if (e.target.matches('[data-leg="px"], [data-leg="qty"]')) posterUpdateAvgs();
+    });
+    modal.addEventListener("change", e => {
+      if (!e.target.matches('[data-leg="date"]')) return;
+      posterUpdateAvgs();
+      // A date is the moment its price becomes knowable, so fetch then rather than making
+      // the button the only path to it.
+      if (_pq("poster-sym").value.trim()) posterPrefill();
+    }, true);
+    modal.addEventListener("blur", e => {
+      if (e.target.matches('[data-leg="px"]')) posterValidateRow(e.target.closest(".poster-leg"));
+    }, true);
   }
 
   // ============ MODEL PICKS — forward-test ledger ============
