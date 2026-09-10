@@ -5181,7 +5181,13 @@ function rsAdjustGrade(grade, rsResult) {
     const wk = Math.ceil(((t - yStart) / 86400000 + 1) / 7);
     return `${t.getUTCFullYear()}-W${String(wk).padStart(2, "0")}`;
   }
-  const mpThisWeek = () => mpIsoWeek(new Date());
+  // ISO week of the ET trading date, not of the UTC clock. After 20:00 ET the UTC date
+  // has already rolled over, so on a Sunday evening this used to file a batch under next
+  // week while weekOf (mpToday, ET) still said today — an id and a date that disagree.
+  const mpThisWeek = () => {
+    const [y, m, d] = mpToday().split("-").map(Number);
+    return mpIsoWeek(new Date(Date.UTC(y, m - 1, d)));
+  };
   const mpCohort   = id => MODEL_PICKS.find(c => c.id === id);
   const mpToday    = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
@@ -5334,6 +5340,10 @@ function rsAdjustGrade(grade, rsResult) {
     const s = mpStats(), weekId = mpThisWeek(), cur = mpCohort(weekId);
     const has = !!cur && !mpDeletable(cur);   // "closed" only once something is priced
     const pct = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+    // Excess return is the gap between two percentages, so it reads in percentage points.
+    // The cohort grid already said pp; the summary tiles were still saying %, which made
+    // the same quantity look like two different things on one screen.
+    const ppf = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}pp`;
     const cls = v => v == null ? "muted" : v >= 0 ? "up" : "down";
 
     const entry = `
@@ -5355,9 +5365,14 @@ function rsAdjustGrade(grade, rsResult) {
         <div id="mp-gen-err" class="mp-err"></div>
       </div>`;
 
+    // Picks per week comes from the ledger rather than the hardcoded 5 it used to assume —
+    // the sentence was simply wrong for anyone recording a different number.
+    const totalPicks = MODEL_PICKS.reduce((n, c) => n + c.picks.length, 0);
+    const perWeek = s.cohorts ? Math.round(totalPicks / s.cohorts) : 0;
     const warn = s.cohorts < MP_MIN_N ? `
-      <div class="mp-warn">共 ${s.cohorts} 批 · 样本不足，当前数字还不足以判断这个来源是否有效。
-      5 只 × ${s.cohorts} 周看起来是 ${s.cohorts * 5} 个仓位，但只有 ${s.cohorts} 个独立观测。</div>` : "";
+      <div class="mp-warn">共 ${s.cohorts} 批 · 样本不足，当前数字还不足以判断这个来源是否有效，还需 ${MP_MIN_N - s.cohorts} 批。
+      ${perWeek} 个 × ${s.cohorts} 周看起来是 ${totalPicks} 个仓位，但只有 ${s.cohorts} 个独立观测 ——
+      同一周的选股一起涨跌，它们不是彼此独立的证据。</div>` : "";
 
     const stats = `
       <div class="mp-stats">
@@ -5366,15 +5381,25 @@ function rsAdjustGrade(grade, rsResult) {
           ${s.rows.map(r => `
             <div class="mp-stat${r.key === MP_PRIMARY ? " primary" : ""}">
               <div class="mp-stat-label">${r.weeks} 周${r.key === MP_PRIMARY ? " · 主口径" : ""}</div>
-              <div class="mp-stat-val num ${cls(r.avg)}">${pct(r.avg)}</div>
+              <div class="mp-stat-val num ${cls(r.avg)}">${ppf(r.avg)}</div>
               <div class="mp-stat-sub">${r.N ? `批次胜率 ${r.win.toFixed(0)}% · N=${r.N}` : "尚无到期批次"}</div>
               ${r.pickN ? `<div class="mp-stat-sub2">
-                个股胜率 ${r.pickWin.toFixed(0)}% (${r.pickN} 只)<br>
-                中位 <span class="num ${cls(r.pickMed)}">${pct(r.pickMed)}</span> · 均值 <span class="num ${cls(r.pickAvg)}">${pct(r.pickAvg)}</span>
+                个股胜率 ${r.pickWin.toFixed(0)}% (${r.pickN} 个)<br>
+                中位 <span class="num ${cls(r.pickMed)}">${ppf(r.pickMed)}</span> · 均值 <span class="num ${cls(r.pickAvg)}">${ppf(r.pickAvg)}</span>
               </div>` : ""}
             </div>`).join("")}
         </div>
-        <div class="mp-note">均值远高于中位数，说明超额来自极少数个股，不是稳定的选股能力。</div>
+        ${(() => {
+          // Was printed unconditionally — a claim about the data that stayed on screen
+          // even when the data said the opposite. Now it appears only when the primary
+          // horizon actually shows that spread, and it quotes the two numbers.
+          const pr = s.rows.find(r => r.key === MP_PRIMARY);
+          if (!pr || pr.pickN < 5 || pr.pickAvg == null || pr.pickMed == null) return "";
+          const gap = pr.pickAvg - pr.pickMed;
+          if (gap < 2) return "";
+          return `<div class="mp-note">${MP_PRIMARY_WEEKS} 周口径下均值 ${ppf(pr.pickAvg)} 明显高于中位数 ${ppf(pr.pickMed)}，
+            说明超额来自极少数个股，不是稳定的选股能力。</div>`;
+        })()}
       </div>`;
 
     // Cohort-level breakdown across every horizon. The header can only ever show one
