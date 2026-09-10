@@ -5416,7 +5416,7 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="mp-cohort-id">${c.id}</span>
             <span class="mp-cohort-date">${c.weekOf}${c.source ? ` · ${c.source}` : ""}</span>
           </div>
-          <span class="mp-cohort-count">${c.picks.length} 只${
+          <span class="mp-cohort-count">${c.picks.length} 个${
             waiting ? ` · <span class="mp-cohort-waiting">${waiting} 待定价</span>` : ""}</span>
           <div class="mp-cohort-num">
             <span class="mp-cohort-hz">${MP_PRIMARY_WEEKS} 周</span>
