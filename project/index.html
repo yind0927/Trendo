@@ -3990,25 +3990,30 @@
      share a flex basis of one unit per trading day, and any gap would desynchronise them. */
   .mkp-bars { border:1px solid var(--line); border-radius:9px; overflow:hidden;
     background:var(--bg-2); }
-  .mkp-ribbon { display:flex; height:26px; }
-  .mkp-seg { position:relative; min-width:2px; overflow:hidden;
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:inset 0 1px 0 oklch(1 0 0 / .16), inset 0 -1px 0 oklch(0 0 0 / .12); }
-  .mkp-seg + .mkp-seg { border-left:1px solid oklch(0 0 0 / .35); }
-  .mkp-seg-txt { font-size:9.5px; font-weight:700; letter-spacing:.03em;
-    color:oklch(0.16 0.012 250 / .82); white-space:nowrap; padding:0 4px; }
-  .mkp-band { display:flex; height:6px; box-shadow:inset 0 1px 0 oklch(0 0 0 / .22); }
+  /* No text inside the band — a year of sessions leaves most segments too narrow for
+     any, and the durations read better in the transition list. */
+  .mkp-ribbon { display:flex; height:30px; }
+  .mkp-seg { position:relative; min-width:2px;
+    box-shadow:inset 0 1px 0 oklch(1 0 0 / .18), inset 0 -2px 4px -2px oklch(0 0 0 / .35); }
+  .mkp-seg + .mkp-seg { border-left:1px solid oklch(0 0 0 / .4); }
+  /* The stretch still running gets a lit right edge — the "you are here" mark. */
+  .mkp-seg.now::after { content:""; position:absolute; top:0; bottom:0; right:0; width:2px;
+    background:oklch(1 0 0 / .85); box-shadow:0 0 6px oklch(1 0 0 / .6); }
+  .mkp-band { display:flex; height:7px; box-shadow:inset 0 2px 3px -2px oklch(0 0 0 / .55); }
   .mkp-ticks { display:flex; height:16px; border-top:1px solid var(--line); background:var(--bg-1); }
   .mkp-tick { position:relative; overflow:hidden; display:flex; align-items:center; }
   .mkp-tick + .mkp-tick { border-left:1px solid var(--line); }
   .mkp-tick i { font-style:normal; font-family:var(--f-mono); font-size:9px;
     color:var(--fg-3); padding-left:4px; white-space:nowrap; }
 
-  .mkp-legend { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:7px; }
-  .mkp-legend-k { font-size:9.5px; color:var(--fg-3); letter-spacing:.05em; text-transform:uppercase; }
+  /* One row for both bands: round dots read as phases, squares as VIX levels. */
+  .mkp-legend { display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:9px; }
+  .mkp-legend-g { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .mkp-legend-k { font-size:9px; color:var(--fg-3); letter-spacing:.09em; text-transform:uppercase; }
   .mkp-key { display:inline-flex; align-items:center; gap:4px; font-size:9.5px;
-    color:var(--fg-3); font-family:var(--f-mono); }
-  .mkp-key i { width:9px; height:9px; border-radius:2px; display:inline-block; }
+    color:var(--fg-2); font-family:var(--f-mono); }
+  .mkp-key i { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .mkp-key i.sq { border-radius:2px; width:9px; height:9px; }
 
   .mkp-sub { display:flex; align-items:baseline; gap:7px; margin:18px 0 8px; }
   .mkp-sub span { font-size:12px; font-weight:600; color:var(--fg-1); }
@@ -4019,7 +4024,7 @@
   /* Grid, not flex: the date / move / reason columns line up down the list instead of
      each row finding its own widths. */
   .mkp-trs { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
-  .mkp-tr { display:grid; grid-template-columns:88px 116px 1fr; align-items:center;
+  .mkp-tr { display:grid; grid-template-columns:88px 112px 62px 1fr; align-items:center;
     gap:10px; padding:9px 12px; }
   .mkp-tr + .mkp-tr { border-top:1px solid var(--line); }
   .mkp-tr:nth-child(odd) { background:color-mix(in oklch, var(--fg-1) 2.5%, transparent); }
@@ -4027,6 +4032,7 @@
   .mkp-tr-move { display:inline-flex; align-items:center; gap:6px;
     font-size:11.5px; font-weight:700; color:var(--fg-1); }
   .mkp-tr-move i { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .mkp-tr-held { font-family:var(--f-mono); font-size:11px; color:var(--fg-2); text-align:right; }
   .mkp-tr-why { font-size:10px; color:var(--fg-3); font-family:var(--f-mono); }
   .mkp-tr-none { font-size:11px; color:var(--fg-3); padding:12px; }
 
@@ -4048,8 +4054,8 @@
   @media (max-width: 768px) {
     .mkp-scope { margin-left:0; flex-basis:100%; text-align:left; }
     .mkp-scope i { display:inline; margin-left:6px; }
-    .mkp-seg-txt { font-size:8.5px; }
-    .mkp-tr { grid-template-columns:70px 1fr; row-gap:3px; }
+    .mkp-legend { gap:12px; }
+    .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
     .mkp-tr-why { grid-column:1 / -1; }
     .mkp-th-row { grid-template-columns:100px 66px; row-gap:2px; }
     .mkp-th-note { grid-column:1 / -1; }
@@ -5747,8 +5753,8 @@
   </div>
 </div>
 
-<script src="data.js?v=730"></script>
-<script src="desk.js?v=730"></script>
+<script src="data.js?v=731"></script>
+<script src="desk.js?v=731"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
