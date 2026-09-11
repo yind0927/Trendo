@@ -13911,14 +13911,12 @@ function rsAdjustGrade(grade, rsResult) {
     // text, and the ones that fit crowded the band without saying anything the list below
     // does not say better. The bar's job is the SHAPE — when it turned and how long each
     // stretch ran relative to the rest; the durations live in the transition rows.
-    // The running stretch had only a thin white edge, which is not enough to say "this
-    // one is live" — the whole point of the bar is where you are NOW. It gets a lit
-    // outline and a pulsing cap instead.
+    // background-COLOR, not the `background` shorthand: the shorthand resets
+    // background-image, which silently threw away the depth gradient on .mkp-seg.
     const ribbon = ph.segs.map((sg, i) => `
       <span class="mkp-seg${i === ph.segs.length - 1 ? " now" : ""}"
-            style="flex:${sg.days.length};background:${sg.color}"
-            title="${sg.label} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日">${
-        i === ph.segs.length - 1 ? `<i class="mkp-pulse" style="background:${sg.color}"></i>` : ""}</span>`).join("");
+            style="flex:${sg.days.length};background-color:${sg.color}"
+            title="${sg.label} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日"></span>`).join("");
 
     // Colour comes from getRiskAxis itself. It used to be a second hand-written mapping
     // here, keyed on ids that did not exist (full/high/half vs the real
@@ -13934,7 +13932,7 @@ function rsAdjustGrade(grade, rsResult) {
       <span class="mkp-bar-k">VIX</span>
       <div class="mkp-band" aria-hidden="true">${ph.days.map(d => {
         if (d.vix != null) carried = getRiskAxis(d.vix).color;
-        return `<span style="flex:1;background:${carried || "var(--bg-3)"}"></span>`;
+        return `<span style="flex:1;background-color:${carried || "var(--bg-3)"}"></span>`;
       }).join("")}</div>` : "";
 
     const monthTicks = `
@@ -13991,6 +13989,11 @@ function rsAdjustGrade(grade, rsResult) {
           ${vixBand}
           <span></span>
           ${monthTicks}
+          <span></span>
+          <div class="mkp-axis">
+            <span>${ph.span.from}</span>
+            <span class="mkp-axis-now" style="color:${cur.color}">现在 · ${cur.label}</span>
+          </div>
         </div>
         ${legend}
         <div class="mkp-sub"><span>阶段转换</span><em>Transitions</em>${
