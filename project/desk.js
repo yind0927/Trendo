@@ -13972,7 +13972,8 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mkp-dot" style="background:${cur.color}"></span>
           <span class="mkp-now" style="color:${cur.color}">${cur.label}区</span>
           <span class="mkp-held"><b>${held}</b> 个交易日</span>
-          <span class="mkp-scope">${scope} · ${total} 个交易日</span>
+          <span class="mkp-scope">${total} 个交易日</span>
+          <span class="mkp-axis-now" style="color:${cur.color}">现在 · ${cur.label}</span>
         </div>
         ${pending ? `<div class="mkp-pending">
           <span class="mkp-pending-dot" style="background:${pending.color}"></span>
@@ -13989,11 +13990,6 @@ function rsAdjustGrade(grade, rsResult) {
           ${vixBand}
           <span></span>
           ${monthTicks}
-          <span></span>
-          <div class="mkp-axis">
-            <span>${ph.span.from}</span>
-            <span class="mkp-axis-now" style="color:${cur.color}">现在 · ${cur.label}</span>
-          </div>
         </div>
         ${legend}
         <div class="mkp-sub"><span>阶段转换</span><em>Transitions</em>${

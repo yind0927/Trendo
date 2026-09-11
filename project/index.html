@@ -4000,7 +4000,6 @@
   .mkp-held b { font-family:var(--f-mono); font-size:13px; color:var(--fg-1); font-weight:700; }
   .mkp-scope { margin-left:auto; text-align:right; font-size:10.5px; color:var(--fg-3);
     font-family:var(--f-mono); line-height:1.5; }
-  .mkp-scope i { display:block; font-style:normal; opacity:.65; }
 
   /* One rounded frame around both bands + the tick row, so they read as a single axis
      instead of three stacked strips. No gaps anywhere inside: the ribbon and the VIX band
@@ -4041,10 +4040,10 @@
   .mkp-seg.now::after { content:""; position:absolute; top:-2px; bottom:-2px; right:-1px;
     width:2px; border-radius:1px; background:oklch(1 0 0 / .92); }
 
-  /* Ends of the axis, stated rather than implied. */
-  .mkp-axis { display:flex; justify-content:space-between; align-items:baseline;
-    font-family:var(--f-mono); font-size:9.5px; color:var(--fg-3); }
-  .mkp-axis-now { font-weight:700; letter-spacing:.02em; }
+  /* The right end of the ribbon is the present; it's said in words in the header
+     rather than drawn as a marker on the band. */
+  .mkp-axis-now { font-family:var(--f-mono); font-size:10.5px; font-weight:700;
+    letter-spacing:.02em; }
   .mkp-band { display:flex; height:7px; border-radius:4px; overflow:hidden;
     box-shadow:inset 0 0 0 1px oklch(0 0 0 / .28); }
   .mkp-ticks { display:flex; height:13px; }
@@ -4099,8 +4098,9 @@
   .mkp-empty { font-size:11.5px; color:var(--fg-3); padding:14px 0; }
 
   @media (max-width: 768px) {
-    .mkp-scope { margin-left:0; flex-basis:100%; text-align:left; }
-    .mkp-scope i { display:inline; margin-left:6px; }
+    /* Keep the session count and the "现在 · X" tag on one line as a pair — giving the
+       count a full-width basis would strand the tag on a row of its own. */
+    .mkp-scope { margin-left:0; text-align:left; }
     .mkp-bars { grid-template-columns:26px 1fr; gap:6px 7px; }
     .mkp-legend { gap:11px; margin-left:33px; }
     .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
@@ -5809,8 +5809,8 @@
   </div>
 </div>
 
-<script src="data.js?v=736"></script>
-<script src="desk.js?v=736"></script>
+<script src="data.js?v=737"></script>
+<script src="desk.js?v=737"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
