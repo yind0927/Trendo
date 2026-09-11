@@ -13788,12 +13788,17 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // 轴B：风险容量（VIX）—— 仓位上限 + 止损宽度。只管"多少"，不管"买不买"。
+  // Colours come from the --vix-* ramp rather than the semantic tokens. The old set
+  // reused --up and --accent for the two calm bands — identical lightness, 37° of hue
+  // apart — and two reds for the two extreme ones, so four of the five were nearly
+  // indistinguishable in a band a few pixels tall. The ramp separates them by hue AND
+  // lightness. Still one source of truth: anything drawing a VIX band reads it from here.
   function getRiskAxis(vix) {
-    if (vix < 15)  return { id: "full",    label: "贪婪", color: "var(--up)",     posMax: 100, stop: "宽松 −10%" };
-    if (vix < 20)  return { id: "normal",  label: "中性", color: "var(--accent)", posMax: 75,  stop: "正常 −8%" };
-    if (vix < 30)  return { id: "reduced", label: "恐惧", color: "var(--orange)", posMax: 50,  stop: "收紧 −5%" };
-    if (vix < 50)  return { id: "minimal", label: "恐慌", color: "var(--down)",   posMax: 25,  stop: "极紧 −5%" };
-    return            { id: "panic",   label: "极恐", color: MKT_DEEP_DOWN,   posMax: 0,   stop: "清仓观望" };
+    if (vix < 15)  return { id: "full",    label: "贪婪", color: "var(--vix-calm)",   posMax: 100, stop: "宽松 −10%" };
+    if (vix < 20)  return { id: "normal",  label: "中性", color: "var(--vix-normal)", posMax: 75,  stop: "正常 −8%" };
+    if (vix < 30)  return { id: "reduced", label: "恐惧", color: "var(--vix-warn)",   posMax: 50,  stop: "收紧 −5%" };
+    if (vix < 50)  return { id: "minimal", label: "恐慌", color: "var(--vix-high)",   posMax: 25,  stop: "极紧 −5%" };
+    return           { id: "panic",   label: "极恐", color: "var(--vix-panic)",  posMax: 0,   stop: "清仓观望" };
   }
 
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
@@ -13906,19 +13911,31 @@ function rsAdjustGrade(grade, rsResult) {
     // text, and the ones that fit crowded the band without saying anything the list below
     // does not say better. The bar's job is the SHAPE — when it turned and how long each
     // stretch ran relative to the rest; the durations live in the transition rows.
+    // The running stretch had only a thin white edge, which is not enough to say "this
+    // one is live" — the whole point of the bar is where you are NOW. It gets a lit
+    // outline and a pulsing cap instead.
     const ribbon = ph.segs.map((sg, i) => `
       <span class="mkp-seg${i === ph.segs.length - 1 ? " now" : ""}"
             style="flex:${sg.days.length};background:${sg.color}"
-            title="${sg.label} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日"></span>`).join("");
+            title="${sg.label} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日">${
+        i === ph.segs.length - 1 ? `<i class="mkp-pulse" style="background:${sg.color}"></i>` : ""}</span>`).join("");
 
     // Colour comes from getRiskAxis itself. It used to be a second hand-written mapping
     // here, keyed on ids that did not exist (full/high/half vs the real
     // full/normal/reduced/minimal/panic), so every VIX above 15 fell through to red.
     const hasVix = ph.days.some(d => d.vix != null);
+    // A day with no VIX bar used to paint grey. VIX and VOO do not always publish the
+    // same sessions, and the newest VOO bar can land before the matching VIX one — which
+    // put a grey stub on the RIGHT end of the band, exactly where the eye goes first, as
+    // if the current reading were unknown. A gap in the quote is not a change in regime,
+    // so the last known band carries forward.
+    let carried = null;
     const vixBand = hasVix ? `
       <span class="mkp-bar-k">VIX</span>
-      <div class="mkp-band" aria-hidden="true">${ph.days.map(d => `
-        <span style="flex:1;background:${d.vix != null ? getRiskAxis(d.vix).color : "var(--bg-3)"}"></span>`).join("")}</div>` : "";
+      <div class="mkp-band" aria-hidden="true">${ph.days.map(d => {
+        if (d.vix != null) carried = getRiskAxis(d.vix).color;
+        return `<span style="flex:1;background:${carried || "var(--bg-3)"}"></span>`;
+      }).join("")}</div>` : "";
 
     const monthTicks = `
       <div class="mkp-ticks">${ph.months.map(m => `
@@ -13957,7 +13974,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mkp-dot" style="background:${cur.color}"></span>
           <span class="mkp-now" style="color:${cur.color}">${cur.label}区</span>
           <span class="mkp-held"><b>${held}</b> 个交易日</span>
-          <span class="mkp-scope">${scope} · ${total} 个交易日<i>截至 ${settledDate || ph.span.to} 收盘</i></span>
+          <span class="mkp-scope">${scope} · ${total} 个交易日</span>
         </div>
         ${pending ? `<div class="mkp-pending">
           <span class="mkp-pending-dot" style="background:${pending.color}"></span>
