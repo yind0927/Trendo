@@ -13889,7 +13889,7 @@ function rsAdjustGrade(grade, rsResult) {
     return rows.join("");
   }
 
-  function mkPhaseHTML(ph, axes, scope = "YTD") {
+  function mkPhaseHTML(ph, axes, scope = "YTD", pending = null, settledDate = null) {
     if (!ph) {
       return `<div class="mkt-card mkt-phase">
         ${atitle("阶段周期", "Market Cycle")}
@@ -13957,8 +13957,13 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mkp-dot" style="background:${cur.color}"></span>
           <span class="mkp-now" style="color:${cur.color}">${cur.label}区</span>
           <span class="mkp-held"><b>${held}</b> 个交易日</span>
-          <span class="mkp-scope">${scope} · ${total} 个交易日<i>${ph.span.from} → ${ph.span.to}</i></span>
+          <span class="mkp-scope">${scope} · ${total} 个交易日<i>截至 ${settledDate || ph.span.to} 收盘</i></span>
         </div>
+        ${pending ? `<div class="mkp-pending">
+          <span class="mkp-pending-dot" style="background:${pending.color}"></span>
+          按最新价 <b>${price(pending.price)}</b> 已进入<b style="color:${pending.color}">${pending.label}</b>区 ——
+          下方色带只画已收盘的交易日，这一笔要等收盘才计入。
+        </div>` : ""}
         <!-- A grid, so the two bands and the tick row share one left edge and one width.
              Vertical gaps between them cost nothing in alignment — only horizontal gaps
              would desynchronise the columns — so the bands can breathe and still line up
@@ -14020,7 +14025,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -14055,7 +14060,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${mkPlaybookHTML()}
         </details>
       </div>
-      ${mkPhaseHTML(phase, axes || {}, phaseScope)}
+      ${mkPhaseHTML(phase, axes || {}, phaseScope, pending, benchDate)}
       <div class="brief-card dd-card" id="drawdown-card"></div>
       <div class="mkt-module-sep"></div>
       <div id="sector-rotation" class="sect-section"></div>`;
@@ -14072,13 +14077,14 @@ function rsAdjustGrade(grade, rsResult) {
       // reaches the card.
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 660); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
-        fetch("/api/quote?stocks=%5EVIX,%5EVXN,SPY,QQQ,DIA,IWM").then(r => r.json()),
+        fetch("/api/quote?stocks=%5EVIX,%5EVXN,VOO,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
 
       // VIX / VXN
       let vix = 0, vxn = 0, vixChg = null, vxnChg = null, vixAbs = null, vxnAbs = null;
+      let vooLive = null;
       if (quoteRes.status === "fulfilled" && quoteRes.value?.results) {
         const q = quoteRes.value.results;
         if (q["^VIX"]) {
@@ -14087,6 +14093,11 @@ function rsAdjustGrade(grade, rsResult) {
           vixAbs = pc != null ? +(last - pc).toFixed(2) : null;
           vixChg = pc != null ? +((last - pc) / pc * 100).toFixed(2) : (q["^VIX"].changePct != null ? +q["^VIX"].changePct.toFixed(2) : null);
         }
+        // Live VOO. /api/history is cached 30 minutes server-side and its bar for today
+        // only exists once the session has settled, so the direction axis used to lag the
+        // market by up to half an hour — long enough to still read 做多 after VOO had
+        // already closed under EMA50. The quote endpoint is cached 45s.
+        if (q["VOO"]?.last > 0) vooLive = +q["VOO"].last.toFixed(2);
         if (q["^VXN"]) {
           const last = q["^VXN"].last, pc = q["^VXN"].prevClose;
           vxn    = +last.toFixed(2);
@@ -14098,7 +14109,7 @@ function rsAdjustGrade(grade, rsResult) {
       // RSI from VOO history (today + yesterday)
       let rsi = 0, rsiPrev = null;
       // VOO price + moving averages for the direction axis (轴A)
-      let benchPrice = null, benchMA50 = null, benchMA200 = null;
+      let benchPrice = null, benchMA50 = null, benchMA200 = null, benchSettled = null, benchDate = null;
       let vooDates = null, vooCloses = null, vixByDate = null;
       if (histRes.status === "fulfilled" && histRes.value?.results?.["VOO"]) {
         const raw = histRes.value.results["VOO"];
@@ -14109,7 +14120,8 @@ function rsAdjustGrade(grade, rsResult) {
           const rp = calcRSI(closes.slice(0, -1));
           if (rp != null) rsiPrev = rp;
         }
-        benchPrice = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
+        benchSettled = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
+        benchDate    = Object.keys(raw).sort().slice(-1)[0] || null;
         benchMA50  = calcEMA(closes, 50);
         benchMA200 = calcEMA(closes, 200);
         vooDates   = Object.keys(raw).sort();
@@ -14168,6 +14180,10 @@ function rsAdjustGrade(grade, rsResult) {
         }
       }
 
+      // The averages only move once a day, so a live price measured against yesterday's
+      // EMA is the standard read of "where are we now" — and it is the whole point of
+      // pulling VOO live.
+      benchPrice = vooLive ?? benchSettled;
       const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend });
       const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS);
       // Says "近一年" only when a full year is actually there; a shorter history is
@@ -14175,7 +14191,18 @@ function rsAdjustGrade(grade, rsResult) {
       const phaseScope = !phase ? ""
         : phase.days.length >= PHASE_SESSIONS ? "近一年"
         : `近 ${phase.days.length} 个交易日`;
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope });
+      // The ribbon is built from settled daily bars. If the live price already implies a
+      // different phase, that is a pending turn, not a completed one — say so rather than
+      // either back-dating it into the history or leaving the card looking stale.
+      const pending = (phase && benchPrice != null && benchMA50 != null)
+        ? (() => {
+            const live = getDirectionAxis(benchPrice, benchMA50, benchMA200);
+            return live.id !== phase.current.id
+              ? { label: live.label, color: live.color, price: benchPrice, settled: benchDate }
+              : null;
+          })()
+        : null;
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,
@@ -14237,7 +14264,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.innerHTML = `
       <div class="brief-head">
         <span class="brief-badge">AI</span>
-        <span class="brief-title">持仓分析 · Portfolio</span>
+        <span class="brief-title"><span class="mkt-sl-zh">持仓分析</span><span class="mkt-sl-en">Portfolio</span></span>
         ${newsTag}${_briefAgeTag(updatedAt)}
         <span class="brief-time">${timeStr} 更新</span>
         <button class="brief-toggle" title="收起/展开">▾</button>
@@ -14263,7 +14290,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.innerHTML = `
       <div class="brief-head">
         <span class="brief-badge">AI</span>
-        <span class="brief-title">持仓分析 · Portfolio</span>
+        <span class="brief-title"><span class="mkt-sl-zh">持仓分析</span><span class="mkt-sl-en">Portfolio</span></span>
         <button class="brief-gen-btn" style="margin-left:auto">生成分析</button>
       </div>`;
     el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchHoldingsBrief(false));
@@ -14335,7 +14362,7 @@ function rsAdjustGrade(grade, rsResult) {
       el.innerHTML = `
         <div class="brief-head">
           <span class="brief-badge">AI</span>
-          <span class="brief-title">持仓分析 · Portfolio</span>
+          <span class="brief-title"><span class="mkt-sl-zh">持仓分析</span><span class="mkt-sl-en">Portfolio</span></span>
           <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
         </div>
         <div class="brief-error">加载失败：${e.message}，点击重试</div>`;
@@ -14351,7 +14378,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.innerHTML = `
       <div class="brief-head">
         <span class="brief-badge">AI</span>
-        <span class="brief-title">今日简报 · Daily Brief</span>
+        <span class="brief-title"><span class="mkt-sl-zh">今日简报</span><span class="mkt-sl-en">Daily Brief</span></span>
         ${_briefAgeTag(updatedAt)}
         <span class="brief-time">${timeStr} 更新</span>
         <button class="brief-toggle" title="收起/展开">▾</button>
@@ -14379,7 +14406,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.innerHTML = `
       <div class="brief-head">
         <span class="brief-badge">AI</span>
-        <span class="brief-title">今日简报 · Daily Brief</span>
+        <span class="brief-title"><span class="mkt-sl-zh">今日简报</span><span class="mkt-sl-en">Daily Brief</span></span>
         <button class="brief-gen-btn" style="margin-left:auto">生成简报</button>
       </div>`;
     el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchMarketBrief(false, mktCtx));
@@ -14425,7 +14452,7 @@ function rsAdjustGrade(grade, rsResult) {
       el.innerHTML = `
         <div class="brief-head">
           <span class="brief-badge">AI</span>
-          <span class="brief-title">今日简报 · Daily Brief</span>
+          <span class="brief-title"><span class="mkt-sl-zh">今日简报</span><span class="mkt-sl-en">Daily Brief</span></span>
           <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
         </div>
         <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;
@@ -14524,7 +14551,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.innerHTML = `
       <div class="brief-head">
         <span class="brief-badge" style="background:var(--down)">历史</span>
-        <span class="brief-title">历史回撤参考 · Drawdown Analogs</span>
+        <span class="brief-title"><span class="mkt-sl-zh">历史回撤参考</span><span class="mkt-sl-en">Drawdown Analogs</span></span>
         ${_briefAgeTag(updatedAt)}
         <span class="brief-time">${timeStr} 更新</span>
         <button class="brief-toggle" title="收起/展开">▾</button>
@@ -14556,7 +14583,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.innerHTML = `
       <div class="brief-head">
         <span class="brief-badge" style="background:var(--down)">历史</span>
-        <span class="brief-title">历史回撤参考 · Drawdown Analogs</span>
+        <span class="brief-title"><span class="mkt-sl-zh">历史回撤参考</span><span class="mkt-sl-en">Drawdown Analogs</span></span>
         <button class="brief-gen-btn" style="margin-left:auto">生成分析</button>
       </div>`;
     el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchDrawdown(false));
@@ -14591,7 +14618,7 @@ function rsAdjustGrade(grade, rsResult) {
       el.innerHTML = `
         <div class="brief-head">
           <span class="brief-badge" style="background:var(--down)">历史</span>
-          <span class="brief-title">历史回撤参考 · Drawdown Analogs</span>
+          <span class="brief-title"><span class="mkt-sl-zh">历史回撤参考</span><span class="mkt-sl-en">Drawdown Analogs</span></span>
           <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
         </div>
         <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;

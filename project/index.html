@@ -2662,10 +2662,9 @@
     background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
     min-width: 0;
   }
-  .analytics-card-title { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-  .analytics-card-title::before { content: ""; display: block; width: 3px; height: 14px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
-  .analytics-card-title .mkt-sl-zh { font-weight: 700; color: var(--fg-1); }
-  .analytics-card-title .mkt-sl-en { font-size: 9.5px; font-weight: 600; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; }
+  .analytics-card-title { display: flex; align-items: baseline; gap: 8px; }
+  .analytics-card-title::before { content: ""; display: block; width: 3px; height: 13px; background: var(--accent); border-radius: 1px; flex-shrink: 0; align-self: center; }
+  /* sizes come from .mkt-sl-zh / .mkt-sl-en — see the single definition below */
   .analytics-card-sub { font-size: 10.5px; color: var(--fg-3); margin-top: 6px; font-family: var(--f-mono); }
   /* Analytics 页上半部分（复盘概览/收益与盈亏）的 .sim-astat 卡片风格对齐「出场质量分析」
      模块的 .eq-summary-card——描边填充卡改成纯色填充 + teal 短刻度线标签，跟页面下半部分
@@ -3907,7 +3906,7 @@
     /* ---- Analytics ---- */
     #analytics-view { padding: 12px 12px calc(126px + env(safe-area-inset-bottom)); }
     .analytics-card { padding: 12px 13px; }
-    .analytics-card-title { font-size: 10.5px; }
+    .mkt-sl-zh { font-size: 11.5px; }
     .analytics-chart-row { flex-direction: column; gap: 8px; margin-bottom: 10px; }
     .bottom-grid { grid-template-columns: 1fr; }
     /* 7 columns in ~360px means a day cell is only ~48px wide — these stay small by
@@ -4002,6 +4001,16 @@
      so they share a left edge and a width exactly; the vertical gap between them costs
      nothing in alignment, which is what lets them read as separate bars instead of one
      fused block. */
+  /* The live price already implies a different phase than the last settled bar. Stated
+     as a pending turn — the ribbon stays on closed sessions rather than back-dating it. */
+  .mkp-pending { display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+    font-size:11px; line-height:1.6; color:var(--fg-2);
+    background:color-mix(in oklch, var(--warn) 10%, transparent);
+    border:1px solid color-mix(in oklch, var(--warn) 30%, transparent);
+    border-radius:8px; padding:8px 11px; margin-bottom:12px; }
+  .mkp-pending b { font-family:var(--f-mono); color:var(--fg-1); }
+  .mkp-pending-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+
   .mkp-bars { display:grid; grid-template-columns:32px 1fr; gap:7px 9px; align-items:center; }
   .mkp-bar-k { font-size:9px; letter-spacing:.09em; text-transform:uppercase;
     color:var(--fg-3); text-align:right; }
@@ -4033,7 +4042,7 @@
   .mkp-key i.sq { border-radius:2px; width:9px; height:9px; }
 
   .mkp-sub { display:flex; align-items:baseline; gap:7px; margin:18px 0 8px; }
-  .mkp-sub span { font-size:12px; font-weight:600; color:var(--fg-1); }
+  .mkp-sub span { font-size:11px; font-weight:600; color:var(--fg-1); }
   .mkp-sub em { font-style:normal; font-size:9.5px; color:var(--fg-3);
     text-transform:uppercase; letter-spacing:.07em; }
   .mkp-filtered { margin-left:auto; font-size:10px; color:var(--fg-3); font-family:var(--f-mono); }
@@ -4092,10 +4101,15 @@
   .mkt-pb-active td:last-child { border-radius: 0 4px 4px 0; }
   .mkt-now { font-size: 9px; font-weight: 700; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; margin-left: 5px; letter-spacing: 0.05em; vertical-align: middle; }
   .mkt-strategy { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 20px; }
-  .mkt-section-label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 11px; }
-  .mkt-section-label::before { content: ""; display: block; width: 3px; height: 14px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
-  .mkt-sl-zh { font-weight: 700; color: var(--fg-1); }
-  .mkt-sl-en { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; }
+  .mkt-section-label { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+  .mkt-section-label::before { content: ""; display: block; width: 3px; height: 13px; background: var(--accent); border-radius: 1px; flex-shrink: 0; align-self: center; }
+  /* ── Module title, one definition ──
+     This zh/en pair had FOUR parallel rule sets (.analytics-card-title, bare, .sect-title,
+     and whatever font-size the container happened to carry), so identical markup rendered
+     at 11px in one card and 12px in the next, with the English at 9px or 9.5px depending
+     on where it sat. Sizes live on the children now, so no container can change them. */
+  .mkt-sl-zh { font-size: 12.5px; font-weight: 700; color: var(--fg-1); letter-spacing: -0.005em; }
+  .mkt-sl-en { font-size: 9.5px; font-weight: 600; letter-spacing: 0.09em; color: var(--fg-3); text-transform: uppercase; }
   .mkt-strat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .mkt-strat-card { border: 1px solid; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
   .mkt-strat-main { font-size: 15px; font-weight: 700; }
@@ -4127,7 +4141,7 @@
   .mkt-axis-gate.block { color: var(--down); }
   .mkt-axis-gate.dim { color: var(--fg-3); }
   .mkt-playbook-ref { margin-top: 16px; margin-bottom: 20px; }
-  .mkt-playbook-ref summary { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--fg-3); text-transform: uppercase; cursor: pointer; padding: 8px 0; list-style: revert; }
+  .mkt-playbook-ref summary { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--fg-2); cursor: pointer; padding: 8px 0; list-style: revert; }
   .mkt-playbook-ref summary:hover { color: var(--fg-2); }
   .mkt-playbook-ref[class] details > .mkt-playbook { margin-top: 10px; }
   .pb3-section { margin-bottom: 14px; }
@@ -4139,7 +4153,11 @@
   .brief-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px; margin-bottom: 0; }
   .brief-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
   .brief-badge { font-size: 8px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; background: var(--accent); color: oklch(0.14 0.012 250); border-radius: 3px; padding: 1px 4px; flex-shrink: 0; }
-  .brief-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-2); font-family: var(--f-mono); }
+  /* Same tier as the other module titles — it was 10px mono uppercase while its
+     neighbours were 12.5px, which read as a caption rather than a heading. */
+  /* Now just the row that holds the shared zh/en pair, so these headings are sized by
+     exactly the same rule as every other module title on the page. */
+  .brief-title { display: inline-flex; align-items: baseline; gap: 8px; }
   .brief-time { font-size: 9px; color: var(--fg-3); font-family: var(--f-mono); margin-left: auto; }
   .brief-toggle { all: unset; cursor: pointer; color: var(--fg-3); font-size: 15px; padding: 1px 5px; border-radius: 4px; line-height: 1; transition: transform .2s ease, color .15s; display: inline-block; }
   .brief-toggle:hover { color: var(--fg-1); background: var(--bg-2); }
@@ -4220,10 +4238,9 @@
   .sect-section { margin-top: 24px; }
   .sect-head { display: flex; flex-direction: column; margin-bottom: 12px; gap: 8px; }
   .sect-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .sect-title { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .sect-title { display: flex; align-items: baseline; gap: 8px; }
   .sect-title::before { content: ""; display: block; width: 3px; height: 14px; background: var(--accent); border-radius: 1px; flex-shrink: 0; }
-  .sect-title .mkt-sl-zh { font-weight: 700; color: var(--fg-1); }
-  .sect-title .mkt-sl-en { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; }
+  /* sizes come from the shared .mkt-sl-* definition */
   .voo-bench-strip { display: flex; align-items: center; gap: 7px; padding: 5px 12px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 8px; }
   .voo-bench-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--fg-2); margin-right: 3px; }
   .voo-bench-stat { font-family: var(--f-mono); font-size: 12px; font-weight: 600; }
@@ -5771,8 +5788,8 @@
   </div>
 </div>
 
-<script src="data.js?v=733"></script>
-<script src="desk.js?v=733"></script>
+<script src="data.js?v=734"></script>
+<script src="desk.js?v=734"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
