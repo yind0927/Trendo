@@ -1992,6 +1992,28 @@
   .mp-note { font-size:10.5px; color:var(--fg-3); margin-top:8px; line-height:1.5; }
   .mp-stat-sub2 { font-size:10px; color:var(--fg-3); margin-top:6px; padding-top:6px;
                   border-top:1px solid var(--line); line-height:1.6; }
+  /* ── Closed-tab range + sort ──
+     Sits inside the closed filter row, pushed to the trailing edge so the chips (which
+     answer "how many") keep the reading order and the controls (which answer "show me
+     which") come after. */
+  .closed-tools-mount { display:flex; align-items:center; gap:8px; margin-left:auto; }
+  .ct-field { display:flex; align-items:center; gap:5px; }
+  .ct-lbl { font-size:10px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.06em; }
+  .ct-select { background:var(--bg-2); color:var(--fg-1); border:1px solid var(--line);
+    border-radius:7px; padding:4px 7px; font-size:11px; font-family:var(--f-sans);
+    cursor:pointer; max-width:112px; }
+  .ct-select:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .ct-dir { background:var(--bg-2); color:var(--fg-2); border:1px solid var(--line);
+    border-radius:7px; width:26px; height:26px; line-height:1; font-size:12px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; }
+  .ct-dir:hover { color:var(--fg-1); border-color:var(--accent); }
+  @media (max-width: 768px) {
+    /* Full width on its own row: three controls cannot share a line with the chips at
+       390px without one of them being clipped. */
+    .closed-tools-mount { margin-left:0; flex-basis:100%; gap:7px; }
+    .ct-field { flex:1; min-width:0; }
+    .ct-select { flex:1; min-width:0; max-width:none; }
+  }
   .mp-extremes { font-size:11px; color:var(--fg-2); margin-top:8px; }
   /* The benchmark leg of every 超额 on the card, priced and dated so the subtraction can
      be checked rather than taken on trust. */
@@ -4890,6 +4912,10 @@
         <button class="filter-chip" data-filter-closed="profit">盈利 <span class="c" id="c-cl-profit">0</span></button>
         <button class="filter-chip" data-filter-closed="loss">亏损 <span class="c" id="c-cl-loss">0</span></button>
         <button class="filter-chip" data-filter-closed="even">持平 <span class="c" id="c-cl-even">0</span></button>
+        <!-- Range + sort controls live INSIDE the closed filter row so they inherit its
+             show/hide. A second element toggling its own `display` next to this one is
+             exactly the two-writers bug that hit the sim exit-quality module twice. -->
+        <div class="closed-tools-mount" id="closed-tools-mount"></div>
         <button class="filter-chip poster-chip" id="poster-open-btn" title="为平台外完成的交易生成一张海报">添加平仓海报</button>
       </div>
     </div>
@@ -5216,6 +5242,7 @@
         <button class="filter-chip" data-simfilter-closed="profit">盈利 <span class="c" id="sim-c-cl-profit">0</span></button>
         <button class="filter-chip" data-simfilter-closed="loss">亏损 <span class="c" id="sim-c-cl-loss">0</span></button>
         <button class="filter-chip" data-simfilter-closed="even">持平 <span class="c" id="sim-c-cl-even">0</span></button>
+        <div class="closed-tools-mount" id="sim-closed-tools-mount"></div>
       </div>
     </div>
     <div style="overflow-x:auto">
@@ -5829,8 +5856,8 @@
   </div>
 </div>
 
-<script src="data.js?v=738"></script>
-<script src="desk.js?v=738"></script>
+<script src="data.js?v=739"></script>
+<script src="desk.js?v=739"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

@@ -1123,6 +1123,10 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   let sortKey = "pnl", sortDir = -1, filter = "all", closedFilter = "all", query = "", selectedSym = null;
+  // Closed tab only: which window of closed trades to show. Sorting reuses sortKey/sortDir
+  // so the select and the column headers drive one piece of state rather than two that can
+  // disagree. Default is 平仓时间 newest-first — a closed ledger reads as a log.
+  let closedRange = "all";
   // selectedEntry/selectedCost disambiguate which SPECIFIC trade is open in the drawer when
   // a symbol has more than one closed trade (e.g. AAPL closed last month, reopened+closed
   // again this month) — selectedSym alone can't tell those two records apart.
@@ -1165,6 +1169,7 @@ function rsAdjustGrade(grade, rsResult) {
   let simActiveTab = "open";
   let simSortKey = "pnl", simSortDir = -1;
   let simFilter = "all", simClosedFilter = "all", simQuery = "";
+  let simClosedRange = "all";
   let simHoldingsViewMode = localStorage.getItem("trendo_sim_holdings_view") || "list";
   let simSelectedSym = null;
   let simSelectedEntry = null, simSelectedCost = null;
@@ -1886,6 +1891,53 @@ function rsAdjustGrade(grade, rsResult) {
   // hidden on desktop + mobile — still editable in the drawer + shown on the level bar.
   const visTableCols = (isClosed) => COLS.filter(c => c.on && !(isClosed && c.closedHide));
 
+  // ── Closed-tab range + sort controls ──────────────────────────────────────
+  // Shared by the real book and the sim book. The two closed tabs are the same view over
+  // different arrays; writing this twice is how the same logic drifts apart (v596).
+  // Card view has no column headers at all, so before this the only way to reorder a
+  // closed list was to switch to list view and click a header.
+  const CLOSED_RANGES = [["all", "全部"], ["30d", "近 30 天"], ["90d", "近 90 天"], ["ytd", "今年"]];
+  const CLOSED_SORTS  = [["closedAt", "平仓时间"], ["pnl", "盈亏金额"], ["pnlpct", "收益率"],
+                         ["rmult", "R 倍数"], ["days", "持仓天数"]];
+
+  // Measured on the ET trading date — the same clock closedAt is written with. Comparing
+  // "YYYY-MM-DD" strings is safe here and sidesteps the UTC-parsing trap that shifted
+  // dates by a day in v584.
+  function closedInRange(h, range) {
+    if (range === "all" || !h.closedAt) return true;
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    if (range === "ytd") return h.closedAt >= `${today.slice(0, 4)}-01-01`;
+    const from = new Date(`${today}T00:00:00Z`);
+    from.setUTCDate(from.getUTCDate() - (range === "30d" ? 30 : 90));
+    return h.closedAt >= from.toISOString().slice(0, 10);
+  }
+
+  // Return % is DERIVED, never read off the record: a merged multi-leg trade carries the
+  // first leg's pnlPct, which is not the trade's return.
+  const CLOSED_KEYFN = {
+    closedAt: h => h.closedAt || "",
+    pnl:      h => h.pnlFinal ?? h.pnlDollar ?? 0,
+    pnlpct:   h => (h.cost > 0 && h.qty > 0) ? (h.pnlFinal ?? h.pnlDollar ?? 0) / (h.cost * h.qty) : 0,
+    rmult:    h => h.rMult ?? 0,
+    days:     h => h.days ?? 0,
+  };
+
+  function closedToolsHTML(pfx, sortKey, dir, range) {
+    const opts = (list, cur) => list.map(([k, l]) =>
+      `<option value="${k}"${k === cur ? " selected" : ""}>${l}</option>`).join("");
+    // A column header click can set a sort key this menu doesn't offer. Saying so is
+    // better than silently showing whichever option happens to sit first.
+    const known = CLOSED_SORTS.some(([k]) => k === sortKey);
+    return `
+      <label class="ct-field"><span class="ct-lbl">区间</span>
+        <select class="ct-select" id="${pfx}closed-range">${opts(CLOSED_RANGES, range)}</select></label>
+      <label class="ct-field"><span class="ct-lbl">排序</span>
+        <select class="ct-select" id="${pfx}closed-sort">${
+          known ? "" : `<option value="__col" selected>按表头列</option>`}${opts(CLOSED_SORTS, sortKey)}</select></label>
+      <button class="ct-dir" id="${pfx}closed-dir" aria-label="切换升降序"
+        title="${dir < 0 ? "当前降序，点击改升序" : "当前升序，点击改降序"}">${dir < 0 ? "↓" : "↑"}</button>`;
+  }
+
   function renderTable() {
     // header
     const thead = $("#thead-row");
@@ -1913,6 +1965,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (closedFilter === "profit" && pnl <= 0) return false;
         if (closedFilter === "loss"   && pnl >= 0) return false;
         if (closedFilter === "even"   && pnl !== 0) return false;
+        if (!closedInRange(h, closedRange)) return false;
       } else {
         if (filter === "equity" && h.kind !== "equity") return false;
         if (filter === "etf"    && h.kind !== "etf") return false;
@@ -1927,7 +1980,7 @@ function rsAdjustGrade(grade, rsResult) {
       return true;
     });
 
-    const keyFn = {
+    const keyFn = (activeTab === "closed" ? CLOSED_KEYFN[sortKey] : null) || {
       tk: h => h.sym, bxbars: h => h.bx.dailyBars, cost: h => h.cost, last: h => h.last,
       qty: h => h.qty, pnl: h => h.pnlDollar, stop: h => h.stop, target: h => h.target,
       progstatus: h => progressBucket(h),
@@ -2032,11 +2085,17 @@ function rsAdjustGrade(grade, rsResult) {
     $("#c-open").textContent   = HOLDINGS.length;
     $("#c-closed").textContent = _closedG.length;
     if (activeTab === "closed") {
-      const profit = _closedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
-      const loss   = _closedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length;
-      const even   = _closedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length;
+      // Chip counts follow the range, or "全部 30" would sit above a list of 5. The tab
+      // counter (#c-closed) stays the unfiltered total — that one answers "how many
+      // closed trades exist", not "how many are on screen".
+      const _inR = _closedG.filter(h => closedInRange(h, closedRange));
+      const profit = _inR.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length;
+      const loss   = _inR.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length;
+      const even   = _inR.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length;
       const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
-      set("#c-cl-all",    _closedG.length);
+      const _mount = $("#closed-tools-mount");
+      if (_mount) _mount.innerHTML = closedToolsHTML("", sortKey, sortDir, closedRange);
+      set("#c-cl-all",    _inR.length);
       set("#c-cl-profit", profit);
       set("#c-cl-loss",   loss);
       set("#c-cl-even",   even);
@@ -3401,6 +3460,30 @@ function rsAdjustGrade(grade, rsResult) {
     renderEvents();
   }
 
+  // Range + sort controls for both closed tabs. Delegated on document once, because the
+  // mounts are rebuilt on every render — listeners bound to the elements themselves would
+  // be thrown away with them.
+  function wireClosedTools() {
+    const apply = (sim, fn) => {
+      if (sim) { fn("sim"); renderSimTable(); } else { fn("real"); renderTable(); }
+    };
+    document.addEventListener("change", e => {
+      const sel = e.target.closest?.("select.ct-select"); if (!sel) return;
+      const sim = sel.id.startsWith("sim-");
+      if (/closed-range$/.test(sel.id)) {
+        apply(sim, who => { if (who === "sim") simClosedRange = sel.value; else closedRange = sel.value; });
+      } else if (/closed-sort$/.test(sel.id)) {
+        if (sel.value === "__col") return;     // placeholder for a header-driven sort
+        apply(sim, who => { if (who === "sim") simSortKey = sel.value; else sortKey = sel.value; });
+      }
+    });
+    document.addEventListener("click", e => {
+      const btn = e.target.closest?.("button.ct-dir"); if (!btn) return;
+      const sim = btn.id.startsWith("sim-");
+      apply(sim, who => { if (who === "sim") simSortDir *= -1; else sortDir *= -1; });
+    });
+  }
+
   // ============ TAB SWITCHING ============
   function wireTableTabs() {
     $$("#desk-view .panel-head .tab").forEach(tab => {
@@ -3410,6 +3493,10 @@ function rsAdjustGrade(grade, rsResult) {
         activeTab = tab.dataset.tab;
         filter = "all"; closedFilter = "all";
         const isOpen = activeTab === "open";
+        // closedAt has no meaning for an open position and pnl-desc has none for a ledger,
+        // so each tab lands on its own sensible default instead of carrying the other's over.
+        sortKey = isOpen ? "pnl" : "closedAt"; sortDir = -1;
+        if (isOpen) closedRange = "all";
         const fo = $("#filters-open"), fc = $("#filters-closed");
         if (fo) fo.style.display = isOpen ? "" : "none";
         if (fc) fc.style.display = isOpen ? "none" : "";
@@ -10110,6 +10197,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (simClosedFilter === "profit" && pnl <= 0) return false;
         if (simClosedFilter === "loss"   && pnl >= 0) return false;
         if (simClosedFilter === "even"   && pnl !== 0) return false;
+        if (!closedInRange(h, simClosedRange)) return false;
       } else {
         if (simFilter === "equity" && h.kind !== "equity") return false;
         if (simFilter === "etf"    && h.kind !== "etf") return false;
@@ -10125,7 +10213,7 @@ function rsAdjustGrade(grade, rsResult) {
       return true;
     });
 
-    const keyFn = {
+    const keyFn = (simActiveTab === "closed" ? CLOSED_KEYFN[simSortKey] : null) || {
       tk: h => h.sym, bxbars: h => h.bx?.dailyBars, cost: h => h.cost, last: h => h.last,
       qty: h => h.qty, pnl: h => h.pnlDollar, stop: h => h.stop, target: h => h.target,
       progstatus: h => progressBucket(h),
@@ -10151,10 +10239,13 @@ function rsAdjustGrade(grade, rsResult) {
     setCount("sim-c-open",   SIM_HOLDINGS.length);
     setCount("sim-c-closed", _simClosedG.length);
     if (simActiveTab === "closed") {
-      setCount("sim-c-cl-all",    _simClosedG.length);
-      setCount("sim-c-cl-profit", _simClosedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
-      setCount("sim-c-cl-loss",   _simClosedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length);
-      setCount("sim-c-cl-even",   _simClosedG.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length);
+      const _inR = _simClosedG.filter(h => closedInRange(h, simClosedRange));
+      const _m = document.getElementById("sim-closed-tools-mount");
+      if (_m) _m.innerHTML = closedToolsHTML("sim-", simSortKey, simSortDir, simClosedRange);
+      setCount("sim-c-cl-all",    _inR.length);
+      setCount("sim-c-cl-profit", _inR.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) > 0).length);
+      setCount("sim-c-cl-loss",   _inR.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) < 0).length);
+      setCount("sim-c-cl-even",   _inR.filter(h => (h.pnlFinal ?? h.pnlDollar ?? 0) === 0).length);
     } else {
       setCount("sim-c-all",   SIM_HOLDINGS.length);
       setCount("sim-c-eq",    SIM_HOLDINGS.filter(h => h.kind === "equity").length);
@@ -10531,6 +10622,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
     if (tabOpen) tabOpen.addEventListener("click", () => {
       simActiveTab = "open"; simFilter = "all"; simClosedFilter = "all";
+      simSortKey = "pnl"; simSortDir = -1; simClosedRange = "all";
       tabOpen.classList.add("active"); if (tabClosed) tabClosed.classList.remove("active");
       const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");
       if (sfo) sfo.style.display = ""; if (sfc) sfc.style.display = "none";
@@ -10539,6 +10631,7 @@ function rsAdjustGrade(grade, rsResult) {
     });
     if (tabClosed) tabClosed.addEventListener("click", () => {
       simActiveTab = "closed"; simFilter = "all"; simClosedFilter = "all";
+      simSortKey = "closedAt"; simSortDir = -1;
       tabClosed.classList.add("active"); if (tabOpen) tabOpen.classList.remove("active");
       const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");
       if (sfo) sfo.style.display = "none"; if (sfc) sfc.style.display = "";
@@ -15350,6 +15443,7 @@ function rsAdjustGrade(grade, rsResult) {
   wireControls();
   wireTweaks();
   wireTableTabs();
+  wireClosedTools();
   wirePoster();
   wireNewPositionModal();
   $("#add-to-close")?.addEventListener("click",  () => closeModal("add-to-modal"));
