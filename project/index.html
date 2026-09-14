@@ -1993,6 +1993,26 @@
   .mp-stat-sub2 { font-size:10px; color:var(--fg-3); margin-top:6px; padding-top:6px;
                   border-top:1px solid var(--line); line-height:1.6; }
   .mp-extremes { font-size:11px; color:var(--fg-2); margin-top:8px; }
+  /* The benchmark leg of every 超额 on the card, priced and dated so the subtraction can
+     be checked rather than taken on trust. */
+  .mp-basis { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; margin-top:9px;
+    padding-top:9px; border-top:1px solid var(--line); font-size:10.5px; color:var(--fg-3);
+    font-family:var(--f-mono); }
+  .mp-basis b { color:var(--fg-1); font-weight:700; }
+  .mp-basis-cp { color:var(--fg-2); }
+  .mp-basis-note { margin-left:auto; font-family:var(--f-sans); opacity:.8; }
+  /* Method block: the rules the figures obey, collapsed by default. */
+  .mp-method { border:1px solid var(--line); border-radius:10px; margin-bottom:14px;
+    background:var(--bg-1); }
+  .mp-method > summary { list-style:none; cursor:pointer; padding:10px 14px; font-size:11.5px;
+    font-weight:600; color:var(--fg-2); display:flex; align-items:center; gap:7px; }
+  .mp-method > summary::-webkit-details-marker { display:none; }
+  .mp-method-arrow { font-size:9px; color:var(--fg-3); transition:transform .16s ease; }
+  .mp-method[open] .mp-method-arrow { transform:rotate(90deg); }
+  .mp-method-body { padding:0 14px 13px; display:flex; flex-direction:column; gap:8px;
+    font-size:11px; line-height:1.65; color:var(--fg-3); }
+  .mp-method-body b { color:var(--fg-1); font-weight:600; }
+  .mp-method-foot { padding-top:8px; border-top:1px solid var(--line); color:var(--fg-2); }
   .mp-cps { display:flex; gap:10px; flex-wrap:wrap; margin-top:7px; padding-top:7px;
             border-top:1px solid var(--line); }
   .mp-cp { font-size:10px; color:var(--fg-3); font-family:var(--f-sans); }
@@ -5809,8 +5829,8 @@
   </div>
 </div>
 
-<script src="data.js?v=737"></script>
-<script src="desk.js?v=737"></script>
+<script src="data.js?v=738"></script>
+<script src="desk.js?v=738"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

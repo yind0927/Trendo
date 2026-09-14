@@ -5214,6 +5214,18 @@ function rsAdjustGrade(grade, rsResult) {
   }
   const mpBenchReturn = (c, key) => mpRet(c.bench?.entryPrice, c.bench?.checkpoints?.[key]?.px);
 
+  // Which horizon the collapsed header should quote. The primary once it exists, so mature
+  // batches all read on the same yardstick; otherwise the longest horizon that HAS data.
+  // Pinning the header to the primary meant a batch that had finished its first week showed
+  // three dashes for another week — the result was computed and stored, just never surfaced
+  // anywhere the user could see without expanding.
+  function mpHeadlineKey(c) {
+    const done = MP_CHECKPOINTS.filter(([k]) =>
+      mpBenchReturn(c, k) != null && mpCohortReturn(c, k).pct != null);
+    if (!done.length) return MP_PRIMARY;
+    return done.some(([k]) => k === MP_PRIMARY) ? MP_PRIMARY : done[done.length - 1][0];
+  }
+
   // ── Manual entry ──────────────────────────────────────────────────────────
   // Accepts "AAPL MSFT NVDA" or "AAPL, MSFT, NVDA" — whatever shape it was pasted in.
   function mpAddCohort(raw, note) {
@@ -5283,12 +5295,21 @@ function rsAdjustGrade(grade, rsResult) {
             if (o != null) { t.entryPrice = o; t.entryDate = days[0]; changed = true; }
             else return;                       // no open yet — session hasn't started
           }
-          const src = j.adjResults?.[t.sym] || j.results?.[t.sym];
-          const series = days.map(d => src?.[d]).filter(v => v != null);
+          // One consistent basis for the whole series: adjusted closes only if they cover
+          // every session, raw closes otherwise. Two reasons this is not a `||` fallback
+          // per day. Mixing bases inside one series compares prices scaled differently.
+          // Worse, the old code compacted the holes out with .filter() — one missing
+          // adjclose shifted every later checkpoint onto the NEXT bar, and checkpoints are
+          // frozen once written, so a wrong number would have been permanent.
+          const adj = j.adjResults?.[t.sym];
+          const src = (adj && days.every(d => adj[d] != null)) ? adj : j.results?.[t.sym];
+          const series = days.map(d => src?.[d] ?? null);
           for (const [key, n] of MP_CHECKPOINTS) {
             if (t.checkpoints[key]) continue;  // frozen once written
             if (series.length > n && series[n] != null) {
-              t.checkpoints[key] = { px: series[n] }; changed = true;
+              // The date is stored alongside the price so the number can be checked
+              // against a chart later — a bare percentage is not verifiable.
+              t.checkpoints[key] = { px: series[n], d: days[n] }; changed = true;
             }
           }
           const lastDay = days[days.length - 1];
@@ -5423,7 +5444,9 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
 
     const body = MODEL_PICKS.length ? MODEL_PICKS.map(c => {
-      const r = mpCohortReturn(c, MP_PRIMARY), b = mpBenchReturn(c, MP_PRIMARY);
+      const hk = mpHeadlineKey(c);
+      const hWeeks = Math.round((MP_CHECKPOINTS.find(([k]) => k === hk)?.[1] || 0) / 5);
+      const r = mpCohortReturn(c, hk), b = mpBenchReturn(c, hk);
       const alpha = (r.pct != null && b != null) ? r.pct - b : null;
       const waiting = c.picks.filter(p => p.entryPrice == null).length;
       const live = c.picks
@@ -5444,14 +5467,31 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mp-cohort-count">${c.picks.length} 个${
             waiting ? ` · <span class="mp-cohort-waiting">${waiting} 待定价</span>` : ""}</span>
           <div class="mp-cohort-num">
-            <span class="mp-cohort-hz">${MP_PRIMARY_WEEKS} 周</span>
+            <span class="mp-cohort-hz"${hk === MP_PRIMARY ? "" : ' title="本批尚未走到主口径，先按已完成的最长周期显示"'
+              }>${hWeeks} 周${hk === MP_PRIMARY ? "" : " 已完成"}</span>
             <span class="mp-cohort-lbl">等权</span><span class="num ${cls(r.pct)}">${pct(r.pct)}</span>
             <span class="mp-cohort-lbl">VOO</span><span class="num ${cls(b)}">${pct(b)}</span>
-            <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${pct(alpha)}</span>
+            <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${ppf(alpha)}</span>
           </div>
           ${mpDeletable(c) ? `<button class="mp-del" data-mp-del="${c.id}" title="仅录入当天、尚未定价时可删">✕</button>` : ""}
         </summary>
         ${hzGrid(c)}
+        ${(() => {
+          // The benchmark side of every alpha on this card, priced and dated. The cohort
+          // return is visible name by name below; VOO's was not visible anywhere, so the
+          // 超额 figures had to be taken on trust.
+          const bp = c.bench?.entryPrice; if (bp == null) return "";
+          const done = MP_CHECKPOINTS.filter(([k]) => c.bench?.checkpoints?.[k]?.px != null);
+          return `<div class="mp-basis">
+            <b>${c.bench.sym || "VOO"}</b> 开盘入场 $${Number(bp).toFixed(2)} · ${c.bench.entryDate || "—"}
+            ${done.map(([k, n]) => {
+              const cp = c.bench.checkpoints[k];
+              return `<span class="mp-basis-cp" title="第 ${n} 个交易日${cp.d ? ` ${cp.d}` : ""}">${
+                Math.round(n / 5)}周 $${Number(cp.px).toFixed(2)}</span>`;
+            }).join("")}
+            <span class="mp-basis-note">超额 = 等权收益 − ${c.bench.sym || "VOO"} 同期收益（单位 pp）</span>
+          </div>`;
+        })()}
         ${live.length > 1 ? `<div class="mp-extremes">本批最好 <b>${live[0].sym}</b> <span class="num ${cls(live[0].v)}">${pct(live[0].v)}</span>
           · 最差 <b>${live[live.length-1].sym}</b> <span class="num ${cls(live[live.length-1].v)}">${pct(live[live.length-1].v)}</span></div>` : ""}
         <div class="mp-picks">
@@ -5473,8 +5513,14 @@ function rsAdjustGrade(grade, rsResult) {
               </div>
               <div class="mp-cps">
                 ${MP_CHECKPOINTS.map(([k, n]) => {
-                  const v = mpRet(p.entryPrice, p.checkpoints?.[k]?.px);
-                  return `<span class="mp-cp${k === MP_PRIMARY ? " primary" : ""}">${Math.round(n/5)}周 <span class="num ${cls(v)}">${pct(v)}</span></span>`;
+                  const cp = p.checkpoints?.[k];
+                  const v = mpRet(p.entryPrice, cp?.px);
+                  // The arithmetic behind the percentage, on the chip itself. Without the
+                  // two prices and the date, the number can't be checked against a chart.
+                  const tip = cp?.px != null && p.entryPrice != null
+                    ? `第 ${n} 个交易日${cp.d ? ` ${cp.d}` : ""} 收盘 $${Number(cp.px).toFixed(2)} ÷ 入场 $${Number(p.entryPrice).toFixed(2)} − 1`
+                    : `还没走满 ${n} 个交易日`;
+                  return `<span class="mp-cp${k === MP_PRIMARY ? " primary" : ""}" title="${tip}">${Math.round(n/5)}周 <span class="num ${cls(v)}">${pct(v)}</span></span>`;
                 }).join("")}
               </div>
             </div>`;
@@ -5483,7 +5529,28 @@ function rsAdjustGrade(grade, rsResult) {
       </details>`;
     }).join("") : `<div class="mp-empty">还没有任何批次。录入第一周的代码后，这里会按周累积。</div>`;
 
-    el.innerHTML = entry + warn + stats + body;
+    // The rules the numbers above obey. They were only ever written in code comments, so
+    // nothing on screen said where an entry price comes from or why a checkpoint never
+    // moves — which makes every figure above impossible to audit from the app itself.
+    const method = `
+      <details class="mp-method">
+        <summary><span class="mp-method-arrow">▸</span>计算方法 · Method</summary>
+        <div class="mp-method-body">
+          <div><b>入场价</b>　录入日当天或之后<b>第一个交易日的开盘价</b>，不是收盘价、也不是轮询时抓到的实时价。
+            开盘价在名单写下的那一刻就已确定，事后任何人都能对着 K 线核对，不含"什么时候刚好打开了 App"这种择时。</div>
+          <div><b>检查点</b>　按<b>K 线根数</b>而不是日历天数计：1 周 = 入场日之后第 5 根日线的收盘价，2 周 = 第 10 根，依此类推。
+            这样节假日和半日市无需特殊处理。走满才写入，<b>写入后永久冻结</b>，后续行情不会再改动它。</div>
+          <div><b>价格口径</b>　检查点收盘价优先用<b>复权价</b>（除息日会让未复权收益系统性偏低）；
+            若某个交易日缺复权价，该标的整条序列改用未复权收盘价，保证同一条序列基准一致。入场价始终是<b>未复权开盘价</b>——那是真实可成交的价格。</div>
+          <div><b>批次收益</b>　批内各标的<b>等权平均</b>，不按市值或价格加权。没拿到入场价或还没走满的标的<b>剔除并计数</b>，不当作 0 计入。</div>
+          <div><b>超额</b>　批次等权收益 − VOO 同期收益。两个百分比相减，单位是 <b>pp（百分点）</b>，不是 %。</div>
+          <div><b>样本</b>　独立观测数按<b>批次</b>算而不是按个股：同一周选出的股票一起涨跌，不是彼此独立的证据。
+            批次数少于 ${MP_MIN_N} 时，上方数字不足以判断来源是否有效。</div>
+          <div class="mp-method-foot">名单一经定价即锁定，不能增删 —— 事后能删掉表现差的那几周，上面所有数字就都失去意义了。</div>
+        </div>
+      </details>`;
+
+    el.innerHTML = entry + warn + stats + method + body;
   }
 
   // Delegated once on the panel so it survives every re-render.
