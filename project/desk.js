@@ -5561,6 +5561,8 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${ppf(alpha)}</span>
           </div>
           ${mpDeletable(c) ? `<button class="mp-del" data-mp-del="${c.id}" title="仅录入当天、尚未定价时可删">✕</button>` : ""}
+          ${live.length > 1 ? `<div class="mp-extremes">最好 <b>${live[0].sym}</b> <span class="num ${cls(live[0].v)}">${pct(live[0].v)}</span>
+            · 最差 <b>${live[live.length-1].sym}</b> <span class="num ${cls(live[live.length-1].v)}">${pct(live[live.length-1].v)}</span></div>` : ""}
         </summary>
         ${hzGrid(c)}
         ${(() => {
@@ -5579,8 +5581,6 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="mp-basis-note">超额 = 等权收益 − ${c.bench.sym || "VOO"} 同期收益（单位 pp）</span>
           </div>`;
         })()}
-        ${live.length > 1 ? `<div class="mp-extremes">本批最好 <b>${live[0].sym}</b> <span class="num ${cls(live[0].v)}">${pct(live[0].v)}</span>
-          · 最差 <b>${live[live.length-1].sym}</b> <span class="num ${cls(live[live.length-1].v)}">${pct(live[live.length-1].v)}</span></div>` : ""}
         <div class="mp-picks">
           ${c.picks.map(p => {
             const now = mpRet(p.entryPrice, p.lastPx);
@@ -5616,28 +5616,7 @@ function rsAdjustGrade(grade, rsResult) {
       </details>`;
     }).join("") : `<div class="mp-empty">还没有任何批次。录入第一周的代码后，这里会按周累积。</div>`;
 
-    // The rules the numbers above obey. They were only ever written in code comments, so
-    // nothing on screen said where an entry price comes from or why a checkpoint never
-    // moves — which makes every figure above impossible to audit from the app itself.
-    const method = `
-      <details class="mp-method">
-        <summary><span class="mp-method-arrow">▸</span>计算方法 · Method</summary>
-        <div class="mp-method-body">
-          <div><b>入场价</b>　录入日当天或之后<b>第一个交易日的开盘价</b>，不是收盘价、也不是轮询时抓到的实时价。
-            开盘价在名单写下的那一刻就已确定，事后任何人都能对着 K 线核对，不含"什么时候刚好打开了 App"这种择时。</div>
-          <div><b>检查点</b>　按<b>K 线根数</b>而不是日历天数计：1 周 = 入场日之后第 5 根日线的收盘价，2 周 = 第 10 根，依此类推。
-            这样节假日和半日市无需特殊处理。走满才写入，<b>写入后永久冻结</b>，后续行情不会再改动它。</div>
-          <div><b>价格口径</b>　检查点收盘价优先用<b>复权价</b>（除息日会让未复权收益系统性偏低）；
-            若某个交易日缺复权价，该标的整条序列改用未复权收盘价，保证同一条序列基准一致。入场价始终是<b>未复权开盘价</b>——那是真实可成交的价格。</div>
-          <div><b>批次收益</b>　批内各标的<b>等权平均</b>，不按市值或价格加权。没拿到入场价或还没走满的标的<b>剔除并计数</b>，不当作 0 计入。</div>
-          <div><b>超额</b>　批次等权收益 − VOO 同期收益。两个百分比相减，单位是 <b>pp（百分点）</b>，不是 %。</div>
-          <div><b>样本</b>　独立观测数按<b>批次</b>算而不是按个股：同一周选出的股票一起涨跌，不是彼此独立的证据。
-            批次数少于 ${MP_MIN_N} 时，上方数字不足以判断来源是否有效。</div>
-          <div class="mp-method-foot">名单一经定价即锁定，不能增删 —— 事后能删掉表现差的那几周，上面所有数字就都失去意义了。</div>
-        </div>
-      </details>`;
-
-    el.innerHTML = entry + warn + stats + method + body;
+    el.innerHTML = entry + warn + stats + body;
   }
 
   // Delegated once on the panel so it survives every re-render.
