@@ -4276,6 +4276,41 @@
   .brief-line:not(:first-child) { margin-top: 3px; }
   /* Drawdown analogs card */
   .dd-card { border-left-color: var(--down); margin-top: 16px; }
+  /* ── VIX study ──
+     Every row is read against the baseline row, so the "vs 基线" column is the one that
+     carries the argument; the raw median is there only to show the absolute level. */
+  .vs-card { border-left-color: var(--warn); margin-top: 16px; }
+  .vs-hz { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .vs-hz-lbl { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+  .vs-hz-btn { background: var(--bg-2); color: var(--fg-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 3px 9px; font-size: 11px; font-family: var(--f-mono); cursor: pointer; }
+  .vs-hz-btn.active { color: var(--warn); border-color: var(--warn); }
+  .vs-span { margin-left: auto; font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
+  .vs-base { font-size: 11.5px; line-height: 1.6; color: var(--fg-2); background: var(--bg-2);
+    border-radius: 8px; padding: 8px 11px; margin-bottom: 12px;
+    border-left: 2px solid color-mix(in oklch, var(--warn) 55%, transparent); }
+  .vs-block { margin-bottom: 14px; }
+  .vs-block-hd { font-size: 11.5px; font-weight: 700; color: var(--fg-1); margin-bottom: 6px; }
+  .vs-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .vs-table th { font-size: 9.5px; font-weight: 600; color: var(--fg-3); text-transform: uppercase;
+    letter-spacing: .05em; text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .vs-table th:first-child { text-align: left; }
+  .vs-table td { font-size: 11.5px; padding: 5px 6px; text-align: right;
+    border-bottom: 1px solid color-mix(in oklch, var(--line) 50%, transparent); }
+  .vs-table td:first-child { text-align: left; }
+  .vs-table th:first-child, .vs-table td:first-child { width: 40%; }
+  .vs-lbl { color: var(--fg-1); }
+  .vs-note { display: block; font-size: 9.5px; color: var(--fg-3); line-height: 1.4; margin-top: 2px; }
+  .vs-n { color: var(--fg-3); font-size: 10.5px; }
+  .vs-sub td:first-child { padding-left: 12px; color: var(--fg-2); }
+  .vs-caveat { font-size: 10.5px; line-height: 1.65; color: var(--fg-3); border-top: 1px solid var(--line);
+    padding-top: 9px; }
+  .vs-caveat b { color: var(--warn); font-weight: 600; }
+  @media (max-width: 768px) {
+    .vs-span { margin-left: 0; flex-basis: 100%; }
+    .vs-table th:first-child, .vs-table td:first-child { width: 34%; }
+    .vs-table th, .vs-table td { font-size: 10.5px; padding: 5px 3px; }
+  }
   .dd-events { font-size: 9.5px; color: var(--fg-3); font-family: var(--f-mono); line-height: 1.5; margin-top: 5px; }
   .dd-events span { font-weight: 700; }
   .dd-banner { font-size: 12px; line-height: 1.5; color: var(--fg-1); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; margin-bottom: 9px; }
@@ -5891,8 +5926,8 @@
   </div>
 </div>
 
-<script src="data.js?v=743"></script>
-<script src="desk.js?v=743"></script>
+<script src="data.js?v=744"></script>
+<script src="desk.js?v=744"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
