@@ -13961,7 +13961,7 @@ function rsAdjustGrade(grade, rsResult) {
     ];
     const axisC = [
       { label: "极端恐惧", color: "var(--up)",
-        cond: "VIX ≥ 30，<b>或</b> FGI < 25 且 RSI < 38<br><span class=\"pb3-gloss\">v745 起 VIX≥30 单独即可触发：历史上 VIX≥30 之后 60 个交易日的中位收益比基线高 4.4pp、胜率 78%，等 FGI/RSI 双双到极端太苛刻</span>",
+        cond: "VIX ≥ 30，<b>或</b> FGI < 25 且 RSI < 38<br><span class=\"pb3-gloss\">VIX≥30 单独即可触发：历史上 VIX≥30 之后 60 个交易日的中位收益比基线高 4.4pp、胜率 78%，等 FGI/RSI 双双到极端太苛刻</span>",
         action: "分批建仓候选：先用计划仓位的 1/3 试探，等 VIX 从高位回落再补后面两笔。仓位总量仍受风险容量轴压制——机会好和能拿多少是两件事。" },
       { label: "恐慌降温期", color: "var(--orange)",
         cond: "此前 60 日内 VIX 曾 > 30，且现已跌回 20 以下<br><span class=\"pb3-gloss\">恐慌已经过去、市场回到平静——容易的钱赚完了</span>",
@@ -14175,8 +14175,8 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
-  // 情绪轴 = 机会侧。v745 起 VIX 直接参与，依据是 VIX Study 用 ^GSPC 1990 年至今
-  // 9242 个交易日跑出来的实证结果（Market 页「VIX 与远期收益」卡片可复现）：
+  // 情绪轴 = 机会侧，VIX 直接参与。依据是用 ^GSPC 1990 年至今 9242 个交易日跑出的
+  // 实证结果：
   //
   //   · VIX ≥ 30 的任意一天，未来 60 个交易日中位收益比「任意一天」的基线高 4.4pp
   //     （胜率 78% vs 基线 70%）；事件版「上穿 30」n=34、独立样本，60 日 +3.9pp。
@@ -14443,7 +14443,7 @@ function rsAdjustGrade(grade, rsResult) {
               sent.tilt === "trim" || sent.tilt === "cooldown" ? "减仓倾斜"
               : sent.tilt === "accumulate" || sent.tilt === "scale" ? "加仓倾斜" : "中性"}</span></div>
             <div class="mkt-axis-desc">${sent.desc}</div>
-            ${sent.evidence ? `<div class="mkt-axis-evi" title="依据来自本页下方「VIX 与远期收益」卡片，可自行复现">${sent.evidence}</div>` : ""}
+            ${sent.evidence ? `<div class="mkt-axis-evi" title="依据：^GSPC 1990 年至今 9242 个交易日的历史统计">${sent.evidence}</div>` : ""}
             <div class="mkt-axis-gate dim">决定"何时止盈/反向"</div>
           </div>
         </div>
@@ -14490,7 +14490,6 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       ${mkPhaseHTML(phase, axes || {}, phaseScope, pending, benchDate)}
       <div class="brief-card dd-card" id="drawdown-card"></div>
-      <div class="brief-card vs-card" id="vixstudy-card"></div>
       <div class="mkt-module-sep"></div>
       <div id="sector-rotation" class="sect-section"></div>`;
   }
@@ -14648,7 +14647,6 @@ function rsAdjustGrade(grade, rsResult) {
       };
       _lastMktCtx = mktCtx;
       initDrawdownCard();
-      initVixStudyCard();
       fetchSectorData()
         .then(sectors => { _lastMktCtx = { ...mktCtx, sectors }; initMarketBriefCard(_lastMktCtx); })
         .catch(()    => initMarketBriefCard(mktCtx));
@@ -15062,137 +15060,6 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;
       el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchDrawdown(true));
-    }
-  }
-
-  // ============ VIX STUDY ============
-  // Settles the "high VIX = deploy, falling VIX = trim" question against real history
-  // instead of theory. Every bucket is shown NEXT TO the all-days baseline, because a
-  // forward return is meaningless until you know what an arbitrary day returns.
-  const VIXSTUDY_LS = "trendo_brief_v1_vixstudy";
-
-  function _vsRow(b, base, h, extraCls = "") {
-    const f = b?.fwd?.[h], bf = base?.fwd?.[h];
-    if (!f) return `<tr class="${extraCls}"><td>${b?.label || "—"}</td><td colspan="4" class="muted">样本不足</td></tr>`;
-    // vs 基线 is the number that actually answers the question; the raw median alone
-    // can look impressive purely because stocks drift up.
-    const edge = bf ? f.median - bf.median : null;
-    const cls = v => v == null ? "muted" : v >= 0 ? "up" : "down";
-    const sg = v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}`;
-    return `<tr class="${extraCls}">
-      <td class="vs-lbl">${b.label}${b.note ? `<span class="vs-note">${b.note}</span>` : ""}</td>
-      <td class="num ${cls(f.median)}">${sg(f.median)}%</td>
-      <td class="num ${cls(edge)}">${edge == null ? "—" : sg(edge) + "pp"}</td>
-      <td class="num">${f.win}%</td>
-      <td class="num vs-n">${f.n}</td>
-    </tr>`;
-  }
-
-  function _vsTable(title, rows, base, h) {
-    return `<div class="vs-block">
-      <div class="vs-block-hd">${title}</div>
-      <table class="vs-table">
-        <thead><tr><th>分组</th><th>中位涨跌</th><th>vs 基线</th><th>胜率</th><th>样本</th></tr></thead>
-        <tbody>${rows.map(r => _vsRow(r.b, base, h, r.cls || "")).join("")}</tbody>
-      </table>
-    </div>`;
-  }
-
-  let _vsHorizon = 20;
-
-  function _renderVixStudy(el, data) {
-    const st = data?.study; if (!st) return;
-    const h = st.horizons.includes(_vsHorizon) ? _vsHorizon : st.horizons[0];
-    const base = st.baseline;
-    const collapsed = localStorage.getItem("trendo_vixstudy_collapsed") === "1";
-
-    const bandRows = st.bands.map(b => ({ b }));
-    const dirRows = [{ b: st.direction.rising }, { b: st.direction.falling }];
-    const crossRows = [];
-    st.bandDirection.forEach(bd => {
-      crossRows.push({ b: bd.falling, cls: "vs-sub" });
-      crossRows.push({ b: bd.rising, cls: "vs-sub" });
-    });
-    const evRows = ["spike30", "cooled", "calmRise"].map(k => ({ b: st.events[k] }));
-
-    el.classList.toggle("collapsed", collapsed);
-    el.innerHTML = `
-      <div class="brief-head">
-        <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">实证</span>
-        <span class="brief-title"><span class="mkt-sl-zh">VIX 与远期收益</span><span class="mkt-sl-en">VIX Study</span></span>
-        ${_briefAgeTag(data.updatedAt)}
-        <button class="brief-refresh" title="重新计算" style="margin-left:auto">↻</button>
-        <button class="brief-toggle" title="收起/展开">▾</button>
-      </div>
-      <div class="brief-body">
-        <div class="vs-hz">
-          <span class="vs-hz-lbl">持有期</span>
-          ${st.horizons.map(n => `<button class="vs-hz-btn${n === h ? " active" : ""}" data-vs-h="${n}">${n} 日</button>`).join("")}
-          <span class="vs-span">${data.bench} · ${st.span.from} 起 · ${st.span.sessions} 个交易日</span>
-        </div>
-        <div class="vs-base">基线：任意一天买入并持有 ${h} 个交易日，中位
-          <b class="num ${base.fwd[h].median >= 0 ? "up" : "down"}">${base.fwd[h].median >= 0 ? "+" : ""}${base.fwd[h].median}%</b>
-          · 胜率 <b class="num">${base.fwd[h].win}%</b>。下面每一组都要跟这个数比才有意义。</div>
-        ${_vsTable("① 按 VIX 档位 —— 高 VIX 买入是不是真的更划算？", bandRows, base, h)}
-        ${_vsTable("② 按 VIX 方向 —— 同样的 VIX，升和降有区别吗？", dirRows, base, h)}
-        ${_vsTable("③ 档位 × 方向交叉 —— 「VIX 18 从高位回落」vs「VIX 18 从低位抬头」", crossRows, base, h)}
-        ${_vsTable("④ 事件触发", evRows, base, h)}
-        <div class="vs-caveat">
-          <b>读这张表要注意两件事。</b>
-          ① 样本高度重叠：相邻交易日的未来 ${h} 天几乎是同一段行情，所以「样本」那一列远远高于真正独立的观测数，
-          胜率看起来会比实际更确定 —— 小的差距（几个百分点）不构成证据，只有量级上的差别才值得据此改规则。
-          ② 基准是 ${data.bench} 的价格指数（不含股息），各组口径一致，所以组间差值可比，绝对值会略低于总回报。
-        </div>
-      </div>`;
-    el.querySelector(".brief-toggle")?.addEventListener("click", () => {
-      const c = el.classList.toggle("collapsed");
-      localStorage.setItem("trendo_vixstudy_collapsed", c ? "1" : "0");
-    });
-    el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchVixStudy(true));
-    $$("[data-vs-h]", el).forEach(btn => btn.addEventListener("click", () => {
-      _vsHorizon = +btn.dataset.vsH;
-      _renderVixStudy(el, data);
-    }));
-  }
-
-  function initVixStudyCard() {
-    const el = $("#vixstudy-card"); if (!el) return;
-    const saved = _loadBrief(VIXSTUDY_LS);
-    if (saved?.study) { _renderVixStudy(el, saved); return; }
-    el.innerHTML = `
-      <div class="brief-head">
-        <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">实证</span>
-        <span class="brief-title"><span class="mkt-sl-zh">VIX 与远期收益</span><span class="mkt-sl-en">VIX Study</span></span>
-        <button class="brief-gen-btn" style="margin-left:auto">跑一次统计</button>
-      </div>`;
-    el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchVixStudy(false));
-  }
-
-  async function fetchVixStudy(force = false) {
-    const el = $("#vixstudy-card"); if (!el) return;
-    const refreshBtn = el.querySelector(".brief-refresh");
-    if (refreshBtn) refreshBtn.classList.add("spinning");
-    else el.innerHTML = `<div class="brief-loading">正在统计 ^VIX 与 ^GSPC 三十余年的历史…</div>`;
-    try {
-      const params = new URLSearchParams({ mode: "vix" });
-      if (force) params.set("force", "1");
-      const res = await fetch("/api/drawdown-context?" + params.toString(), { signal: AbortSignal.timeout(35000) });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      _saveBrief(VIXSTUDY_LS, data);
-      _renderVixStudy(el, data);
-    } catch (e) {
-      el.innerHTML = `
-        <div class="brief-head">
-          <span class="brief-badge" style="background:var(--warn);color:var(--bg-0)">实证</span>
-          <span class="brief-title"><span class="mkt-sl-zh">VIX 与远期收益</span><span class="mkt-sl-en">VIX Study</span></span>
-          <button class="brief-refresh" title="重试" style="margin-left:auto">↻</button>
-        </div>
-        <div class="brief-error">加载失败：${e.message}，点击右上角重试</div>`;
-      el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchVixStudy(true));
     }
   }
 
