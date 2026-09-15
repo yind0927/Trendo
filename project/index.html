@@ -4107,6 +4107,9 @@
 
   .mkp-sub { display:flex; align-items:baseline; gap:7px; margin:18px 0 8px; }
   .mkp-sub span { font-size:11px; font-weight:600; color:var(--fg-1); }
+  /* Trailing note on a section head — says what the rows below are for, so the heading
+     itself can stay short. */
+  .mkp-sub .mkp-sub-note { margin-left:auto; font-size:10px; font-weight:400; color:var(--fg-3); }
   .mkp-sub em { font-style:normal; font-size:9.5px; color:var(--fg-3);
     text-transform:uppercase; letter-spacing:.07em; }
   .mkp-filtered { margin-left:auto; font-size:10px; color:var(--fg-3); font-family:var(--f-mono); }
@@ -4154,7 +4157,6 @@
   }
 
   .mkt-playbook { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
-  .mkt-playbook-title { font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; color: var(--fg-2); text-transform: uppercase; margin-bottom: 10px; }
   .mkt-pb-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
   .mkt-pb-table th:nth-child(1), .mkt-pb-table td:nth-child(1) { width: 78px; }
   .mkt-pb-table th:nth-child(2), .mkt-pb-table td:nth-child(2) { width: 38%; }
@@ -4209,10 +4211,27 @@
   .mkt-playbook-ref summary { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--fg-2); cursor: pointer; padding: 8px 0; list-style: revert; }
   .mkt-playbook-ref summary:hover { color: var(--fg-2); }
   .mkt-playbook-ref[class] details > .mkt-playbook { margin-top: 10px; }
-  .pb3-section { margin-bottom: 14px; }
-  .pb3-section-head { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; }
-  .pb3-section-sub { font-size: 10px; font-weight: 400; color: var(--fg-3); text-transform: none; letter-spacing: 0; margin-left: 4px; }
-  .pb3-tip { font-size: 10.5px; color: var(--fg-3); border-top: 1px solid var(--line); padding-top: 8px; margin-top: 6px; line-height: 1.6; }
+  .pb3-section { margin-bottom: 16px; }
+  /* Head reads as the question the table answers; the axis letter is demoted to a chip so
+     it still cross-references the three cards above without leading the sentence. */
+  .pb3-section-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 7px; }
+  .pb3-tag { font-family: var(--f-mono); font-size: 9.5px; font-weight: 700; letter-spacing: .04em;
+    color: var(--accent); border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent);
+    border-radius: 4px; padding: 1px 5px; }
+  .pb3-q { font-size: 12.5px; font-weight: 700; color: var(--fg-1); letter-spacing: -.01em; }
+  .pb3-src { margin-left: auto; font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
+  .pb3-cond { font-family: var(--f-mono); font-size: 11px; color: var(--fg-2); }
+  .pb3-act { font-size: 12px; }
+  /* Priority rules: one per line, numbered, condition and consequence visually separated.
+     This was a single line of ">"-chained fragments — the most important rule in the
+     module rendered as the least readable thing in it. */
+  .pb3-rules { border-top: 1px solid var(--line); padding-top: 11px; margin-top: 4px; }
+  .pb3-rules-hd { font-size: 11px; font-weight: 700; color: var(--fg-2); margin-bottom: 8px; }
+  .pb3-rule-list { list-style: decimal; margin: 0; padding-left: 20px;
+    display: flex; flex-direction: column; gap: 7px; }
+  .pb3-rule-list li { font-size: 11.5px; color: var(--fg-3); line-height: 1.55; }
+  .pb3-rule-list li::marker { color: var(--fg-3); font-family: var(--f-mono); font-size: 10.5px; }
+  .pb3-rule-list b { color: var(--fg-1); font-weight: 700; margin-right: 6px; }
 
   /* AI Market Brief card */
   .brief-card { background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px; margin-bottom: 0; }
@@ -5862,8 +5881,8 @@
   </div>
 </div>
 
-<script src="data.js?v=741"></script>
-<script src="desk.js?v=741"></script>
+<script src="data.js?v=742"></script>
+<script src="desk.js?v=742"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

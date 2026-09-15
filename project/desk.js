@@ -13927,9 +13927,9 @@ function rsAdjustGrade(grade, rsResult) {
   function mkPlaybookHTML() {
     // Three-axis reference handbook (replaces old 6-regime table).
     const axisA = [
-      { label: "做多", color: "var(--up)", cond: "价格 > EMA50 > EMA200", action: "有做多资格，正常布局" },
-      { label: "中性", color: "var(--warn)", cond: "价格在 EMA50/EMA200 之间回调", action: "少开新仓，持有已有仓位" },
-      { label: "做空", color: "var(--down)", cond: "EMA50 下穿 EMA200 或 价格 < EMA200", action: "禁止新多仓，严格执行止损" },
+      { label: "做多", color: "var(--up)", cond: "价格 > EMA50 > EMA200", action: "可以开新多仓" },
+      { label: "中性", color: "var(--warn)", cond: "价格在 EMA50/EMA200 之间回调", action: "不开新仓，已有仓位继续持有" },
+      { label: "做空", color: "var(--down)", cond: "EMA50 下穿 EMA200 或 价格 < EMA200", action: "禁止开新多仓，严格执行止损" },
     ];
     const axisB = [
       { label: "贪婪", color: "var(--up)",     cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
@@ -13945,25 +13945,45 @@ function rsAdjustGrade(grade, rsResult) {
       { label: "偏热",     color: "var(--orange)", cond: "FGI 60–75 或 RSI 65–72", action: "持仓不加码，盯紧止损" },
       { label: "极端过热", color: "var(--down)", cond: "FGI > 75 或 RSI > 72",   action: "禁止新仓，盈利仓减仓 1/3，收紧止损" },
     ];
-    const mkSection = (title, sub, rows) => `
+    // Each section is headed by the QUESTION its table answers, not by the axis's letter.
+    // "轴A · 方向（趋势）— 决定有没有做多资格" made the reader translate jargon into a
+    // question before reading the rows; the letter is kept only as a small cross-reference
+    // chip back to the three cards above.
+    const mkSection = (tag, name, question, source, rows) => `
       <div class="pb3-section">
-        <div class="pb3-section-head">${title} <span class="pb3-section-sub">${sub}</span></div>
+        <div class="pb3-section-head">
+          <span class="pb3-tag">${tag}</span>
+          <span class="pb3-q">${name} —— ${question}</span>
+          <span class="pb3-src">看 ${source}</span>
+        </div>
         <table class="mkt-pb-table">
-          <thead><tr><th>状态</th><th>触发条件</th><th>操作含义</th></tr></thead>
+          <thead><tr><th>状态</th><th>什么时候算</th><th>该怎么做</th></tr></thead>
           <tbody>${rows.map(r => `<tr>
             <td style="color:${r.color};font-weight:700;white-space:nowrap">${r.label}</td>
-            <td style="font-family:var(--f-mono);font-size:10.5px;color:var(--fg-3)">${r.cond}</td>
-            <td style="font-size:12px">${r.action}</td>
+            <td class="pb3-cond">${r.cond}</td>
+            <td class="pb3-act">${r.action}</td>
           </tr>`).join("")}</tbody>
         </table>
       </div>`;
+    // The merge rule is the single most important line in this module and it used to be a
+    // chain of ">" signs — a formula, not a sentence. Numbered, one rule per line, highest
+    // priority first, each saying what it overrides.
+    const priority = [
+      ["方向 = 做空", "禁止开新多仓。这是闸门，VIX 再低、情绪再冷都不能推翻它。"],
+      ["情绪 = 极端过热", "优先止盈减仓，不开新仓 —— 即使方向仍是做多。"],
+      ["情绪 = 极端恐惧", "分批建仓，等 VIX 回落再加。"],
+      ["以上都不满足", "按风险容量给出的仓位上限正常执行。"],
+    ];
     return `
       <div class="mkt-playbook">
-        <div class="mkt-playbook-title">市场模型详情</div>
-        ${mkSection("轴A · 方向（趋势）", "决定有没有做多资格", axisA)}
-        ${mkSection("轴B · 风险容量（VIX）", "决定开多少（仓位上限）", axisB)}
-        ${mkSection("轴C · 情绪（FGI / RSI）", "决定何时止盈或分批进", axisC)}
-        <div class="pb3-tip">三轴合并规则：方向逆风 = 闸门（禁新多）&gt; 情绪极端过热 = 止盈优先 &gt; 情绪极端恐惧 = 分批进 &gt; 正常进攻</div>
+        ${mkSection("轴A", "方向", "现在能不能开新多仓？", "VOO 与 EMA50 / EMA200", axisA)}
+        ${mkSection("轴B", "风险容量", "能开多大？", "VIX", axisB)}
+        ${mkSection("轴C", "情绪", "该减仓，还是该分批进？", "FGI 与 RSI", axisC)}
+        <div class="pb3-rules">
+          <div class="pb3-rules-hd">三轴冲突时，按这个顺序裁决</div>
+          <ol class="pb3-rule-list">${priority.map(([cond, act]) =>
+            `<li><b>${cond}</b><span>${act}</span></li>`).join("")}</ol>
+        </div>
       </div>`;
   }
 
@@ -14311,7 +14331,11 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkp-sub"><span>阶段转换</span><em>Transitions</em>${
           ph.transitions.length ? `<span class="mkp-filtered">${ph.transitions.length} 次</span>` : ""}</div>
         <div class="mkp-trs">${trans}</div>
-        <div class="mkp-sub"><span>距阶段转换还有多远</span><em>Distance to Transition</em></div>
+        <!-- Was 「距阶段转换还有多远」, which only described the first three rows: VIX moves
+             the position cap and FGI/RSI move the sentiment tilt, neither of which is a
+             phase transition. The heading now names what every row actually is. -->
+        <div class="mkp-sub"><span>离触发还差多少</span><em>Distance to Triggers</em>
+          <span class="mkp-sub-note">越过这些线，上面的判断就会变</span></div>
         <div class="mkp-th">${mkThresholdsHTML(axes)}</div>
         <div class="mkp-note">均线是回看的，阶段只能事后确认 —— 这里说明现在处在什么阶段、已经多久，不预测下一阶段。</div>
       </div>`;
