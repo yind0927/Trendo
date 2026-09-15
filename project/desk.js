@@ -7555,12 +7555,55 @@ function rsAdjustGrade(grade, rsResult) {
     return finalPnl / capitalBase / days * 365 * 100;
   }
 
+  // ── Editing a settled record ──────────────────────────────────────────────
+  // Deliberately narrow: only the EXIT slot (the price the position was closed out at, and
+  // its date). The entry side — premium, strike, expiry, qty — stays frozen, which is what
+  // keeps this safe: a CC's strike is copied into its parent CSP's assignedExitPrice when
+  // the CC is exercised, so letting strike move here would desynchronise the wheel group
+  // exactly the way v604 had to fix. Status may flip between 到期作废 and 买回平仓, but never
+  // into or out of 指派 — that would mean re-deciding who owns the stock leg
+  // (_optOwnsStockLeg), which is a different job from correcting a typo.
+  //
+  // Nothing writes a derived total here beyond keeping `realized` in step for this render:
+  // _optMigrate recomputes it from premium/qty/closePremium on every render anyway, so the
+  // summary card, monthly breakdown, win rate, capture rate and annualised return all follow
+  // from the edited inputs by themselves.
+  const OPT_EXIT_SLOT = {
+    // status → { priceField, dateField, label, dateLabel, hint }
+    closed: { px: "closePremium", dt: "closedAt", label: "买回价格 ($/share)", dtLabel: "平仓日期",
+      note: "改后已实现盈亏 = (卖出价 − 买回价) × 100 × 张数，随之更新" },
+    assignedCsp: { px: "assignedExitPrice", dt: "assignedExitDate", label: "正股出仓价 ($/share)", dtLabel: "出仓日期",
+      note: "改后正股盈亏 = (出仓价 − 行权价) × 100 × 张数，随之更新" },
+    // settleSpot is display-only: the CC stock leg is (strike − underlyingAtEntry), and
+    // neither of those is editable here. Say so rather than shipping a field that looks
+    // like it moves the P&L and doesn't.
+    assignedCc: { px: "settleSpot", dt: "closedAt", label: "到期结算价 ($/share)", dtLabel: "结算日期",
+      note: "结算价仅用于卡片记录展示，不参与盈亏计算（CC 正股盈亏按行权价与建仓时现价计算）" },
+  };
+  function _optExitSlot(pos) {
+    if (pos.status === "closed") return OPT_EXIT_SLOT.closed;
+    if (pos.status === "assigned" && pos.strat === "csp")
+      return pos.assignedStockSold ? OPT_EXIT_SLOT.assignedCsp : null;  // still holding: no exit yet
+    if (pos.status === "assigned" && pos.strat === "cc") return OPT_EXIT_SLOT.assignedCc;
+    return null;                       // expired has no exit price — only the status switch
+  }
+  // Expired records have nothing to edit but can still be reclassified as bought-back.
+  const _optEditable = pos => !!_optExitSlot(pos) || pos.status === "expired";
+
   function _optDonePosCard(pos) {
     const typeL = pos.type === "call" ? "C" : "P";
     const isCSP = pos.strat === "csp";
     const stMap = { expired: ["到期OTM", "var(--up)"], assigned: ["被指派", "var(--warn)"], closed: ["已平仓", "var(--fg-3)"] };
     const [stTxt, stColor] = stMap[pos.status] || ["—", "var(--fg-3)"];
     const delBtn = `<button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button>`;
+    // Settled records feed every aggregate on the page, and until now a mistyped buy-back
+    // price could only be fixed by deleting and re-recording — which throws away the entry
+    // snapshot (entryDelta / entryDTE / underlyingAtEntry / linkedCspId), none of which can
+    // be reconstructed after the fact.
+    const editBtn = _optEditable(pos)
+      ? `<button class="opts-mini-btn opts-edit" data-opt-edit="${pos.id}" title="编辑出场价与日期">✎</button>` : "";
+    const editedTag = pos.editedAt
+      ? `<span class="opts-edited-tag" title="出场信息于 ${pos.editedAt.slice(0, 16).replace("T", " ")} 手动修改过">已编辑</span>` : "";
     const stratBadge = `<span class="opts-badge ${isCSP ? "opts-badge-csp" : "opts-badge-cc"}">${isCSP ? "CSP" : "CC"}</span>`;
 
     // CSP assigned — still holding stock (live card, not "settled")
@@ -7669,8 +7712,8 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="opts-card-hd">
         ${stratBadge}
         <span class="opts-card-sym">${pos.sym} <span>$${pos.strike}${typeL}</span></span>
-        <span class="opts-st-tag" style="color:${tagColor};border-color:${tagColor}">${tagTxt}</span>
-        <div class="opts-card-hd-r"><div class="opts-card-amt ${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</div>${delBtn}</div>
+        <span class="opts-st-tag" style="color:${tagColor};border-color:${tagColor}">${tagTxt}</span>${editedTag}
+        <div class="opts-card-hd-r"><div class="opts-card-amt ${totalCls}">${total >= 0 ? "+" : "−"}${fmt.usd(Math.abs(total))}</div>${editBtn}${delBtn}</div>
       </div>
       <div class="opts-card-meta">${metaLine}</div>
       ${_pnlBreakdownHTML(bd)}
@@ -8551,6 +8594,10 @@ function rsAdjustGrade(grade, rsResult) {
       const pos = arr.find(p => p.id === btn.dataset.optFill);
       if (pos) openOptionsFillModal(pos);
     }));
+    $$("[data-opt-edit]", root).forEach(btn => btn.addEventListener("click", () => {
+      const pos = arr.find(p => p.id === btn.dataset.optEdit);
+      if (pos) openOptionsEditModal(pos);
+    }));
     $$("[data-opt-del-pending]", root).forEach(btn => btn.addEventListener("click", () => {
       const pos = arr.find(p => p.id === btn.dataset.optDelPending);
       if (!pos) return;
@@ -8588,6 +8635,14 @@ function rsAdjustGrade(grade, rsResult) {
     if (closeDateRow) closeDateRow.style.display = mode === "close" ? "" : "none";
     const deltaRow = modal.querySelector("#opts-row-delta");
     if (deltaRow) deltaRow.style.display = isSell ? "" : "none";
+    // Belongs to the edit modal alone; it re-shows itself there. Hiding it here means every
+    // other caller of this shared modal starts from a clean footer.
+    const reclass = modal.querySelector("#opts-reclass-btn");
+    if (reclass) reclass.style.display = "none";
+    // The premium row is hidden only by the edit modal (expired records have no exit price);
+    // restore it for every other mode, which all expect it visible.
+    const premRowReset = modal.querySelector("#opts-row-premium");
+    if (premRowReset) premRowReset.style.display = "";
     // Wire click-outside-to-close once
     if (!_optModalClickOutsideReady) {
       _optModalClickOutsideReady = true;
@@ -8775,6 +8830,128 @@ function rsAdjustGrade(grade, rsResult) {
       modal.style.display = "none";
       if (isRoll) openOptionsSellModal({ sym: pos.sym, strat: pos.strat, qty: pos.qty, linkedCspId: pos.linkedCspId });
       else renderSimOptions();
+    };
+    modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
+  }
+
+  // ── Edit a settled record's exit price + date ──────────────────────────────
+  function openOptionsEditModal(pos) {
+    const modal = _optModalMode("close");     // premium + close-date fields, same as 买回
+    if (!modal) return;
+    const typeL = pos.type === "call" ? "C" : "P";
+    const slot  = _optExitSlot(pos);
+    modal.querySelector(".opts-modal-title").textContent = `编辑记录 · ${pos.sym} $${pos.strike}${typeL}`;
+
+    // A CSP whose exit price was written by settleExpiredOptions when its linked CC got
+    // exercised: the two numbers are meant to be the same, so overwriting one silently
+    // would split the wheel group's 合看/分看 totals. Warn instead of blocking — the user
+    // may legitimately be correcting the CC's strike-price fill.
+    const linkedCC = pos.strat === "csp" && pos.status === "assigned"
+      ? _activeOpts().find(p => p.linkedCspId === pos.id && p.strat === "cc" && p.status === "assigned")
+      : null;
+
+    const premRow  = modal.querySelector("#opts-row-premium");
+    const premEl   = modal.querySelector("#opts-premium");
+    const premLabel= modal.querySelector("#opts-row-premium label");
+    const dateEl   = modal.querySelector("#opts-close-date");
+    const dateLabel= modal.querySelector("#opts-row-close-date label");
+    const calcEl   = modal.querySelector("#opts-calc");
+
+    // Expired records have no exit price at all — only the reclassify action applies.
+    if (premRow) premRow.style.display = slot ? "" : "none";
+    if (slot) {
+      if (premLabel) premLabel.textContent = slot.label;
+      premEl.placeholder = "按券商实际成交价填写";
+      premEl.value = pos[slot.px] != null ? Number(pos[slot.px]).toFixed(2) : "";
+      if (dateLabel) dateLabel.textContent = slot.dtLabel;
+      dateEl.value = pos[slot.dt] || new Date().toISOString().slice(0, 10);
+    } else {
+      if (dateLabel) dateLabel.textContent = "平仓日期";
+      dateEl.value = pos.closedAt || new Date().toISOString().slice(0, 10);
+    }
+
+    // Reclassify is an explicit button, not a silent dropdown: switching settlement type
+    // switches which fields mean anything, so it shouldn't feel like editing a price.
+    // Only 到期作废 ↔ 买回平仓 — anything involving 指派 would mean re-deciding who owns the
+    // stock leg, which is a different job from correcting a typo.
+    const canReclass = pos.status === "expired" || pos.status === "closed";
+    let wantClosed = pos.status === "closed";
+
+    const render = () => {
+      const slotNow = canReclass ? (wantClosed ? OPT_EXIT_SLOT.closed : null) : slot;
+      if (premRow) premRow.style.display = slotNow ? "" : "none";
+      if (slotNow) {
+        if (premLabel) premLabel.textContent = slotNow.label;
+        if (dateLabel) dateLabel.textContent = slotNow.dtLabel;
+      }
+
+      const lines = [`入场：卖出 $${pos.premium.toFixed(2)}/share ×${pos.qty}张 · 行权价 $${pos.strike} · 到期 ${pos.expiry || "—"}（入场信息不可改）`];
+      if (slotNow?.note) lines.push(slotNow.note);
+      if (linkedCC) lines.push(`⚠ 这笔 CSP 的出仓价来自关联 CC（$${linkedCC.strike}${linkedCC.type === "call" ? "C" : "P"}）被行权写入，改动后轮组的合计与两张子卡可能对不上。`);
+      const meta = modal.querySelector("#opts-modal-meta");
+      if (meta) meta.innerHTML = lines.map(t => `<div>${t}</div>`).join("");
+
+      const btn = modal.querySelector("#opts-reclass-btn");
+      if (btn) {
+        btn.style.display = canReclass ? "" : "none";
+        btn.textContent = wantClosed ? "改为：到期作废" : "改为：买回平仓";
+        btn.title = wantClosed ? "这笔其实没有买回，是放到期作废的" : "这笔其实是到期前买回平仓的";
+      }
+
+      const px = parseFloat(premEl.value);
+      if (!slotNow) {
+        calcEl.innerHTML = `<div><span>到期作废，保留全部权利金</span><b class="up">+${fmt.usd(pos.premium * 100 * pos.qty)}</b></div>`;
+      } else if (isNaN(px)) {
+        calcEl.innerHTML = `<div><span class="muted">填写价格以预览</span></div>`;
+      } else if (slotNow === OPT_EXIT_SLOT.closed) {
+        const per = pos.premium - px, tot = per * 100 * pos.qty;
+        calcEl.innerHTML = [
+          `<div><span>卖出价</span><b>$${pos.premium.toFixed(2)}/share</b></div>`,
+          `<div><span>买回价</span><b>$${px.toFixed(2)}/share</b></div>`,
+          `<div><span>已实现盈亏</span><b class="${tot >= 0 ? "up" : "down"}">${tot >= 0 ? "+" : "−"}${fmt.usd(Math.abs(tot))}</b></div>`,
+        ].join("");
+      } else if (slotNow === OPT_EXIT_SLOT.assignedCsp) {
+        const tot = (px - pos.strike) * 100 * pos.qty;
+        calcEl.innerHTML = [
+          `<div><span>行权价</span><b>$${pos.strike.toFixed(2)}</b></div>`,
+          `<div><span>出仓价</span><b>$${px.toFixed(2)}</b></div>`,
+          `<div><span>正股盈亏</span><b class="${tot >= 0 ? "up" : "down"}">${tot >= 0 ? "+" : "−"}${fmt.usd(Math.abs(tot))}</b></div>`,
+        ].join("");
+      } else {
+        calcEl.innerHTML = `<div><span class="muted">仅更新记录，不影响盈亏</span></div>`;
+      }
+    };
+    premEl.oninput = render;
+    const reclassBtn = modal.querySelector("#opts-reclass-btn");
+    if (reclassBtn) reclassBtn.onclick = () => { wantClosed = !wantClosed; render(); };
+    render();
+    modal.style.display = "flex";
+
+    modal.querySelector("#opts-confirm-btn").onclick = () => {
+      const px = parseFloat(premEl.value);
+      const date = dateEl.value || new Date().toISOString().slice(0, 10);
+      if (canReclass) {
+        if (wantClosed) {
+          if (isNaN(px) || px < 0) { alert("请填写买回价格"); return; }
+          pos.status = "closed"; pos.closePremium = px; pos.closedAt = date;
+        } else {
+          pos.status = "expired";
+          delete pos.closePremium; delete pos.closedAt;
+        }
+        // Kept in step for THIS render only; _optMigrate recomputes it from the inputs on
+        // every render regardless, which is what makes editing raw inputs sufficient.
+        pos.realized = pos.status === "closed"
+          ? (pos.premium - pos.closePremium) * 100 * pos.qty
+          : pos.premium * 100 * pos.qty;
+      } else if (slot) {
+        if (isNaN(px) || px < 0) { alert("请填写价格"); return; }
+        pos[slot.px] = px;
+        pos[slot.dt] = date;
+      }
+      pos.editedAt = new Date().toISOString();
+      saveToStorage();
+      modal.style.display = "none";
+      renderSimOptions();
     };
     modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
   }
