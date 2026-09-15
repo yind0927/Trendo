@@ -13926,38 +13926,70 @@ function rsAdjustGrade(grade, rsResult) {
 
   function mkPlaybookHTML() {
     // Three-axis reference handbook (replaces old 6-regime table).
+    // 定义 states the rule AND what the rule means in plain terms; 策略 says what to do,
+    // concretely enough to act on without re-deriving it. The VIX rows quote the implied
+    // DAILY move (VIX ÷ √252) because "VIX 30" means nothing until it is translated into
+    // how far the index is expected to travel in a day — which is exactly what decides how
+    // large a position a fixed risk budget can carry.
     const axisA = [
-      { label: "做多", color: "var(--up)", cond: "价格 > EMA50 > EMA200", action: "可以开新多仓" },
-      { label: "中性", color: "var(--warn)", cond: "价格在 EMA50/EMA200 之间回调", action: "不开新仓，已有仓位继续持有" },
-      { label: "做空", color: "var(--down)", cond: "EMA50 下穿 EMA200 或 价格 < EMA200", action: "禁止开新多仓，严格执行止损" },
+      { label: "做多", color: "var(--up)",
+        cond: "价格 > EMA50 > EMA200<br><span class=\"pb3-gloss\">三者依次排列，中期与长期均线都在价格下方托着</span>",
+        action: "可以开新多仓，规模按风险容量轴给出的上限执行。回踩到 EMA50 附近是加仓位置，不是离场信号。" },
+      { label: "中性", color: "var(--warn)",
+        cond: "价格跌回 EMA50 之下，但仍在 EMA200 之上<br><span class=\"pb3-gloss\">均线本身的顺序没有破坏，属于上升趋势中的回调</span>",
+        action: "不开新仓。已有仓位继续持有，把止损上移到成本价附近。等价格重新站上 EMA50 再考虑加仓。" },
+      { label: "做空", color: "var(--down)",
+        cond: "价格跌破 EMA200，或 EMA50 下穿 EMA200<br><span class=\"pb3-gloss\">中期均线掉到长期均线之下，趋势结构已经改变</span>",
+        action: "禁止开新多仓——VIX 再低、情绪再冷都不能推翻。已有仓位按原止损执行；反弹到 EMA50 附近是减仓机会而不是加仓点。" },
     ];
     const axisB = [
-      { label: "贪婪", color: "var(--up)",     cond: "VIX < 15",    action: "仓位上限 100% · 止损 −10%" },
-      { label: "中性", color: "var(--accent)", cond: "VIX 15–20",   action: "仓位上限 75%  · 止损 −8%" },
-      { label: "恐惧", color: "var(--orange)", cond: "VIX 20–30",   action: "仓位上限 50%  · 止损 −5%" },
-      { label: "恐慌", color: "var(--down)",   cond: "VIX 30–50",   action: "仓位上限 25%  · 止损 −5%" },
-      { label: "极恐", color: MKT_DEEP_DOWN,   cond: "VIX ≥ 50",    action: "清仓观望，不开新仓" },
+      { label: "贪婪", color: "var(--up)",
+        cond: "VIX < 15<br><span class=\"pb3-gloss\">隐含日波动约 0.9%，市场预期未来一个月平静</span>",
+        action: "仓位上限 100%。止损可放宽到 −10%：波动小，−10% 需要走很久才会触发，放宽反而减少被洗出去的概率。" },
+      { label: "中性", color: "var(--accent)",
+        cond: "VIX 15–20<br><span class=\"pb3-gloss\">隐含日波动 0.9%–1.3%，处在长期均值附近</span>",
+        action: "仓位上限 75%，止损 −8%。常态节奏，不因波动率额外加减仓。" },
+      { label: "恐惧", color: "var(--orange)",
+        cond: "VIX 20–30<br><span class=\"pb3-gloss\">隐含日波动 1.3%–1.9%，出现持续性抛压</span>",
+        action: "仓位上限 50%，止损收紧到 −5%。注意：同样的止损百分比在这种波动下更容易被打到，所以单笔规模要同步缩小，否则等于悄悄放大了每笔的风险。" },
+      { label: "恐慌", color: "var(--down)",
+        cond: "VIX 30–50<br><span class=\"pb3-gloss\">隐含日波动 1.9%–3.1%，恐慌性去杠杆</span>",
+        action: "仓位上限 25%，只保留最强的持仓。新仓只能小额分批试探——这个区间往往是长期机会区，但也可能只是去往更高 VIX 的中途。" },
+      { label: "极恐", color: MKT_DEEP_DOWN,
+        cond: "VIX ≥ 50<br><span class=\"pb3-gloss\">隐含日波动 > 3%，流动性与相关性同时崩坏</span>",
+        action: "清仓观望。此时任何仓位的单日波动都可能吃掉数周的盈利，分散也失效（所有资产一起跌）。" },
     ];
     const axisC = [
-      { label: "极端恐惧", color: "var(--up)", cond: "FGI < 25 且 RSI < 38", action: "分批建仓候选，等 VIX 回落确认" },
-      { label: "偏冷",     color: "var(--accent)", cond: "FGI < 40 或 RSI < 45", action: "可小幅加仓，不追高" },
-      { label: "中性",     color: "var(--warn)",   cond: "FGI 40–60，RSI 45–65", action: "正常操作，按计划执行" },
-      { label: "偏热",     color: "var(--orange)", cond: "FGI 60–75 或 RSI 65–72", action: "持仓不加码，盯紧止损" },
-      { label: "极端过热", color: "var(--down)", cond: "FGI > 75 或 RSI > 72",   action: "禁止新仓，盈利仓减仓 1/3，收紧止损" },
+      { label: "极端恐惧", color: "var(--up)",
+        cond: "FGI < 25 且 RSI < 38<br><span class=\"pb3-gloss\">情绪与动量同时到极端，两个条件必须同时成立</span>",
+        action: "分批建仓候选：先用计划仓位的 1/3 试探，等 VIX 从高位回落再补后面两笔。不要一次打满——极端恐惧可以持续数周并继续下探。" },
+      { label: "偏冷", color: "var(--accent)",
+        cond: "FGI < 40 或 RSI < 45<br><span class=\"pb3-gloss\">任一指标偏冷即触发</span>",
+        action: "可小幅加仓，优先补强已经盈利的仓位，不追当日大涨的标的。" },
+      { label: "中性", color: "var(--warn)",
+        cond: "FGI 40–60 且 RSI 45–65<br><span class=\"pb3-gloss\">情绪与动量都在常态区间</span>",
+        action: "按既定计划执行，不因情绪指标额外加减仓。" },
+      { label: "偏热", color: "var(--orange)",
+        cond: "FGI 60–75 或 RSI 65–72<br><span class=\"pb3-gloss\">任一指标偏热即触发</span>",
+        action: "持仓不加码。把止损上移到成本价之上，先把这一段的利润锁住。" },
+      { label: "极端过热", color: "var(--down)",
+        cond: "FGI > 75 或 RSI > 72<br><span class=\"pb3-gloss\">任一指标越过极端线即触发</span>",
+        action: "禁止开新仓；盈利仓减去 1/3 落袋，其余收紧止损。这一条会推翻方向轴给出的做多资格。" },
     ];
     // Each section is headed by the QUESTION its table answers, not by the axis's letter.
     // "轴A · 方向（趋势）— 决定有没有做多资格" made the reader translate jargon into a
     // question before reading the rows; the letter is kept only as a small cross-reference
     // chip back to the three cards above.
-    const mkSection = (tag, name, question, source, rows) => `
+    const mkSection = (tag, name, question, source, rows, note = "") => `
       <div class="pb3-section">
         <div class="pb3-section-head">
           <span class="pb3-tag">${tag}</span>
           <span class="pb3-q">${name} —— ${question}</span>
           <span class="pb3-src">看 ${source}</span>
         </div>
+        ${note ? `<div class="pb3-note">${note}</div>` : ""}
         <table class="mkt-pb-table">
-          <thead><tr><th>状态</th><th>什么时候算</th><th>该怎么做</th></tr></thead>
+          <thead><tr><th>状态</th><th>定义</th><th>策略</th></tr></thead>
           <tbody>${rows.map(r => `<tr>
             <td style="color:${r.color};font-weight:700;white-space:nowrap">${r.label}</td>
             <td class="pb3-cond">${r.cond}</td>
@@ -13977,7 +14009,9 @@ function rsAdjustGrade(grade, rsResult) {
     return `
       <div class="mkt-playbook">
         ${mkSection("轴A", "方向", "现在能不能开新多仓？", "VOO 与 EMA50 / EMA200", axisA)}
-        ${mkSection("轴B", "风险容量", "能开多大？", "VIX", axisB)}
+        ${mkSection("轴B", "风险容量", "能开多大？", "VIX", axisB,
+          "这一轴只回答「能拿多少」，不回答「该不该买」。VIX 高 = 同样的仓位每天波动更大，"
+          + "所以同样的风险预算只能拿更少 —— 它不是看空信号。VIX 高时「机会好」那一面由情绪轴（轴C）承担。")}
         ${mkSection("轴C", "情绪", "该减仓，还是该分批进？", "FGI 与 RSI", axisC)}
         <div class="pb3-rules">
           <div class="pb3-rules-hd">三轴冲突时，按这个顺序裁决</div>

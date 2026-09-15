@@ -4220,8 +4220,18 @@
     border-radius: 4px; padding: 1px 5px; }
   .pb3-q { font-size: 12.5px; font-weight: 700; color: var(--fg-1); letter-spacing: -.01em; }
   .pb3-src { margin-left: auto; font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); }
-  .pb3-cond { font-family: var(--f-mono); font-size: 11px; color: var(--fg-2); }
-  .pb3-act { font-size: 12px; }
+  .pb3-cond { font-family: var(--f-mono); font-size: 11px; color: var(--fg-2); line-height: 1.5; }
+  /* Plain-language reading of the rule directly above it — the rule says WHAT is true,
+     the gloss says what that MEANS. */
+  .pb3-gloss { display: block; font-family: var(--f-sans); font-size: 10.5px;
+    color: var(--fg-3); margin-top: 3px; line-height: 1.5; }
+  .pb3-act { font-size: 12px; line-height: 1.6; }
+  /* Section-level caveat, e.g. that the VIX axis is a capacity rule and not a directional
+     signal — the single most misread thing in this model. */
+  .pb3-note { font-size: 11px; line-height: 1.6; color: var(--fg-3); margin-bottom: 8px;
+    padding: 7px 10px; border-radius: 7px; background: var(--bg-2);
+    border-left: 2px solid color-mix(in oklch, var(--accent) 55%, transparent); }
+  .mkt-pb-table td { vertical-align: top; }
   /* Priority rules: one per line, numbered, condition and consequence visually separated.
      This was a single line of ">"-chained fragments — the most important rule in the
      module rendered as the least readable thing in it. */
@@ -5881,8 +5891,8 @@
   </div>
 </div>
 
-<script src="data.js?v=742"></script>
-<script src="desk.js?v=742"></script>
+<script src="data.js?v=743"></script>
+<script src="desk.js?v=743"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
