@@ -13961,8 +13961,11 @@ function rsAdjustGrade(grade, rsResult) {
     ];
     const axisC = [
       { label: "极端恐惧", color: "var(--up)",
-        cond: "FGI < 25 且 RSI < 38<br><span class=\"pb3-gloss\">情绪与动量同时到极端，两个条件必须同时成立</span>",
-        action: "分批建仓候选：先用计划仓位的 1/3 试探，等 VIX 从高位回落再补后面两笔。不要一次打满——极端恐惧可以持续数周并继续下探。" },
+        cond: "VIX ≥ 30，<b>或</b> FGI < 25 且 RSI < 38<br><span class=\"pb3-gloss\">v745 起 VIX≥30 单独即可触发：历史上 VIX≥30 之后 60 个交易日的中位收益比基线高 4.4pp、胜率 78%，等 FGI/RSI 双双到极端太苛刻</span>",
+        action: "分批建仓候选：先用计划仓位的 1/3 试探，等 VIX 从高位回落再补后面两笔。仓位总量仍受风险容量轴压制——机会好和能拿多少是两件事。" },
+      { label: "恐慌降温期", color: "var(--orange)",
+        cond: "此前 60 日内 VIX 曾 > 30，且现已跌回 20 以下<br><span class=\"pb3-gloss\">恐慌已经过去、市场回到平静——容易的钱赚完了</span>",
+        action: "不开新仓，分批兑现这一轮的利润。依据：历史同形态之后 60 个交易日中位比基线低 1.9pp、胜率从 70% 掉到 57%（n=21，样本偏少，当作倾斜而非铁律）。" },
       { label: "偏冷", color: "var(--accent)",
         cond: "FGI < 40 或 RSI < 45<br><span class=\"pb3-gloss\">任一指标偏冷即触发</span>",
         action: "可小幅加仓，优先补强已经盈利的仓位，不追当日大涨的标的。" },
@@ -14172,16 +14175,45 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
-  function getSentimentAxis(fg, rsi, vixTrend = "flat") {
+  // 情绪轴 = 机会侧。v745 起 VIX 直接参与，依据是 VIX Study 用 ^GSPC 1990 年至今
+  // 9242 个交易日跑出来的实证结果（Market 页「VIX 与远期收益」卡片可复现）：
+  //
+  //   · VIX ≥ 30 的任意一天，未来 60 个交易日中位收益比「任意一天」的基线高 4.4pp
+  //     （胜率 78% vs 基线 70%）；事件版「上穿 30」n=34、独立样本，60 日 +3.9pp。
+  //     所以 VIX ≥ 30 本身就足以构成分批建仓的理由，不必等 FGI 和 RSI 同时到极端 ——
+  //     旧规则 fg<25 && rsi<38 两个条件同时成立，苛刻到几乎只在崩盘最深处才触发。
+  //
+  //   · 「此前 60 日内曾 > 30、现已跌回 20 以下」这个降温完成态，未来 60 个交易日
+  //     比基线低 1.9pp，胜率从 70% 掉到 57%（n=21）。这是「VIX 回落时该逐步减仓」
+  //     的实证形态。
+  //
+  // 明确不做的两件事，同样有数据依据：
+  //   · VIX 的连续方向（5日均 vs 20日均）没有预测力——各档位下差异都在 1pp 以内
+  //     且符号不一致，纯噪音。
+  //   · 「低位上穿 15」只有 5 日 −0.6pp 的短期噪音，20/60 日转正，不构成中期信号。
+  function getSentimentAxis(fg, rsi, vixTrend = "flat", vix = null, vix60Max = null) {
+    // 降温完成：曾恐慌、现已平静。排在过热之后、恐惧之前——它是减仓倾斜，但没有
+    // 极端过热那么急迫。n=21 是小样本，界面上如实标注。
+    const cooled = vix != null && vix60Max != null && vix60Max > 30 && vix < 20;
     if (fg > 75 || rsi > 72)
       return { id: "euphoria", label: "极端过热", color: "var(--down)", tilt: "trim",
         desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
+    if (cooled)
+      return { id: "cooldown", label: "恐慌降温期", color: "var(--orange)", tilt: "cooldown",
+        desc: `VIX 已从 ${vix60Max.toFixed(0)} 回落至 ${vix.toFixed(1)}，容易的钱已经赚完：不加新仓，分批兑现利润`,
+        evidence: "历史同形态后 60 日中位低于基线 1.9pp、胜率 57%（n=21，样本偏少）" };
     if (fg >= 60 || rsi >= 65)
       return { id: "warm", label: "偏热", color: "var(--orange)", tilt: "hold",
         desc: "可持仓，不加仓，盯紧止损" };
-    if (fg < 25 && rsi < 38)
+    // VIX ≥ 30 单独即可触发；FGI/RSI 双极端仍保留为另一条入口。
+    if ((vix != null && vix >= 30) || (fg < 25 && rsi < 38)) {
+      const byVix = vix != null && vix >= 30;
       return { id: "panic", label: "极端恐惧", color: "var(--up)", tilt: "accumulate",
-        desc: vixTrend === "down" ? "分批建仓候选，VIX 已回落" : "分批建仓候选，待 VIX 回落确认" };
+        desc: byVix
+          ? `VIX ${vix.toFixed(1)}：分批建仓候选，仓位仍受风险容量轴压制`
+          : (vixTrend === "down" ? "分批建仓候选，VIX 已回落" : "分批建仓候选，待 VIX 回落确认"),
+        evidence: byVix ? "历史 VIX≥30 后 60 日中位高于基线 4.4pp、胜率 78%（n=736 个交易日，约 7 轮危机）" : null };
+    }
     if (fg < 40 || rsi < 45)
       return { id: "cool", label: "偏冷", color: "var(--accent)", tilt: "scale",
         desc: "可小幅分批加仓，不追高" };
@@ -14196,6 +14228,9 @@ function rsAdjustGrade(grade, rsResult) {
     if (sent.tilt === "trim")
       return { headline: "止盈", emoji: "🟠", state: `极端过热`, color: "var(--orange)",
         detail: "减仓止盈，收紧保护。" };
+    if (sent.tilt === "cooldown")
+      return { headline: "兑现", emoji: "🟠", state: `恐慌降温期`, color: "var(--orange)",
+        detail: "不开新仓，分批兑现这一轮的利润。" };
     if (sent.tilt === "accumulate")
       return { headline: "布局", emoji: "🟢", state: `恐慌积累`, color: "var(--up)",
         detail: "控制仓位，分批买入强势标的。" };
@@ -14209,10 +14244,10 @@ function rsAdjustGrade(grade, rsResult) {
       detail: "按风险预算正常布局。" };
   }
 
-  function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend }) {
+  function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend, vix60Max }) {
     const dir  = getDirectionAxis(price, ma50, ma200);
     const risk = getRiskAxis(vix);
-    const sent = getSentimentAxis(fg, rsi, vixTrend);
+    const sent = getSentimentAxis(fg, rsi, vixTrend, vix, vix60Max);
     const combined = combineAxes(dir, risk, sent);
     return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 };
   }
@@ -14403,9 +14438,12 @@ function rsAdjustGrade(grade, rsResult) {
             <div class="mkt-axis-gate dim">决定"开多少"</div>
           </div>
           <div class="mkt-axis-card" style="border-color:${mkAlpha(sent.color,25)}">
-            <div class="mkt-axis-top"><span class="mkt-axis-name">情绪 · FGI/RSI</span><span class="mkt-axis-val" style="color:${sent.color}">${sent.label}</span></div>
-            <div class="mkt-axis-meta">FGI ${fg} · RSI ${rsi} <span class="mkt-axis-dim">${sent.tilt === "trim" ? "减仓倾斜" : sent.tilt === "accumulate" || sent.tilt === "scale" ? "加仓倾斜" : "中性"}</span></div>
+            <div class="mkt-axis-top"><span class="mkt-axis-name">情绪 · FGI/RSI/VIX</span><span class="mkt-axis-val" style="color:${sent.color}">${sent.label}</span></div>
+            <div class="mkt-axis-meta">FGI ${fg} · RSI ${rsi} <span class="mkt-axis-dim">${
+              sent.tilt === "trim" || sent.tilt === "cooldown" ? "减仓倾斜"
+              : sent.tilt === "accumulate" || sent.tilt === "scale" ? "加仓倾斜" : "中性"}</span></div>
             <div class="mkt-axis-desc">${sent.desc}</div>
+            ${sent.evidence ? `<div class="mkt-axis-evi" title="依据来自本页下方「VIX 与远期收益」卡片，可自行复现">${sent.evidence}</div>` : ""}
             <div class="mkt-axis-gate dim">决定"何时止盈/反向"</div>
           </div>
         </div>
@@ -14575,7 +14613,16 @@ function rsAdjustGrade(grade, rsResult) {
       // EMA is the standard read of "where are we now" — and it is the whole point of
       // pulling VOO live.
       benchPrice = vooLive ?? benchSettled;
-      const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend });
+      // Highest VIX close over the last 60 sessions — the only extra input the cooldown
+      // state needs, and it comes from the ^VIX history already being fetched above.
+      // Includes today's live VIX so a same-day spike is not missed by the settled series.
+      const vix60Max = (() => {
+        const ser = histResults?.["^VIX"];
+        const vals = ser ? Object.keys(ser).sort().slice(-60).map(d => ser[d]).filter(v => v != null) : [];
+        if (vix) vals.push(vix);
+        return vals.length ? Math.max(...vals) : null;
+      })();
+      const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend, vix60Max });
       const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS);
       // Says "近一年" only when a full year is actually there; a shorter history is
       // reported at its real length rather than mislabelled.

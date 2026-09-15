@@ -4203,6 +4203,11 @@
   .mkt-axis-meta { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); }
   .mkt-axis-dim { color: var(--fg-3); }
   .mkt-axis-desc { font-size: 11.5px; color: var(--fg-1); line-height: 1.45; }
+  /* Why a tilt fires, quoted from the VIX study rather than asserted. Only the two
+     VIX-driven states carry one; the FGI/RSI states are definitional, not empirical. */
+  .mkt-axis-evi { font-size: 9.5px; line-height: 1.5; color: var(--fg-3); margin-top: 5px;
+    padding-top: 5px; border-top: 1px dashed color-mix(in oklch, var(--line) 80%, transparent);
+    cursor: help; }
   .mkt-axis-gate { font-size: 10px; font-weight: 700; font-family: var(--f-mono); margin-top: auto; padding-top: 3px; }
   .mkt-axis-gate.ok { color: var(--up); }
   .mkt-axis-gate.block { color: var(--down); }
@@ -5926,8 +5931,8 @@
   </div>
 </div>
 
-<script src="data.js?v=744"></script>
-<script src="desk.js?v=744"></script>
+<script src="data.js?v=745"></script>
+<script src="desk.js?v=745"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
