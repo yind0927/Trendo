@@ -11604,17 +11604,24 @@ function rsAdjustGrade(grade, rsResult) {
     if (!known.length) return "";   // 刚平仓不久，一个都还没走满：整行不显示，不摆三个横杠
 
     // 结论锚在已知的最长期限上：它最能说明趋势有没有延续。
+    // 判定的是「这个出场时点」对不对，不是这笔交易赚没赚 —— 出场后继续涨＝走早了＝错误，
+    // 出场后跌了＝躲开了回落＝正确。±3% 以内不下结论，那个幅度分不出对错。
     const last = known[known.length - 1];
-    const v = last.pct >= 3 ? { cls: "miss", txt: `走早了 · ${last.n}日后仍高 ${last.pct.toFixed(1)}%` }
-            : last.pct <= -3 ? { cls: "good", txt: `走对了 · ${last.n}日后低 ${Math.abs(last.pct).toFixed(1)}%` }
-            : { cls: "flat", txt: `${last.n}日后基本持平` };
+    const v = last.pct >= 3
+        ? { cls: "miss", tag: "错误", txt: `${last.n}日后又涨 ${last.pct.toFixed(1)}%`,
+            tip: `出场后第 ${last.n} 个交易日收盘比出场均价高 ${last.pct.toFixed(1)}%——走早了，趋势还在继续` }
+      : last.pct <= -3
+        ? { cls: "good", tag: "正确", txt: `${last.n}日后跌 ${Math.abs(last.pct).toFixed(1)}%`,
+            tip: `出场后第 ${last.n} 个交易日收盘比出场均价低 ${Math.abs(last.pct).toFixed(1)}%——走对了，躲开了回落` }
+      : { cls: "flat", tag: "持平", txt: `${last.n}日内 ±3% 以内`,
+          tip: `出场后第 ${last.n} 个交易日与出场均价相差不到 3%，这个幅度分不出对错` };
 
     return `<div class="eq-after">
       <span class="eq-after-lbl">出场后</span>
       ${cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"${
         c.pct != null ? ` title="出场后第 ${c.n} 个交易日（${c.d}）收盘 $${c.px.toFixed(2)} · 出场均价 $${exitPx.toFixed(2)}"` : ""
       }><i>${c.n}日</i>${c.pct == null ? "—" : (c.pct >= 0 ? "+" : "") + c.pct.toFixed(1) + "%"}</span>`).join("")}
-      <span class="eq-after-verdict ${v.cls}">${v.txt}</span>
+      <span class="eq-after-verdict ${v.cls}" title="${v.tip}"><b>${v.tag}</b>${v.txt}</span>
     </div>`;
   }
 
