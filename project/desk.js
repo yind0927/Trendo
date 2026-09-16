@@ -2116,9 +2116,13 @@ function rsAdjustGrade(grade, rsResult) {
       });
     }
 
-    // counts — use groupTrades() so partial-close records count as one trade
+    // counts — must equal what the closed table renders, see _closedG below
     const rc = $("#row-count"); if (rc) rc.textContent = rows.length;
-    const _closedG = groupTrades(CLOSED_POSITIONS);
+    // Count what the table actually renders. The table uses mergeClosedForDisplay, which
+    // merges a trade's exit legs into one row only once the position is fully out —
+    // a trade still being trimmed keeps each leg as its own row. groupTrades merges
+    // unconditionally, so the counter said 2 where the table showed 3.
+    const _closedG = mergeClosedForDisplay(CLOSED_POSITIONS, HOLDINGS);
     $("#c-open").textContent   = HOLDINGS.length;
     $("#c-closed").textContent = _closedG.length;
     if (activeTab === "closed") {
@@ -10433,9 +10437,9 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     // Counts — run before card/list branch so card mode also updates chips
-    // Use groupTrades() so partial-close records from the same trade are counted as one.
+    // Counted off mergeClosedForDisplay so the number equals the rows on screen.
     const setCount = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    const _simClosedG = groupTrades(SIM_CLOSED);
+    const _simClosedG = mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS);
     setCount("sim-c-open",   SIM_HOLDINGS.length);
     setCount("sim-c-closed", _simClosedG.length);
     if (simActiveTab === "closed") {
