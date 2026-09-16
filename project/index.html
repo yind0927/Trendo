@@ -2431,6 +2431,57 @@
      （无背景），所以卡片之间的空隙露出的是页面底色 --bg-0 而非 --bg-1 —— 这正是 v572 在
      期权页踩过的坑：间隙若和卡片同色，两张卡会读成"中间一条分隔线"而不是两个独立模块。 */
   .simb-part { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 16px; margin-top: 14px; }
+
+  /* ── 分析复盘：三层重组 ──
+     结论 → 期望值分解 → 折叠的归因与口径。前两层始终可见且很短；其余一律折叠，
+     因为它们是下钻，不该跟结论抢同一屏。 */
+  .rvw-verdict { border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 12px; padding: 14px 16px; margin-top: 14px; background: var(--bg-1); }
+  .rvw-headline { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+    font-size: 12.5px; color: var(--fg-2); }
+  .rvw-headline b { font-size: 19px; font-weight: 700; letter-spacing: -.02em; color: var(--fg-1); margin-right: 2px; }
+  .rvw-headline b.up { color: var(--up); } .rvw-headline b.down { color: var(--down); }
+  .rvw-hl-sep { color: var(--fg-3); opacity: .5; }
+  .rvw-verdict-txt { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line);
+    font-size: 12px; line-height: 1.7; color: var(--fg-2); }
+  .rvw-verdict-txt b { font-weight: 700; color: var(--fg-1); font-family: var(--f-mono); }
+  .rvw-verdict-txt b.up { color: var(--up); } .rvw-verdict-txt b.down { color: var(--down); }
+  .rvw-verdict-txt b.warn { color: var(--warn); }
+
+  /* 恒等式：四个输入 + 结果。横向排布让「×」「−」「=」读起来真的像一个式子。 */
+  .rvw-eq { border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px 15px;
+    margin-top: 12px; }
+  .rvw-eq-hd { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--fg-3); margin-bottom: 11px; }
+  .rvw-eq-row { display: flex; align-items: stretch; gap: 4px; flex-wrap: wrap; }
+  .rvw-eq-term { flex: 1 1 96px; min-width: 0; background: var(--bg-2); border-radius: 9px;
+    padding: 9px 10px; }
+  .rvw-eq-term.rvw-eq-result { background: color-mix(in oklch, var(--accent) 9%, var(--bg-2));
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--accent) 30%, transparent); }
+  .rvw-eq-lbl { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; }
+  .rvw-eq-val { font-size: 17px; font-weight: 700; letter-spacing: -.02em; margin-top: 3px; color: var(--fg-1); }
+  .rvw-eq-sub { font-size: 9.5px; color: var(--fg-3); margin-top: 3px; line-height: 1.45; }
+  .rvw-eq-op { display: flex; align-items: center; font-family: var(--f-mono); font-size: 14px;
+    color: var(--fg-3); padding: 0 1px; }
+
+  .rvw-fold { border: 1px solid var(--line); border-radius: 12px; margin-top: 12px; }
+  .rvw-fold > summary { list-style: none; cursor: pointer; padding: 11px 16px;
+    display: flex; align-items: baseline; gap: 8px; }
+  .rvw-fold > summary::-webkit-details-marker { display: none; }
+  .rvw-fold-arrow { font-size: 9px; color: var(--fg-3); transition: transform .16s ease; }
+  .rvw-fold[open] .rvw-fold-arrow { transform: rotate(90deg); }
+  .rvw-fold-zh { font-size: 12.5px; font-weight: 700; color: var(--fg-1); }
+  .rvw-fold-en { font-size: 9.5px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; }
+  .rvw-fold-body { padding: 0 16px 15px; }
+
+  @media (max-width: 768px) {
+    /* 五个项横排在 390px 下会被压成不可读的窄条：改为两列网格，运算符各自占满一行
+       的分隔位，式子仍然读得出顺序。 */
+    .rvw-eq-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .rvw-eq-op { display: none; }
+    .rvw-eq-term.rvw-eq-result { grid-column: 1 / -1; }
+    .rvw-headline b { font-size: 17px; }
+  }
   .simb-part-hd { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
   .simb-part-zh { font-size: 12px; font-weight: 700; color: var(--fg-1); letter-spacing: .02em; }
   .simb-part-en { font-size: 9.5px; font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: .08em; }
@@ -5902,8 +5953,8 @@
   </div>
 </div>
 
-<script src="data.js?v=751"></script>
-<script src="desk.js?v=751"></script>
+<script src="data.js?v=752"></script>
+<script src="desk.js?v=752"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

@@ -10058,72 +10058,137 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="simb-part-en">${en}</span>
         </div>`;
 
+      // ── 三层重组 ────────────────────────────────────────────────────
+      // 旧版把 17 个指标 tile 平铺成 8 个小节、1360px 一次全展开，权重完全相同，
+      // 没有任何东西告诉读者先看哪个。而那 17 个数里只有 7–8 个携带独立信息：
+      // 盈利数+亏损数+持平数+胜率 只有 2 个自由度；总盈利+总亏损+已实现+盈亏因子
+      // 同样只有 2 个。信息一条没删，只是分成「结论 → 为什么 → 哪里漏」三层。
+      const nClosed = closedOnlyItems.length;
+      const lossRatePct = nClosed ? losses.length / nClosed * 100 : null;
+      // 保本胜率：当前盈亏结构下期望为零所需的胜率。把四个输入压成一个判断，
+      // 直接回答「这套打法还有多少余量」。
+      const aw = avgWinPct, al = avgLossPct === null ? null : Math.abs(avgLossPct);
+      const beWin = (aw !== null && al !== null && aw + al > 0) ? al / (aw + al) * 100 : null;
+      const margin = (beWin !== null && winRatePct !== null) ? winRatePct - beWin : null;
+
+      const verdict = (() => {
+        if (!nClosed) return { txt: "还没有已平仓交易，等第一笔结束后这里会给出结论。", cls: "" };
+        if (beWin === null) return { txt: "盈利端或亏损端样本为空，暂时无法拆解期望。", cls: "" };
+        const parts = [`保本需要 <b>${beWin.toFixed(0)}%</b> 胜率，实际 <b>${winRatePct.toFixed(0)}%</b>`];
+        if (margin >= 10) parts.push(`余量 <b class="up">${margin.toFixed(0)}pp</b>，结构稳健`);
+        else if (margin > 0) parts.push(`余量只有 <b class="warn">${margin.toFixed(0)}pp</b>，胜率小幅回落就会转负`);
+        else parts.push(`<b class="down">已低于保本线 ${Math.abs(margin).toFixed(0)}pp</b>，当前是负期望`);
+        const rr = (aw !== null && al !== null && al > 0) ? aw / al : null;
+        if (rr !== null) parts.push(rr >= 1.5
+          ? `盈亏比 ${rr.toFixed(2)}，盈利端在拉动结果`
+          : rr >= 1
+          ? `盈亏比 ${rr.toFixed(2)} 偏低，靠胜率撑着 —— 先看能不能让盈利跑得更远`
+          : `盈亏比 ${rr.toFixed(2)}，<b class="down">平均亏损大于平均盈利</b>，改进优先级在止损纪律`);
+        return { txt: parts.join("；") + "。", cls: margin === null ? "" : margin > 0 ? "up" : "down" };
+      })();
+
+      const rvwFold = (key, zh, en, body) => {
+        const k = `trendo_rvw_${key}`;
+        const isOpen = localStorage.getItem(k) === "1";
+        return `<details class="rvw-fold" data-rvw-fold="${k}"${isOpen ? " open" : ""}>
+          <summary><span class="rvw-fold-arrow">▸</span><span class="rvw-fold-zh">${zh}</span>
+            <span class="rvw-fold-en">${en}</span></summary>
+          <div class="rvw-fold-body">${body}</div>
+        </details>`;
+      };
+      const pctTxt = v => v === null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
+
       curEl.innerHTML = `
         <div class="simb-note">${closedNote}</div>
 
-        <div class="simb-part">
-          ${partHead("组合层面", "Portfolio")}
-          ${subTitle("规模", "Scale")}
-          <div class="sim-a-stats cols-3">
-            ${simTile(countLabel, combinedItems.length, "", countSub)}
-            ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", scopeToMonth ? "本月所有开仓的成本×数量合计" : "全部已平仓交易的成本×数量合计")}
-            ${tile3}
+        <div class="rvw-verdict">
+          <div class="rvw-headline">
+            <span class="rvw-hl-item"><b class="num">${combinedItems.length}</b> 笔</span>
+            <span class="rvw-hl-sep">·</span>
+            <span class="rvw-hl-item">已实现 <b class="num ${monthCls}">${fmt.signed(Math.round(monthPnl))}</b></span>
+            <span class="rvw-hl-sep">·</span>
+            <span class="rvw-hl-item">胜率 <b class="num">${winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—"}</b></span>
+            <span class="rvw-hl-sep">·</span>
+            <span class="rvw-hl-item">盈亏因子 <b class="num ${pfCls}">${pfStr}</b></span>
           </div>
-          ${subTitle("表现", "Performance")}
-          <div class="sim-a-stats cols-3">
-            ${simTile(pnlTileLabel, fmt.signed(Math.round(monthPnl)), monthCls, pnlTileSub)}
-            ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", weightedSub)}
-            ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
-          </div>
-          ${subTitle("盈亏总额", "P&L Total")}
-          <div class="sim-a-stats cols-3">
-            ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up", `${combinedWins.length} 笔盈利仓位合计`)}
-            ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "", `${combinedLosses.length} 笔亏损仓位合计`)}
-            ${simTile("盈亏因子", pfStr, pfCls, "总盈利 ÷ 总亏损，>1 为正期望")}
+          <div class="rvw-verdict-txt ${verdict.cls}">${verdict.txt}</div>
+        </div>
+
+        <div class="rvw-eq">
+          <div class="rvw-eq-hd">每笔期望 · Expectancy per Trade</div>
+          <div class="rvw-eq-row">
+            <div class="rvw-eq-term">
+              <div class="rvw-eq-lbl">胜率</div>
+              <div class="rvw-eq-val num">${winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—"}</div>
+              <div class="rvw-eq-sub">${wins.length} / ${nClosed} 笔 · 改进＝选股</div>
+            </div>
+            <div class="rvw-eq-op">×</div>
+            <div class="rvw-eq-term">
+              <div class="rvw-eq-lbl">平均盈利</div>
+              <div class="rvw-eq-val num up">${avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—"}</div>
+              <div class="rvw-eq-sub">改进＝让盈利跑得更远</div>
+            </div>
+            <div class="rvw-eq-op">−</div>
+            <div class="rvw-eq-term">
+              <div class="rvw-eq-lbl">败率</div>
+              <div class="rvw-eq-val num">${lossRatePct !== null ? lossRatePct.toFixed(0) + "%" : "—"}</div>
+              <div class="rvw-eq-sub">${losses.length} / ${nClosed} 笔</div>
+            </div>
+            <div class="rvw-eq-op">×</div>
+            <div class="rvw-eq-term">
+              <div class="rvw-eq-lbl">平均亏损</div>
+              <div class="rvw-eq-val num down">${avgLossPct !== null ? Math.abs(avgLossPct).toFixed(1) + "%" : "—"}</div>
+              <div class="rvw-eq-sub">改进＝止损纪律</div>
+            </div>
+            <div class="rvw-eq-op">=</div>
+            <div class="rvw-eq-term rvw-eq-result">
+              <div class="rvw-eq-lbl">每笔期望</div>
+              <div class="rvw-eq-val num ${nClosed ? (avgPct >= 0 ? "up" : "down") : ""}">${nClosed ? pctTxt(avgPct) : "—"}</div>
+              <div class="rvw-eq-sub">${beWin !== null ? `保本线 ${beWin.toFixed(0)}%` : ""}</div>
+            </div>
           </div>
         </div>
 
-        <div class="simb-part">
-          ${partHead("逐笔拆解", "Breakdown")}
-          ${subTitle("交易分布", "Trade Distribution")}
-          <div class="sim-a-stats">
-            ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
-            ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
-            ${simTile("持平数量", evens.length)}
-            ${simTile("总体胜率", winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—", winRatePct !== null && winRatePct >= 50 ? "up" : "down")}
-          </div>
-
-          ${subTitle("收益率", "Returns", "", "逐笔简单平均")}
-          <div class="sim-a-stats">
-            ${closedOnlyItems.length ? `
-              ${simTile("平均收益率", (avgPct >= 0 ? "+" : "") + avgPct.toFixed(1) + "%", avgPct >= 0 ? "up" : "down")}
-              ${simTile("中位数收益率", (medPct >= 0 ? "+" : "") + medPct.toFixed(1) + "%", medPct >= 0 ? "up" : "down")}
-              ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct.toFixed(1) + "%" : "—", "up")}
-              ${simTile("平均亏损收益率", avgLossPct !== null ? avgLossPct.toFixed(1) + "%" : "—", "down")}
-            ` : simTile("暂无已平仓交易", "—", "", "本月新开仓位尚未平仓")}
-          </div>
-
+        ${rvwFold("attr", "哪里在漏", "Attribution", `
           ${subTitle("最佳 / 最差", "Best / Worst")}
           ${bestItem && worstItem ? `
           <div class="simbw-row">
             <div class="simbw-card up">
-              <div class="simbw-label">最佳股票${bwState()}</div>
+              <div class="simbw-label">最佳股票</div>
               <div class="simbw-sym">${bestItem.h.sym}<span class="simbw-name">${bestItem.h.name || ""}</span></div>
               <div class="simbw-pct up">${bestItem.pct >= 0 ? "+" : ""}${bestItem.pct.toFixed(1)}%</div>
             </div>
             <div class="simbw-card down">
-              <div class="simbw-label">最差股票${bwState()}</div>
+              <div class="simbw-label">最差股票</div>
               <div class="simbw-sym">${worstItem.h.sym}<span class="simbw-name">${worstItem.h.name || ""}</span></div>
               <div class="simbw-pct down">${worstItem.pct >= 0 ? "+" : ""}${worstItem.pct.toFixed(1)}%</div>
             </div>
           </div>` : `<div class="simb-note">暂无已平仓交易</div>`}
-
           ${subTitle("评级分层表现", "Grade Tiers")}
           ${gradeTableHTML}
-
           ${subTitle("行业表现", "Sector Performance")}
           <div class="simb-table">${simbBarRows(sectorRows, r => r.label)}</div>
-        </div>`;
+        `)}
+
+        ${rvwFold("scale", "规模与口径", "Scale & Basis", `
+          <div class="sim-a-stats">
+            ${simTile("总投入金额", monthCostBasis > 0 ? "$" + Math.round(monthCostBasis).toLocaleString("en-US") : "—", "", "成本×数量合计")}
+            ${simTile("资金加权收益率", weightedPct !== null ? pctTxt(weightedPct) : "—", weightedPct !== null ? (weightedPct >= 0 ? "up" : "down") : "", "已实现盈亏 ÷ 总投入")}
+            ${simTile("平均持仓天数", avgDays !== null ? avgDays + " 天" : "—", "", "全部已平仓交易的平均持有时长")}
+            ${simTile(ddLabel, peak > 0 ? "−" + ddPct.toFixed(1) + "%" : "—", ddPct > 0 ? "down" : "", peak > 0 ? `峰值 ${fmt.signed(Math.round(peak))}` : "尚未产生正向峰值")}
+          </div>
+          <div class="sim-a-stats">
+            ${simTile("总盈利", fmt.signed(Math.round(grossWin)), "up", `${combinedWins.length} 笔合计`)}
+            ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "", `${combinedLosses.length} 笔合计`)}
+            ${simTile("中位数收益率", nClosed ? pctTxt(medPct) : "—", nClosed ? (medPct >= 0 ? "up" : "down") : "", "一半交易好于此值")}
+            ${simTile("交易构成", `${wins.length} / ${losses.length} / ${evens.length}`, "", `盈 / 亏 / 平 · ${countSub}`)}
+          </div>
+        `)}`;
+
+      // 折叠状态记忆：面板每次价格轮询都会重建，不记住的话刚展开就被收回去。
+      $$("[data-rvw-fold]", curEl).forEach(d => d.addEventListener("toggle", () => {
+        localStorage.setItem(d.dataset.rvwFold, d.open ? "1" : "0");
+      }));
       return;
     }
 
