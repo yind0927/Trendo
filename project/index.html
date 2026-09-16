@@ -2058,6 +2058,12 @@
   .mp-stats { margin-bottom:18px; }
   /* Six horizons (1/2/4/6/8/12w). Three columns tiles them 3x2 with no orphan; the old
      five-column grid left the sixth stranded alone on a second row. */
+  /* Says outright what the six tiles are, because "1 周 / 2 周 …" otherwise reads as
+     第1周/第2周 — i.e. the weekly batches, which live further down the page. */
+  .mp-stats-hint { font-size:11px; line-height:1.65; color:var(--fg-3); background:var(--bg-2);
+    border-radius:8px; padding:8px 11px; margin-bottom:10px;
+    border-left:2px solid color-mix(in oklch, var(--accent) 55%, transparent); }
+  .mp-stats-hint b { color:var(--fg-1); font-weight:600; }
   .mp-stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .mp-stat { background:var(--bg-2); border-radius:10px; padding:11px 13px; }
   .mp-stat.primary { box-shadow:inset 2px 0 0 0 var(--accent); }
@@ -5896,8 +5902,8 @@
   </div>
 </div>
 
-<script src="data.js?v=746"></script>
-<script src="desk.js?v=746"></script>
+<script src="data.js?v=747"></script>
+<script src="desk.js?v=747"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

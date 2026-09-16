@@ -5484,13 +5484,17 @@ function rsAdjustGrade(grade, rsResult) {
 
     const stats = `
       <div class="mp-stats">
-        <div class="sim-section-label"><span class="ssl-zh">超额收益</span><span class="ssl-en">vs VOO</span><span class="ssl-rule"></span></div>
+        <div class="sim-section-label"><span class="ssl-zh">超额收益</span><span class="ssl-en">vs VOO</span><span class="ssl-rule"></span>
+          <span class="ssl-meta">按持有期汇总 · 全部批次合并</span></div>
+        <div class="mp-stats-hint">这六张卡是<b>六个持有期</b>，不是六周的批次 ——
+          每一张回答的是「选出来的股票拿 N 周，平均比 VOO 多赚多少」，统计的是<b>全部</b>已录批次。
+          单周批次各自的表现在下方按周列出。</div>
         <div class="mp-stat-grid">
           ${s.rows.map(r => `
             <div class="mp-stat${r.key === MP_PRIMARY ? " primary" : ""}">
-              <div class="mp-stat-label">${r.weeks} 周${r.key === MP_PRIMARY ? " · 主口径" : ""}</div>
+              <div class="mp-stat-label">持有 ${r.weeks} 周${r.key === MP_PRIMARY ? " · 主口径" : ""}</div>
               <div class="mp-stat-val num ${cls(r.avg)}">${ppf(r.avg)}</div>
-              <div class="mp-stat-sub">${r.N ? `批次胜率 ${r.win.toFixed(0)}% · N=${r.N}` : "尚无到期批次"}</div>
+              <div class="mp-stat-sub">${r.N ? `批次胜率 ${r.win.toFixed(0)}% · 已走满 ${r.N} 批` : "还没有批次走满这个持有期"}</div>
               ${r.pickN ? `<div class="mp-stat-sub2">
                 个股胜率 ${r.pickWin.toFixed(0)}% (${r.pickN} 个)<br>
                 中位 <span class="num ${cls(r.pickMed)}">${ppf(r.pickMed)}</span> · 均值 <span class="num ${cls(r.pickAvg)}">${ppf(r.pickAvg)}</span>
