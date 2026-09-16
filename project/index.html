@@ -2834,6 +2834,25 @@
 
   /* Fills behind an exit-quality row: every leg on both sides, wrapping on a phone. */
   .eq-legs { margin: 6px 0 8px; display: flex; flex-direction: column; gap: 3px; }
+
+  /* ── 出场后走势：一行，三个期限 + 一句结论 ──
+     数值刻意保持中性色。出场后上涨是「走早了」的信号，用涨跌色会读反；含义由结论
+     那一枚 chip 承担，它按结论着色而不是按涨跌。 */
+  .eq-after { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+    margin: 2px 0 9px; font-size: 10.5px; }
+  .eq-after-lbl { color: var(--fg-3); letter-spacing: .04em; }
+  .eq-after-cell { font-family: var(--f-mono); color: var(--fg-2); cursor: help; }
+  .eq-after-cell i { font-style: normal; color: var(--fg-3); margin-right: 3px;
+    font-family: var(--f-sans); font-size: 9.5px; }
+  .eq-after-cell.pending { opacity: .45; cursor: default; }
+  .eq-after-verdict { margin-left: auto; font-size: 9.5px; padding: 1px 7px; border-radius: 4px;
+    border: 1px solid currentColor; white-space: nowrap; }
+  .eq-after-verdict.miss { color: var(--down); }
+  .eq-after-verdict.good { color: var(--up); }
+  .eq-after-verdict.flat { color: var(--fg-3); }
+  @media (max-width: 768px) {
+    .eq-after-verdict { margin-left: 0; flex-basis: 100%; text-align: center; }
+  }
   .eq-legs-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 10.5px; }
   .eq-legs-k { color: var(--fg-3); flex-shrink: 0; min-width: 26px; }
   .eq-leg { display: inline-flex; align-items: baseline; gap: 3px;
@@ -5953,8 +5972,8 @@
   </div>
 </div>
 
-<script src="data.js?v=752"></script>
-<script src="desk.js?v=752"></script>
+<script src="data.js?v=753"></script>
+<script src="desk.js?v=753"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

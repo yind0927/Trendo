@@ -10149,7 +10149,7 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>
 
-        ${rvwFold("attr", "哪里在漏", "Attribution", `
+        ${rvwFold("attr", "详情分布", "Breakdown", `
           ${subTitle("最佳 / 最差", "Best / Worst")}
           ${bestItem && worstItem ? `
           <div class="simbw-row">
@@ -11538,6 +11538,51 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
+  // ── 出场之后价格怎么走 ────────────────────────────────────────────────
+  // 出场日之后第 5 / 10 / 20 个交易日的收盘价，与实际出场价对比。
+  // 数据全部来自 histCache（fetchSimHistory 一次就拉到今天），零新增请求。
+  //
+  // 刻意只显示相对出场价的百分比，不显示收盘价绝对值：$63.40 这个数要先跟出场价
+  // 心算一次才有意义，而那个心算的结果恰好就是百分比本身。
+  //
+  // 颜色不按涨跌给：出场后上涨在这里是「走早了」的信号，用绿色会读成「好事」。
+  // 改为按结论着色，并把结论用文字写出来，不让颜色单独承担含义。
+  const EQ_AFTER_DAYS = [5, 10, 20];
+  function eqAfterExitHTML(h, records, totalQty) {
+    const ySym = h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
+    const prices = histCache[ySym];
+    const exitDate = (h.closedAt || "").slice(0, 10);
+    if (!prices || !exitDate) return "";
+    // 多次减仓时用数量加权的平均出场价——单看某一条腿的价格不能代表这笔交易。
+    const soldQty = records.reduce((s, r) => s + (r.qty || 0), 0);
+    const exitPx = soldQty > 0
+      ? records.reduce((s, r) => s + (r.closePrice || 0) * (r.qty || 0), 0) / soldQty
+      : null;
+    if (!(exitPx > 0)) return "";
+
+    const after = Object.keys(prices).filter(d => d > exitDate).sort();
+    const cells = EQ_AFTER_DAYS.map(n => {
+      const d = after[n - 1];
+      return d != null ? { n, d, px: prices[d], pct: (prices[d] - exitPx) / exitPx * 100 } : { n, pct: null };
+    });
+    const known = cells.filter(c => c.pct != null);
+    if (!known.length) return "";   // 刚平仓不久，一个都还没走满：整行不显示，不摆三个横杠
+
+    // 结论锚在已知的最长期限上：它最能说明趋势有没有延续。
+    const last = known[known.length - 1];
+    const v = last.pct >= 3 ? { cls: "miss", txt: `走早了 · ${last.n}日后仍高 ${last.pct.toFixed(1)}%` }
+            : last.pct <= -3 ? { cls: "good", txt: `走对了 · ${last.n}日后低 ${Math.abs(last.pct).toFixed(1)}%` }
+            : { cls: "flat", txt: `${last.n}日后基本持平` };
+
+    return `<div class="eq-after">
+      <span class="eq-after-lbl">出场后</span>
+      ${cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"${
+        c.pct != null ? ` title="出场后第 ${c.n} 个交易日（${c.d}）收盘 $${c.px.toFixed(2)} · 出场均价 $${exitPx.toFixed(2)}"` : ""
+      }><i>${c.n}日</i>${c.pct == null ? "—" : (c.pct >= 0 ? "+" : "") + c.pct.toFixed(1) + "%"}</span>`).join("")}
+      <span class="eq-after-verdict ${v.cls}">${v.txt}</span>
+    </div>`;
+  }
+
   function exitQualityHTML(closedArr, { limit } = {}) {
     const closed = closedArr ?? CLOSED_POSITIONS;
     const isSimMode = closedArr != null && closedArr !== CLOSED_POSITIONS;
@@ -11691,6 +11736,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="eq-eff-chip ${chip}">${effLabel(efficiency)}</span>
         </div>
         ${eqLegsHTML(h, records, totalQty)}
+        ${eqAfterExitHTML(h, records, totalQty)}
         <div class="eq-bar-row">
           <span class="eq-bar-label">峰值</span>
           <div class="eq-bar-track"><div class="eq-bar-fill peak" style="width:100%"></div></div>
