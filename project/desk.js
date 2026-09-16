@@ -11621,7 +11621,7 @@ function rsAdjustGrade(grade, rsResult) {
       ${cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"${
         c.pct != null ? ` title="出场后第 ${c.n} 个交易日（${c.d}）收盘 $${c.px.toFixed(2)} · 出场均价 $${exitPx.toFixed(2)}"` : ""
       }><i>${c.n}日</i>${c.pct == null ? "—" : (c.pct >= 0 ? "+" : "") + c.pct.toFixed(1) + "%"}</span>`).join("")}
-      <span class="eq-after-verdict ${v.cls}" title="${v.tip}"><b>${v.tag}</b>${v.txt}</span>
+      <span class="eq-after-verdict ${v.cls}" title="${v.tip}"><b>${v.tag}</b><i class="eq-av-detail">${v.txt}</i></span>
     </div>`;
   }
 

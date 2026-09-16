@@ -2860,11 +2860,16 @@
     border: 1px solid currentColor; white-space: nowrap; cursor: help; }
   .eq-after-verdict b { font-weight: 700; letter-spacing: .04em; margin-right: 5px;
     padding-right: 5px; border-right: 1px solid currentColor; }
+  .eq-after-verdict i { font-style: normal; }
   .eq-after-verdict.miss { color: var(--down); }
   .eq-after-verdict.good { color: var(--up); }
   .eq-after-verdict.flat { color: var(--fg-3); }
   @media (max-width: 768px) {
-    .eq-after-verdict { margin-left: 0; flex-basis: 100%; text-align: center; }
+    /* 手机端收成纯判定词的小标签：数字在上面三个 cell 里已经有了，
+       标签再重复一遍就得独占一整行。只留结论词，依据仍在 title 里。 */
+    .eq-after-verdict { margin-left: 0; font-size: 9px; padding: 1px 6px; }
+    .eq-after-verdict b { margin-right: 0; padding-right: 0; border-right: none; }
+    .eq-after-verdict .eq-av-detail { display: none; }
   }
   .eq-legs-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 10.5px; }
   .eq-legs-k { color: var(--fg-3); flex-shrink: 0; min-width: 26px; }
@@ -5985,8 +5990,8 @@
   </div>
 </div>
 
-<script src="data.js?v=755"></script>
-<script src="desk.js?v=755"></script>
+<script src="data.js?v=756"></script>
+<script src="desk.js?v=756"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
