@@ -11606,16 +11606,18 @@ function rsAdjustGrade(grade, rsResult) {
     // 结论锚在已知的最长期限上：它最能说明趋势有没有延续。
     // 判定的是「这个出场时点」对不对，不是这笔交易赚没赚 —— 出场后继续涨＝走早了＝错误，
     // 出场后跌了＝躲开了回落＝正确。±3% 以内不下结论，那个幅度分不出对错。
-    // 徽章里放「为什么」，不重复「多少」——涨跌幅上面三个格子里已经有了，
-    // 再抄一遍既占地方又没有新信息。腾出来的位置留给 cmp 那行真正的新数据。
+    // 徽章＝判定词 + 它依据的那个数值，桌面与手机同一套文案（不再按视口裁剪）。
+    // 数值跟左边对应的 cell 是同一个，重复是有意的：结论旁边直接有依据，
+    // 不用回头去对是哪一档。「走早了/躲开回落」这类解释退到 title 里。
     const last = known[known.length - 1];
+    const num = `${last.n}日 ${last.pct >= 0 ? "+" : "−"}${Math.abs(last.pct).toFixed(1)}%`;
     const v = last.pct >= 3
-        ? { cls: "miss", tag: "错误", txt: "走早了",
+        ? { cls: "miss", tag: "错误", txt: num,
             tip: `出场后第 ${last.n} 个交易日收盘比出场均价高 ${last.pct.toFixed(1)}%——走早了，趋势还在继续` }
       : last.pct <= -3
-        ? { cls: "good", tag: "正确", txt: "躲开回落",
+        ? { cls: "good", tag: "正确", txt: num,
             tip: `出场后第 ${last.n} 个交易日收盘比出场均价低 ${Math.abs(last.pct).toFixed(1)}%——走对了，躲开了回落` }
-      : { cls: "flat", tag: "持平", txt: "没走出方向",
+      : { cls: "flat", tag: "持平", txt: num,
           tip: `出场后第 ${last.n} 个交易日与出场均价相差不到 3%，这个幅度分不出对错` };
     // 绝对价格对比：此前只在 cell 的 tooltip 里，桌面这一行右边本来就空着一大段，
     // 摆出来是纯增量信息（三个百分比都是相对值，看不到实际价位）。手机端隐藏。
