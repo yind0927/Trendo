@@ -1696,8 +1696,10 @@ function rsAdjustGrade(grade, rsResult) {
     // prevClose is never saved (noMarket strips it), so nothing to wipe.
     // Any old localStorage snapshot that still has it gets cleared here permanently.
     [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; h.changePct = null; });
-    // Freeze identity before anything groups these arrays.
-    migrateTradeIds();
+    // Freeze identity before anything groups these arrays, and persist it right away
+    // (same pattern as _optMigrate) so the id travels with cloud sync immediately rather
+    // than waiting for some unrelated save. Idempotent: it only writes the first time.
+    if (migrateTradeIds()) saveLocalOnly();
   }
 
   // ============ TRADING DAYS CALCULATOR ============
