@@ -11608,28 +11608,23 @@ function rsAdjustGrade(grade, rsResult) {
     // 出场后跌了＝躲开了回落＝正确。±3% 以内不下结论，那个幅度分不出对错。
     // 徽章＝判定词 + 它依据的那个数值，桌面与手机同一套文案（不再按视口裁剪）。
     // 数值跟左边对应的 cell 是同一个，重复是有意的：结论旁边直接有依据，
-    // 不用回头去对是哪一档。「走早了/躲开回落」这类解释退到 title 里。
+    // 不用回头去对是哪一档。不带 title：手机端本来就悬停不了，桌面端藏一半
+    // 文案在悬停里等于两套信息，不如页面上写什么就是什么。
     const last = known[known.length - 1];
     const num = `${last.n}日 ${last.pct >= 0 ? "+" : "−"}${Math.abs(last.pct).toFixed(1)}%`;
-    const v = last.pct >= 3
-        ? { cls: "miss", tag: "错误", txt: num,
-            tip: `出场后第 ${last.n} 个交易日收盘比出场均价高 ${last.pct.toFixed(1)}%——走早了，趋势还在继续` }
-      : last.pct <= -3
-        ? { cls: "good", tag: "正确", txt: num,
-            tip: `出场后第 ${last.n} 个交易日收盘比出场均价低 ${Math.abs(last.pct).toFixed(1)}%——走对了，躲开了回落` }
-      : { cls: "flat", tag: "持平", txt: num,
-          tip: `出场后第 ${last.n} 个交易日与出场均价相差不到 3%，这个幅度分不出对错` };
-    // 绝对价格对比：此前只在 cell 的 tooltip 里，桌面这一行右边本来就空着一大段，
-    // 摆出来是纯增量信息（三个百分比都是相对值，看不到实际价位）。手机端隐藏。
+    const v = last.pct >= 3  ? { cls: "miss", tag: "错误", txt: num }
+      : last.pct <= -3       ? { cls: "good", tag: "正确", txt: num }
+      :                        { cls: "flat", tag: "持平", txt: num };
+    // 绝对价格对比：三个百分比都是相对值、看不到实际价位，这里补上。桌面端展示，
+    // 手机端放不下（187px）隐藏。
     const cmp = `<span class="eq-after-cmp">出场均价 <b>$${exitPx.toFixed(2)}</b>`
       + ` → 第${last.n}日 <b>$${last.px.toFixed(2)}</b></span>`;
 
     return `<div class="eq-after">
       <span class="eq-after-lbl">出场后</span>
-      ${cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"${
-        c.pct != null ? ` title="出场后第 ${c.n} 个交易日（${c.d}）收盘 $${c.px.toFixed(2)} · 出场均价 $${exitPx.toFixed(2)}"` : ""
-      }><i>${c.n}日</i>${c.pct == null ? "—" : (c.pct >= 0 ? "+" : "") + c.pct.toFixed(1) + "%"}</span>`).join("")}
-      <span class="eq-after-verdict ${v.cls}" title="${v.tip}"><b>${v.tag}</b><i>${v.txt}</i></span>
+      ${cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"><i>${c.n}日</i>${
+        c.pct == null ? "—" : (c.pct >= 0 ? "+" : "") + c.pct.toFixed(1) + "%"}</span>`).join("")}
+      <span class="eq-after-verdict ${v.cls}"><b>${v.tag}</b><i>${v.txt}</i></span>
       ${cmp}
     </div>`;
   }

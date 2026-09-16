@@ -2851,7 +2851,7 @@
   .eq-after { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
     margin: 2px 0 9px; font-size: 10.5px; }
   .eq-after-lbl { color: var(--fg-3); letter-spacing: .04em; }
-  .eq-after-cell { font-family: var(--f-mono); color: var(--fg-2); cursor: help; }
+  .eq-after-cell { font-family: var(--f-mono); color: var(--fg-2); }
   .eq-after-cell i { font-style: normal; color: var(--fg-3); margin-right: 3px;
     font-family: var(--f-sans); font-size: 9.5px; }
   .eq-after-cell.pending { opacity: .45; cursor: default; }
@@ -2860,7 +2860,7 @@
      留一大段空白（1400px 下实测 ~700px），眼睛得横跨过去才读到结论。紧跟在
      百分比后面既把那段空白用上，阅读动线也是连着的；放不下时 flex-wrap 自然换行。 */
   .eq-after-verdict { font-size: 9.5px; padding: 1px 7px; border-radius: 4px;
-    border: 1px solid currentColor; white-space: nowrap; cursor: help; }
+    border: 1px solid currentColor; white-space: nowrap; }
   .eq-after-verdict b { font-weight: 700; letter-spacing: .04em; margin-right: 5px;
     padding-right: 5px; border-right: 1px solid currentColor; }
   .eq-after-verdict i { font-style: normal; font-family: var(--f-mono); }
@@ -5997,8 +5997,8 @@
   </div>
 </div>
 
-<script src="data.js?v=758"></script>
-<script src="desk.js?v=758"></script>
+<script src="data.js?v=759"></script>
+<script src="desk.js?v=759"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
