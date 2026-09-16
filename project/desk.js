@@ -10528,8 +10528,17 @@ function rsAdjustGrade(grade, rsResult) {
       // both when they differ rather than leave a count that does not match what is on
       // screen looking broken.
       const records = SIM_HOLDINGS.length + SIM_CLOSED.length;
-      if (countEl) countEl.textContent =
-        records > trades ? `${trades} 笔 · ${records} 条记录` : `${trades} 笔`;
+      if (countEl) {
+        countEl.textContent =
+          records > trades ? `${trades} 笔交易 · ${records} 条记录` : `${trades} 笔交易`;
+        // Two different questions, and the label alone doesn't say which is which.
+        countEl.title = records > trades
+          ? `「笔」= 交易笔数：持仓中 ${SIM_HOLDINGS.length} 笔 + 已全部平掉 ${closedTrades.length} 笔。\n`
+            + `「条记录」= 下方列表的行数 ${records} 行（持仓中 ${SIM_HOLDINGS.length} + 平仓事件 ${SIM_CLOSED.length}）。\n`
+            + `两者不同是因为分批平仓：同一笔交易每减一次仓就多一条记录，但仍然只算一笔交易。`
+          : `交易笔数：持仓中 ${SIM_HOLDINGS.length} 笔 + 已全部平掉 ${closedTrades.length} 笔。`
+            + `\n目前没有分批平仓，所以记录条数与交易笔数相同。`;
+      }
       const toggleBtn = $("#sim-trade-log-toggle", labelEl);
       if (toggleBtn) {
         toggleBtn.classList.toggle("collapsed", simTradeLogCollapsed);
