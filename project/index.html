@@ -2855,21 +2855,28 @@
   .eq-after-cell i { font-style: normal; color: var(--fg-3); margin-right: 3px;
     font-family: var(--f-sans); font-size: 9.5px; }
   .eq-after-cell.pending { opacity: .45; cursor: default; }
-  /* 判定词加粗在前、数据跟在后：先读结论，再读依据。 */
-  .eq-after-verdict { margin-left: auto; font-size: 9.5px; padding: 1px 7px; border-radius: 4px;
+  /* 判定词加粗在前、数据跟在后：先读结论，再读依据。
+     不再 margin-left:auto 顶到最右——三个百分比只排到行宽的一半，靠右会在中间
+     留一大段空白（1400px 下实测 ~700px），眼睛得横跨过去才读到结论。紧跟在
+     百分比后面既把那段空白用上，阅读动线也是连着的；放不下时 flex-wrap 自然换行。 */
+  .eq-after-verdict { font-size: 9.5px; padding: 1px 7px; border-radius: 4px;
     border: 1px solid currentColor; white-space: nowrap; cursor: help; }
   .eq-after-verdict b { font-weight: 700; letter-spacing: .04em; margin-right: 5px;
     padding-right: 5px; border-right: 1px solid currentColor; }
   .eq-after-verdict i { font-style: normal; }
+  /* 绝对价格对比，填掉判定徽章右侧的空白；灰一档，不跟结论抢注意力。 */
+  .eq-after-cmp { color: var(--fg-3); white-space: nowrap; }
+  .eq-after-cmp b { font-family: var(--f-mono); font-weight: 600; color: var(--fg-2); }
   .eq-after-verdict.miss { color: var(--down); }
   .eq-after-verdict.good { color: var(--up); }
   .eq-after-verdict.flat { color: var(--fg-3); }
   @media (max-width: 768px) {
-    /* 手机端收成纯判定词的小标签：数字在上面三个 cell 里已经有了，
-       标签再重复一遍就得独占一整行。只留结论词，依据仍在 title 里。 */
-    .eq-after-verdict { margin-left: 0; font-size: 9px; padding: 1px 6px; }
-    .eq-after-verdict b { margin-right: 0; padding-right: 0; border-right: none; }
-    .eq-after-verdict .eq-av-detail { display: none; }
+    /* 手机端同样跟在百分比后面、保留完整文字：三个 cell 只排到 245px，
+       右边本来就空着 ~119px，够放完整的一句；真的放不下就换行，不会溢出。 */
+    .eq-after-verdict { font-size: 9px; padding: 1px 6px; }
+    .eq-after-verdict b { margin-right: 4px; padding-right: 4px; }
+    /* 手机端只放得下判定本身；绝对价格仍在 cell 的 tooltip 里 */
+    .eq-after-cmp { display: none; }
   }
   .eq-legs-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 10.5px; }
   .eq-legs-k { color: var(--fg-3); flex-shrink: 0; min-width: 26px; }
@@ -5990,8 +5997,8 @@
   </div>
 </div>
 
-<script src="data.js?v=756"></script>
-<script src="desk.js?v=756"></script>
+<script src="data.js?v=757"></script>
+<script src="desk.js?v=757"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
