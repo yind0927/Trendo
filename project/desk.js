@@ -10071,20 +10071,53 @@ function rsAdjustGrade(grade, rsResult) {
       const beWin = (aw !== null && al !== null && aw + al > 0) ? al / (aw + al) * 100 : null;
       const margin = (beWin !== null && winRatePct !== null) ? winRatePct - beWin : null;
 
+      // 判定：这套打法到底是对的还是错的。
+      //
+      // 关键在于「每笔期望」和「已实现盈亏／盈亏因子」用的是两套口径，可以符号相反：
+      //   · 每笔期望 = 各笔<收益率>的简单平均 —— 每笔等权，回答「选股平均质量如何」
+      //   · 已实现盈亏／盈亏因子 = <美元>金额 —— 按仓位大小加权，回答「账户实际赚没赚」
+      // 亏的时候下注更大，就会出现「每笔期望 +1.9% 但盈亏因子 0.89」。那不是矛盾，
+      // 是一个具体的诊断：问题在仓位管理，不在选股。以前这两个数各自摆着、谁也不解释
+      // 谁，读起来就像哪个算错了。
+      const pf = grossLoss > 0 ? grossWin / grossLoss : null;
+      const moneyOk = monthPnl > 0;          // 账户口径：真金白银赚了吗
+      const pickOk  = nClosed > 0 && avgPct > 0;  // 选股口径：每笔平均是正的吗
+
       const verdict = (() => {
-        if (!nClosed) return { txt: "还没有已平仓交易，等第一笔结束后这里会给出结论。", cls: "" };
-        if (beWin === null) return { txt: "盈利端或亏损端样本为空，暂时无法拆解期望。", cls: "" };
-        const parts = [`保本需要 <b>${beWin.toFixed(0)}%</b> 胜率，实际 <b>${winRatePct.toFixed(0)}%</b>`];
-        if (margin >= 10) parts.push(`余量 <b class="up">${margin.toFixed(0)}pp</b>，结构稳健`);
-        else if (margin > 0) parts.push(`余量只有 <b class="warn">${margin.toFixed(0)}pp</b>，胜率小幅回落就会转负`);
-        else parts.push(`<b class="down">已低于保本线 ${Math.abs(margin).toFixed(0)}pp</b>，当前是负期望`);
-        const rr = (aw !== null && al !== null && al > 0) ? aw / al : null;
-        if (rr !== null) parts.push(rr >= 1.5
-          ? `盈亏比 ${rr.toFixed(2)}，盈利端在拉动结果`
-          : rr >= 1
-          ? `盈亏比 ${rr.toFixed(2)} 偏低，靠胜率撑着 —— 先看能不能让盈利跑得更远`
-          : `盈亏比 ${rr.toFixed(2)}，<b class="down">平均亏损大于平均盈利</b>，改进优先级在止损纪律`);
-        return { txt: parts.join("；") + "。", cls: margin === null ? "" : margin > 0 ? "up" : "down" };
+        if (!nClosed) return { tag: "—", cls: "flat", txt: "还没有已平仓交易，等第一笔结束后这里会给出判定。" };
+        const money = `已实现 <b class="${moneyOk ? "up" : "down"}">${fmt.signed(Math.round(monthPnl))}</b>`
+          + (pf !== null ? `（盈亏因子 ${pf.toFixed(2)}）` : "");
+        const pick = `每笔期望 <b class="${pickOk ? "up" : "down"}">${(avgPct >= 0 ? "+" : "−") + Math.abs(avgPct).toFixed(1)}%</b>`;
+
+        // 两个口径打架 —— 这是最有信息量的情形，直接把病因说出来
+        if (moneyOk !== pickOk) {
+          return { tag: "存疑", cls: "warn",
+            txt: pickOk
+              ? `${pick}，选股平均是<b>对</b>的；但${money}，账户在亏。`
+                + `两个口径差在权重：期望按每笔等权，盈亏按仓位金额加权 —— `
+                + `<b class="down">亏的那几笔下注更大</b>。问题在仓位管理，不在选股。`
+              : `${money}，账户是<b>赚</b>的；但${pick}，多数交易其实在亏。`
+                + `说明结果靠少数重仓的大赢家撑着 —— <b class="warn">赢的那几笔下注更大</b>，`
+                + `一旦这类机会没抓到就会转负。`};
+        }
+        // 两个口径一致
+        if (!moneyOk) {
+          const parts = [`${money}，${pick}，两个口径都是负的 —— 这套打法目前是<b class="down">错</b>的。`];
+          if (beWin !== null) parts.push(`保本需要 ${beWin.toFixed(0)}% 胜率，实际只有 ${winRatePct.toFixed(0)}%，`
+            + `差 <b class="down">${Math.abs(margin).toFixed(0)}pp</b>。`);
+          const rr = (aw !== null && al !== null && al > 0) ? aw / al : null;
+          if (rr !== null) parts.push(rr < 1
+            ? `平均亏损 ${al.toFixed(1)}% 大于平均盈利 ${aw.toFixed(1)}%，先改止损纪律。`
+            : `盈亏比 ${rr.toFixed(2)} 还行，问题出在胜率太低，先改选股。`);
+          return { tag: "错误", cls: "down", txt: parts.join("") };
+        }
+        const parts = [`${money}，${pick}，两个口径一致 —— 这套打法目前是<b class="up">对</b>的。`];
+        if (beWin !== null) {
+          if (margin >= 10) parts.push(`保本需要 ${beWin.toFixed(0)}% 胜率，实际 ${winRatePct.toFixed(0)}%，余量 <b class="up">${margin.toFixed(0)}pp</b>，结构稳健。`);
+          else parts.push(`但保本线就在 ${beWin.toFixed(0)}%，实际 ${winRatePct.toFixed(0)}%，余量只有 <b class="warn">${margin.toFixed(0)}pp</b> —— 胜率小幅回落就会转负。`);
+        }
+        return { tag: margin !== null && margin < 10 ? "正确 · 脆弱" : "正确",
+                 cls: margin !== null && margin < 10 ? "warn" : "up", txt: parts.join("") };
       })();
 
       const rvwFold = (key, zh, en, body) => {
@@ -10110,7 +10143,9 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="rvw-hl-item">胜率 <b class="num">${winRatePct !== null ? winRatePct.toFixed(0) + "%" : "—"}</b></span>
             <span class="rvw-hl-sep">·</span>
             <span class="rvw-hl-item">盈亏因子 <b class="num ${pfCls}">${pfStr}</b></span>
+            <span class="rvw-tag rvw-tag-${verdict.cls}">${verdict.tag}</span>
           </div>
+          <div class="rvw-scope">只统计<b>已平仓</b>交易，不含持仓中的浮动盈亏</div>
           <div class="rvw-verdict-txt ${verdict.cls}">${verdict.txt}</div>
         </div>
 
