@@ -1132,6 +1132,37 @@ function rsAdjustGrade(grade, rsResult) {
   // again this month) — selectedSym alone can't tell those two records apart.
   let selectedEntry = null, selectedCost = null;
   function tradeKey(h) { return `${h.sym}|${h.entry || ""}|${h.cost ?? ""}`; }
+
+  // ── Stable trade identity ─────────────────────────────────────────────────
+  // tradeKey (sym|entry|cost) is fine for matching a row the user just clicked, because
+  // the object always comes from the same array. It is NOT a reliable IDENTITY:
+  //   · cost moves when a position is added to, so a partially-closed trade loses the
+  //     link to its own exit records and gets counted twice;
+  //   · two genuinely different trades in the same symbol on the same day at the same
+  //     price are indistinguishable, so they collapse into one.
+  // Both corrupt everything built on groupTrades — win rate, trade counts, Analytics,
+  // the monthly backtest — not just the Trade Log label.
+  //
+  // `_tid` is written once when a position is created and never changes. closePosition
+  // spreads the whole position into each closed record, so exits inherit it for free.
+  // Anything without one falls back to the old composite key, so existing data behaves
+  // exactly as it did before — this is additive, not a migration of meaning.
+  const newTradeId = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  const tradeIdOf = h => h._tid || tradeKey(h);
+
+  // Freeze today's identity onto existing data. Doing it once means a later 加仓 (which
+  // changes cost) can no longer break the link between a position and its own exits.
+  // Two old trades that already share sym|entry|cost stay merged — that information was
+  // never recorded and cannot be recovered; only new trades get a truly unique id.
+  function migrateTradeIds() {
+    let changed = false;
+    for (const arr of [HOLDINGS, CLOSED_POSITIONS, SIM_HOLDINGS, SIM_CLOSED]) {
+      for (const h of arr) {
+        if (!h._tid) { h._tid = tradeKey(h); changed = true; }
+      }
+    }
+    return changed;
+  }
   let activeTab = "open";
   let holdingsViewMode = localStorage.getItem("trendo_holdings_view") || "list";
   let totalNotional = 60000;
@@ -1328,11 +1359,10 @@ function rsAdjustGrade(grade, rsResult) {
       // as "open" again, its matching pending close order gets rescued right after,
       // and the next fetchPrices tick auto-closes it a second time → duplicate
       // closed record for the same trade.
-      const closedKeys = new Set(SIM_CLOSED.map(c => `${c.sym}|${c.entry}|${c.cost}`));
+      const closedKeys = new Set(SIM_CLOSED.map(tradeIdOf));
       if (Array.isArray(cloudData.simHoldings) && cloudData.simHoldings.length) {
-        const localKey = h => `${h.sym}|${h.entry}|${h.cost}`;
-        const localKeys = new Set(SIM_HOLDINGS.map(localKey));
-        const newH = cloudData.simHoldings.filter(h => !localKeys.has(localKey(h)) && !closedKeys.has(localKey(h)));
+        const localKeys = new Set(SIM_HOLDINGS.map(tradeIdOf));
+        const newH = cloudData.simHoldings.filter(h => !localKeys.has(tradeIdOf(h)) && !closedKeys.has(tradeIdOf(h)));
         if (newH.length) {
           SIM_HOLDINGS.push(...newH);
           newH.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
@@ -1496,6 +1526,9 @@ function rsAdjustGrade(grade, rsResult) {
     });
     // Refresh quotes right away (next tick) instead of waiting out the 30s interval
     lastPriceFetch = 0;
+    // Cloud data can come from a device that predates _tid — give anything without one
+    // its identity before the render below groups these arrays.
+    migrateTradeIds();
     // Persist locally then re-render
     saveLocalOnly();
     renderOverview(); renderTable(); renderTape();
@@ -1663,6 +1696,8 @@ function rsAdjustGrade(grade, rsResult) {
     // prevClose is never saved (noMarket strips it), so nothing to wipe.
     // Any old localStorage snapshot that still has it gets cleared here permanently.
     [...HOLDINGS, ...SIM_HOLDINGS].forEach(h => { h.prevClose = null; h.changePct = null; });
+    // Freeze identity before anything groups these arrays.
+    migrateTradeIds();
   }
 
   // ============ TRADING DAYS CALCULATOR ============
@@ -3064,7 +3099,7 @@ function rsAdjustGrade(grade, rsResult) {
   function groupTrades(closedArr) {
     const map = new Map();
     for (const h of closedArr) {
-      const key = `${h.sym}|${h.entry}|${h.cost}`;
+      const key = tradeIdOf(h);
       if (!map.has(key)) map.set(key, { ...h, _pnl: 0, _qty: 0, _lastClose: "" });
       const t = map.get(key);
       t._pnl += (h.pnlFinal ?? 0);
@@ -3090,11 +3125,11 @@ function rsAdjustGrade(grade, rsResult) {
   // trimmed keep showing each raw exit record separately (position still open = still
   // watching how it plays out, so each trim stays visible as its own event).
   function mergeClosedForDisplay(closedArr, holdingsArr) {
-    const openKeys = new Set(holdingsArr.map(h => `${h.sym}|${h.entry}|${h.cost}`));
+    const openKeys = new Set(holdingsArr.map(tradeIdOf));
     const groups = new Map();
     const order = [];
     closedArr.forEach(c => {
-      const key = `${c.sym}|${c.entry}|${c.cost}`;
+      const key = tradeIdOf(c);
       if (!groups.has(key)) { groups.set(key, []); order.push(key); }
       groups.get(key).push(c);
     });
@@ -4041,6 +4076,7 @@ function rsAdjustGrade(grade, rsResult) {
         ...(entryATR > 0 && { entryATR })
       };
 
+      newPos._tid = newTradeId();
       targetHoldings.push(newPos);
       saveToStorage();
       form.reset();
@@ -6228,6 +6264,7 @@ function rsAdjustGrade(grade, rsResult) {
           ...(order.entryATR > 0 && { entryATR: order.entryATR }),
         };
         recomputeHolding(pos, simNotional);
+        pos._tid = newTradeId();
         SIM_HOLDINGS.push(pos);
         const i = SIM_PENDING.findIndex(p => p.id === order.id);
         if (i !== -1) SIM_PENDING.splice(i, 1);
@@ -6428,6 +6465,7 @@ function rsAdjustGrade(grade, rsResult) {
           ...(order.entryATR > 0 && { entryATR: order.entryATR }),
         };
         recomputeHolding(newPos, simNotional);
+        newPos._tid = newTradeId();
         SIM_HOLDINGS.push(newPos);
         executed.push(order.id);
         changed = true;
@@ -6800,19 +6838,19 @@ function rsAdjustGrade(grade, rsResult) {
     }).sort((a, b) => b.h.entry.localeCompare(a.h.entry));
 
     // Build closed grouped trades — skip positions that still have an open holding.
-    const openKeys = new Set(HOLDINGS.map(h => `${h.sym}|${h.entry}|${h.cost}`));
+    const openKeys = new Set(HOLDINGS.map(tradeIdOf));
     const rawRecordsMap = new Map();
     CLOSED_POSITIONS.forEach(c => {
-      const key = `${c.sym}|${c.entry}|${c.cost}`;
+      const key = tradeIdOf(c);
       (rawRecordsMap.get(key) || rawRecordsMap.set(key, []).get(key)).push(c);
     });
     const grouped = groupTrades(CLOSED_POSITIONS);
     const closedItems = grouped
-      .filter(t => !openKeys.has(`${t.sym}|${t.entry}|${t.cost}`))
+      .filter(t => !openKeys.has(tradeIdOf(t)))
       .map(t => ({
         h: t,
         from: "closed",
-        records: (rawRecordsMap.get(`${t.sym}|${t.entry}|${t.cost}`) || [])
+        records: (rawRecordsMap.get(tradeIdOf(t)) || [])
           .sort((a, b) => (a.closedAt || "").localeCompare(b.closedAt || "")),
       }))
       .sort((a, b) => (b.h.closedAt || "").localeCompare(a.h.closedAt || ""));
@@ -10521,8 +10559,8 @@ function rsAdjustGrade(grade, rsResult) {
       // in SIM_CLOSED, and groupTrades keeps a group for them. Adding the two lengths
       // therefore counted such a trade twice. Closed groups whose trade is still open are
       // dropped here — the same rule mergeClosedForDisplay applies for the closed table.
-      const openKeys = new Set(SIM_HOLDINGS.map(tradeKey));
-      const closedTrades = groupTrades(SIM_CLOSED).filter(t => !openKeys.has(tradeKey(t)));
+      const openKeys = new Set(SIM_HOLDINGS.map(tradeIdOf));
+      const closedTrades = groupTrades(SIM_CLOSED).filter(t => !openKeys.has(tradeIdOf(t)));
       const trades  = SIM_HOLDINGS.length + closedTrades.length;
       // Rows below are exit EVENTS, so a trade scaled out of spans several of them. State
       // both when they differ rather than leave a count that does not match what is on
@@ -11439,7 +11477,7 @@ function rsAdjustGrade(grade, rsResult) {
     // Group partial closes into trades (sym + entry + cost)
     const tradeMap = new Map();
     for (const h of closed) {
-      const key = `${h.sym}|${h.entry}|${h.cost}`;
+      const key = tradeIdOf(h);
       if (!tradeMap.has(key)) tradeMap.set(key, []);
       tradeMap.get(key).push(h);
     }
