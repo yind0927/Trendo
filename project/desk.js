@@ -1490,6 +1490,7 @@ function rsAdjustGrade(grade, rsResult) {
       CYCLE_CHECK.log   = data.cycleCheck.log   || [];
       CYCLE_CHECK.confirmedPhase = data.cycleCheck.confirmedPhase || null;
       CYCLE_CHECK.confirmedAt    = data.cycleCheck.confirmedAt    || null;
+      CYCLE_CHECK.history        = data.cycleCheck.history        || [];
     }
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
@@ -1662,7 +1663,8 @@ function rsAdjustGrade(grade, rsResult) {
       const cc = localStorage.getItem("trendo_v4_cycle_check");
       if (cc) { try { const p = JSON.parse(cc);
         if (p && typeof p === "object") { CYCLE_CHECK.items = p.items || {}; CYCLE_CHECK.log = p.log || [];
-          CYCLE_CHECK.confirmedPhase = p.confirmedPhase || null; CYCLE_CHECK.confirmedAt = p.confirmedAt || null; } } catch (_) {} }
+          CYCLE_CHECK.confirmedPhase = p.confirmedPhase || null; CYCLE_CHECK.confirmedAt = p.confirmedAt || null;
+          CYCLE_CHECK.history = p.history || []; } } catch (_) {} }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
@@ -14690,13 +14692,11 @@ function rsAdjustGrade(grade, rsResult) {
   // 分档几乎不做功，得分基本等于「有几条 T2 亮了」——这正是 v761 判定「没有区分度」的同一类毛病。
   // 现在权重只表达决定性，时序改为独立标签（领先/同步/终点），信息不丢但不再混进分数。
   const CYCLE_TIER_W = { 1: 3, 2: 2, 3: 1 };
-  const CYCLE_TIER_ZH = { 1: "决定性", 2: "结构性", 3: "行为性" };
   const CYCLE_TIER_DESC = {
-    1: "单独亮起就足以定位周期位置",
-    2: "钱从哪来、产出值多少——硬结构，不易被情绪解释",
-    3: "会计手法与市场行为——真实，但都能用情绪解释掉",
+    1: "T1 决定性：单独亮起就足以定位周期位置",
+    2: "T2 结构性：钱从哪来、产出值多少——硬结构，不易被情绪解释",
+    3: "T3 行为性：会计手法与市场行为——真实，但都能用情绪解释掉",
   };
-  const CYCLE_LEAD_ZH = { lead: "领先", sync: "同步", end: "终点" };
   const CYCLE_STATES = [
     { k: "clear", zh: "未出现" },
     { k: "watch", zh: "观察中" },
@@ -14704,67 +14704,67 @@ function rsAdjustGrade(grade, rsResult) {
   ];
 
   const CYCLE_ITEMS = [
-    { id: "capex_guide", tier: 1, when: "end", terminal: true, days: 90, zh: "超大厂 capex 指引下调",
+    { id: "capex_guide", tier: 1, terminal: true, days: 90, zh: "超大厂 capex 指引下调",
       what: "买方停止加码 = 卖方收入立刻塌。这是整轮周期机械性的终点。",
       where: "MSFT / GOOGL / AMZN / META 季度财报电话会的 capex guidance 段落",
       how: "有任何一家下调下季度或全年 capex 指引？",
       warn: "「增速放缓」不算，要实际 guide-down" },
 
-    { id: "depreciation", tier: 3, when: "sync", days: 90, zh: "折旧年限假设被拉长",
+    { id: "depreciation", tier: 3, days: 90, zh: "折旧年限假设被拉长",
       what: "capex 滞后 3–6 年变成折旧打进利润表。把年限往后拉＝用会计手段护 EPS——这是金融化阶段的手法，不是周期终点。",
       where: "10-K / 10-Q 的「Property and Equipment」附注，找 useful life",
       how: "有没有哪家又把服务器折旧年限往后拉了？",
       warn: "往后拉＝看空信号；主动缩短反而是诚实的，算「未出现」" },
 
-    { id: "semi_orders", tier: 1, when: "lead", lead: true, days: 90, zh: "半导体订单 / backlog 掉头",
+    { id: "semi_orders", tier: 1, lead: true, days: 90, zh: "半导体订单 / backlog 掉头",
       what: "卖铲子一端的领先指标，通常早于 capex 指引出现。",
       where: "NVDA / AVGO / TSM 财报里的 backlog 与交期；ODM 渠道库存",
       how: "交期缩短、订单取消、或渠道库存开始堆积？" },
 
-    { id: "credit_spread", tier: 2, when: "lead", days: 30, zh: "AI 相关信用利差走扩",
+    { id: "credit_spread", tier: 2, days: 30, zh: "AI 相关信用利差走扩",
       what: "信用几乎永远领先股票。这是性价比最高的单一同步指标。",
       where: "超大厂债利差 vs 同期限国债；数据中心项目债利差",
       how: "利差是否较上季明显走扩？" },
 
-    { id: "debt_ratio", tier: 2, when: "sync", days: 90, zh: "AI capex 债务融资占比", num: true,
+    { id: "debt_ratio", tier: 2, days: 90, zh: "AI capex 债务融资占比", num: true,
       what: "边际那一块钱从自由现金流变成债务时，这轮就挂上了一个偿债时钟。",
       where: "高盛 / 摩根大通 / BIS 的 AI 融资报告",
       how: "填一个百分比即可，阈值由系统判色",
       warn: "<25% 未出现 · 25–40% 观察中 · >40% 已触发" },
 
-    { id: "circular", tier: 2, when: "sync", days: 90, zh: "循环交易 / 表外融资结构",
+    { id: "circular", tier: 2, days: 90, zh: "循环交易 / 表外融资结构",
       what: "供应商融资、SPV、芯片厂投资客户再买自家芯片 —— 1999 年电信同款结构。",
       where: "BIS 季报、公司债发行公告、10-Q 的 VIE / SPV 附注",
       how: "有没有 SPV、表外结构或循环股权交易的新证据？" },
 
-    { id: "breadth", tier: 3, when: "lead", days: 0, zh: "宽度背离（等权 vs 市值加权）", auto: true,
+    { id: "breadth", tier: 3, days: 0, zh: "宽度背离（等权 vs 市值加权）", auto: true,
       what: "指数靠少数几只撑着 —— 派发期最客观的量化表达。",
       where: "RSP/VOO 与 QQQE/QQQ 的 60 交易日比值变化（本模块自动计算）",
       how: "自动：任一比值 60 日跌超 3% 记「已触发」，跌超 1% 记「观察中」" },
 
-    { id: "good_news_fail", tier: 3, when: "sync", days: 90, zh: "利好失效",
+    { id: "good_news_fail", tier: 3, days: 90, zh: "利好失效",
       what: "财报超预期但股价下跌 —— 典型的买盘衰竭信号。",
       where: "四家超大厂 + NVDA 财报后次日表现",
       how: "最近一个财报季，有没有出现「beat 却大跌」？" },
 
-    { id: "ai_roi", tier: 2, when: "lead", days: 90, zh: "AI 投入产出比转弱",
+    { id: "ai_roi", tier: 2, days: 90, zh: "AI 投入产出比转弱",
       what: "capex 是投入，云收入是产出。整轮周期的合理性最终只取决于这个比值——它先转弱，capex 指引才会跟着下调。此前这张表只测了投入、融资、成本与市场行为，没有一条在问「钱有没有回来」。",
       where: "四家超大厂季报的云业务收入增速（Azure / Google Cloud / AWS）对比同期 capex 增速",
       how: "云收入增速是否明显跟不上 capex 增速？",
       warn: "单季波动不算，要连续两季；收入增速放缓但仍快于 capex 增速不算" },
 
-    { id: "compute_price", tier: 2, when: "lead", days: 90, zh: "算力单价转跌（最新一代）",
+    { id: "compute_price", tier: 2, days: 90, zh: "算力单价转跌（最新一代）",
       what: "这是整张表里唯一一条测「产出物的价格」的判据。产能过剩最先体现在租金上，比财报、比 capex 指引都早——但必须盯最新一代，老一代降价只是技术换代。",
       where: "Lambda / CoreWeave / RunPod / Nebius 等的公开小时价；SemiAnalysis 的算力价格追踪",
       how: "**最新一代**（当前为 B200 / GB200）的按需与现货价格是否连续两季下跌？",
       warn: "H100 这类老一代降价不算——那是换代的正常折旧；反过来，若最新一代现货折扣扩大，那才是供给开始过剩" },
 
-    { id: "ipo_window", tier: 3, when: "lead", days: 0, zh: "IPO 窗口状态",
+    { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态",
       what: "测的是市场能不能消化叙事顶点的最大供给量。",
       where: "近期大型科技 IPO 的定价与首月表现",
       how: "有没有大型 IPO 破发、或发行人主动推迟？" },
 
-    { id: "new_metric", tier: 3, when: "lead", days: 0, zh: "新估值指标出现",
+    { id: "new_metric", tier: 3, days: 0, zh: "新估值指标出现",
       what: "GAAP 撑不住时卖方会发明新口径。2000 年是 EBITDA 和 eyeballs。",
       where: "卖方研报、公司 IR 材料的措辞",
       how: "有没有出现「算力调整后收入」这类新造指标来论证估值？" },
@@ -14907,15 +14907,28 @@ function rsAdjustGrade(grade, rsResult) {
       : (CYCLE_CHECK.items[it.id]?.state || "unset");
   }
 
+  // 某条是否已过自己的复核周期（days=0 的事件型判据永不过期）
+  function cycStaleOf(it) {
+    const rec = CYCLE_CHECK.items[it.id];
+    if (it.auto || !it.days || !rec || !rec.at) return false;
+    return Math.floor((Date.now() - new Date(rec.at + "T00:00:00").getTime()) / 864e5) > it.days;
+  }
+
   function cyclePhase() {
-    let score = 0, maxV = 0, wDone = 0, wAll = 0;
+    let score = 0, maxV = 0, wDone = 0, wAll = 0, staleN = 0;
     let terminal = false, lead = false;
     const cnt = { 1: [0, 0], 2: [0, 0], 3: [0, 0] };   // [lit, 总数]
     for (const it of CYCLE_ITEMS) {
       const st = cycStateOf(it), w = CYCLE_TIER_W[it.tier];
       cnt[it.tier][1]++; wAll += w;
       if (st === "unset") continue;                     // 未核实不进分子也不进分母
-      wDone += w; maxV += w;
+      // v770：过期项只按半权计入**完整度**——"核实过但已经过期"确实比"本季刚核实"弱，
+      // 这正是「完整度」和它名字暗示的「可信度」之间的那道缝。**得分的分母 maxV 不打折**：
+      // 过期不代表这条的事实变了，只代表没人再去看过，不该连带把打分的口径也改掉。
+      const stale = cycStaleOf(it);
+      if (stale) staleN++;
+      wDone += stale ? w / 2 : w;
+      maxV += w;
       if (st === "lit") {
         cnt[it.tier][0]++; score += w;
         if (it.terminal) terminal = true;
@@ -14951,7 +14964,7 @@ function rsAdjustGrade(grade, rsResult) {
       .map(([cut, n, zh]) => ({ cut, n, zh, d: ratio - cut }))
       .filter(e => Math.abs(e.d) <= 0.02)
       .sort((a, b) => Math.abs(a.d) - Math.abs(b.d))[0] || null;
-    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, terminal, prev, edge };
+    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, terminal, prev, edge, staleN };
   }
 
   // 高可信（或直接观测到终点信号）时才把阶段"确认"下来并落盘——这是
@@ -15006,8 +15019,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     return `<div class="cyc-item cyc-st-${st}">
       <div class="cyc-hd">
-        <span class="cyc-tier t${it.tier}" title="${CYCLE_TIER_DESC[it.tier]}">${CYCLE_TIER_ZH[it.tier]} ${CYCLE_TIER_W[it.tier]}</span>
-        ${it.when ? `<span class="cyc-when">${CYCLE_LEAD_ZH[it.when]}</span>` : ""}
+        <span class="cyc-tier t${it.tier}" title="${CYCLE_TIER_DESC[it.tier]}">T${it.tier}</span>
         <span class="cyc-zh">${it.zh}</span>
         <span class="cyc-state ${st}">${stZh}</span>
       </div>
@@ -15054,6 +15066,7 @@ function rsAdjustGrade(grade, rsResult) {
         <span class="cyc-sum-phase ${headCls}">${headTxt}</span>
         <span class="cyc-sum-score ${p.raw.cls}">${sc10(p.ratio).toFixed(1)}<i>/10</i></span>
         <span class="cyc-sum-conf ${p.band.k}">证据 ${pct(p.conf)}%</span>
+        ${p.staleN ? `<span class="cyc-sum-stale">${p.staleN} 条待复核</span>` : ""}
       </summary>
       <div class="cyc-top">
         <div class="cyc-top-l">
@@ -15081,10 +15094,13 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         <div class="cyc-conf-bar"><i class="${p.band.k}" style="width:${pct(p.conf)}%"></i></div>
         <div class="cyc-conf-note">${p.band.note}</div>
-        <div class="cyc-conf-def">完整度 = <b>已核实项的权重和 ÷ 全部项的权重和</b>（不含"未填"）。
-          它只回答「这张表填了多少」，<b>不判断填得对不对、也不判断新不新</b>——
-          一条半年前填的和今天刚核实的，在这个数字里是一样的。所以每条自带复核周期，
-          过期会在该条下方标「已 N 天未复核」，需要人自己去看。</div>
+        ${p.staleN ? `<div class="cyc-stale-sum">⏱ <b>${p.staleN} 条已过复核周期</b>，在完整度里按半权计入——
+          这几条的事实可能已经变了，但没人再去看过。展开下方清单，标着「已 N 天未复核」的就是。</div>` : ""}
+        <div class="cyc-conf-def">完整度 = <b>已核实项的权重和 ÷ 全部项的权重和</b>（不含"未填"），
+          <b>过期项按半权</b>计入。它回答的是「这张表填得有多全、有多新」，
+          <b>但不判断填得对不对</b>——一条填错的和一条填对的在这个数字里是一样的。
+          <br>注意：过期只打折<b>完整度</b>，<b>不打折得分</b>——过期不代表那条的事实变了，
+          只代表没人再去看过，不该连带把打分的口径也改掉。</div>
         ${rawLine}
       </div>
 
@@ -15094,9 +15110,9 @@ function rsAdjustGrade(grade, rsResult) {
         <b>得分</b> = 已触发权重 ÷ <b>已核实项</b>的满分 × 10（未填既不进分子也不进分母）。
         满分固定 10 分，所以**增删判据不会换尺子**，前后版本可以直接比。
         已触发计该档权重，观察中计 1/3。
-        <br><b>档位＝决定性</b>（这条亮了信息量多大）：决定性 3 分 · 结构性 2 分 · 行为性 1 分。
-        <b>时序</b>（领先/同步/终点）只作标签，<b>不进分数</b>——它说的是「什么时候能看到」，
-        不是「有多重要」，把两者混在一个权重里会让早而弱的信号被系统性低估。
+        <br><b>档位＝决定性</b>（这条亮了信息量多大，与「早晚」无关）：
+        <b>T1</b> 3 分 决定性（单独亮起就足以定位周期）· <b>T2</b> 2 分 结构性（钱从哪来、产出值多少）·
+        <b>T3</b> 1 分 行为性（会计手法与市场行为，都能用情绪解释掉）。
         <br>得分 ≥6.0 第 5 阶段 · ≥3.5 第 4 阶段 · ≥1.5 第 3 阶段；
         半导体订单掉头则至少第 5 阶段；<b>capex 指引下调 → 第 6 阶段</b>，
         这一条是直接观测到的事实，不受完整度门控压制。
@@ -15124,6 +15140,11 @@ function rsAdjustGrade(grade, rsResult) {
         <span>一次覆盖除自动项外的 9 条（含备注与复核日期），每条都会写进下方变更记录，可逐条改回。</span>
       </div>
       <div class="cyc-list">${CYCLE_ITEMS.map(cycItemHTML).join("")}</div>
+      <details class="cyc-hist">
+        <summary><span class="cyc-defs-tick"></span>得分走向 · SCORE TREND
+          <i>这个模块有用的是方向，不是某一天的数字</i></summary>
+        <div class="cyc-hist-body">${cycHistHTML()}</div>
+      </details>
       ${recent.length ? `<details class="cyc-log"><summary>变更记录 · 最近 ${recent.length} 条</summary>
         <div class="cyc-log-body">${recent.map(l => {
           const it = CYCLE_ITEMS.find(x => x.id === l.id);
@@ -15180,11 +15201,55 @@ function rsAdjustGrade(grade, rsResult) {
     }));
   }
 
+  // 得分快照。这个模块的价值在**趋势**而不是快照——v760 就写过"趋势比快照有意义"，
+  // 但当时只存了逐条的文字变更记录，没有一条可比的得分序列，等于看不出方向。
+  // 每天最多留一条；同日内得分变化 ≥0.05 或阶段变了才覆盖，避免价格轮询把记录刷爆。
+  function cycleSnapshot(p) {
+    if (!p || !p.maxV) return false;                  // 一条都没核实时不记
+    CYCLE_CHECK.history = CYCLE_CHECK.history || [];
+    const H = CYCLE_CHECK.history;
+    const d = cycToday();
+    const cur = { d, sc: +(p.ratio * 10).toFixed(2), n: p.shown ? p.shown.n : null,
+                  zh: p.shown ? p.shown.zh : null, conf: +(p.conf * 100).toFixed(0) };
+    const last = H[H.length - 1];
+    if (last && last.d === d) {
+      if (Math.abs(last.sc - cur.sc) < 0.05 && last.n === cur.n && last.conf === cur.conf) return false;
+      H[H.length - 1] = cur;
+    } else {
+      if (last && Math.abs(last.sc - cur.sc) < 0.05 && last.n === cur.n) return false;
+      H.push(cur);
+    }
+    if (H.length > 60) H.splice(0, H.length - 60);
+    return true;
+  }
+
+  function cycHistHTML() {
+    const H = (CYCLE_CHECK.history || []).slice(-12).reverse();
+    if (H.length < 2) {
+      return `<div class="cyc-hist-empty">还只有 ${H.length} 个读数。每次改动判据都会留一条，
+        攒够两条以后这里会显示得分的走向——<b>这个模块真正有用的是方向，不是某一天的数字</b>。</div>`;
+    }
+    const first = H[H.length - 1], now = H[0];
+    const delta = +(now.sc - first.sc).toFixed(2);
+    const dirTxt = Math.abs(delta) < 0.05 ? "基本持平"
+      : delta > 0 ? `上行 +${delta.toFixed(2)} 分（更接近周期尾声）`
+      : `回落 ${delta.toFixed(2)} 分（结构性压力在缓解）`;
+    const dirCls = Math.abs(delta) < 0.05 ? "" : delta > 0 ? "down" : "up";
+    return `<div class="cyc-hist-sum ${dirCls}">${first.d} → ${now.d}：${first.sc.toFixed(1)} → ${now.sc.toFixed(1)} 分 · ${dirTxt}</div>
+      <div class="cyc-hist-rows">${H.map(h => `<div class="cyc-hist-row">
+        <i>${h.d}</i>
+        <span class="cyc-hist-bar"><b style="width:${Math.min(100, h.sc * 10)}%"></b></span>
+        <em>${h.sc.toFixed(1)}</em>
+        <s>${h.n ? "第 " + h.n + " 阶段" : "暂不判定"}</s>
+      </div>`).join("")}</div>`;
+  }
+
   function renderCycleCard() {
     const el = $("#cycle-card");
     if (!el) return;
     let dirty = cycleSeed();
     if (cycleConfirm()) dirty = true;
+    if (cycleSnapshot(cyclePhase())) dirty = true;
     if (dirty) saveToStorage();
     el.innerHTML = cycleCardHTML();
     wireCycleCard(el);

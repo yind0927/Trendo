@@ -116,4 +116,4 @@ window.REAL_OPTIONS = [];
 //   confirmedPhase: { n, zh, cls } | null,  — 上次在「高可信」下确认的阶段
 //   confirmedAt: "YYYY-MM-DD" | null }      — 阶段是有状态的：证据完整度不足时
 //                                             保留上次确认值，不因新增单条证据跳档
-window.CYCLE_CHECK = { items: {}, log: [], confirmedPhase: null, confirmedAt: null };
+window.CYCLE_CHECK = { items: {}, log: [], history: [], confirmedPhase: null, confirmedAt: null };
