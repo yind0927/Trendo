@@ -14741,6 +14741,12 @@ function rsAdjustGrade(grade, rsResult) {
       how: "云收入增速是否明显跟不上 capex 增速？",
       warn: "单季波动不算，要连续两季；收入增速放缓但仍快于 capex 增速不算" },
 
+    { id: "compute_price", tier: 2, days: 90, zh: "算力单价转跌（最新一代）",
+      what: "这是整张表里唯一一条测「产出物的价格」的判据。产能过剩最先体现在租金上，比财报、比 capex 指引都早——但必须盯最新一代，老一代降价只是技术换代。",
+      where: "Lambda / CoreWeave / RunPod / Nebius 等的公开小时价；SemiAnalysis 的算力价格追踪",
+      how: "**最新一代**（当前为 B200 / GB200）的按需与现货价格是否连续两季下跌？",
+      warn: "H100 这类老一代降价不算——那是换代的正常折旧；反过来，若最新一代现货折扣扩大，那才是供给开始过剩" },
+
     { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态",
       what: "测的是市场能不能消化叙事顶点的最大供给量。",
       where: "近期大型科技 IPO 的定价与首月表现",
@@ -14766,6 +14772,7 @@ function rsAdjustGrade(grade, rsResult) {
       circular:      { state: "lit",   note: "BIS 确认超大厂借 SPV 收购数据中心资产、私募发债，自身只持少数股权 + 长期租赁承诺。最新实例：Blackstone + Alphabet 合资的 Crux AI 由 10 家银行提供 220 亿美元贷款买 Google 自家 TPU，以芯片本身与客户合同作抵押（Bloomberg 9/16）——卖方把设备卖给一个由自己参股、靠举债买货的实体，正是这一条要测的结构。多头把它读作「贷款人愿意按项目融资口径放款」，看法可以不同，但结构事实本身没有争议。" },
       good_news_fail:{ state: "watch", note: "Alphabet 云收入 +82% 大幅超预期、股价当日仍跌逾 7%（一年多来最差），Meta 财报次日跌 10%——字面上「beat 却大跌」确实发生了。但 MSFT +8%、AMZN +10% 同期仍被奖励：这是市场开始**区分谁的 capex 讲得通**，不是系统性的买盘衰竭。这一条测的是后者，所以记观察中而非已触发（v766 曾误记已触发，与本条备注自相矛盾，v767 更正）。要升为已触发，需要四家一起 beat 一起跌。" },
       ai_roi:        { state: "watch", note: "分化：Google Cloud +82%、AWS 加速到 +37%，而 2026 年 capex 同比约 +80%——GCP 大致跟得上，AWS 明显慢于投入增速。同时 Alphabet 自 2004 年上市以来首次出现季度自由现金流转负。产出还在高速增长，谈不上「跟不上」，但比值确实在变薄，记观察中。" },
+      compute_price: { state: "watch", note: "两代走势相反：H100 租金腰斩至约 $3.38/小时（AWS 2025年6月一次性下调 44%，市场跟随），而最新一代 B200 仍是溢价、且现货折扣自 5 月起明显收窄（供给偏紧而非过剩）。老一代跌是换代折旧、不算信号；最新一代还没转跌，所以记观察中而非已触发。顺带一提，H100 租金腰斩本身也是「6 年折旧年限偏长」的市场侧佐证。" },
       ipo_window:    { state: "lit",   note: "SpaceX 6/12 上市 $135 定价 → 4 天见顶 $225.64 → 7 月低点 $110.85（较峰值腰斩）；OpenAI 推迟至 2027。" },
       new_metric:    { state: "clear", note: "专门检索未发现「算力调整后收入」这类新造指标进入主流卖方口径。唯一接近的是把 RPO／可取消 backlog 当作 capex 正当性的头条论据（如 MSFT 6,780 亿商业 RPO），但 RPO 本身是既有 GAAP 披露、不是新发明——下季度值得再看一眼。" },
     },
@@ -14830,6 +14837,29 @@ function rsAdjustGrade(grade, rsResult) {
     return { state: worst <= -3 ? "lit" : worst <= -1 ? "watch" : "clear", sp, nq, worst };
   }
   let _cycBreadth = { state: "unset", sp: null, nq: null };
+
+  // 阶段定义。放在卡片里可收起——不看时不占地方，但「第 4 阶段」到底指什么
+  // 必须随时查得到，否则这张表给出的结论就是个没有刻度的数字。
+  const CYCLE_PHASE_DEFS = [
+    { n: 1, zh: "替代", en: "Displacement", cls: "flat",
+      desc: "一项新技术出现，改变了资本对未来收益的预期。早期资金进场，多数人还不相信。",
+      tell: "清单上几乎全是「未出现」——那时还没有可测的结构性异常。" },
+    { n: 2, zh: "起步", en: "Take-off", cls: "flat",
+      desc: "叙事成立，价格开始反映预期。投入加速，但融资还主要靠自有现金流。",
+      tell: "比例 <15%：偶有一两条 T3 亮起（估值语言、IPO 变热），T1/T2 基本干净。" },
+    { n: 3, zh: "机构化", en: "Institutional", cls: "flat",
+      desc: "机构资金系统性进场，产业链全面扩产。投入仍由真实需求牵引，但价格已经跑在基本面前面。",
+      tell: "比例 15–35%：融资结构开始出现异常（表外、项目债），但投入与产出还对得上。" },
+    { n: 4, zh: "金融化", en: "Financialization", cls: "warn",
+      desc: "边际那一块钱从自有现金流变成债务。会计手法、表外结构、供应商融资开始承担增长。这一阶段可以持续很久，不等于马上结束。",
+      tell: "比例 35–60%：信用利差、债务占比、循环交易几条同时亮，但 T1（capex 指引、半导体订单）仍然干净。" },
+    { n: 5, zh: "派发", en: "Distribution", cls: "down",
+      desc: "聪明钱开始把筹码交给后来者。指数还在涨，但靠少数几只撑着；利好不再推升价格。",
+      tell: "比例 ≥60%，或半导体订单掉头：宽度背离 + 利好失效 + IPO 窗口关闭同时出现。" },
+    { n: 6, zh: "认知", en: "Awareness", cls: "down",
+      desc: "买方停止加码，卖方收入随即塌陷。这是周期机械性的终点，不是情绪问题。",
+      tell: "capex 指引下调——只要任何一家真的 guide-down，无论其余几条如何，直接判定第 6 阶段。" },
+  ];
 
   // 阶段判定（v761 重写）。规则整段印在卡片上，不做黑箱。
   //
@@ -15047,6 +15077,20 @@ function rsAdjustGrade(grade, rsResult) {
         <br>完整度门控：<b>≥70%</b> 允许升降 · <b>60–69%</b> 显示评分但保留上次确认的阶段 ·
         <b>&lt;60%</b> 评分仅供参考、不切换阶段。
       </div>
+      <details class="cyc-defs"${'' /* 默认收起 */}>
+        <summary><span class="cyc-defs-tick"></span>阶段定义 · PHASE DEFINITIONS
+          <i>六个阶段各自是什么意思，以及清单在那一阶段会长什么样</i></summary>
+        <div class="cyc-defs-body">${CYCLE_PHASE_DEFS.map(d => {
+          const cur = p.shown && p.shown.n === d.n;
+          return `<div class="cyc-def${cur ? " cur" : ""}">
+            <div class="cyc-def-hd"><span class="cyc-def-n ${d.cls}">第 ${d.n} 阶段</span>
+              <b>${d.zh}</b><span class="cyc-def-en">${d.en}</span>${
+              cur ? `<span class="cyc-def-cur">当前</span>` : ""}</div>
+            <div class="cyc-def-desc">${d.desc}</div>
+            <div class="cyc-def-tell"><i>清单长相</i>${d.tell}</div>
+          </div>`;
+        }).join("")}</div>
+      </details>
       <div class="cyc-scope">季度级判据，不接入三轴模型、不产生交易信号；每个财报季复核一次即可。
         再次点击已选中的那一档可清空回「未填」（未填不进分母，与「未出现」不是一回事）。</div>
       <div class="cyc-apply">
