@@ -14837,9 +14837,14 @@ function rsAdjustGrade(grade, rsResult) {
     const cells = order.map(k => {
       const m = _cycMacro.series[k];
       if (!m || m.err || m.last == null) return "";
-      // 实际利率与信用利差：走高＝对风险资产不利，所以涨记红。曲线不做风险着色。
-      const risk = k !== "curve";
-      const cls = !risk ? "" : m.chg > 0.02 ? "down" : m.chg < -0.02 ? "up" : "";
+      // 着色由服务端给的 pol 决定：多数指标走高＝对风险资产不利（up-bad），
+      // 但代理口径下的「债券/国债比值」相反——比值走低才是利差走阔（down-bad）。
+      // 阈值按各自的量纲走：百分比用 0.02，无量纲比值用 0.005。
+      const pol = m.pol || (k === "curve" ? "none" : "up-bad");
+      const eps = m.unit === "%" ? 0.02 : 0.005;
+      const bad = pol === "up-bad" ? m.chg > eps : pol === "down-bad" ? m.chg < -eps : false;
+      const good = pol === "up-bad" ? m.chg < -eps : pol === "down-bad" ? m.chg > eps : false;
+      const cls = bad ? "down" : good ? "up" : "";
       const sign = m.chg > 0 ? "+" : m.chg < 0 ? "−" : "";
       return `<div class="cyc-macro-cell">
         <i>${m.zh}</i>
@@ -14848,8 +14853,11 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).filter(Boolean).join("");
     if (!cells) return "";
+    // 代理口径下不触发复核提示——`CYC_MACRO_TRIG` 的阈值是按真实 OAS 利差定的，
+    // 拿 ETF 比值去套那几个 bp 数字没有意义，宁可不提示也不给假信号。
+    const proxy = _cycMacro.source === "yahoo-proxy";
     // 触发复核：只提示「去看哪一条」，不代替人填，也不动分数。
-    const hits = CYC_MACRO_TRIG.filter(t => {
+    const hits = proxy ? [] : CYC_MACRO_TRIG.filter(t => {
       const m = _cycMacro.series[t.k];
       return m && !m.err && m.chg != null && m.chg >= t.up;
     });
@@ -14857,14 +14865,20 @@ function rsAdjustGrade(grade, rsResult) {
       ? `<div class="cyc-macro-trig lit">⚑ 建议复核：${
           [...new Set(hits.map(h => CYCLE_ITEMS.find(i => i.id === h.go)?.zh || h.go))].join(" · ")
         }<i>${hits.map(h => h.why).join("；")}</i></div>`
-      : `<div class="cyc-macro-trig">融资成本通道暂未触发复核阈值（HY +50bp / IG +25bp / 实际利率 +40bp，均为 3 个月变化）</div>`;
+      : proxy
+        ? `<div class="cyc-macro-trig">代理口径，不做复核阈值判断（阈值按真实 OAS 利差定，套不到 ETF 比值上）</div>`
+        : `<div class="cyc-macro-trig">融资成本通道暂未触发复核阈值（HY +50bp / IG +25bp / 实际利率 +40bp，均为 3 个月变化）</div>`;
     return `<div class="cyc-macro">
       <div class="cyc-macro-hd"><span class="cyc-macro-lbl">MACRO BACKDROP · 宏观背景</span>
         <span class="cyc-macro-tag">不计入评分</span></div>
       <div class="cyc-macro-grid">${cells}</div>
       ${trig}
-      <div class="cyc-macro-src">FRED · 数据截至 ${_cycMacro.series.real10?.date || _cycMacro.asOf}
-        · 长端实际利率与信用利差是这轮 AI capex（约三分之一靠举债）的融资成本通道</div>
+      <div class="cyc-macro-src">${proxy ? "Yahoo 代理指标" : "FRED"} · 数据截至 ${
+        _cycMacro.series.real10?.date || _cycMacro.asOf}
+        · 长端利率与信用利差是这轮 AI capex（约三分之一靠举债）的融资成本通道${
+        proxy ? "<br><b>FRED 当前不可达，以上为方向同源的代理值</b>：名义利率非实际利率（未扣通胀预期）；"
+              + "债券/国债比值只反映相对价格走势，不是期权调整利差（OAS）；曲线为 10年−3月而非 10年−2年。"
+              : ""}</div>
     </div>`;
   }
 

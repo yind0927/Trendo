@@ -5,7 +5,7 @@
     "api/market-summary.js":  { "maxDuration": 60 },
     "api/drawdown-context.js":{ "maxDuration": 60 },
     "api/history.js":         { "maxDuration": 20 },
-    "api/feargreed.js":       { "maxDuration": 20 }
+    "api/feargreed.js":       { "maxDuration": 30 }
   },
   "crons": [
     {
