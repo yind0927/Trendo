@@ -4464,6 +4464,11 @@
     .cyc-sum .cyc-eyebrow { flex-basis: 100%; order: -1; }
   }
 
+  .cyc-edge { margin-top: 10px; padding: 8px 10px; border-radius: 8px; font-size: 10.5px;
+    line-height: 1.7; color: var(--warn); font-weight: 600;
+    background: color-mix(in oklch, var(--warn) 10%, transparent);
+    border: 1px solid color-mix(in oklch, var(--warn) 40%, transparent); }
+
   .cyc-apply { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .cyc-apply-btn { font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 8px;
     cursor: pointer; color: var(--accent); background: transparent;
@@ -6165,8 +6170,8 @@
   </div>
 </div>
 
-<script src="data.js?v=766"></script>
-<script src="desk.js?v=766"></script>
+<script src="data.js?v=767"></script>
+<script src="desk.js?v=767"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

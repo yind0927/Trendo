@@ -14735,6 +14735,12 @@ function rsAdjustGrade(grade, rsResult) {
       where: "四家超大厂 + NVDA 财报后次日表现",
       how: "最近一个财报季，有没有出现「beat 却大跌」？" },
 
+    { id: "ai_roi", tier: 2, days: 90, zh: "AI 投入产出比转弱",
+      what: "capex 是投入，云收入是产出。整轮周期的合理性最终只取决于这个比值——它先转弱，capex 指引才会跟着下调。此前这张表只测了投入、融资、成本与市场行为，没有一条在问「钱有没有回来」。",
+      where: "四家超大厂季报的云业务收入增速（Azure / Google Cloud / AWS）对比同期 capex 增速",
+      how: "云收入增速是否明显跟不上 capex 增速？",
+      warn: "单季波动不算，要连续两季；收入增速放缓但仍快于 capex 增速不算" },
+
     { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态",
       what: "测的是市场能不能消化叙事顶点的最大供给量。",
       where: "近期大型科技 IPO 的定价与首月表现",
@@ -14754,11 +14760,12 @@ function rsAdjustGrade(grade, rsResult) {
     items: {
       capex_guide:   { state: "clear", note: "全线仍在上修：Alphabet 195–205B、Amazon ~220B、Meta 125–145B、MSFT ~190B；2027 预估合计约 9,345 亿。无任何一家下调。" },
       depreciation:  { state: "watch", note: "2020–24 每次调整都是拉长（MSFT/GOOGL/AMZN/META/ORCL 均推向 6 年，各增净利 4–5%）；但 2025 年 Amazon 把一部分设备 6→5 年主动缩短、Meta 拉到 5.5 年。存量护垫很大，最新的边际动作方向相反，故记观察中而非已触发。" },
-      semi_orders:   { state: "clear", note: "反向：CoWoS 排到 52–78 周、HBM 2026 年售罄、26–27 年产能 85%+ 已锁定；Broadcom AI backlog 730 亿、ASIC 出货同比 +44.6%。无取消、无交期缩短、无渠道累库。" },
+      semi_orders:   { state: "clear", note: "强烈反向：Broadcom Q3 FY26 营收 +86%、AI 半导体 +221% 至 167 亿，Q4 指引 +93%，FY28 AI 收入指引上修至 2,300 亿且**产能已锁定**；CoWoS 排到 52–78 周、HBM 2026 年售罄、26–27 年产能 85%+ 已锁定。无取消、无交期缩短、无渠道累库。" },
       credit_spread: { state: "lit",   note: "较上季明显恶化：Oracle CDS 75bp→218bp（7 年新高），GOOGL/AMZN/META 利差同步走扩；2026 年超大厂发债 1,820 亿（同比 +1300%）；Apollo 9/16 公开示警。" },
       debt_ratio:    { state: "num",   value: 33, note: "沿用高盛口径 33%。交叉验算：仅公募债 1,820 亿 ÷ capex 约 7,200–7,450 亿 ≈ 25%，SPV 与私募信贷在这之上——两者不矛盾，33% 仍是目前最可靠的单一来源，不自行编造中值。" },
-      circular:      { state: "lit",   note: "BIS 确认超大厂借 SPV 收购数据中心资产、私募发债，自身只持少数股权 + 长期租赁承诺；2026 年发债规模印证该结构已成主渠道。" },
-      good_news_fail:{ state: "lit",   note: "本轮最大的变化：Alphabet 云收入 +82% 大幅超预期，股价当日仍跌逾 7%（一年多来最差），Meta 财报次日跌 10%。注意并非普遍——MSFT +8%、AMZN +10% 仍被奖励，是分化不是全面失效。" },
+      circular:      { state: "lit",   note: "BIS 确认超大厂借 SPV 收购数据中心资产、私募发债，自身只持少数股权 + 长期租赁承诺。最新实例：Blackstone + Alphabet 合资的 Crux AI 由 10 家银行提供 220 亿美元贷款买 Google 自家 TPU，以芯片本身与客户合同作抵押（Bloomberg 9/16）——卖方把设备卖给一个由自己参股、靠举债买货的实体，正是这一条要测的结构。多头把它读作「贷款人愿意按项目融资口径放款」，看法可以不同，但结构事实本身没有争议。" },
+      good_news_fail:{ state: "watch", note: "Alphabet 云收入 +82% 大幅超预期、股价当日仍跌逾 7%（一年多来最差），Meta 财报次日跌 10%——字面上「beat 却大跌」确实发生了。但 MSFT +8%、AMZN +10% 同期仍被奖励：这是市场开始**区分谁的 capex 讲得通**，不是系统性的买盘衰竭。这一条测的是后者，所以记观察中而非已触发（v766 曾误记已触发，与本条备注自相矛盾，v767 更正）。要升为已触发，需要四家一起 beat 一起跌。" },
+      ai_roi:        { state: "watch", note: "分化：Google Cloud +82%、AWS 加速到 +37%，而 2026 年 capex 同比约 +80%——GCP 大致跟得上，AWS 明显慢于投入增速。同时 Alphabet 自 2004 年上市以来首次出现季度自由现金流转负。产出还在高速增长，谈不上「跟不上」，但比值确实在变薄，记观察中。" },
       ipo_window:    { state: "lit",   note: "SpaceX 6/12 上市 $135 定价 → 4 天见顶 $225.64 → 7 月低点 $110.85（较峰值腰斩）；OpenAI 推迟至 2027。" },
       new_metric:    { state: "clear", note: "专门检索未发现「算力调整后收入」这类新造指标进入主流卖方口径。唯一接近的是把 RPO／可取消 backlog 当作 capex 正当性的头条论据（如 MSFT 6,780 亿商业 RPO），但 RPO 本身是既有 GAAP 披露、不是新发明——下季度值得再看一眼。" },
     },
@@ -14892,7 +14899,13 @@ function rsAdjustGrade(grade, rsResult) {
       shown = prev ? { ...prev } : null;                // 保留上次确认值；从未确认过则不判定
       held = true;
     }
-    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, terminal, prev };
+    // 临界：比例贴着某条分档线（±2pp）时如实标出——这种位置上，任何一条判据
+    // 改一档都会让阶段翻面，把它当成一个确定的结论读是误导。
+    const edge = CYCLE_RATIO_CUT
+      .map(([cut, n, zh]) => ({ cut, n, zh, d: ratio - cut }))
+      .filter(e => Math.abs(e.d) <= 0.02)
+      .sort((a, b) => Math.abs(a.d) - Math.abs(b.d))[0] || null;
+    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, terminal, prev, edge };
   }
 
   // 高可信（或直接观测到终点信号）时才把阶段"确认"下来并落盘——这是
@@ -14968,7 +14981,9 @@ function rsAdjustGrade(grade, rsResult) {
   function cycleCardHTML() {
     const p = cyclePhase();
     const recent = (CYCLE_CHECK.log || []).slice(-6).reverse();
-    const pct = v => (v * 100).toFixed(0);
+    // 全部向下取整：四舍五入会把 34.85% 显示成 35%、69.6% 显示成 70%，
+    // 而规则行写的是「≥35%」「≥70%」——显示值必须永不高于实际值，否则卡片自相矛盾。
+    const pct = v => Math.floor(v * 100);
 
     // 阶段标题。三种情形：正常显示 / 保留上次确认值（带待确认标记）/ 从未确认过。
     const headCls = p.shown ? p.shown.cls : "flat";
@@ -15022,6 +15037,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
 
 
+      ${p.edge ? `<div class="cyc-edge">⚖ 临界：比例 ${(p.ratio * 100).toFixed(1)}% 距「第 ${p.edge.n} 阶段 · ${p.edge.zh}」的 ${(p.edge.cut * 100).toFixed(0)}% 线只有 ${Math.abs(p.edge.d * 100).toFixed(1)}pp —— 任何一条判据改一档都可能让阶段翻面，别把它当成一个稳的结论。</div>` : ""}
       <div class="cyc-rule">
         <b>比例</b> = 已触发权重 ÷ <b>已核实项</b>的满分（未填既不进分子也不进分母）。
         已触发计该档权重（T1=3 / T2=2 / T3=1），观察中计 1/3。
