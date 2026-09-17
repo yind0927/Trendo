@@ -14696,46 +14696,34 @@ function rsAdjustGrade(grade, rsResult) {
       what: "买方停止加码 = 卖方收入立刻塌。这是整轮周期机械性的终点。",
       where: "MSFT / GOOGL / AMZN / META 季度财报电话会的 capex guidance 段落",
       how: "有任何一家下调下季度或全年 capex 指引？",
-      warn: "「增速放缓」不算，要实际 guide-down",
-      base: "2026-09-17 核实：仍在上修 —— 摩根大通估 2026 年五大厂 $6,970 亿，年内已上修 $1,730 亿",
-      init: "clear" },
+      warn: "「增速放缓」不算，要实际 guide-down" },
 
     { id: "depreciation", tier: 2, days: 90, zh: "折旧年限假设被拉长",
       what: "capex 滞后 3–6 年变成折旧打进利润表。把年限往后拉＝用会计手段护 EPS——这是金融化阶段的手法，不是周期终点。",
       where: "10-K / 10-Q 的「Property and Equipment」附注，找 useful life",
       how: "有没有哪家又把服务器折旧年限往后拉了？",
-      warn: "往后拉＝看空信号；主动缩短反而是诚实的，算「未出现」",
-      base: "未核实",
-      init: "unset" },
+      warn: "往后拉＝看空信号；主动缩短反而是诚实的，算「未出现」" },
 
     { id: "semi_orders", tier: 1, lead: true, days: 90, zh: "半导体订单 / backlog 掉头",
       what: "卖铲子一端的领先指标，通常早于 capex 指引出现。",
       where: "NVDA / AVGO / TSM 财报里的 backlog 与交期；ODM 渠道库存",
-      how: "交期缩短、订单取消、或渠道库存开始堆积？",
-      base: "未核实",
-      init: "unset" },
+      how: "交期缩短、订单取消、或渠道库存开始堆积？" },
 
     { id: "credit_spread", tier: 2, days: 30, zh: "AI 相关信用利差走扩",
       what: "信用几乎永远领先股票。这是性价比最高的单一同步指标。",
       where: "超大厂债利差 vs 同期限国债；数据中心项目债利差",
-      how: "利差是否较上季明显走扩？",
-      base: "2026-09-17 核实：2–4 年期 30→40bp；20 年期以上 118bp；高收益项目债较超大厂 +208bp",
-      init: "lit" },
+      how: "利差是否较上季明显走扩？" },
 
     { id: "debt_ratio", tier: 2, days: 90, zh: "AI capex 债务融资占比", num: true,
       what: "边际那一块钱从自由现金流变成债务时，这轮就挂上了一个偿债时钟。",
       where: "高盛 / 摩根大通 / BIS 的 AI 融资报告",
       how: "填一个百分比即可，阈值由系统判色",
-      warn: "<25% 未出现 · 25–40% 观察中 · >40% 已触发",
-      base: "2026-09-17 核实：约 33%（高盛口径）",
-      init: "watch", initVal: 33 },
+      warn: "<25% 未出现 · 25–40% 观察中 · >40% 已触发" },
 
     { id: "circular", tier: 2, days: 90, zh: "循环交易 / 表外融资结构",
       what: "供应商融资、SPV、芯片厂投资客户再买自家芯片 —— 1999 年电信同款结构。",
       where: "BIS 季报、公司债发行公告、10-Q 的 VIE / SPV 附注",
-      how: "有没有 SPV、表外结构或循环股权交易的新证据？",
-      base: "2026-09-17 核实：BIS 确认超大厂通过 SPV 收购数据中心资产、私募发债，自身仅持少数股权 + 长期租赁承诺",
-      init: "lit" },
+      how: "有没有 SPV、表外结构或循环股权交易的新证据？" },
 
     { id: "breadth", tier: 2, days: 0, zh: "宽度背离（等权 vs 市值加权）", auto: true,
       what: "指数靠少数几只撑着 —— 派发期最客观的量化表达。",
@@ -14745,40 +14733,68 @@ function rsAdjustGrade(grade, rsResult) {
     { id: "good_news_fail", tier: 2, days: 90, zh: "利好失效",
       what: "财报超预期但股价下跌 —— 典型的买盘衰竭信号。",
       where: "四家超大厂 + NVDA 财报后次日表现",
-      how: "最近一个财报季，有没有出现「beat 却大跌」？",
-      base: "未核实",
-      init: "unset" },
+      how: "最近一个财报季，有没有出现「beat 却大跌」？" },
 
     { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态",
       what: "测的是市场能不能消化叙事顶点的最大供给量。",
       where: "近期大型科技 IPO 的定价与首月表现",
-      how: "有没有大型 IPO 破发、或发行人主动推迟？",
-      base: "2026-09-17 核实：SpaceX 6/12 上市，$135 定价 → 4 天见顶 $225.64 → 7 月低点 $110.85（较峰值腰斩）；OpenAI 已推迟至 2027",
-      init: "lit" },
+      how: "有没有大型 IPO 破发、或发行人主动推迟？" },
 
     { id: "new_metric", tier: 3, days: 0, zh: "新估值指标出现",
       what: "GAAP 撑不住时卖方会发明新口径。2000 年是 EBITDA 和 eyeballs。",
       where: "卖方研报、公司 IR 材料的措辞",
-      how: "有没有出现「算力调整后收入」这类新造指标来论证估值？",
-      base: "未核实",
-      init: "unset" },
+      how: "有没有出现「算力调整后收入」这类新造指标来论证估值？" },
   ];
+
+  // 2026-09-17 联网核实的一整轮读数（v766）。写成常量而不是只改 CYCLE_ITEMS 的
+  // init——init 只对「这台设备第一次打开」生效，已经存过数据的用户永远吃不到新基线，
+  // 所以另配一个「载入核实基线」按钮，把整轮结果一次写进去并逐条留痕。
+  const CYCLE_BASELINE = {
+    date: "2026-09-17",
+    items: {
+      capex_guide:   { state: "clear", note: "全线仍在上修：Alphabet 195–205B、Amazon ~220B、Meta 125–145B、MSFT ~190B；2027 预估合计约 9,345 亿。无任何一家下调。" },
+      depreciation:  { state: "watch", note: "2020–24 每次调整都是拉长（MSFT/GOOGL/AMZN/META/ORCL 均推向 6 年，各增净利 4–5%）；但 2025 年 Amazon 把一部分设备 6→5 年主动缩短、Meta 拉到 5.5 年。存量护垫很大，最新的边际动作方向相反，故记观察中而非已触发。" },
+      semi_orders:   { state: "clear", note: "反向：CoWoS 排到 52–78 周、HBM 2026 年售罄、26–27 年产能 85%+ 已锁定；Broadcom AI backlog 730 亿、ASIC 出货同比 +44.6%。无取消、无交期缩短、无渠道累库。" },
+      credit_spread: { state: "lit",   note: "较上季明显恶化：Oracle CDS 75bp→218bp（7 年新高），GOOGL/AMZN/META 利差同步走扩；2026 年超大厂发债 1,820 亿（同比 +1300%）；Apollo 9/16 公开示警。" },
+      debt_ratio:    { state: "num",   value: 33, note: "沿用高盛口径 33%。交叉验算：仅公募债 1,820 亿 ÷ capex 约 7,200–7,450 亿 ≈ 25%，SPV 与私募信贷在这之上——两者不矛盾，33% 仍是目前最可靠的单一来源，不自行编造中值。" },
+      circular:      { state: "lit",   note: "BIS 确认超大厂借 SPV 收购数据中心资产、私募发债，自身只持少数股权 + 长期租赁承诺；2026 年发债规模印证该结构已成主渠道。" },
+      good_news_fail:{ state: "lit",   note: "本轮最大的变化：Alphabet 云收入 +82% 大幅超预期，股价当日仍跌逾 7%（一年多来最差），Meta 财报次日跌 10%。注意并非普遍——MSFT +8%、AMZN +10% 仍被奖励，是分化不是全面失效。" },
+      ipo_window:    { state: "lit",   note: "SpaceX 6/12 上市 $135 定价 → 4 天见顶 $225.64 → 7 月低点 $110.85（较峰值腰斩）；OpenAI 推迟至 2027。" },
+      new_metric:    { state: "clear", note: "专门检索未发现「算力调整后收入」这类新造指标进入主流卖方口径。唯一接近的是把 RPO／可取消 backlog 当作 capex 正当性的头条论据（如 MSFT 6,780 亿商业 RPO），但 RPO 本身是既有 GAAP 披露、不是新发明——下季度值得再看一眼。" },
+    },
+  };
 
   // 首次打开时把核实过的基线写进去，而不是留一张空表——空白清单会让人误以为
   // 「什么都没发生」，但真相是「什么都没查」。未核实的项一律留 unset，不装作 clear。
+  // 一键载入：整轮覆盖，逐条写 log，因此任何一条都能从变更记录里回溯是谁改的。
+  function cycleApplyBaseline() {
+    const B = CYCLE_BASELINE;
+    Object.entries(B.items).forEach(([id, v]) => {
+      const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
+      const next = v.state === "num" ? cycNumState(v.value) : v.state;
+      if ((rec.state || "unset") !== next) cycLog(id, rec.state || "unset", next);
+      rec.state = next;
+      if (v.value != null) rec.value = v.value;
+      rec.at = B.date;
+      rec.seeded = false;
+    });
+    saveToStorage();
+    renderCycleCard();
+  }
+
   function cycleSeed() {
     let changed = false;
     for (const it of CYCLE_ITEMS) {
-      if (it.auto) continue;
-      if (!CYCLE_CHECK.items[it.id]) {
-        CYCLE_CHECK.items[it.id] = {
-          state: it.init || "unset",
-          ...(it.initVal != null ? { value: it.initVal } : {}),
-          at: it.init && it.init !== "unset" ? "2026-09-17" : null,
-          seeded: true,
-        };
-        changed = true;
-      }
+      if (it.auto || CYCLE_CHECK.items[it.id]) continue;
+      const b = CYCLE_BASELINE.items[it.id];
+      const st = !b ? "unset" : b.state === "num" ? cycNumState(b.value) : b.state;
+      CYCLE_CHECK.items[it.id] = {
+        state: st,
+        ...(b && b.value != null ? { value: b.value } : {}),
+        at: st === "unset" ? null : CYCLE_BASELINE.date,
+        seeded: true,
+      };
+      changed = true;
     }
     return changed;
   }
@@ -14807,81 +14823,6 @@ function rsAdjustGrade(grade, rsResult) {
     return { state: worst <= -3 ? "lit" : worst <= -1 ? "watch" : "clear", sp, nq, worst };
   }
   let _cycBreadth = { state: "unset", sp: null, nq: null };
-  // FRED 宏观背景。**刻意不计入评分**：FRED 给的是广谱 IG/HY 利差，而清单里那条
-  // 问的是 AI/数据中心专属的利差（超大厂债、项目债），两者不是一回事——拿广谱数据
-  // 去打 AI 专属那一格的分，既答非所问又会跟手填项重复计分。这里只作背景参照。
-  let _cycMacro = null;
-
-  // 宏观复核提示阈值。FRED 的广谱利差不直接打分，但它是「该去复核哪一条手填项」的
-  // 触发器——融资成本通道一旦动起来，AI 专属利差多半也在动，值得人工去看一眼。
-  const CYC_MACRO_TRIG = [
-    { k: "hy",     up:  0.50, why: "高收益债利差 3 个月走阔超 50bp", go: "credit_spread" },
-    { k: "ig",     up:  0.25, why: "投资级利差 3 个月走阔超 25bp",   go: "credit_spread" },
-    { k: "real10", up:  0.40, why: "10 年实际利率 3 个月上行超 40bp", go: "debt_ratio" },
-  ];
-
-  function cycMacroHTML() {
-    // 拉取失败时不静默——把原因摆出来（v591 起的惯例：手机端开不了 devtools，
-    // 卡片上直接写清楚，用户读一句话就能把关键信息反馈回来）。
-    if (_cycMacro && _cycMacro.err) {
-      return `<div class="cyc-macro">
-        <div class="cyc-macro-hd"><span class="cyc-macro-lbl">MACRO BACKDROP · 宏观背景</span>
-          <span class="cyc-macro-tag">不计入评分</span></div>
-        <div class="cyc-macro-err">宏观利率拉取失败：${_cycMacro.err}
-          <br>数据源 FRED（<code>/api/feargreed?mode=rates</code>）。该模块不参与评分，
-          失败不影响上方的阶段判定。</div>
-      </div>`;
-    }
-    if (!_cycMacro || !_cycMacro.series) return "";
-    const order = ["real10", "hy", "ig", "curve"];
-    const cells = order.map(k => {
-      const m = _cycMacro.series[k];
-      if (!m || m.err || m.last == null) return "";
-      // 着色由服务端给的 pol 决定：多数指标走高＝对风险资产不利（up-bad），
-      // 但代理口径下的「债券/国债比值」相反——比值走低才是利差走阔（down-bad）。
-      // 阈值按各自的量纲走：百分比用 0.02，无量纲比值用 0.005。
-      const pol = m.pol || (k === "curve" ? "none" : "up-bad");
-      const eps = m.unit === "%" ? 0.02 : 0.005;
-      const bad = pol === "up-bad" ? m.chg > eps : pol === "down-bad" ? m.chg < -eps : false;
-      const good = pol === "up-bad" ? m.chg < -eps : pol === "down-bad" ? m.chg > eps : false;
-      const cls = bad ? "down" : good ? "up" : "";
-      const sign = m.chg > 0 ? "+" : m.chg < 0 ? "−" : "";
-      return `<div class="cyc-macro-cell">
-        <i>${m.zh}</i>
-        <b>${m.last.toFixed(m.digits)}${m.unit}</b>
-        <s class="${cls}">3个月 ${sign}${Math.abs(m.chg).toFixed(m.digits)}</s>
-      </div>`;
-    }).filter(Boolean).join("");
-    if (!cells) return "";
-    // 代理口径下不触发复核提示——`CYC_MACRO_TRIG` 的阈值是按真实 OAS 利差定的，
-    // 拿 ETF 比值去套那几个 bp 数字没有意义，宁可不提示也不给假信号。
-    const proxy = _cycMacro.source === "yahoo-proxy";
-    // 触发复核：只提示「去看哪一条」，不代替人填，也不动分数。
-    const hits = proxy ? [] : CYC_MACRO_TRIG.filter(t => {
-      const m = _cycMacro.series[t.k];
-      return m && !m.err && m.chg != null && m.chg >= t.up;
-    });
-    const trig = hits.length
-      ? `<div class="cyc-macro-trig lit">⚑ 建议复核：${
-          [...new Set(hits.map(h => CYCLE_ITEMS.find(i => i.id === h.go)?.zh || h.go))].join(" · ")
-        }<i>${hits.map(h => h.why).join("；")}</i></div>`
-      : proxy
-        ? `<div class="cyc-macro-trig">代理口径，不做复核阈值判断（阈值按真实 OAS 利差定，套不到 ETF 比值上）</div>`
-        : `<div class="cyc-macro-trig">融资成本通道暂未触发复核阈值（HY +50bp / IG +25bp / 实际利率 +40bp，均为 3 个月变化）</div>`;
-    return `<div class="cyc-macro">
-      <div class="cyc-macro-hd"><span class="cyc-macro-lbl">MACRO BACKDROP · 宏观背景</span>
-        <span class="cyc-macro-tag">不计入评分</span></div>
-      <div class="cyc-macro-grid">${cells}</div>
-      ${trig}
-      <div class="cyc-macro-src">${proxy ? "Yahoo 代理指标" : "FRED"} · 数据截至 ${
-        _cycMacro.series.real10?.date || _cycMacro.asOf}
-        · 长端利率与信用利差是这轮 AI capex（约三分之一靠举债）的融资成本通道${
-        proxy ? "<br><b>FRED 当前不可达，以上为方向同源的代理值</b>：名义利率非实际利率（未扣通胀预期）；"
-              + "债券/国债比值只反映相对价格走势，不是期权调整利差（OAS）；曲线为 10年−3月而非 10年−2年。"
-              : ""}</div>
-    </div>`;
-  }
-
 
   // 阶段判定（v761 重写）。规则整段印在卡片上，不做黑箱。
   //
@@ -15018,7 +14959,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${control}
         ${it.auto ? "" : `<input class="cyc-note form-input" data-cyc-note="${it.id}"
           placeholder="备注（可留空）" value="${cycEsc(rec.note)}">`}
-        ${it.base ? `<div class="cyc-base">基线 ${it.base}</div>` : ""}
+        ${CYCLE_BASELINE.items[it.id] ? `<div class="cyc-base"><i>${CYCLE_BASELINE.date} 核实</i>${CYCLE_BASELINE.items[it.id].note}</div>` : ""}
         ${rec.at && !it.auto ? `<div class="cyc-at">上次更新 ${rec.at}${stale ? " · " : ""}${stale}</div>` : stale}
       </div>
     </div>`;
@@ -15080,7 +15021,6 @@ function rsAdjustGrade(grade, rsResult) {
         ${rawLine}
       </div>
 
-      ${cycMacroHTML()}
 
       <div class="cyc-rule">
         <b>比例</b> = 已触发权重 ÷ <b>已核实项</b>的满分（未填既不进分子也不进分母）。
@@ -15093,6 +15033,10 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       <div class="cyc-scope">季度级判据，不接入三轴模型、不产生交易信号；每个财报季复核一次即可。
         再次点击已选中的那一档可清空回「未填」（未填不进分母，与「未出现」不是一回事）。</div>
+      <div class="cyc-apply">
+        <button class="cyc-apply-btn" data-cyc-apply>载入核实基线 · ${CYCLE_BASELINE.date}</button>
+        <span>一次覆盖除自动项外的 9 条（含备注与复核日期），每条都会写进下方变更记录，可逐条改回。</span>
+      </div>
       <div class="cyc-list">${CYCLE_ITEMS.map(cycItemHTML).join("")}</div>
       ${recent.length ? `<details class="cyc-log"><summary>变更记录 · 最近 ${recent.length} 条</summary>
         <div class="cyc-log-body">${recent.map(l => {
@@ -15136,6 +15080,11 @@ function rsAdjustGrade(grade, rsResult) {
       rec.value = v; rec.state = after; rec.at = cycToday(); rec.seeded = false;
       saveToStorage();
       renderCycleCard();
+    }));
+    $$("[data-cyc-apply]", host).forEach(b => b.addEventListener("click", () => {
+      if (!confirm(`将用 ${CYCLE_BASELINE.date} 的核实结果覆盖 9 条判据（自动项不动）。\n`
+        + "你自己填过的状态与备注会被替换，但每条变更都会留痕，之后可以逐条改回。继续？")) return;
+      cycleApplyBaseline();
     }));
     $$("[data-cyc-note]", host).forEach(inp => inp.addEventListener("change", () => {
       const id = inp.dataset.cycNote;
@@ -15211,11 +15160,10 @@ function rsAdjustGrade(grade, rsResult) {
       // cover BOTH — ~452 sessions ≈ 660 calendar days — and the warm-up half never
       // reaches the card.
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 660); return d.toISOString().slice(0, 10); })();
-      const [quoteRes, histRes, fgRes, ratesRes] = await Promise.allSettled([
+      const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,VOO,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN,RSP,QQQE,QQQ&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
-        fetch("/api/feargreed?mode=rates").then(r => r.json()),
       ]);
 
       // VIX / VXN
@@ -15349,10 +15297,6 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      _cycMacro = ratesRes.status === "fulfilled"
-        ? (ratesRes.value?.series ? ratesRes.value
-            : { err: ratesRes.value?.error || "响应里没有 series 字段" })
-        : { err: ratesRes.reason?.message || "请求未完成" };
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
