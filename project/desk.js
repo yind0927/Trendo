@@ -1290,6 +1290,7 @@ function rsAdjustGrade(grade, rsResult) {
       simOptions: SIM_OPTIONS,
       realOptions: REAL_OPTIONS,
       modelPicks: MODEL_PICKS,
+      cycleCheck: CYCLE_CHECK,
       analysisHistory: histForSync,
       savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
     };
@@ -1484,6 +1485,10 @@ function rsAdjustGrade(grade, rsResult) {
     if (Array.isArray(data.simOptions))      SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...data.simOptions);
     if (Array.isArray(data.realOptions))     REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions);
     if (Array.isArray(data.modelPicks))      MODEL_PICKS.splice(0, MODEL_PICKS.length, ...data.modelPicks);
+    if (data.cycleCheck && typeof data.cycleCheck === "object") {
+      CYCLE_CHECK.items = data.cycleCheck.items || {};
+      CYCLE_CHECK.log   = data.cycleCheck.log   || [];
+    }
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
     }
@@ -1609,6 +1614,7 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_sim_options",        JSON.stringify(SIM_OPTIONS));
       localStorage.setItem("trendo_v4_real_options",       JSON.stringify(REAL_OPTIONS));
       localStorage.setItem("trendo_v4_model_picks",        JSON.stringify(MODEL_PICKS));
+      localStorage.setItem("trendo_v4_cycle_check",        JSON.stringify(CYCLE_CHECK));
       localStorage.setItem("trendo_v4_daily_pnl",    JSON.stringify(dailyPnlLog));
       localStorage.setItem("trendo_v4_analysis_hist", JSON.stringify(analysisHistory));
       // Skip timestamp update for price-only ticks so they don't make local appear "newer"
@@ -1651,6 +1657,9 @@ function rsAdjustGrade(grade, rsResult) {
       if (ro) { const parsed = JSON.parse(ro); REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...parsed); }
       const mp = localStorage.getItem("trendo_v4_model_picks");
       if (mp) { const parsed = JSON.parse(mp); MODEL_PICKS.splice(0, MODEL_PICKS.length, ...parsed); }
+      const cc = localStorage.getItem("trendo_v4_cycle_check");
+      if (cc) { try { const p = JSON.parse(cc);
+        if (p && typeof p === "object") { CYCLE_CHECK.items = p.items || {}; CYCLE_CHECK.log = p.log || []; } } catch (_) {} }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
@@ -14664,6 +14673,294 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
   }
 
+  // ============ AI 周期检查清单（Market 页） ============
+  // 刻意跟三轴模型分开：三轴是日频、自动、用来定仓位的；这张清单是季度级、
+  // 人工判断的结构性判据，用来回答「这轮资本开支周期走到哪一段了」。
+  // 两者混在一起只会让低频信号被日频噪声淹没。
+  //
+  // 权重设计：判据按可靠性分三档，T1 是机械性的终点（权重 3），T2 是同步确认
+  // （权重 2），T3 早但噪声大（权重 1）。lit 记满分、watch 记半分、unset 不计分
+  // ——「没核实」和「核实了没发生」必须是两回事，否则空白清单会伪装成安全。
+  const CYCLE_TIER_W = { 1: 3, 2: 2, 3: 1 };
+  const CYCLE_STATES = [
+    { k: "clear", zh: "未出现" },
+    { k: "watch", zh: "观察中" },
+    { k: "lit",   zh: "已触发" },
+  ];
+
+  const CYCLE_ITEMS = [
+    { id: "capex_guide", tier: 1, days: 90, zh: "超大厂 capex 指引下调",
+      what: "买方停止加码 = 卖方收入立刻塌。这是整轮周期机械性的终点。",
+      where: "MSFT / GOOGL / AMZN / META 季度财报电话会的 capex guidance 段落",
+      how: "有任何一家下调下季度或全年 capex 指引？",
+      warn: "「增速放缓」不算，要实际 guide-down",
+      base: "2026-09-17 核实：仍在上修 —— 摩根大通估 2026 年五大厂 $6,970 亿，年内已上修 $1,730 亿",
+      init: "clear" },
+
+    { id: "depreciation", tier: 1, days: 90, zh: "折旧年限假设被拉长",
+      what: "capex 滞后 3–6 年变成折旧打进利润表。把年限往后拉＝用会计手段护 EPS。",
+      where: "10-K / 10-Q 的「Property and Equipment」附注，找 useful life",
+      how: "有没有哪家又把服务器折旧年限往后拉了？",
+      warn: "往后拉＝看空信号；主动缩短反而是诚实的，算「未出现」",
+      base: "未核实",
+      init: "unset" },
+
+    { id: "semi_orders", tier: 1, days: 90, zh: "半导体订单 / backlog 掉头",
+      what: "卖铲子一端的领先指标，通常早于 capex 指引出现。",
+      where: "NVDA / AVGO / TSM 财报里的 backlog 与交期；ODM 渠道库存",
+      how: "交期缩短、订单取消、或渠道库存开始堆积？",
+      base: "未核实",
+      init: "unset" },
+
+    { id: "credit_spread", tier: 2, days: 30, zh: "AI 相关信用利差走扩",
+      what: "信用几乎永远领先股票。这是性价比最高的单一同步指标。",
+      where: "超大厂债利差 vs 同期限国债；数据中心项目债利差",
+      how: "利差是否较上季明显走扩？",
+      base: "2026-09-17 核实：2–4 年期 30→40bp；20 年期以上 118bp；高收益项目债较超大厂 +208bp",
+      init: "lit" },
+
+    { id: "debt_ratio", tier: 2, days: 90, zh: "AI capex 债务融资占比", num: true,
+      what: "边际那一块钱从自由现金流变成债务时，这轮就挂上了一个偿债时钟。",
+      where: "高盛 / 摩根大通 / BIS 的 AI 融资报告",
+      how: "填一个百分比即可，阈值由系统判色",
+      warn: "<25% 未出现 · 25–40% 观察中 · >40% 已触发",
+      base: "2026-09-17 核实：约 33%（高盛口径）",
+      init: "watch", initVal: 33 },
+
+    { id: "circular", tier: 2, days: 90, zh: "循环交易 / 表外融资结构",
+      what: "供应商融资、SPV、芯片厂投资客户再买自家芯片 —— 1999 年电信同款结构。",
+      where: "BIS 季报、公司债发行公告、10-Q 的 VIE / SPV 附注",
+      how: "有没有 SPV、表外结构或循环股权交易的新证据？",
+      base: "2026-09-17 核实：BIS 确认超大厂通过 SPV 收购数据中心资产、私募发债，自身仅持少数股权 + 长期租赁承诺",
+      init: "lit" },
+
+    { id: "breadth", tier: 2, days: 0, zh: "宽度背离（等权 vs 市值加权）", auto: true,
+      what: "指数靠少数几只撑着 —— 派发期最客观的量化表达。",
+      where: "RSP/VOO 与 QQQE/QQQ 的 60 交易日比值变化（本模块自动计算）",
+      how: "自动：任一比值 60 日跌超 3% 记「已触发」，跌超 1% 记「观察中」" },
+
+    { id: "good_news_fail", tier: 2, days: 90, zh: "利好失效",
+      what: "财报超预期但股价下跌 —— 典型的买盘衰竭信号。",
+      where: "四家超大厂 + NVDA 财报后次日表现",
+      how: "最近一个财报季，有没有出现「beat 却大跌」？",
+      base: "未核实",
+      init: "unset" },
+
+    { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态",
+      what: "测的是市场能不能消化叙事顶点的最大供给量。",
+      where: "近期大型科技 IPO 的定价与首月表现",
+      how: "有没有大型 IPO 破发、或发行人主动推迟？",
+      base: "2026-09-17 核实：SpaceX 6/12 上市，$135 定价 → 4 天见顶 $225.64 → 7 月低点 $110.85（较峰值腰斩）；OpenAI 已推迟至 2027",
+      init: "lit" },
+
+    { id: "new_metric", tier: 3, days: 0, zh: "新估值指标出现",
+      what: "GAAP 撑不住时卖方会发明新口径。2000 年是 EBITDA 和 eyeballs。",
+      where: "卖方研报、公司 IR 材料的措辞",
+      how: "有没有出现「算力调整后收入」这类新造指标来论证估值？",
+      base: "未核实",
+      init: "unset" },
+  ];
+
+  // 首次打开时把核实过的基线写进去，而不是留一张空表——空白清单会让人误以为
+  // 「什么都没发生」，但真相是「什么都没查」。未核实的项一律留 unset，不装作 clear。
+  function cycleSeed() {
+    let changed = false;
+    for (const it of CYCLE_ITEMS) {
+      if (it.auto) continue;
+      if (!CYCLE_CHECK.items[it.id]) {
+        CYCLE_CHECK.items[it.id] = {
+          state: it.init || "unset",
+          ...(it.initVal != null ? { value: it.initVal } : {}),
+          at: it.init && it.init !== "unset" ? "2026-09-17" : null,
+          seeded: true,
+        };
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  const cycNumState = v =>
+    v == null || isNaN(v) ? "unset" : v > 40 ? "lit" : v >= 25 ? "watch" : "clear";
+
+  // 自动项：等权 / 市值加权的比值在 N 个交易日里的变化。两条腿任一走弱即记一次。
+  function cycRatioChg(results, num, den, days = 60) {
+    const A = results?.[num], B = results?.[den];
+    if (!A || !B) return null;
+    const ds = Object.keys(A).filter(d => A[d] != null && B[d] != null).sort();
+    if (ds.length < days + 1) return null;
+    const hi = ds[ds.length - 1], lo = ds[ds.length - 1 - days];
+    const r1 = A[hi] / B[hi], r0 = A[lo] / B[lo];
+    if (!(r0 > 0) || !(r1 > 0)) return null;
+    return { pct: (r1 / r0 - 1) * 100, from: lo, to: hi };
+  }
+
+  function cycBreadth(results) {
+    const sp = cycRatioChg(results, "RSP", "VOO");
+    const nq = cycRatioChg(results, "QQQE", "QQQ");
+    const legs = [sp, nq].filter(Boolean);
+    if (!legs.length) return { state: "unset", sp, nq };
+    const worst = Math.min(...legs.map(l => l.pct));
+    return { state: worst <= -3 ? "lit" : worst <= -1 ? "watch" : "clear", sp, nq, worst };
+  }
+  let _cycBreadth = { state: "unset", sp: null, nq: null };
+
+  // 阶段判定。规则整段印在卡片上，不做黑箱——用户随时能看出「为什么是第 5 阶段」。
+  function cyclePhase() {
+    let score = 0;
+    const cnt = { 1: [0, 0], 2: [0, 0], 3: [0, 0] };   // [lit, 总数]
+    let t1lit = false;
+    for (const it of CYCLE_ITEMS) {
+      const st = it.auto ? _cycBreadth.state
+        : it.num ? cycNumState(CYCLE_CHECK.items[it.id]?.value)
+        : (CYCLE_CHECK.items[it.id]?.state || "unset");
+      cnt[it.tier][1]++;
+      if (st === "lit") { cnt[it.tier][0]++; score += CYCLE_TIER_W[it.tier]; if (it.tier === 1) t1lit = true; }
+      else if (st === "watch") score += CYCLE_TIER_W[it.tier] / 2;
+    }
+    const p = t1lit ? { n: 6, zh: "认知", cls: "down" }
+      : score >= 6 ? { n: 5, zh: "派发", cls: "down" }
+      : score >= 3 ? { n: 4, zh: "金融化", cls: "warn" }
+      : score >= 1 ? { n: 3, zh: "机构化", cls: "flat" }
+      : { n: 0, zh: "尚无足够信号", cls: "flat" };
+    return { ...p, score, cnt };
+  }
+
+  const cycEsc = s => String(s ?? "").replace(/[&<>"]/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  function cycItemHTML(it) {
+    const rec = CYCLE_CHECK.items[it.id] || {};
+    const st = it.auto ? _cycBreadth.state
+      : it.num ? cycNumState(rec.value)
+      : (rec.state || "unset");
+    const stZh = st === "unset" ? "未填" : CYCLE_STATES.find(s => s.k === st).zh;
+
+    // 过期提示：按该条自己的复核周期，不是全表统一
+    let stale = "";
+    if (!it.auto && it.days > 0 && rec.at) {
+      const d = Math.floor((Date.now() - new Date(rec.at + "T00:00:00").getTime()) / 864e5);
+      if (d > it.days) stale = `<span class="cyc-stale">⏱ 已 ${d} 天未复核，建议更新</span>`;
+    }
+
+    let control;
+    if (it.auto) {
+      const leg = (l, lbl) => l == null ? `<span class="cyc-auto-na">${lbl} 数据不足</span>`
+        : `<span class="cyc-auto-leg"><i>${lbl}</i><b class="${l.pct >= 0 ? "up" : "down"}">${
+            (l.pct >= 0 ? "+" : "−") + Math.abs(l.pct).toFixed(2)}%</b></span>`;
+      control = `<div class="cyc-auto">${leg(_cycBreadth.sp, "RSP/VOO")}${leg(_cycBreadth.nq, "QQQE/QQQ")}
+        <span class="cyc-auto-tag">自动 · 60 交易日</span></div>`;
+    } else if (it.num) {
+      control = `<div class="cyc-num">
+        <input type="number" step="1" min="0" max="100" class="form-input" data-cyc-num="${it.id}"
+          value="${rec.value ?? ""}" placeholder="—"><span class="cyc-num-pct">%</span>
+        <span class="cyc-num-scale"><i class="clear">&lt;25</i><i class="watch">25–40</i><i class="lit">&gt;40</i></span>
+      </div>`;
+    } else {
+      control = `<div class="cyc-btns">${CYCLE_STATES.map(s =>
+        `<button class="cyc-btn${st === s.k ? " on " + s.k : ""}" data-cyc-set="${it.id}:${s.k}">${s.zh}</button>`
+      ).join("")}</div>`;
+    }
+
+    return `<div class="cyc-item cyc-st-${st}">
+      <div class="cyc-hd">
+        <span class="cyc-tier">T${it.tier}</span>
+        <span class="cyc-zh">${it.zh}</span>
+        <span class="cyc-state ${st}">${stZh}</span>
+      </div>
+      <div class="cyc-body">
+        <div class="cyc-line"><i>这条在测什么</i><span>${it.what}</span></div>
+        <div class="cyc-line"><i>去哪看</i><span>${it.where}</span></div>
+        <div class="cyc-line"><i>怎么判</i><span>${it.how}${
+          it.warn ? `<b class="cyc-warn">⚠ ${it.warn}</b>` : ""}</span></div>
+        ${control}
+        ${it.auto ? "" : `<input class="cyc-note form-input" data-cyc-note="${it.id}"
+          placeholder="备注（可留空）" value="${cycEsc(rec.note)}">`}
+        ${it.base ? `<div class="cyc-base">基线 ${it.base}</div>` : ""}
+        ${rec.at && !it.auto ? `<div class="cyc-at">上次更新 ${rec.at}${stale ? " · " : ""}${stale}</div>` : stale}
+      </div>
+    </div>`;
+  }
+
+  function cycleCardHTML() {
+    const p = cyclePhase();
+    const recent = (CYCLE_CHECK.log || []).slice(-6).reverse();
+    return `<div class="cyc-card">
+      <div class="cyc-top">
+        <div class="cyc-top-l">
+          <div class="cyc-eyebrow"><span class="cyc-tick"></span>CYCLE CHECKLIST · 周期检查清单</div>
+          <div class="cyc-phase ${p.cls}">${p.n ? `第 ${p.n} 阶段 · ${p.zh}` : p.zh}</div>
+          <div class="cyc-counts">
+            T1 <b>${p.cnt[1][0]}/${p.cnt[1][1]}</b> ·
+            T2 <b>${p.cnt[2][0]}/${p.cnt[2][1]}</b> ·
+            T3 <b>${p.cnt[3][0]}/${p.cnt[3][1]}</b>
+          </div>
+        </div>
+        <div class="cyc-top-r">
+          <div class="cyc-score-lbl">加权得分</div>
+          <div class="cyc-score ${p.cls}">${p.score % 1 ? p.score.toFixed(1) : p.score}</div>
+        </div>
+      </div>
+      <div class="cyc-rule">
+        判定规则：<b>T1 任一「已触发」→ 第 6 阶段</b>；否则按加权得分 —
+        ≥6 第 5 阶段 · ≥3 第 4 阶段 · ≥1 第 3 阶段。
+        已触发计该档权重（T1=3 / T2=2 / T3=1），观察中计半分，<b>未填不计分</b>。
+      </div>
+      <div class="cyc-scope">季度级判据，不接入三轴模型、不产生交易信号；每个财报季复核一次即可。</div>
+      <div class="cyc-list">${CYCLE_ITEMS.map(cycItemHTML).join("")}</div>
+      ${recent.length ? `<details class="cyc-log"><summary>变更记录 · 最近 ${recent.length} 条</summary>
+        <div class="cyc-log-body">${recent.map(l => {
+          const it = CYCLE_ITEMS.find(x => x.id === l.id);
+          return `<div class="cyc-log-row"><i>${(l.ts || "").slice(0, 10)}</i>
+            <span>${it ? it.zh : l.id}</span><b>${l.from} → ${l.to}</b></div>`;
+        }).join("")}</div></details>` : ""}
+    </div>`;
+  }
+
+  function cycLog(id, from, to) {
+    CYCLE_CHECK.log = CYCLE_CHECK.log || [];
+    CYCLE_CHECK.log.push({ ts: new Date().toISOString(), id, from, to });
+    if (CYCLE_CHECK.log.length > 200) CYCLE_CHECK.log.splice(0, CYCLE_CHECK.log.length - 200);
+  }
+  const cycToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+
+  function wireCycleCard(root) {
+    const host = root || document;
+    $$("[data-cyc-set]", host).forEach(b => b.addEventListener("click", () => {
+      const [id, st] = b.dataset.cycSet.split(":");
+      const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
+      if (rec.state === st) return;
+      cycLog(id, rec.state || "unset", st);
+      rec.state = st; rec.at = cycToday(); rec.seeded = false;
+      saveToStorage();
+      renderCycleCard();
+    }));
+    $$("[data-cyc-num]", host).forEach(inp => inp.addEventListener("change", () => {
+      const id = inp.dataset.cycNum;
+      const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
+      const v = inp.value === "" ? null : Number(inp.value);
+      const before = cycNumState(rec.value), after = cycNumState(v);
+      if (before !== after) cycLog(id, before, after);
+      rec.value = v; rec.state = after; rec.at = cycToday(); rec.seeded = false;
+      saveToStorage();
+      renderCycleCard();
+    }));
+    $$("[data-cyc-note]", host).forEach(inp => inp.addEventListener("change", () => {
+      const id = inp.dataset.cycNote;
+      const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
+      rec.note = inp.value.trim();
+      saveToStorage();
+    }));
+  }
+
+  function renderCycleCard() {
+    const el = $("#cycle-card");
+    if (!el) return;
+    if (cycleSeed()) saveToStorage();
+    el.innerHTML = cycleCardHTML();
+    wireCycleCard(el);
+  }
+
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
@@ -14705,6 +15002,8 @@ function rsAdjustGrade(grade, rsResult) {
       ${mkPhaseHTML(phase, axes || {}, phaseScope, pending, benchDate)}
       <div class="brief-card dd-card" id="drawdown-card"></div>
       <div class="mkt-module-sep"></div>
+      <div id="cycle-card"></div>
+      <div class="mkt-module-sep"></div>
       <div id="sector-rotation" class="sect-section"></div>`;
   }
 
@@ -14720,7 +15019,7 @@ function rsAdjustGrade(grade, rsResult) {
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 660); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,VOO,SPY,QQQ,DIA,IWM").then(r => r.json()),
-        fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN&from=" + fromDate).then(r => r.json()),
+        fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN,RSP,QQQE,QQQ&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
 
@@ -14853,6 +15152,8 @@ function rsAdjustGrade(grade, rsResult) {
               : null;
           })()
         : null;
+      // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
+      _cycBreadth = cycBreadth(histResults);
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
@@ -14860,6 +15161,7 @@ function rsAdjustGrade(grade, rsResult) {
         direction: axes.dir.label, posMax: axes.risk.posMax, sentiment: axes.sent.label,
       };
       _lastMktCtx = mktCtx;
+      renderCycleCard();
       initDrawdownCard();
       fetchSectorData()
         .then(sectors => { _lastMktCtx = { ...mktCtx, sectors }; initMarketBriefCard(_lastMktCtx); })

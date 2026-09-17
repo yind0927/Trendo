@@ -107,3 +107,10 @@ window.MODEL_PICKS = [];
 //   closePremium?, settleSpot?, realized?, closedAt? }
 window.SIM_OPTIONS = [];
 window.REAL_OPTIONS = [];
+
+// AI 周期检查清单（Market 页）。低频、人工判断为主的结构性判据，
+// 跟三轴模型（日频、自动）刻意分开——这些是季度级的，不该被当成交易信号。
+// { items: { [id]: { state:"unset"|"clear"|"watch"|"lit", value?:number,
+//                    note?:string, at?:"ISO" } },
+//   log: [{ ts, id, from, to }] }        — 每次改动留痕，趋势比快照更有意义
+window.CYCLE_CHECK = { items: {}, log: [] };

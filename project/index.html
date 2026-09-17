@@ -4415,6 +4415,106 @@
   .mo-table .dd-med { font-size: 11px; }
   .mo-table .dd-win { font-size: 8.5px; }
   /* Module separator between brief and regime */
+
+  /* ── 周期检查清单（Market 页） ──
+     季度级的人工判据。视觉上刻意比三轴模型克制：它不产生交易信号，
+     不该跟综合建议抢注意力，所以不用大字号、不用 emoji。 */
+  .cyc-card { border: 1px solid var(--line); border-radius: 12px; background: var(--bg-1);
+    padding: 16px 18px 14px; }
+  .cyc-top { display: flex; align-items: flex-start; gap: 16px; }
+  .cyc-top-l { flex: 1; min-width: 0; }
+  .cyc-eyebrow { display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 600;
+    letter-spacing: .07em; color: var(--fg-3); text-transform: uppercase; }
+  .cyc-tick { width: 3px; height: 11px; border-radius: 2px; background: var(--accent); }
+  .cyc-phase { font-size: 22px; font-weight: 700; letter-spacing: -.02em; margin-top: 7px; }
+  .cyc-phase.down { color: var(--down); } .cyc-phase.warn { color: var(--warn); }
+  .cyc-phase.flat { color: var(--fg-2); }
+  .cyc-counts { margin-top: 5px; font-size: 11px; color: var(--fg-3); }
+  .cyc-counts b { font-family: var(--f-mono); color: var(--fg-2); font-weight: 700; }
+  .cyc-top-r { text-align: right; flex-shrink: 0; }
+  .cyc-score-lbl { font-size: 9.5px; letter-spacing: .06em; color: var(--fg-3); text-transform: uppercase; }
+  .cyc-score { font-family: var(--f-mono); font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  .cyc-score.down { color: var(--down); } .cyc-score.warn { color: var(--warn); }
+  .cyc-score.flat { color: var(--fg-2); }
+  .cyc-rule { margin-top: 12px; padding: 9px 11px; border-radius: 8px; background: var(--bg-2);
+    font-size: 11px; line-height: 1.75; color: var(--fg-2); }
+  .cyc-rule b { color: var(--fg-1); font-weight: 600; }
+  .cyc-scope { margin-top: 7px; font-size: 10.5px; color: var(--fg-3); }
+
+  .cyc-list { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .cyc-item { border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px 12px;
+    border-left-width: 3px; border-left-color: var(--line); }
+  .cyc-item.cyc-st-lit   { border-left-color: var(--down); }
+  .cyc-item.cyc-st-watch { border-left-color: var(--warn); }
+  .cyc-item.cyc-st-clear { border-left-color: var(--up); }
+  .cyc-hd { display: flex; align-items: center; gap: 9px; }
+  .cyc-tier { font-family: var(--f-mono); font-size: 9.5px; font-weight: 700; padding: 1px 5px;
+    border-radius: 4px; border: 1px solid currentColor; color: var(--fg-3); flex-shrink: 0; }
+  .cyc-zh { font-size: 13px; font-weight: 600; color: var(--fg-1); flex: 1; min-width: 0; }
+  .cyc-state { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid currentColor; white-space: nowrap;
+    background: color-mix(in oklch, currentColor 12%, transparent); }
+  .cyc-state.lit { color: var(--down); } .cyc-state.watch { color: var(--warn); }
+  .cyc-state.clear { color: var(--up); } .cyc-state.unset { color: var(--fg-3); }
+  .cyc-body { margin-top: 9px; }
+  .cyc-line { display: flex; gap: 9px; font-size: 11px; line-height: 1.7; margin-bottom: 4px; }
+  .cyc-line > i { font-style: normal; flex-shrink: 0; width: 76px; color: var(--fg-3);
+    font-size: 10px; letter-spacing: .03em; padding-top: 1px; }
+  .cyc-line > span { color: var(--fg-2); min-width: 0; }
+  .cyc-warn { display: block; margin-top: 3px; color: var(--warn); font-weight: 500; }
+
+  .cyc-btns { display: flex; gap: 7px; margin-top: 10px; }
+  .cyc-btn { flex: 1; padding: 6px 4px; border-radius: 7px; border: 1px solid var(--line);
+    background: transparent; color: var(--fg-3); font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all .12s; font-family: inherit; }
+  .cyc-btn:hover { border-color: var(--fg-3); color: var(--fg-2); }
+  .cyc-btn.on { color: #fff; border-color: transparent; }
+  .cyc-btn.on.clear { background: var(--up); } .cyc-btn.on.watch { background: var(--warn); }
+  .cyc-btn.on.lit { background: var(--down); }
+
+  .cyc-num { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .cyc-num input { width: 84px; flex: 0 0 auto; }
+  .cyc-num-pct { font-size: 12px; color: var(--fg-2); margin-left: -4px; }
+  .cyc-num-scale { display: flex; gap: 5px; }
+  .cyc-num-scale i { font-style: normal; font-family: var(--f-mono); font-size: 9.5px;
+    padding: 2px 6px; border-radius: 4px; border: 1px solid currentColor; }
+  .cyc-num-scale i.clear { color: var(--up); } .cyc-num-scale i.watch { color: var(--warn); }
+  .cyc-num-scale i.lit { color: var(--down); }
+
+  .cyc-auto { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .cyc-auto-leg { display: flex; align-items: baseline; gap: 6px; }
+  .cyc-auto-leg i { font-style: normal; font-size: 10px; color: var(--fg-3); }
+  .cyc-auto-leg b { font-family: var(--f-mono); font-size: 14px; font-weight: 700; }
+  .cyc-auto-na { font-size: 10.5px; color: var(--fg-3); }
+  .cyc-auto-tag { margin-left: auto; font-size: 9.5px; color: var(--fg-3);
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+
+  .cyc-note { margin-top: 9px; font-size: 11px !important; }
+  .cyc-base { margin-top: 8px; font-size: 10.5px; line-height: 1.6; color: var(--fg-3);
+    padding-left: 9px; border-left: 2px solid var(--line); }
+  .cyc-at { margin-top: 6px; font-size: 10px; color: var(--fg-3); }
+  .cyc-stale { color: var(--warn); }
+
+  .cyc-log { margin-top: 12px; }
+  .cyc-log > summary { cursor: pointer; font-size: 11px; color: var(--fg-3); list-style: none; }
+  .cyc-log > summary::-webkit-details-marker { display: none; }
+  .cyc-log > summary::before { content: "▸ "; }
+  .cyc-log[open] > summary::before { content: "▾ "; }
+  .cyc-log-body { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+  .cyc-log-row { display: flex; gap: 10px; font-size: 10.5px; color: var(--fg-2); }
+  .cyc-log-row i { font-style: normal; font-family: var(--f-mono); color: var(--fg-3); flex-shrink: 0; }
+  .cyc-log-row span { flex: 1; min-width: 0; }
+  .cyc-log-row b { font-family: var(--f-mono); color: var(--fg-3); font-weight: 600; }
+
+  @media (max-width: 768px) {
+    .cyc-card { padding: 14px 13px 12px; }
+    .cyc-phase { font-size: 19px; } .cyc-score { font-size: 22px; }
+    /* 标签窄屏下换行到上方，正文才有足够宽度 */
+    .cyc-line { flex-direction: column; gap: 2px; margin-bottom: 7px; }
+    .cyc-line > i { width: auto; }
+    .cyc-auto-tag { margin-left: 0; }
+  }
+
   .mkt-module-sep { height: 1px; background: linear-gradient(to right, var(--line), transparent); margin: 20px 0; }
   .mkt-refresh-btn { background: none; border: 1px solid var(--line); border-radius: 7px; color: var(--fg-2); font-size: 12px; padding: 5px 12px; cursor: pointer; margin-left: auto; display: block; margin-bottom: 12px; }
   .mkt-refresh-btn:hover { color: var(--fg-0); border-color: var(--fg-2); }
@@ -5997,8 +6097,8 @@
   </div>
 </div>
 
-<script src="data.js?v=759"></script>
-<script src="desk.js?v=759"></script>
+<script src="data.js?v=760"></script>
+<script src="desk.js?v=760"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
