@@ -4441,6 +4441,42 @@
   .cyc-rule b { color: var(--fg-1); font-weight: 600; }
   .cyc-scope { margin-top: 7px; font-size: 10.5px; color: var(--fg-3); }
 
+/* v761 置信度门控 */
+  .cyc-phase-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 7px; }
+  .cyc-phase-row .cyc-phase { margin-top: 0; }
+  .cyc-held { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid currentColor; white-space: nowrap;
+    background: color-mix(in oklch, currentColor 12%, transparent); }
+  .cyc-held.prov { color: var(--warn); } .cyc-held.low { color: var(--fg-3); }
+  .cyc-score-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
+  .cyc-score i { font-style: normal; font-size: 15px; margin-left: 1px; }
+
+  .cyc-conf { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg-2); }
+  .cyc-conf-hd { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .cyc-conf-lbl { font-size: 9.5px; font-weight: 600; letter-spacing: .06em;
+    color: var(--fg-3); text-transform: uppercase; }
+  .cyc-conf-band { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 4px;
+    border: 1px solid currentColor; }
+  .cyc-conf-band.high { color: var(--up); } .cyc-conf-band.prov { color: var(--warn); }
+  .cyc-conf-band.low { color: var(--fg-3); }
+  .cyc-conf-pct { margin-left: auto; font-family: var(--f-mono); font-size: 14px; font-weight: 700; }
+  .cyc-conf-pct.high { color: var(--up); } .cyc-conf-pct.prov { color: var(--warn); }
+  .cyc-conf-pct.low { color: var(--fg-3); }
+  .cyc-conf-bar { height: 5px; border-radius: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }
+  .cyc-conf-bar i { display: block; height: 100%; border-radius: 3px; }
+  .cyc-conf-bar i.high { background: var(--up); } .cyc-conf-bar i.prov { background: var(--warn); }
+  .cyc-conf-bar i.low { background: var(--fg-3); }
+  .cyc-conf-note { margin-top: 7px; font-size: 10.5px; color: var(--fg-2); }
+  /* 被门控压住时仍把本次读数摆出来——不采信，但不隐瞒 */
+  .cyc-raw { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line);
+    font-size: 10.5px; line-height: 1.7; color: var(--fg-3); }
+  .cyc-raw b { color: var(--fg-2); font-weight: 600; }
+  .cyc-rule br { content: ""; display: block; margin-top: 3px; }
+
+  @media (max-width: 768px) {
+    .cyc-conf-pct { margin-left: 0; }
+  }
+
   .cyc-list { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
   .cyc-item { border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px 12px;
     border-left-width: 3px; border-left-color: var(--line); }
@@ -6097,8 +6133,8 @@
   </div>
 </div>
 
-<script src="data.js?v=760"></script>
-<script src="desk.js?v=760"></script>
+<script src="data.js?v=761"></script>
+<script src="desk.js?v=761"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

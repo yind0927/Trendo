@@ -1488,6 +1488,8 @@ function rsAdjustGrade(grade, rsResult) {
     if (data.cycleCheck && typeof data.cycleCheck === "object") {
       CYCLE_CHECK.items = data.cycleCheck.items || {};
       CYCLE_CHECK.log   = data.cycleCheck.log   || [];
+      CYCLE_CHECK.confirmedPhase = data.cycleCheck.confirmedPhase || null;
+      CYCLE_CHECK.confirmedAt    = data.cycleCheck.confirmedAt    || null;
     }
     if (data.dailyPnlLog && typeof data.dailyPnlLog === "object") {
       Object.assign(dailyPnlLog, data.dailyPnlLog);
@@ -1659,7 +1661,8 @@ function rsAdjustGrade(grade, rsResult) {
       if (mp) { const parsed = JSON.parse(mp); MODEL_PICKS.splice(0, MODEL_PICKS.length, ...parsed); }
       const cc = localStorage.getItem("trendo_v4_cycle_check");
       if (cc) { try { const p = JSON.parse(cc);
-        if (p && typeof p === "object") { CYCLE_CHECK.items = p.items || {}; CYCLE_CHECK.log = p.log || []; } } catch (_) {} }
+        if (p && typeof p === "object") { CYCLE_CHECK.items = p.items || {}; CYCLE_CHECK.log = p.log || [];
+          CYCLE_CHECK.confirmedPhase = p.confirmedPhase || null; CYCLE_CHECK.confirmedAt = p.confirmedAt || null; } } catch (_) {} }
       const dp = localStorage.getItem("trendo_v4_daily_pnl");
       if (dp) { try { Object.assign(dailyPnlLog, JSON.parse(dp)); } catch (_) {} }
       const ah = localStorage.getItem("trendo_v4_analysis_hist");
@@ -14689,7 +14692,7 @@ function rsAdjustGrade(grade, rsResult) {
   ];
 
   const CYCLE_ITEMS = [
-    { id: "capex_guide", tier: 1, days: 90, zh: "超大厂 capex 指引下调",
+    { id: "capex_guide", tier: 1, terminal: true, days: 90, zh: "超大厂 capex 指引下调",
       what: "买方停止加码 = 卖方收入立刻塌。这是整轮周期机械性的终点。",
       where: "MSFT / GOOGL / AMZN / META 季度财报电话会的 capex guidance 段落",
       how: "有任何一家下调下季度或全年 capex 指引？",
@@ -14697,15 +14700,15 @@ function rsAdjustGrade(grade, rsResult) {
       base: "2026-09-17 核实：仍在上修 —— 摩根大通估 2026 年五大厂 $6,970 亿，年内已上修 $1,730 亿",
       init: "clear" },
 
-    { id: "depreciation", tier: 1, days: 90, zh: "折旧年限假设被拉长",
-      what: "capex 滞后 3–6 年变成折旧打进利润表。把年限往后拉＝用会计手段护 EPS。",
+    { id: "depreciation", tier: 2, days: 90, zh: "折旧年限假设被拉长",
+      what: "capex 滞后 3–6 年变成折旧打进利润表。把年限往后拉＝用会计手段护 EPS——这是金融化阶段的手法，不是周期终点。",
       where: "10-K / 10-Q 的「Property and Equipment」附注，找 useful life",
       how: "有没有哪家又把服务器折旧年限往后拉了？",
       warn: "往后拉＝看空信号；主动缩短反而是诚实的，算「未出现」",
       base: "未核实",
       init: "unset" },
 
-    { id: "semi_orders", tier: 1, days: 90, zh: "半导体订单 / backlog 掉头",
+    { id: "semi_orders", tier: 1, lead: true, days: 90, zh: "半导体订单 / backlog 掉头",
       what: "卖铲子一端的领先指标，通常早于 capex 指引出现。",
       where: "NVDA / AVGO / TSM 财报里的 backlog 与交期；ODM 渠道库存",
       how: "交期缩短、订单取消、或渠道库存开始堆积？",
@@ -14805,25 +14808,89 @@ function rsAdjustGrade(grade, rsResult) {
   }
   let _cycBreadth = { state: "unset", sp: null, nq: null };
 
-  // 阶段判定。规则整段印在卡片上，不做黑箱——用户随时能看出「为什么是第 5 阶段」。
+  // 阶段判定（v761 重写）。规则整段印在卡片上，不做黑箱。
+  //
+  // v760 的三个缺陷（穷举 59,049 种组合实测出来的）：
+  //   ① `T1 任一 lit → 第6阶段` 把三条性质不同的判据一视同仁——折旧年限被拉长是
+  //      「金融化」的会计手法（第4阶段），却会直接判成「周期已结束」；
+  //   ② watch 半权太重——十条全「观察中」= 10.5 分 = 第5阶段，但「处处有苗头」
+  //      不等于「正在派发」；
+  //   ③ 分数没有分母——8 分永远显示第5阶段，不管它基于 6 条还是 10 条证据。
+  //   合计后果：70.4% 的可能状态都判第6阶段，95.8% 落在第5–6，量表几乎没有区分度。
+  //
+  // v761 的修法：watch 改 1/3 权；比例＝得分÷已核实项满分（有分母了）；
+  // terminal override 只留 capex 指引下调一条，半导体订单改为「至少第5阶段」的下限。
+  const CYCLE_WATCH_F = 1 / 3;
+  const CYCLE_RATIO_CUT = [[0.60, 5, "派发", "down"], [0.35, 4, "金融化", "warn"],
+                           [0.15, 3, "机构化", "flat"]];
+
+  // 证据完整度三档门控。核心：阶段是**有状态**的——低可信时不重新判定，
+  // 保留上一次在高可信下确认的阶段，避免「填了一条就跳一档」。
+  const CYCLE_CONF = [
+    { min: 0.70, k: "high", zh: "高可信", en: "High confidence", note: "允许阶段升级 / 降级" },
+    { min: 0.60, k: "prov", zh: "暂定",   en: "Provisional",     note: "显示评分，但阶段保持上次确认值" },
+    { min: 0,    k: "low",  zh: "低可信", en: "Low confidence",  note: "评分仅供参考，不执行阶段切换" },
+  ];
+
+  function cycStateOf(it) {
+    return it.auto ? _cycBreadth.state
+      : it.num ? cycNumState(CYCLE_CHECK.items[it.id]?.value)
+      : (CYCLE_CHECK.items[it.id]?.state || "unset");
+  }
+
   function cyclePhase() {
-    let score = 0;
+    let score = 0, maxV = 0, wDone = 0, wAll = 0;
+    let terminal = false, lead = false;
     const cnt = { 1: [0, 0], 2: [0, 0], 3: [0, 0] };   // [lit, 总数]
-    let t1lit = false;
     for (const it of CYCLE_ITEMS) {
-      const st = it.auto ? _cycBreadth.state
-        : it.num ? cycNumState(CYCLE_CHECK.items[it.id]?.value)
-        : (CYCLE_CHECK.items[it.id]?.state || "unset");
-      cnt[it.tier][1]++;
-      if (st === "lit") { cnt[it.tier][0]++; score += CYCLE_TIER_W[it.tier]; if (it.tier === 1) t1lit = true; }
-      else if (st === "watch") score += CYCLE_TIER_W[it.tier] / 2;
+      const st = cycStateOf(it), w = CYCLE_TIER_W[it.tier];
+      cnt[it.tier][1]++; wAll += w;
+      if (st === "unset") continue;                     // 未核实不进分子也不进分母
+      wDone += w; maxV += w;
+      if (st === "lit") {
+        cnt[it.tier][0]++; score += w;
+        if (it.terminal) terminal = true;
+        if (it.lead) lead = true;
+      } else if (st === "watch") score += w * CYCLE_WATCH_F;
     }
-    const p = t1lit ? { n: 6, zh: "认知", cls: "down" }
-      : score >= 6 ? { n: 5, zh: "派发", cls: "down" }
-      : score >= 3 ? { n: 4, zh: "金融化", cls: "warn" }
-      : score >= 1 ? { n: 3, zh: "机构化", cls: "flat" }
-      : { n: 0, zh: "尚无足够信号", cls: "flat" };
-    return { ...p, score, cnt };
+    const conf = wAll ? wDone / wAll : 0;
+    const ratio = maxV ? score / maxV : 0;
+
+    // 本次读数（raw）——只看比例，不考虑置信度
+    let raw = { n: 2, zh: "尚无足够信号", cls: "flat" };
+    for (const [cut, n, zh, cls] of CYCLE_RATIO_CUT)
+      if (ratio >= cut) { raw = { n, zh, cls }; break; }
+    if (lead && raw.n < 5) raw = { n: 5, zh: "派发", cls: "down" };
+
+    const band = CYCLE_CONF.find(c => conf >= c.min);
+    const prev = CYCLE_CHECK.confirmedPhase || null;    // 上次在高可信下确认的阶段
+
+    // terminal 凌驾于置信度门控之上：capex 指引下调是直接观测到的事实，
+    // 不该因为「别的项没填」而被压住不报。
+    let shown, held = false;
+    if (terminal) {
+      shown = { n: 6, zh: "认知", cls: "down" };
+    } else if (band.k === "high") {
+      shown = raw;
+    } else {
+      shown = prev ? { ...prev } : null;                // 保留上次确认值；从未确认过则不判定
+      held = true;
+    }
+    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, terminal, prev };
+  }
+
+  // 高可信（或直接观测到终点信号）时才把阶段"确认"下来并落盘——这是
+  // 「保留上一阶段」得以成立的前提。
+  function cycleConfirm() {
+    const p = cyclePhase();
+    if (!p.shown) return false;
+    if (!(p.band.k === "high" || p.terminal)) return false;
+    const c = CYCLE_CHECK.confirmedPhase;
+    if (c && c.n === p.shown.n) return false;
+    CYCLE_CHECK.confirmedPhase = { n: p.shown.n, zh: p.shown.zh, cls: p.shown.cls };
+    CYCLE_CHECK.confirmedAt = cycToday();
+    cycLog("_phase", c ? `第${c.n}阶段` : "未确认", `第${p.shown.n}阶段`);
+    return true;
   }
 
   const cycEsc = s => String(s ?? "").replace(/[&<>"]/g, c =>
@@ -14885,11 +14952,27 @@ function rsAdjustGrade(grade, rsResult) {
   function cycleCardHTML() {
     const p = cyclePhase();
     const recent = (CYCLE_CHECK.log || []).slice(-6).reverse();
+    const pct = v => (v * 100).toFixed(0);
+
+    // 阶段标题。三种情形：正常显示 / 保留上次确认值（带待确认标记）/ 从未确认过。
+    const headCls = p.shown ? p.shown.cls : "flat";
+    const headTxt = p.shown ? `第 ${p.shown.n} 阶段 · ${p.shown.zh}` : "暂不判定";
+    const heldTag = p.held
+      ? `<span class="cyc-held ${p.band.k}">${p.shown ? "证据不足，待确认" : "证据不足"}</span>` : "";
+    // 被门控压住时，把「本次读数」单独摆出来——不采信它，但不隐瞒它。
+    const rawLine = p.held
+      ? `<div class="cyc-raw">本次读数 <b>第 ${p.raw.n} 阶段 · ${p.raw.zh}</b>（比例 ${pct(p.ratio)}%）` +
+        (p.prev ? ` · 当前显示的是 ${CYCLE_CHECK.confirmedAt || ""} 在高可信下确认的阶段，未随本次读数切换`
+                : ` · 尚无高可信下确认过的阶段，故不下判定`) + `</div>`
+      : "";
+
     return `<div class="cyc-card">
       <div class="cyc-top">
         <div class="cyc-top-l">
           <div class="cyc-eyebrow"><span class="cyc-tick"></span>CYCLE CHECKLIST · 周期检查清单</div>
-          <div class="cyc-phase ${p.cls}">${p.n ? `第 ${p.n} 阶段 · ${p.zh}` : p.zh}</div>
+          <div class="cyc-phase-row">
+            <span class="cyc-phase ${headCls}">${headTxt}</span>${heldTag}
+          </div>
           <div class="cyc-counts">
             T1 <b>${p.cnt[1][0]}/${p.cnt[1][1]}</b> ·
             T2 <b>${p.cnt[2][0]}/${p.cnt[2][1]}</b> ·
@@ -14897,14 +14980,31 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>
         <div class="cyc-top-r">
-          <div class="cyc-score-lbl">加权得分</div>
-          <div class="cyc-score ${p.cls}">${p.score % 1 ? p.score.toFixed(1) : p.score}</div>
+          <div class="cyc-score-lbl">已触发比例</div>
+          <div class="cyc-score ${p.raw.cls}">${pct(p.ratio)}<i>%</i></div>
+          <div class="cyc-score-sub">${p.score % 1 ? p.score.toFixed(1) : p.score} / ${p.maxV} 分</div>
         </div>
       </div>
+
+      <div class="cyc-conf">
+        <div class="cyc-conf-hd">
+          <span class="cyc-conf-lbl">EVIDENCE COMPLETENESS · 证据完整度</span>
+          <span class="cyc-conf-band ${p.band.k}">${p.band.en} · ${p.band.zh}</span>
+          <span class="cyc-conf-pct ${p.band.k}">${pct(p.conf)}%</span>
+        </div>
+        <div class="cyc-conf-bar"><i class="${p.band.k}" style="width:${pct(p.conf)}%"></i></div>
+        <div class="cyc-conf-note">${p.band.note}</div>
+        ${rawLine}
+      </div>
+
       <div class="cyc-rule">
-        判定规则：<b>T1 任一「已触发」→ 第 6 阶段</b>；否则按加权得分 —
-        ≥6 第 5 阶段 · ≥3 第 4 阶段 · ≥1 第 3 阶段。
-        已触发计该档权重（T1=3 / T2=2 / T3=1），观察中计半分，<b>未填不计分</b>。
+        <b>比例</b> = 已触发权重 ÷ <b>已核实项</b>的满分（未填既不进分子也不进分母）。
+        已触发计该档权重（T1=3 / T2=2 / T3=1），观察中计 1/3。
+        <br>比例 ≥60% 第 5 阶段 · ≥35% 第 4 阶段 · ≥15% 第 3 阶段；
+        半导体订单掉头则至少第 5 阶段；<b>capex 指引下调 → 第 6 阶段</b>，
+        这一条是直接观测到的事实，不受完整度门控压制。
+        <br>完整度门控：<b>≥70%</b> 允许升降 · <b>60–69%</b> 显示评分但保留上次确认的阶段 ·
+        <b>&lt;60%</b> 评分仅供参考、不切换阶段。
       </div>
       <div class="cyc-scope">季度级判据，不接入三轴模型、不产生交易信号；每个财报季复核一次即可。</div>
       <div class="cyc-list">${CYCLE_ITEMS.map(cycItemHTML).join("")}</div>
@@ -14912,7 +15012,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="cyc-log-body">${recent.map(l => {
           const it = CYCLE_ITEMS.find(x => x.id === l.id);
           return `<div class="cyc-log-row"><i>${(l.ts || "").slice(0, 10)}</i>
-            <span>${it ? it.zh : l.id}</span><b>${l.from} → ${l.to}</b></div>`;
+            <span>${l.id === "_phase" ? "阶段确认" : (it ? it.zh : l.id)}</span><b>${l.from} → ${l.to}</b></div>`;
         }).join("")}</div></details>` : ""}
     </div>`;
   }
@@ -14956,7 +15056,9 @@ function rsAdjustGrade(grade, rsResult) {
   function renderCycleCard() {
     const el = $("#cycle-card");
     if (!el) return;
-    if (cycleSeed()) saveToStorage();
+    let dirty = cycleSeed();
+    if (cycleConfirm()) dirty = true;
+    if (dirty) saveToStorage();
     el.innerHTML = cycleCardHTML();
     wireCycleCard(el);
   }

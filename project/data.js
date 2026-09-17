@@ -112,5 +112,8 @@ window.REAL_OPTIONS = [];
 // 跟三轴模型（日频、自动）刻意分开——这些是季度级的，不该被当成交易信号。
 // { items: { [id]: { state:"unset"|"clear"|"watch"|"lit", value?:number,
 //                    note?:string, at?:"ISO" } },
-//   log: [{ ts, id, from, to }] }        — 每次改动留痕，趋势比快照更有意义
-window.CYCLE_CHECK = { items: {}, log: [] };
+//   log: [{ ts, id, from, to }],       — 每次改动留痕，趋势比快照更有意义
+//   confirmedPhase: { n, zh, cls } | null,  — 上次在「高可信」下确认的阶段
+//   confirmedAt: "YYYY-MM-DD" | null }      — 阶段是有状态的：证据完整度不足时
+//                                             保留上次确认值，不因新增单条证据跳档
+window.CYCLE_CHECK = { items: {}, log: [], confirmedPhase: null, confirmedAt: null };
