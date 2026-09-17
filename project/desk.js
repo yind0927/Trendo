@@ -14726,7 +14726,7 @@ function rsAdjustGrade(grade, rsResult) {
       where: "超大厂债利差 vs 同期限国债；数据中心项目债利差",
       how: "利差是否较上季明显走扩？" },
 
-    { id: "debt_ratio", tier: 2, days: 90, zh: "AI capex 债务融资占比", num: true,
+    { id: "debt_ratio", tier: 2, days: 90, zh: "AI capex 债务融资占比", num: true, cuts: [25, 40],
       what: "边际那一块钱从自由现金流变成债务时，这轮就挂上了一个偿债时钟。",
       where: "高盛 / 摩根大通 / BIS 的 AI 融资报告",
       how: "填一个百分比即可，阈值由系统判色",
@@ -14753,11 +14753,12 @@ function rsAdjustGrade(grade, rsResult) {
       how: "云收入增速是否明显跟不上 capex 增速？",
       warn: "单季波动不算，要连续两季；收入增速放缓但仍快于 capex 增速不算" },
 
-    { id: "compute_price", tier: 2, days: 90, zh: "算力单价转跌（最新一代）",
-      what: "这是整张表里唯一一条测「产出物的价格」的判据。产能过剩最先体现在租金上，比财报、比 capex 指引都早——但必须盯最新一代，老一代降价只是技术换代。",
-      where: "Lambda / CoreWeave / RunPod / Nebius 等的公开小时价；SemiAnalysis 的算力价格追踪",
-      how: "**最新一代**（当前为 B200 / GB200）的按需与现货价格是否连续两季下跌？",
-      warn: "H100 这类老一代降价不算——那是换代的正常折旧；反过来，若最新一代现货折扣扩大，那才是供给开始过剩" },
+    { id: "real_rate", tier: 2, days: 90, zh: "10年期实际利率（融资成本门槛）", num: true,
+      cuts: [1.5, 2.5], step: 0.05, min: -2, max: 6, unit: "%",
+      what: "无风险实际利率是**所有**长久期 capex 的门槛收益率，跟信用风险无关——这一点与「AI 相关信用利差」测的是两件事：那条问的是市场要为『借给这个行业』多收多少溢价，这条问的是钱本身多贵。实际利率抬上去，回本期越长的项目越先被砍。",
+      where: "FRED `DFII10`（10 年期 TIPS 收益率）；或任一财经站的 10Y TIPS yield",
+      how: "填当前的 10 年期**实际**利率（已扣通胀预期），阈值由系统判色",
+      warn: "<1.5% 未出现 · 1.5–2.5% 观察中 · >2.5% 已触发。别填名义利率（^TNX 那个），名义利率含通胀预期、跟资金真实成本不是一回事" },
 
     { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态",
       what: "测的是市场能不能消化叙事顶点的最大供给量。",
@@ -14784,7 +14785,7 @@ function rsAdjustGrade(grade, rsResult) {
       circular:      { state: "lit",   note: "BIS 确认超大厂借 SPV 收购数据中心资产、私募发债，自身只持少数股权 + 长期租赁承诺。最新实例：Blackstone + Alphabet 合资的 Crux AI 由 10 家银行提供 220 亿美元贷款买 Google 自家 TPU，以芯片本身与客户合同作抵押（Bloomberg 9/16）——卖方把设备卖给一个由自己参股、靠举债买货的实体，正是这一条要测的结构。多头把它读作「贷款人愿意按项目融资口径放款」，看法可以不同，但结构事实本身没有争议。" },
       good_news_fail:{ state: "watch", note: "Alphabet 云收入 +82% 大幅超预期、股价当日仍跌逾 7%（一年多来最差），Meta 财报次日跌 10%——字面上「beat 却大跌」确实发生了。但 MSFT +8%、AMZN +10% 同期仍被奖励：这是市场开始**区分谁的 capex 讲得通**，不是系统性的买盘衰竭。这一条测的是后者，所以记观察中而非已触发（v766 曾误记已触发，与本条备注自相矛盾，v767 更正）。要升为已触发，需要四家一起 beat 一起跌。" },
       ai_roi:        { state: "watch", note: "分化：Google Cloud +82%、AWS 加速到 +37%，而 2026 年 capex 同比约 +80%——GCP 大致跟得上，AWS 明显慢于投入增速。同时 Alphabet 自 2004 年上市以来首次出现季度自由现金流转负。产出还在高速增长，谈不上「跟不上」，但比值确实在变薄，记观察中。" },
-      compute_price: { state: "watch", note: "两代走势相反：H100 租金腰斩至约 $3.38/小时（AWS 2025年6月一次性下调 44%，市场跟随），而最新一代 B200 仍是溢价、且现货折扣自 5 月起明显收窄（供给偏紧而非过剩）。老一代跌是换代折旧、不算信号；最新一代还没转跌，所以记观察中而非已触发。顺带一提，H100 租金腰斩本身也是「6 年折旧年限偏长」的市场侧佐证。" },
+      real_rate:     { state: "num", value: 2.15, note: "2026-09-17 约 2.15%，落在 1.5–2.5% 的观察区间。参照系：这轮 AI capex 的投资决策大多是在实际利率 1.5–2% 时做的，2.5% 以上会让长回本期项目的净现值明显承压。**与信用利差那条不重叠**——那条测的是市场要为『借给 AI 这个行业』额外收多少溢价（Oracle CDS 75→218bp），这条测的是资金本身的价格，即使信用零风险也要付。" },
       ipo_window:    { state: "lit",   note: "SpaceX 6/12 上市 $135 定价 → 4 天见顶 $225.64 → 7 月低点 $110.85（较峰值腰斩）；OpenAI 推迟至 2027。" },
       new_metric:    { state: "clear", note: "专门检索未发现「算力调整后收入」这类新造指标进入主流卖方口径。唯一接近的是把 RPO／可取消 backlog 当作 capex 正当性的头条论据（如 MSFT 6,780 亿商业 RPO），但 RPO 本身是既有 GAAP 披露、不是新发明——下季度值得再看一眼。" },
     },
@@ -14797,7 +14798,7 @@ function rsAdjustGrade(grade, rsResult) {
     const B = CYCLE_BASELINE;
     Object.entries(B.items).forEach(([id, v]) => {
       const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
-      const next = v.state === "num" ? cycNumState(v.value) : v.state;
+      const next = v.state === "num" ? cycNumState(v.value, CYCLE_ITEMS.find(i => i.id === id)) : v.state;
       if ((rec.state || "unset") !== next) cycLog(id, rec.state || "unset", next);
       rec.state = next;
       if (v.value != null) rec.value = v.value;
@@ -14813,7 +14814,7 @@ function rsAdjustGrade(grade, rsResult) {
     for (const it of CYCLE_ITEMS) {
       if (it.auto || CYCLE_CHECK.items[it.id]) continue;
       const b = CYCLE_BASELINE.items[it.id];
-      const st = !b ? "unset" : b.state === "num" ? cycNumState(b.value) : b.state;
+      const st = !b ? "unset" : b.state === "num" ? cycNumState(b.value, it) : b.state;
       CYCLE_CHECK.items[it.id] = {
         state: st,
         ...(b && b.value != null ? { value: b.value } : {}),
@@ -14825,8 +14826,14 @@ function rsAdjustGrade(grade, rsResult) {
     return changed;
   }
 
-  const cycNumState = v =>
-    v == null || isNaN(v) ? "unset" : v > 40 ? "lit" : v >= 25 ? "watch" : "clear";
+  // 数字项的阈值由条目自带 `cuts: [watchMin, litMin]`——v772 起有两条数字判据
+  // （债务融资占比、10年期实际利率），量纲和方向都不同，不能再共用一套写死的数
+  const CYC_NUM_DEFAULT = [25, 40];
+  const cycNumState = (v, it) => {
+    if (v == null || isNaN(v)) return "unset";
+    const [w, l] = (it && it.cuts) || CYC_NUM_DEFAULT;
+    return v > l ? "lit" : v >= w ? "watch" : "clear";
+  };
 
   // 自动项：等权 / 市值加权的比值在 N 个交易日里的变化。两条腿任一走弱即记一次。
   function cycRatioChg(results, num, den, days = 60) {
@@ -14903,7 +14910,7 @@ function rsAdjustGrade(grade, rsResult) {
 
   function cycStateOf(it) {
     return it.auto ? _cycBreadth.state
-      : it.num ? cycNumState(CYCLE_CHECK.items[it.id]?.value)
+      : it.num ? cycNumState(CYCLE_CHECK.items[it.id]?.value, it)
       : (CYCLE_CHECK.items[it.id]?.state || "unset");
   }
 
@@ -14987,7 +14994,7 @@ function rsAdjustGrade(grade, rsResult) {
   function cycItemHTML(it) {
     const rec = CYCLE_CHECK.items[it.id] || {};
     const st = it.auto ? _cycBreadth.state
-      : it.num ? cycNumState(rec.value)
+      : it.num ? cycNumState(rec.value, it)
       : (rec.state || "unset");
     const stZh = st === "unset" ? "未填" : CYCLE_STATES.find(s => s.k === st).zh;
 
@@ -15006,10 +15013,12 @@ function rsAdjustGrade(grade, rsResult) {
       control = `<div class="cyc-auto">${leg(_cycBreadth.sp, "RSP/VOO")}${leg(_cycBreadth.nq, "QQQE/QQQ")}
         <span class="cyc-auto-tag">自动 · 60 交易日</span></div>`;
     } else if (it.num) {
+      const [nw, nl] = it.cuts || CYC_NUM_DEFAULT;
       control = `<div class="cyc-num">
-        <input type="number" step="1" min="0" max="100" class="form-input" data-cyc-num="${it.id}"
-          value="${rec.value ?? ""}" placeholder="—"><span class="cyc-num-pct">%</span>
-        <span class="cyc-num-scale"><i class="clear">&lt;25</i><i class="watch">25–40</i><i class="lit">&gt;40</i></span>
+        <input type="number" step="${it.step || 1}" min="${it.min ?? 0}" max="${it.max ?? 100}"
+          class="form-input" data-cyc-num="${it.id}"
+          value="${rec.value ?? ""}" placeholder="—"><span class="cyc-num-pct">${it.unit || "%"}</span>
+        <span class="cyc-num-scale"><i class="clear">&lt;${nw}</i><i class="watch">${nw}–${nl}</i><i class="lit">&gt;${nl}</i></span>
       </div>`;
     } else {
       control = `<div class="cyc-btns">${CYCLE_STATES.map(s =>
@@ -15183,7 +15192,8 @@ function rsAdjustGrade(grade, rsResult) {
       const id = inp.dataset.cycNum;
       const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
       const v = inp.value === "" ? null : Number(inp.value);
-      const before = cycNumState(rec.value), after = cycNumState(v);
+      const it = CYCLE_ITEMS.find(x => x.id === id);
+      const before = cycNumState(rec.value, it), after = cycNumState(v, it);
       if (before !== after) cycLog(id, before, after);
       rec.value = v; rec.state = after; rec.at = cycToday(); rec.seeded = false;
       saveToStorage();
