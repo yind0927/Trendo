@@ -15106,6 +15106,7 @@ function rsAdjustGrade(grade, rsResult) {
 
 
       ${p.edge ? `<div class="cyc-edge">⚖ 临界：得分 ${(p.ratio * 10).toFixed(2)} 距「第 ${p.edge.n} 阶段 · ${p.edge.zh}」的 ${(p.edge.cut * 10).toFixed(1)} 分线只有 ${Math.abs(p.edge.d * 10).toFixed(2)} 分 —— 任何一条判据改一档都可能让阶段翻面，别把它当成一个稳的结论。</div>` : ""}
+      ${cycNextHTML(p)}
       <div class="cyc-rule">
         <b>得分</b> = 已触发权重 ÷ <b>已核实项</b>的满分 × 10（未填既不进分子也不进分母）。
         满分固定 10 分，所以**增删判据不会换尺子**，前后版本可以直接比。
@@ -15199,6 +15200,91 @@ function rsAdjustGrade(grade, rsResult) {
       rec.note = inp.value.trim();
       saveToStorage();
     }));
+  }
+
+  // 「距下一阶段还差什么」——把这张表从**描述**变成**监视清单**。
+  // 只告诉你现在在第几阶段，等于给了个结论却没给下一步；这里算出最少需要哪几条
+  // 改变状态才会跨线，两个方向都算：往上要多少、往下只差多少。
+  //
+  // 两条**硬规则**单独列出，因为它们完全绕开分数：capex 指引下调直接判第 6 阶段，
+  // 半导体订单掉头直接把下限抬到第 5 阶段——攒再多 T2/T3 也不如这两条里的任何一条。
+  function cycNextSteps(p) {
+    if (!p.maxV) return null;
+    const asc = [...CYCLE_RATIO_CUT].sort((a, b) => a[0] - b[0]);
+    const upCut = asc.find(c => c[0] > p.ratio + 1e-9) || null;
+    const dnCut = [...asc].reverse().find(c => c[0] <= p.ratio + 1e-9) || null;
+
+    const ups = [], dns = [];
+    for (const it of CYCLE_ITEMS) {
+      const st = cycStateOf(it), w = CYCLE_TIER_W[it.tier];
+      if (st === "unset") continue;                  // 未填的改动会同时动分子分母，不在这里算
+      if (st === "clear")      ups.push({ it, gain: w,                     to: "已触发" });
+      else if (st === "watch") ups.push({ it, gain: w * (1 - CYCLE_WATCH_F), to: "已触发" });
+      if (st === "lit")        dns.push({ it, drop: w * (1 - CYCLE_WATCH_F), to: "观察中" });
+      else if (st === "watch") dns.push({ it, drop: w * CYCLE_WATCH_F,      to: "未出现" });
+    }
+    // 贪心取最少条数：先挑单条影响最大的
+    const pick = (arr, key, need) => {
+      const out = []; let acc = 0;
+      for (const c of [...arr].sort((a, b) => b[key] - a[key])) {
+        if (acc >= need) break;
+        out.push(c); acc += c[key];
+      }
+      return acc >= need ? { list: out, acc } : null;
+    };
+
+    const up = upCut ? (() => {
+      const need = upCut[0] * p.maxV - p.score + 1e-9;
+      const r = pick(ups, "gain", need);
+      return { cut: upCut, need, ...(r || { list: null, acc: 0 }) };
+    })() : null;
+
+    const dn = dnCut ? (() => {
+      const need = p.score - dnCut[0] * p.maxV + 1e-9;   // 需要跌破这条线
+      // dnCut 是**当前所处**那一档的门槛，跌破它落到的是**再下一档**——
+      // 直接用 dnCut[1] 会把"掉回第 3 阶段"写成"掉回第 4 阶段"（v771 首测抓到）
+      const below = asc.filter(c => c[0] < dnCut[0]).pop();
+      const to = below ? { n: below[1], zh: below[2] } : { n: 2, zh: "尚无足够信号" };
+      const r = pick(dns, "drop", need);
+      return { cut: dnCut, to, need, ...(r || { list: null, acc: 0 }) };
+    })() : null;
+
+    const hard = [];
+    for (const it of CYCLE_ITEMS) {
+      if (cycStateOf(it) === "lit") continue;
+      if (it.terminal) hard.push({ zh: it.zh, txt: "任意一家真的下调 → 直接判第 6 阶段，不看分数、也不受完整度门控" });
+      else if (it.lead) hard.push({ zh: it.zh, txt: "单独点亮 → 阶段下限直接抬到第 5 阶段，不看分数" });
+    }
+    return { up, dn, hard };
+  }
+
+  function cycNextHTML(p) {
+    const n = cycNextSteps(p);
+    if (!n) return "";
+    const row = (dir, o, verb) => {
+      if (!o) return "";
+      const to = dir === "up" ? { n: o.cut[1], zh: o.cut[2] } : o.to;
+      const d = (o.need * 10 / p.maxV);
+      const names = o.list && o.list.map(c =>
+        `<b>${c.it.zh}</b><i>→${c.to}</i>${c.it.auto ? `<u>自动项</u>` : ""}`).join(" · ");
+      return `<div class="cyc-next-row ${dir}">
+        <div class="cyc-next-hd"><span class="cyc-next-arrow">${dir === "up" ? "↑" : "↓"}</span>
+          ${verb}<b>第 ${to.n} 阶段 · ${to.zh}</b>（${dir === "up" ? "越过" : "跌破"} ${(o.cut[0] * 10).toFixed(1)} 分线）
+          <em>${dir === "up" ? "还差" : "只差"} ${Math.abs(d).toFixed(2)} 分</em></div>
+        <div class="cyc-next-list">${o.list
+          ? `最少需要这 ${o.list.length} 条：${names}`
+          : `<span class="cyc-next-none">把剩下所有能动的都动到底也不够——这个方向暂时到不了</span>`}</div>
+      </div>`;
+    };
+    return `<div class="cyc-next">
+      <div class="cyc-next-lbl"><span class="cyc-defs-tick"></span>距下一阶段 · WHAT WOULD CHANGE IT</div>
+      ${row("up", n.up, "要到 ")}
+      ${row("down", n.dn, "要掉回 ")}
+      ${n.hard.length ? `<div class="cyc-next-hard">${n.hard.map(h =>
+        `<div>⚑ <b>${h.zh}</b>：${h.txt}</div>`).join("")}</div>` : ""}
+      <div class="cyc-next-note">上面算的是<b>最少条数</b>（先挑单条影响最大的），不是唯一路径；
+        「未填」的判据不参与这个计算——它们一改会同时动分子和分母，不是单纯的加减分。</div>
+    </div>`;
   }
 
   // 得分快照。这个模块的价值在**趋势**而不是快照——v760 就写过"趋势比快照有意义"，
