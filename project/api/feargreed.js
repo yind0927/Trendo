@@ -38,10 +38,16 @@ async function ratesHandler(res) {
   const settled = await Promise.allSettled(keys.map(k => fetchSeries(FRED_SERIES[k].id, from)));
 
   const out = {};
+  const errs = [];
   let okCount = 0;
   settled.forEach((s, i) => {
     const k = keys[i], meta = FRED_SERIES[k];
-    if (s.status !== "fulfilled" || !s.value.length) { out[k] = { ...meta, err: true }; return; }
+    if (s.status !== "fulfilled" || !s.value.length) {
+      const msg = s.status === "rejected" ? (s.reason?.message || "fetch failed") : "empty series";
+      errs.push(`${meta.id}: ${msg}`);
+      out[k] = { ...meta, err: true, msg };
+      return;
+    }
     okCount++;
     const ser = s.value;
     const last = ser[ser.length - 1];
@@ -52,7 +58,9 @@ async function ratesHandler(res) {
                chg: +(last.v - back.v).toFixed(4) };
   });
 
-  if (!okCount) return res.status(502).json({ error: "FRED unavailable" });
+  // 全失败才报错，并且把具体原因带出去——上游是 403 / 超时 / 还是返回空，
+  // 三种情况的处理方式完全不同，只回 "unavailable" 等于把线索扔了。
+  if (!okCount) return res.status(502).json({ error: `FRED unavailable — ${errs.join(" | ")}` });
   res.setHeader("Cache-Control", "s-maxage=21600, stale-while-revalidate=86400");  // 日频数据，缓存 6h
   res.json({ series: out, asOf: new Date().toISOString().slice(0, 10) });
 }

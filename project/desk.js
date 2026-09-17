@@ -14812,7 +14812,26 @@ function rsAdjustGrade(grade, rsResult) {
   // 去打 AI 专属那一格的分，既答非所问又会跟手填项重复计分。这里只作背景参照。
   let _cycMacro = null;
 
+  // 宏观复核提示阈值。FRED 的广谱利差不直接打分，但它是「该去复核哪一条手填项」的
+  // 触发器——融资成本通道一旦动起来，AI 专属利差多半也在动，值得人工去看一眼。
+  const CYC_MACRO_TRIG = [
+    { k: "hy",     up:  0.50, why: "高收益债利差 3 个月走阔超 50bp", go: "credit_spread" },
+    { k: "ig",     up:  0.25, why: "投资级利差 3 个月走阔超 25bp",   go: "credit_spread" },
+    { k: "real10", up:  0.40, why: "10 年实际利率 3 个月上行超 40bp", go: "debt_ratio" },
+  ];
+
   function cycMacroHTML() {
+    // 拉取失败时不静默——把原因摆出来（v591 起的惯例：手机端开不了 devtools，
+    // 卡片上直接写清楚，用户读一句话就能把关键信息反馈回来）。
+    if (_cycMacro && _cycMacro.err) {
+      return `<div class="cyc-macro">
+        <div class="cyc-macro-hd"><span class="cyc-macro-lbl">MACRO BACKDROP · 宏观背景</span>
+          <span class="cyc-macro-tag">不计入评分</span></div>
+        <div class="cyc-macro-err">宏观利率拉取失败：${_cycMacro.err}
+          <br>数据源 FRED（<code>/api/feargreed?mode=rates</code>）。该模块不参与评分，
+          失败不影响上方的阶段判定。</div>
+      </div>`;
+    }
     if (!_cycMacro || !_cycMacro.series) return "";
     const order = ["real10", "hy", "ig", "curve"];
     const cells = order.map(k => {
@@ -14829,10 +14848,21 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).filter(Boolean).join("");
     if (!cells) return "";
+    // 触发复核：只提示「去看哪一条」，不代替人填，也不动分数。
+    const hits = CYC_MACRO_TRIG.filter(t => {
+      const m = _cycMacro.series[t.k];
+      return m && !m.err && m.chg != null && m.chg >= t.up;
+    });
+    const trig = hits.length
+      ? `<div class="cyc-macro-trig lit">⚑ 建议复核：${
+          [...new Set(hits.map(h => CYCLE_ITEMS.find(i => i.id === h.go)?.zh || h.go))].join(" · ")
+        }<i>${hits.map(h => h.why).join("；")}</i></div>`
+      : `<div class="cyc-macro-trig">融资成本通道暂未触发复核阈值（HY +50bp / IG +25bp / 实际利率 +40bp，均为 3 个月变化）</div>`;
     return `<div class="cyc-macro">
       <div class="cyc-macro-hd"><span class="cyc-macro-lbl">MACRO BACKDROP · 宏观背景</span>
         <span class="cyc-macro-tag">不计入评分</span></div>
       <div class="cyc-macro-grid">${cells}</div>
+      ${trig}
       <div class="cyc-macro-src">FRED · 数据截至 ${_cycMacro.series.real10?.date || _cycMacro.asOf}
         · 长端实际利率与信用利差是这轮 AI capex（约三分之一靠举债）的融资成本通道</div>
     </div>`;
@@ -15047,7 +15077,8 @@ function rsAdjustGrade(grade, rsResult) {
         <br>完整度门控：<b>≥70%</b> 允许升降 · <b>60–69%</b> 显示评分但保留上次确认的阶段 ·
         <b>&lt;60%</b> 评分仅供参考、不切换阶段。
       </div>
-      <div class="cyc-scope">季度级判据，不接入三轴模型、不产生交易信号；每个财报季复核一次即可。</div>
+      <div class="cyc-scope">季度级判据，不接入三轴模型、不产生交易信号；每个财报季复核一次即可。
+        再次点击已选中的那一档可清空回「未填」（未填不进分母，与「未出现」不是一回事）。</div>
       <div class="cyc-list">${CYCLE_ITEMS.map(cycItemHTML).join("")}</div>
       ${recent.length ? `<details class="cyc-log"><summary>变更记录 · 最近 ${recent.length} 条</summary>
         <div class="cyc-log-body">${recent.map(l => {
@@ -15073,9 +15104,12 @@ function rsAdjustGrade(grade, rsResult) {
     $$("[data-cyc-set]", host).forEach(b => b.addEventListener("click", () => {
       const [id, st] = b.dataset.cycSet.split(":");
       const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
-      if (rec.state === st) return;
-      cycLog(id, rec.state || "unset", st);
-      rec.state = st; rec.at = cycToday(); rec.seeded = false;
+      // 再次点击已选中的那一档 → 清空回「未填」。"没核实" 和 "核实了没发生" 在
+      // 评分里是两件事（unset 不进分母），所以必须留一条回到 unset 的路，
+      // 否则手滑点错之后就再也回不去了。
+      const next = rec.state === st ? "unset" : st;
+      cycLog(id, rec.state || "unset", next);
+      rec.state = next; rec.at = next === "unset" ? null : cycToday(); rec.seeded = false;
       saveToStorage();
       renderCycleCard();
     }));
@@ -15301,7 +15335,10 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      _cycMacro = ratesRes.status === "fulfilled" && ratesRes.value?.series ? ratesRes.value : null;
+      _cycMacro = ratesRes.status === "fulfilled"
+        ? (ratesRes.value?.series ? ratesRes.value
+            : { err: ratesRes.value?.error || "响应里没有 series 字段" })
+        : { err: ratesRes.reason?.message || "请求未完成" };
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
