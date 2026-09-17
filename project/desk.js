@@ -14676,7 +14676,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
   }
 
-  // ============ AI 周期检查清单（Market 页） ============
+  // ============ 周期系统分析（Market 页） ============
   // 刻意跟三轴模型分开：三轴是日频、自动、用来定仓位的；这张清单是季度级、
   // 人工判断的结构性判据，用来回答「这轮资本开支周期走到哪一段了」。
   // 两者混在一起只会让低频信号被日频噪声淹没。
@@ -14807,6 +14807,37 @@ function rsAdjustGrade(grade, rsResult) {
     return { state: worst <= -3 ? "lit" : worst <= -1 ? "watch" : "clear", sp, nq, worst };
   }
   let _cycBreadth = { state: "unset", sp: null, nq: null };
+  // FRED 宏观背景。**刻意不计入评分**：FRED 给的是广谱 IG/HY 利差，而清单里那条
+  // 问的是 AI/数据中心专属的利差（超大厂债、项目债），两者不是一回事——拿广谱数据
+  // 去打 AI 专属那一格的分，既答非所问又会跟手填项重复计分。这里只作背景参照。
+  let _cycMacro = null;
+
+  function cycMacroHTML() {
+    if (!_cycMacro || !_cycMacro.series) return "";
+    const order = ["real10", "hy", "ig", "curve"];
+    const cells = order.map(k => {
+      const m = _cycMacro.series[k];
+      if (!m || m.err || m.last == null) return "";
+      // 实际利率与信用利差：走高＝对风险资产不利，所以涨记红。曲线不做风险着色。
+      const risk = k !== "curve";
+      const cls = !risk ? "" : m.chg > 0.02 ? "down" : m.chg < -0.02 ? "up" : "";
+      const sign = m.chg > 0 ? "+" : m.chg < 0 ? "−" : "";
+      return `<div class="cyc-macro-cell">
+        <i>${m.zh}</i>
+        <b>${m.last.toFixed(m.digits)}${m.unit}</b>
+        <s class="${cls}">3个月 ${sign}${Math.abs(m.chg).toFixed(m.digits)}</s>
+      </div>`;
+    }).filter(Boolean).join("");
+    if (!cells) return "";
+    return `<div class="cyc-macro">
+      <div class="cyc-macro-hd"><span class="cyc-macro-lbl">MACRO BACKDROP · 宏观背景</span>
+        <span class="cyc-macro-tag">不计入评分</span></div>
+      <div class="cyc-macro-grid">${cells}</div>
+      <div class="cyc-macro-src">FRED · 数据截至 ${_cycMacro.series.real10?.date || _cycMacro.asOf}
+        · 长端实际利率与信用利差是这轮 AI capex（约三分之一靠举债）的融资成本通道</div>
+    </div>`;
+  }
+
 
   // 阶段判定（v761 重写）。规则整段印在卡片上，不做黑箱。
   //
@@ -14966,10 +14997,18 @@ function rsAdjustGrade(grade, rsResult) {
                 : ` · 尚无高可信下确认过的阶段，故不下判定`) + `</div>`
       : "";
 
-    return `<div class="cyc-card">
+    // 收起态只留一行：模块名 + 阶段 + 完整度。这是季度级模块，平时不该占着
+    // Market 页的纵向空间——展开状态存 localStorage，跨会话记住。
+    const isOpen = localStorage.getItem("trendo_cyc_open") === "1";
+    return `<details class="cyc-card" data-cyc-fold${isOpen ? " open" : ""}>
+      <summary class="cyc-sum">
+        <span class="cyc-sum-arrow">▸</span>
+        <span class="cyc-eyebrow"><span class="cyc-tick"></span>CYCLE SYSTEM · 周期系统分析</span>
+        <span class="cyc-sum-phase ${headCls}">${headTxt}</span>
+        <span class="cyc-sum-conf ${p.band.k}">${pct(p.conf)}%</span>
+      </summary>
       <div class="cyc-top">
         <div class="cyc-top-l">
-          <div class="cyc-eyebrow"><span class="cyc-tick"></span>CYCLE CHECKLIST · 周期检查清单</div>
           <div class="cyc-phase-row">
             <span class="cyc-phase ${headCls}">${headTxt}</span>${heldTag}
           </div>
@@ -14997,6 +15036,8 @@ function rsAdjustGrade(grade, rsResult) {
         ${rawLine}
       </div>
 
+      ${cycMacroHTML()}
+
       <div class="cyc-rule">
         <b>比例</b> = 已触发权重 ÷ <b>已核实项</b>的满分（未填既不进分子也不进分母）。
         已触发计该档权重（T1=3 / T2=2 / T3=1），观察中计 1/3。
@@ -15014,7 +15055,7 @@ function rsAdjustGrade(grade, rsResult) {
           return `<div class="cyc-log-row"><i>${(l.ts || "").slice(0, 10)}</i>
             <span>${l.id === "_phase" ? "阶段确认" : (it ? it.zh : l.id)}</span><b>${l.from} → ${l.to}</b></div>`;
         }).join("")}</div></details>` : ""}
-    </div>`;
+    </details>`;
   }
 
   function cycLog(id, from, to) {
@@ -15026,6 +15067,9 @@ function rsAdjustGrade(grade, rsResult) {
 
   function wireCycleCard(root) {
     const host = root || document;
+    $$("[data-cyc-fold]", host).forEach(d => d.addEventListener("toggle", () => {
+      try { localStorage.setItem("trendo_cyc_open", d.open ? "1" : "0"); } catch (_) {}
+    }));
     $$("[data-cyc-set]", host).forEach(b => b.addEventListener("click", () => {
       const [id, st] = b.dataset.cycSet.split(":");
       const rec = CYCLE_CHECK.items[id] || (CYCLE_CHECK.items[id] = { state: "unset" });
@@ -15119,10 +15163,11 @@ function rsAdjustGrade(grade, rsResult) {
       // cover BOTH — ~452 sessions ≈ 660 calendar days — and the warm-up half never
       // reaches the card.
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 660); return d.toISOString().slice(0, 10); })();
-      const [quoteRes, histRes, fgRes] = await Promise.allSettled([
+      const [quoteRes, histRes, fgRes, ratesRes] = await Promise.allSettled([
         fetch("/api/quote?stocks=%5EVIX,%5EVXN,VOO,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN,RSP,QQQE,QQQ&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
+        fetch("/api/feargreed?mode=rates").then(r => r.json()),
       ]);
 
       // VIX / VXN
@@ -15256,6 +15301,7 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
+      _cycMacro = ratesRes.status === "fulfilled" && ratesRes.value?.series ? ratesRes.value : null;
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {

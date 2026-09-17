@@ -4441,7 +4441,48 @@
   .cyc-rule b { color: var(--fg-1); font-weight: 600; }
   .cyc-scope { margin-top: 7px; font-size: 10.5px; color: var(--fg-3); }
 
-/* v761 置信度门控 */
+/* v762 收起形态 + 宏观背景条 */
+  details.cyc-card > summary { list-style: none; cursor: pointer; display: flex;
+    align-items: center; gap: 10px; flex-wrap: wrap; }
+  details.cyc-card > summary::-webkit-details-marker { display: none; }
+  .cyc-sum-arrow { color: var(--fg-3); font-size: 11px; transition: transform .15s; flex-shrink: 0; }
+  details.cyc-card[open] .cyc-sum-arrow { transform: rotate(90deg); }
+  .cyc-sum .cyc-eyebrow { flex: 1; min-width: 0; }
+  .cyc-sum-phase { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .cyc-sum-phase.down { color: var(--down); } .cyc-sum-phase.warn { color: var(--warn); }
+  .cyc-sum-phase.flat { color: var(--fg-2); }
+  .cyc-sum-conf { font-family: var(--f-mono); font-size: 11px; font-weight: 700;
+    padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor;
+    background: color-mix(in oklch, currentColor 12%, transparent); white-space: nowrap; }
+  .cyc-sum-conf.high { color: var(--up); } .cyc-sum-conf.prov { color: var(--warn); }
+  .cyc-sum-conf.low { color: var(--fg-3); }
+  details.cyc-card[open] > summary { margin-bottom: 4px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--line); }
+
+  .cyc-macro { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg-2); }
+  .cyc-macro-hd { display: flex; align-items: center; gap: 8px; }
+  .cyc-macro-lbl { font-size: 9.5px; font-weight: 600; letter-spacing: .06em;
+    color: var(--fg-3); text-transform: uppercase; }
+  .cyc-macro-tag { font-size: 9.5px; color: var(--fg-3); border: 1px solid var(--line);
+    border-radius: 999px; padding: 1px 7px; }
+  .cyc-macro-grid { margin-top: 9px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .cyc-macro-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .cyc-macro-cell i { font-style: normal; font-size: 9.5px; color: var(--fg-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cyc-macro-cell b { font-family: var(--f-mono); font-size: 15px; font-weight: 700;
+    letter-spacing: -.02em; color: var(--fg-1); }
+  .cyc-macro-cell s { text-decoration: none; font-family: var(--f-mono); font-size: 10px;
+    color: var(--fg-3); }
+  .cyc-macro-cell s.up { color: var(--up); } .cyc-macro-cell s.down { color: var(--down); }
+  .cyc-macro-src { margin-top: 8px; font-size: 10px; line-height: 1.6; color: var(--fg-3); }
+
+  @media (max-width: 768px) {
+    .cyc-macro-grid { grid-template-columns: repeat(2, 1fr); }
+    .cyc-sum-phase { font-size: 11.5px; }
+    .cyc-sum .cyc-eyebrow { flex-basis: 100%; order: -1; }
+  }
+
+  /* v761 置信度门控 */
   .cyc-phase-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 7px; }
   .cyc-phase-row .cyc-phase { margin-top: 0; }
   .cyc-held { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
@@ -6133,8 +6174,8 @@
   </div>
 </div>
 
-<script src="data.js?v=761"></script>
-<script src="desk.js?v=761"></script>
+<script src="data.js?v=762"></script>
+<script src="desk.js?v=762"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
