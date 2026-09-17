@@ -4516,7 +4516,7 @@
     background: color-mix(in oklch, currentColor 12%, transparent); }
   .cyc-held.prov { color: var(--warn); } .cyc-held.low { color: var(--fg-3); }
   .cyc-score-sub { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 1px; }
-  .cyc-score i { font-style: normal; font-size: 15px; margin-left: 1px; }
+  .cyc-score i { font-style: normal; font-size: 13px; margin-left: 3px; opacity: .55; }
 
   .cyc-conf { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg-2); }
   .cyc-conf-hd { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
@@ -4550,8 +4550,21 @@
   .cyc-item { border: 1px solid var(--line); border-radius: 12px; padding: 14px 15px 15px;
     background: var(--bg-2); }
   .cyc-hd { display: flex; align-items: center; gap: 9px; }
-  .cyc-tier { font-family: var(--f-mono); font-size: 9.5px; font-weight: 700; padding: 1px 5px;
-    border-radius: 4px; border: 1px solid currentColor; color: var(--fg-3); flex-shrink: 0; }
+  .cyc-tier { font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+    border: 1px solid currentColor; color: var(--fg-3); flex-shrink: 0; white-space: nowrap; }
+  .cyc-tier.t1 { color: var(--fg-1); }
+  .cyc-tier.t2 { color: var(--fg-2); }
+  .cyc-when { font-size: 9.5px; color: var(--fg-3); padding: 1px 6px; border-radius: 999px;
+    background: var(--bg-1); flex-shrink: 0; white-space: nowrap; }
+  .cyc-conf-def { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line);
+    font-size: 10px; line-height: 1.75; color: var(--fg-3); }
+  .cyc-conf-def b { color: var(--fg-2); }
+  .cyc-sum-score { font-family: var(--f-mono); font-size: 13px; font-weight: 700;
+    letter-spacing: -.02em; flex-shrink: 0; }
+  .cyc-sum-score i { font-style: normal; font-size: 9.5px; font-weight: 600; opacity: .6;
+    margin-left: 1px; }
+  .cyc-sum-score.down { color: var(--down); } .cyc-sum-score.warn { color: var(--warn); }
+  .cyc-sum-score.flat { color: var(--fg-2); }
   .cyc-zh { font-size: 13px; font-weight: 600; color: var(--fg-1); flex: 1; min-width: 0; }
   .cyc-state { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
     border: 1px solid currentColor; white-space: nowrap;
@@ -6201,8 +6214,8 @@
   </div>
 </div>
 
-<script src="data.js?v=768"></script>
-<script src="desk.js?v=768"></script>
+<script src="data.js?v=769"></script>
+<script src="desk.js?v=769"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
