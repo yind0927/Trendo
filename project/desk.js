@@ -15725,12 +15725,31 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // ── Brief: local-cache helpers ────────────────────────────────────────────
+  // 简报的「多久之前」。此前是渲染那一刻算一次就再也不动——而这三张卡都只在
+  // 进入对应页面时渲染一次，页面开着不动，标签就会一直停在当时那个数。
+  // 现在把时间戳写进 data-brief-age，由下方的 ticker 每分钟统一刷新。
+  const _briefAgeMin = at => at ? Math.floor((Date.now() - new Date(at).getTime()) / 60000) : null;
+  const _briefAgeLbl = m => m == null ? ""
+    : m < 1 ? "刚刚" : m < 60 ? `${m}分钟前`
+    : m < 1440 ? `${Math.floor(m / 60)}小时前` : `${Math.floor(m / 1440)}天前`;
   function _briefAgeTag(updatedAt) {
     if (!updatedAt) return "";
-    const m = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 60000);
-    const lbl = m < 5 ? "刚刚" : m < 60 ? `${m}分钟前` : `${Math.floor(m / 60)}小时前`;
-    return `<span style="font-size:9px;color:var(--fg-3);font-family:var(--f-mono)">${lbl}</span>`;
+    return `<span class="brief-age" data-brief-age="${updatedAt}">${
+      _briefAgeLbl(_briefAgeMin(updatedAt))}</span>`;
   }
+  function _briefAgeTick() {
+    $$("[data-brief-age]").forEach(el => {
+      el.textContent = _briefAgeLbl(_briefAgeMin(el.dataset.briefAge));
+    });
+  }
+  setInterval(_briefAgeTick, 60000);
+
+  // 简报过期多久就该重新生成。服务端按「北京 09:30 / 21:30」两档缓存，同一档里
+  // 无论点多少次都返回同一份（连 updatedAt 都是第一次生成的那个时刻）——所以只要
+  // 不强制刷新，时间戳在半天内根本不会变。这里在「进入 Market 页 / 展开卡片」时
+  // 检查一次，超过这个分钟数就带 force 重新生成，时间戳因此跟着你实际查看的时刻走。
+  const BRIEF_STALE_MIN = 30;
+  const _briefStale = at => { const m = _briefAgeMin(at); return m == null || m >= BRIEF_STALE_MIN; };
   // Cache slot aligned to Beijing 09:30 / 21:30 — same logic as the API
   function _bjSlotKey() {
     const bjMs = Date.now() + 8 * 3600 * 1000;
@@ -15900,6 +15919,8 @@ function rsAdjustGrade(grade, rsResult) {
     el.querySelector(".brief-toggle")?.addEventListener("click", () => {
       const collapsed = el.classList.toggle("collapsed");
       localStorage.setItem("trendo_brief_collapsed", collapsed ? "1" : "0");
+      // 展开时才检查：收起状态下用户根本没在看，没必要为它调一次 Claude
+      if (!collapsed && _briefStale(updatedAt)) fetchMarketBrief(true, mktCtx);
     });
     el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
   }
@@ -15908,7 +15929,14 @@ function rsAdjustGrade(grade, rsResult) {
     const el = $("#market-brief");
     if (!el) return;
     const saved = _loadBrief(MARKET_BRIEF_LS);
-    if (saved?.summary) { _renderMarketBrief(el, saved, mktCtx); return; }
+    if (saved?.summary) {
+      _renderMarketBrief(el, saved, mktCtx);
+      // 卡片是展开的（用户马上会读到它）且内容已过期 → 直接换成最新的一份。
+      // 先渲染旧的再刷新，而不是干等——网络慢时至少有东西可读。
+      if (!el.classList.contains("collapsed") && _briefStale(saved.updatedAt))
+        fetchMarketBrief(true, mktCtx);
+      return;
+    }
     el.innerHTML = `
       <div class="brief-head">
         <span class="brief-badge">AI</span>
