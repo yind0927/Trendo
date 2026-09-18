@@ -4479,35 +4479,46 @@
     border-bottom: 1px solid var(--line); }
 
   /* 收起态的逐档摘要：展开后下方有完整清单，这块就是重复信息，隐藏。 */
-  .cyc-dims { flex-basis: 100%; margin-top: 12px; }
+  .cyc-dims { flex-basis: 100%; margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
   details.cyc-card[open] .cyc-dims { display: none; }
-  .cyc-dims-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .cyc-dim { background: var(--bg-2); border-radius: 10px; padding: 10px 11px; }
-  .cyc-dim-hd { display: flex; align-items: center; gap: 7px; }
+  .cyc-dims-hd { display: flex; font-size: 9px; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--fg-3); padding: 0 2px 6px; }
+  .cyc-dims-hd-r { margin-left: auto; }
+  .cyc-dim { display: flex; align-items: center; gap: 10px; padding: 8px 2px;
+    border-top: 1px solid color-mix(in oklch, var(--line) 55%, transparent); }
   .cyc-dim-t { font-family: var(--f-mono); font-size: 9.5px; font-weight: 700; color: var(--fg-3);
-    border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+    border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; flex-shrink: 0; }
   .cyc-dim-t.t1 { color: var(--fg-1); } .cyc-dim-t.t2 { color: var(--fg-2); }
-  .cyc-dim-zh { font-size: 11.5px; font-weight: 600; color: var(--fg-1); }
-  .cyc-dim-w { margin-left: auto; font-size: 9.5px; color: var(--fg-3); white-space: nowrap; }
-  .cyc-dim-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden;
-    background: var(--bg-3); margin: 8px 0 7px; }
-  .cyc-dim-bar i { display: block; }
-  .cyc-dim-bar i.lit { background: var(--down); }
-  .cyc-dim-bar i.watch { background: var(--warn); }
-  .cyc-dim-bar i.clear { background: var(--up); }
-  .cyc-dim-bar i.unset { background: color-mix(in oklch, var(--fg-3) 35%, transparent); }
-  .cyc-dim-cnt { font-size: 10px; color: var(--fg-3); line-height: 1.6; }
-  .cyc-dim-cnt b { font-family: var(--f-mono); font-weight: 700; }
-  .cyc-dim-cnt b.lit { color: var(--down); } .cyc-dim-cnt b.watch { color: var(--warn); }
-  .cyc-dim-cnt b.clear { color: var(--up); } .cyc-dim-cnt b.unset { color: var(--fg-3); }
-  .cyc-dim-sc { margin-top: 4px; font-size: 10px; color: var(--fg-3); }
-  .cyc-dim-sc b { font-family: var(--f-mono); color: var(--fg-2); font-weight: 700; }
+  .cyc-dim-zh { font-size: 12.5px; font-weight: 600; color: var(--fg-1);
+    display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .cyc-dim-zh i { font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--fg-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cyc-dim-dots { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
+  .cyc-dim-dots b { width: 8px; height: 8px; border-radius: 50%; display: block; }
+  .cyc-dim-dots b.lit { background: var(--down); }
+  .cyc-dim-dots b.watch { background: var(--warn); }
+  .cyc-dim-dots b.clear { background: var(--up); }
+  .cyc-dim-dots b.unset { background: none; box-shadow: inset 0 0 0 1px var(--fg-3); opacity: .5; }
+  .cyc-dim-st { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid currentColor; white-space: nowrap; flex-shrink: 0; width: 66px; text-align: center;
+    background: color-mix(in oklch, currentColor 12%, transparent); }
+  .cyc-dim-st.lit { color: var(--down); } .cyc-dim-st.warn2 { color: var(--orange); }
+  .cyc-dim-st.watch { color: var(--warn); } .cyc-dim-st.clear { color: var(--up); }
+  .cyc-dim-st.unset { color: var(--fg-3); }
+  .cyc-dim-sc { font-family: var(--f-mono); font-size: 13px; font-weight: 700; color: var(--fg-1);
+    flex-shrink: 0; width: 52px; text-align: right; }
+  .cyc-dim-sc i { font-style: normal; font-size: 9.5px; font-weight: 600; color: var(--fg-3); }
   .cyc-dims-foot { margin-top: 9px; font-size: 10.5px; line-height: 1.7; color: var(--fg-3); }
 
   @media (max-width: 768px) {
     .cyc-sum-phase { font-size: 11.5px; }
     .cyc-sum .cyc-eyebrow { flex-basis: 100%; order: -1; }
-    .cyc-dims-grid { grid-template-columns: 1fr; gap: 8px; }
+    .cyc-dim { flex-wrap: wrap; gap: 7px 8px; }
+    .cyc-dim-zh { font-size: 12px; flex: 1; }
+    .cyc-dim-zh i { display: none; }        /* 窄屏优先保证名称、状态与得分同一行 */
+    .cyc-dim-dots { margin-left: 0; flex-basis: 100%; order: 3; }
+    .cyc-dim-st { width: auto; }
+    .cyc-dims-hd-r { display: none; }
   }
 
   details.cyc-defs { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px;
@@ -6332,8 +6343,8 @@
   </div>
 </div>
 
-<script src="data.js?v=778"></script>
-<script src="desk.js?v=778"></script>
+<script src="data.js?v=779"></script>
+<script src="desk.js?v=779"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

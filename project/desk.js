@@ -15039,13 +15039,14 @@ function rsAdjustGrade(grade, rsResult) {
     // 逐档明细：收起态要在不展开的情况下说清每一档的构成，光有 [lit, 总数] 不够。
     const tiers = [1, 2, 3].map(t => ({
       t, w: CYCLE_TIER_W[t], lit: 0, watch: 0, clear: 0, unset: 0, n: 0,
-      score: 0, maxV: 0,
+      score: 0, maxV: 0, items: [],
     }));
     const tierOf = t => tiers[t - 1];
     for (const it of CYCLE_ITEMS) {
       const st = cycStateOf(it), w = CYCLE_TIER_W[it.tier];
       const T = tierOf(it.tier);
       T.n++; T[st === "unset" ? "unset" : st]++;
+      T.items.push({ zh: it.zh, st });
       if (st !== "unset") T.maxV += w;
       if (st === "lit") T.score += w;
       else if (st === "watch") T.score += w * CYCLE_WATCH_F;
@@ -15168,32 +15169,44 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
-  // 收起态的逐档摘要。收起时这张卡只有一行，等于把结论压成一个数字——但
-  // 「3.6 分」本身不说明任何事，看的人需要知道这 3.6 分是从哪一档来的：
-  // 三档全是轻权重的行为性信号，和 T1 已经亮了一条，是完全不同的处境。
+  // 收起态的逐档摘要。收起时这张卡只有一行，等于把结论压成一个没有上下文的数字——
+  // 「3.6 分」本身不说明任何事：三档全是轻权重的行为性信号，和 T1 已经亮了一条，
+  // 是完全不同的处境。每档一行，给出名称、逐条状态、一个状态词和该档得分；
+  // 三档得分之和就是总分的分子，读者可以自己把总分拆回来源。
   // 展开后下方有完整清单，这块就多余了，因此 [open] 时隐藏。
-  const CYCLE_TIER_ZH = { 1: "决定性", 2: "结构性", 3: "行为性" };
+  const CYCLE_TIER_ZH = {
+    1: { zh: "决定性", sub: "capex 指引与半导体订单" },
+    2: { zh: "结构性", sub: "融资结构、资金成本与投入产出" },
+    3: { zh: "行为性", sub: "会计手法与市场行为" },
+  };
+  // 每一档自己的状态词。用「该档已得分 ÷ 该档已核实满分」而不是条数——
+  // 一条 T1 亮起和三条 T3 亮起在条数上都是"有几条"，在含义上完全不是一回事。
+  function cycTierState(T) {
+    if (!T.maxV) return { k: "unset", zh: "未核实" };
+    const r = T.score / T.maxV;
+    return r === 0 ? { k: "clear", zh: "干净" }
+      : r < 1 / 3   ? { k: "watch", zh: "初现" }
+      : r < 2 / 3   ? { k: "warn2", zh: "承压" }
+      :               { k: "lit",   zh: "全面触发" };
+  }
+
   function cycDigestHTML(p) {
-    const seg = (T, k) => T.n && T[k]
-      ? `<i class="${k}" style="width:${(T[k] / T.n * 100).toFixed(1)}%"></i>` : "";
-    const cells = p.tiers.map(T => {
-      const parts = [];
-      if (T.lit)   parts.push(`已触发 <b class="lit">${T.lit}</b>`);
-      if (T.watch) parts.push(`观察中 <b class="watch">${T.watch}</b>`);
-      if (T.clear) parts.push(`未出现 <b class="clear">${T.clear}</b>`);
-      if (T.unset) parts.push(`未填 <b class="unset">${T.unset}</b>`);
+    const rows = p.tiers.map(T => {
+      const st = cycTierState(T);
+      const meta = CYCLE_TIER_ZH[T.t];
       const sc = T.score % 1 ? T.score.toFixed(1) : String(T.score);
+      const dots = T.items.map(i =>
+        `<b class="${i.st}" title="${cycEsc(i.zh)}：${
+          i.st === "unset" ? "未填" : CYCLE_STATES.find(x => x.k === i.st).zh}"></b>`).join("");
       return `<div class="cyc-dim">
-        <div class="cyc-dim-hd"><span class="cyc-dim-t t${T.t}">T${T.t}</span>
-          <span class="cyc-dim-zh">${CYCLE_TIER_ZH[T.t]}</span>
-          <span class="cyc-dim-w">每条 ${T.w} 分</span></div>
-        <div class="cyc-dim-bar">${seg(T, "lit")}${seg(T, "watch")}${seg(T, "clear")}${seg(T, "unset")}</div>
-        <div class="cyc-dim-cnt">${parts.join(" · ")}</div>
-        <div class="cyc-dim-sc">贡献 <b>${sc}</b> / 已核实 ${T.maxV} 分</div>
+        <span class="cyc-dim-t t${T.t}">T${T.t}</span>
+        <span class="cyc-dim-zh">${meta.zh}<i>${meta.sub}</i></span>
+        <span class="cyc-dim-dots">${dots}</span>
+        <span class="cyc-dim-st ${st.k}">${st.zh}</span>
+        <span class="cyc-dim-sc"><b>${sc}</b><i>/${T.maxV || "—"}</i></span>
       </div>`;
     }).join("");
 
-    // 一句话把这一档的分数落到语义上；再把最近的方向和最近的分档线附在后面。
     const H = CYCLE_CHECK.history || [];
     let trend = "";
     if (H.length >= 2) {
@@ -15206,7 +15219,8 @@ function rsAdjustGrade(grade, rsResult) {
       : "";
     const foot = [edge, trend].filter(Boolean).join(" · ");
     return `<div class="cyc-dims">
-      <div class="cyc-dims-grid">${cells}</div>
+      <div class="cyc-dims-hd"><span>维度</span><span class="cyc-dims-hd-r">逐条状态 · 该档得分</span></div>
+      ${rows}
       ${foot ? `<div class="cyc-dims-foot">${foot}</div>` : ""}
     </div>`;
   }
