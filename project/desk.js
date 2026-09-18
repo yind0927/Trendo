@@ -3022,16 +3022,26 @@ function rsAdjustGrade(grade, rsResult) {
       const safe      = h.last >= ppP;
       const distPct   = (h.last - ppP) / h.last * 100;
       const ppLinePct = Math.min(Math.max((ppP - h.cost) / mfe * 100, 0), 100);
+      // 第二道参考刻度：回撤 45%（保留 55% 峰值盈利）。保护价那条是「回撤 40% 就该走」的
+      // 触发线，这一条在它右侧一点点，用来看「已经跌过头多少」——跌破它说明不只是触发，
+      // 是明显跌过了。做成细虚线 + 灰标签，跟实心的保护价线分主次，不抢它的注意力。
+      const dd45Px    = h.cost + mfe * 0.55;
+      const dd45Pct   = 55;
+      const past45    = h.last < dd45Px;
       return `
         <div class="pp-axis-wrap">
           <div class="pp-axis-track">
             <div class="pp-axis-fill ${safe ? "safe" : "breach"}" style="width:${(pos*100).toFixed(1)}%"></div>
+            <div class="pp-axis-dd-line${past45 ? " past" : ""}" style="left:${dd45Pct}%"></div>
             <div class="pp-axis-pp-line" style="left:${ppLinePct.toFixed(1)}%" title="保护价 $${price(ppP)}"></div>
           </div>
           <div class="pp-axis-labels">
             <span title="入场成本">$${price(h.cost)}</span>
             <span class="pp-axis-pp-tag ${safe ? "safe" : "breach"}">保护价 ${safe ? "▲" : "▼"} ${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%</span>
             <span title="历史峰值收盘价">$${price(peakPx)}</span>
+          </div>
+          <div class="pp-axis-dd-note${past45 ? " past" : ""}">
+            <i></i>回撤45% <b>$${price(dd45Px)}</b>${past45 ? " · 已跌破" : ""}
           </div>
         </div>`;
     })();
@@ -11425,19 +11435,20 @@ function rsAdjustGrade(grade, rsResult) {
         ${atitle("复盘概览", "Overview")}
         <div class="analytics-card-sub">全部历史已平仓交易 · 与月度回测同一套统计口径</div>
 
-        <div class="simb-overview-row-label" style="margin-top:16px">规模与收益 · Scale & Returns</div>
-        <div class="sim-a-stats cols-5" style="margin-top:6px">
-          ${simTile("总投入金额", realCostBasis > 0 ? "$" + Math.round(realCostBasis).toLocaleString("en-US") : "—", "", "全部已平仓交易的成本×数量合计")}
-          ${simTile("资金利用率", realUtilPct !== null ? realUtilPct.toFixed(0) + "%" : "—", realUtilPct !== null ? (realUtilPct > 90 ? "down" : realUtilPct > 60 ? "warn" : "up") : "", realUtilPct !== null ? `组合基准 $${Math.round(totalNotional / 1000)}k` : "")}
-          ${simTile("已实现盈亏", total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl))}
-          ${simTile("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "", "可与大盘同期涨跌幅同层对比")}
-          ${simTile("历史回撤", realPeak > 0 ? "−" + realDdPct.toFixed(1) + "%" : "—", realDdPct > 0 ? "down" : "", realPeak > 0 ? `峰值 ${fmt.signed(Math.round(realPeak))}` : "尚未产生正向峰值")}
+        <div class="rhero-row">
+          ${rheroStat("已实现盈亏", total ? fmt.signed(Math.round(totalPnl)) : "—", fmt.sign(totalPnl), total ? `${total} 笔已平仓` : "暂无数据")}
+          ${rheroStat("资金加权收益率", weightedPct !== null ? (weightedPct >= 0 ? "+" : "") + weightedPct.toFixed(1) + "%" : "—", weightedPct !== null ? fmt.sign(weightedPct) : "", "可与大盘同期同层对比")}
+          ${rheroStat("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down", total ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "")}
+          ${rheroStat("历史回撤", realPeak > 0 ? "−" + realDdPct.toFixed(1) + "%" : "—", realDdPct > 0 ? "down" : "", realPeak > 0 ? `峰值 ${fmt.signed(Math.round(realPeak))}` : "尚未产生正向峰值")}
         </div>
 
-        <div class="simb-overview-row-label" style="margin-top:14px">交易分布 · Trade Distribution</div>
-        <div class="sim-a-stats cols-5" style="margin-top:6px;margin-bottom:0">
-          ${simTile("已平仓笔数", total, "", total ? `${wins.length}胜 / ${losses.length}负${evens.length > 0 ? ` / ${evens.length}平` : ""}` : "暂无数据")}
-          ${simTile("总体胜率", winRate !== null ? winRate + "%" : "—", parseFloat(winRate) >= 50 ? "up" : "down")}
+        <div class="simb-subtitle">
+          <span class="simb-sub-zh">明细</span><span class="simb-sub-en">Breakdown</span>
+        </div>
+        <div class="sim-a-stats cols-3" style="margin-bottom:0">
+          ${simTile("总投入金额", realCostBasis > 0 ? "$" + Math.round(realCostBasis).toLocaleString("en-US") : "—", "", "成本×数量合计")}
+          ${simTile("资金利用率", realUtilPct !== null ? realUtilPct.toFixed(0) + "%" : "—", realUtilPct !== null ? (realUtilPct > 90 ? "down" : realUtilPct > 60 ? "warn" : "up") : "", realUtilPct !== null ? `组合基准 $${Math.round(totalNotional / 1000)}k` : "")}
+          ${simTile("已平仓笔数", total, "", total ? "合并分批出场后" : "暂无数据")}
           ${simTile("盈利数量", wins.length, wins.length ? "up" : "")}
           ${simTile("亏损数量", losses.length, losses.length ? "down" : "")}
           ${simTile("持平数量", evens.length)}
@@ -11446,37 +11457,37 @@ function rsAdjustGrade(grade, rsResult) {
 
       <div class="analytics-card" style="margin-bottom:14px">
         ${atitle("收益与盈亏", "Returns & P&L")}
-        <div class="analytics-card-sub">收益率 · 盈亏总额 · 最佳最差个股</div>
+        <div class="analytics-card-sub">每笔交易的质量 · 盈亏构成 · 最佳最差个股</div>
 
-        <div class="rrow-group">
-          <div class="simb-title">收益率<span style="font-weight:400;color:var(--fg-3);font-size:10px;text-transform:none;letter-spacing:0;margin-left:2px">· 逐笔收益率简单平均，非按金额加权的组合整体涨跌幅</span></div>
-          <div class="sim-a-stats" style="margin-top:8px">
-            ${simTile("平均收益率", realAvgPct !== null ? (realAvgPct >= 0 ? "+" : "") + realAvgPct.toFixed(1) + "%" : "—", realAvgPct !== null ? fmt.sign(realAvgPct) : "")}
-            ${simTile("中位数收益率", realMedPct !== null ? (realMedPct >= 0 ? "+" : "") + realMedPct.toFixed(1) + "%" : "—", realMedPct !== null ? fmt.sign(realMedPct) : "")}
-            ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct + "%" : "—", "up")}
-            ${simTile("平均亏损收益率", avgLossPct !== null ? "−" + avgLossPct + "%" : "—", "down")}
-          </div>
+        <div class="rhero-row">
+          ${rheroStat("盈亏因子", pfStr || "—", pfStr && parseFloat(pfStr) >= 1 ? "up" : pfStr ? "down" : "", "总盈利 ÷ 总亏损")}
+          ${rheroStat("平均收益率", realAvgPct !== null ? (realAvgPct >= 0 ? "+" : "") + realAvgPct.toFixed(1) + "%" : "—", realAvgPct !== null ? fmt.sign(realAvgPct) : "", "逐笔简单平均，每笔等权")}
+          ${rheroStat("中位数收益率", realMedPct !== null ? (realMedPct >= 0 ? "+" : "") + realMedPct.toFixed(1) + "%" : "—", realMedPct !== null ? fmt.sign(realMedPct) : "", "不受极端单笔影响")}
+          ${rheroStat("平均持仓",
+            holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
+            holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "" : "down") : "",
+            avgWinDays !== null || avgLossDays !== null
+              ? `盈 ${avgWinDays ?? "—"}d · 亏 ${avgLossDays ?? "—"}d`
+              : avgHold !== null ? `均 ${avgHold}d` : "")}
         </div>
 
-        <div class="rrow-group">
-          <div class="simb-title">盈亏总额</div>
-          <div class="sim-a-stats" style="margin-top:8px">
-            ${simTile("总盈利", grossWin > 0 ? fmt.signed(Math.round(grossWin)) : "—", grossWin > 0 ? "up" : "")}
-            ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
-            ${simTile("盈亏因子", pfStr || "—", pfStr && parseFloat(pfStr) >= 1 ? "up" : pfStr ? "down" : "")}
-            ${simTile("平均持仓",
-              holdRatio !== null ? holdRatio + "x" : avgHold !== null ? avgHold + " 天" : "—",
-              holdRatio !== null ? (parseFloat(holdRatio) >= 1.5 ? "up" : parseFloat(holdRatio) >= 1 ? "" : "down") : "",
-              avgWinDays !== null || avgLossDays !== null
-                ? `盈 ${avgWinDays ?? "—"}d · 亏 ${avgLossDays ?? "—"}d`
-                : avgHold !== null ? `均 ${avgHold}d` : "")}
-          </div>
+        <div class="simb-subtitle">
+          <span class="simb-sub-zh">盈亏构成</span><span class="simb-sub-en">Composition</span>
+          <span class="simb-sub-note">盈利与亏损两侧各自的规模与幅度</span>
+        </div>
+        <div class="sim-a-stats" style="margin-bottom:0">
+          ${simTile("总盈利", grossWin > 0 ? fmt.signed(Math.round(grossWin)) : "—", grossWin > 0 ? "up" : "")}
+          ${simTile("总亏损", grossLoss > 0 ? "−$" + Math.round(grossLoss).toLocaleString("en-US") : "—", grossLoss > 0 ? "down" : "")}
+          ${simTile("平均盈利收益率", avgWinPct !== null ? "+" + avgWinPct + "%" : "—", "up")}
+          ${simTile("平均亏损收益率", avgLossPct !== null ? "−" + avgLossPct + "%" : "—", "down")}
         </div>
 
         ${realBest && realWorst ? `
-        <div class="rrow-group">
-          <div class="simb-title">最佳 / 最差</div>
-          <div class="simbw-row" style="margin-top:12px">
+        <div class="simb-subtitle">
+          <span class="simb-sub-zh">最佳 / 最差</span><span class="simb-sub-en">Best / Worst</span>
+        </div>
+        <div>
+          <div class="simbw-row">
             <div class="simbw-card up">
               <div class="simbw-label">最佳股票</div>
               <div class="simbw-sym">${realBest.h.sym}<span class="simbw-name">${realBest.h.name || ""}</span></div>
@@ -11721,22 +11732,21 @@ function rsAdjustGrade(grade, rsResult) {
     // 数值跟左边对应的 cell 是同一个，重复是有意的：结论旁边直接有依据，
     // 不用回头去对是哪一档。不带 title：手机端本来就悬停不了，桌面端藏一半
     // 文案在悬停里等于两套信息，不如页面上写什么就是什么。
+    // 样式与行首那枚「出场效率」chip 对齐（同为 pill + 填充底色）：两者都是这一行的
+    // 结论性标签，此前一个是描边方角、一个是填充圆角，并排看像两套系统。
     const last = known[known.length - 1];
     const num = `${last.n}日 ${last.pct >= 0 ? "+" : "−"}${Math.abs(last.pct).toFixed(1)}%`;
     const v = last.pct >= 3  ? { cls: "miss", tag: "错误", txt: num }
       : last.pct <= -3       ? { cls: "good", tag: "正确", txt: num }
       :                        { cls: "flat", tag: "持平", txt: num };
-    // 绝对价格对比：三个百分比都是相对值、看不到实际价位，这里补上。桌面端展示，
-    // 手机端放不下（187px）隐藏。
-    const cmp = `<span class="eq-after-cmp">出场均价 <b>$${exitPx.toFixed(2)}</b>`
-      + ` → 第${last.n}日 <b>$${last.px.toFixed(2)}</b></span>`;
+    // 绝对价格对比（出场均价 $X → 第N日 $Y）已删除：三个 cell 的百分比已经表达了
+    // 同一件事，绝对价位在这一行里没有被用来做任何判断，只是让行更长。
 
     return `<div class="eq-after">
       <span class="eq-after-lbl">出场后</span>
       ${cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"><i>${c.n}日</i>${
         c.pct == null ? "—" : (c.pct >= 0 ? "+" : "") + c.pct.toFixed(1) + "%"}</span>`).join("")}
       <span class="eq-after-verdict ${v.cls}"><b>${v.tag}</b><i>${v.txt}</i></span>
-      ${cmp}
     </div>`;
   }
 

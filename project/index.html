@@ -2587,11 +2587,14 @@
   /* 复盘概览卡片：总览 + 交易分布合并成一组竖线分隔的 KPI 条，8 项统一字号；收益率/盈亏总额/
      最佳最差归到另一张卡片，用回带边框的卡片小方块（simTile），两张卡片风格上做区分——一个是
      "一眼扫过的头条数字"，一个是"逐项展开的细分卡片"。 */
-  .rhero-row { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 16px; row-gap: 20px; }
+  /* 头条数字必须和下面的明细 tile 拉开可见的一档——19px vs 18px 那种差距等于没有层级，
+     眼睛扫过去一视同仁。26px vs 18px 才让"先看哪几个数"这件事不用想。 */
+  .rhero-row { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 16px; row-gap: 20px;
+    padding-bottom: 18px; border-bottom: 1px solid var(--line); }
   .rhero-stat { padding: 0 18px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .rhero-stat:nth-child(4n+1) { border-left: none; padding-left: 0; }
   .rhero-label { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
-  .rhero-value { font-size: 19px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.01em; line-height: 1.1; }
+  .rhero-value { font-size: 26px; font-weight: 800; font-family: var(--f-mono); letter-spacing: -0.02em; line-height: 1.1; }
   .rhero-value.up { color: var(--up); }
   .rhero-value.down { color: var(--down); }
   .rhero-sub { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
@@ -2600,7 +2603,7 @@
     .rhero-stat:nth-child(4n+1) { border-left: 1px solid var(--line); padding-left: 18px; }
     .rhero-stat:nth-child(2n+1) { border-left: none; padding-left: 0; }
     .rhero-stat:nth-child(n+3) { border-top: 1px solid var(--line); padding-top: 12px; }
-    .rhero-value { font-size: 17px; }
+    .rhero-value { font-size: 21px; }
   }
   .rrow-group { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
   .rrow-group:first-child { margin-top: 0; padding-top: 0; border-top: none; }
@@ -2859,24 +2862,19 @@
      不再 margin-left:auto 顶到最右——三个百分比只排到行宽的一半，靠右会在中间
      留一大段空白（1400px 下实测 ~700px），眼睛得横跨过去才读到结论。紧跟在
      百分比后面既把那段空白用上，阅读动线也是连着的；放不下时 flex-wrap 自然换行。 */
-  .eq-after-verdict { font-size: 9.5px; padding: 1px 7px; border-radius: 4px;
-    border: 1px solid currentColor; white-space: nowrap; }
-  .eq-after-verdict b { font-weight: 700; letter-spacing: .04em; margin-right: 5px;
-    padding-right: 5px; border-right: 1px solid currentColor; }
-  .eq-after-verdict i { font-style: normal; font-family: var(--f-mono); }
-  /* 绝对价格对比，填掉判定徽章右侧的空白；灰一档，不跟结论抢注意力。 */
-  .eq-after-cmp { color: var(--fg-3); white-space: nowrap; }
-  .eq-after-cmp b { font-family: var(--f-mono); font-weight: 600; color: var(--fg-2); }
-  .eq-after-verdict.miss { color: var(--down); }
-  .eq-after-verdict.good { color: var(--up); }
-  .eq-after-verdict.flat { color: var(--fg-3); }
+  /* 判定徽章与行首的「出场效率」chip（.eq-eff-chip）对齐成同一套标签语言：
+     pill 圆角 + 填充底色 + mono，不再用描边方角 + 内部竖线分隔——两者都是这一行的
+     结论标签，并排看必须是同一个东西的两种取值，而不是两套控件。 */
+  .eq-after-verdict { font-size: 10px; font-weight: 600; padding: 2px 8px;
+    border-radius: 10px; font-family: var(--f-mono); white-space: nowrap; }
+  .eq-after-verdict b { font-weight: 700; letter-spacing: .04em; margin-right: 5px; }
+  .eq-after-verdict i { font-style: normal; font-family: var(--f-mono); opacity: .85; }
+  .eq-after-verdict.miss { background: var(--down-dim); color: var(--down); }
+  .eq-after-verdict.good { background: var(--up-dim); color: var(--up); }
+  .eq-after-verdict.flat { background: var(--bg-3); color: var(--fg-2); }
   @media (max-width: 768px) {
-    /* 手机端同样跟在百分比后面、保留完整文字：三个 cell 只排到 245px，
-       右边本来就空着 ~119px，够放完整的一句；真的放不下就换行，不会溢出。 */
-    .eq-after-verdict { font-size: 9px; padding: 1px 6px; }
-    .eq-after-verdict b { margin-right: 4px; padding-right: 4px; }
-    /* 手机端只放得下判定本身；绝对价格仍在 cell 的 tooltip 里 */
-    .eq-after-cmp { display: none; }
+    .eq-after-verdict { font-size: 9.5px; padding: 2px 7px; }
+    .eq-after-verdict b { margin-right: 4px; }
   }
   .eq-legs-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 10.5px; }
   .eq-legs-k { color: var(--fg-3); flex-shrink: 0; min-width: 26px; }
@@ -2960,6 +2958,18 @@
   .pp-axis-pp-tag { font-size:9px; font-family:var(--f-mono); font-weight:600; }
   .pp-axis-pp-tag.safe   { color:var(--up); }
   .pp-axis-pp-tag.breach { color:var(--down); }
+  /* 回撤 45% 的第二道刻度：细虚线，比保护价那条实线弱一档，不抢主次 */
+  .pp-axis-dd-line { position:absolute; top:-2px; bottom:-2px; width:0;
+    border-left:1px dashed color-mix(in oklch,var(--fg-2) 55%,transparent); }
+  .pp-axis-dd-line.past { border-left-color:var(--down); }
+  .pp-axis-dd-note { display:flex; align-items:center; gap:5px; margin-top:4px;
+    font-size:9px; color:var(--fg-3); font-family:var(--f-mono); }
+  .pp-axis-dd-note i { display:block; width:9px; height:0; flex-shrink:0;
+    border-top:1px dashed color-mix(in oklch,var(--fg-2) 55%,transparent); }
+  .pp-axis-dd-note b { font-weight:600; color:var(--fg-2); }
+  .pp-axis-dd-note.past { color:var(--down); }
+  .pp-axis-dd-note.past i { border-top-color:var(--down); }
+  .pp-axis-dd-note.past b { color:var(--down); }
   .curve-labels { display: flex; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
   .ec-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .ec-period-seg { display: flex; gap: 2px; background: var(--bg-2); border-radius: 8px; padding: 3px; flex-shrink: 0; }
@@ -6286,8 +6296,8 @@
   </div>
 </div>
 
-<script src="data.js?v=775"></script>
-<script src="desk.js?v=775"></script>
+<script src="data.js?v=776"></script>
+<script src="desk.js?v=776"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
