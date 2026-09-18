@@ -6301,6 +6301,29 @@ function rsAdjustGrade(grade, rsResult) {
     // Orders written before entryDate was recorded fall back to the day they were
     // created, so a legacy order is replayed rather than sitting pending forever.
     const dateOf = o => o.entryDate || (o.createdAt || "").slice(0, 10) || null;
+
+    // 一个订单只能在**它已经存在之后才开盘**的交易日成交（v775）。
+    // 旧代码只比日期不看时刻：周五 18:00（收盘后）下的市价单，`entryDate` 是周五，
+    // 而周五那根日线已经收完、`d < today` 成立，于是它被"回放"成**按周五 09:30 的开盘价
+    // 成交**——用的是下单前好几个小时就已经定死的价格，`entry` 日期也写成周五。
+    // 用户看到的就是：刷新一下挂单从队列里消失了，可那笔成交根本不该发生。
+    // `createdAt` 是带时刻的 ISO，足以判断下单时那天有没有开过盘。
+    const gateOf = o => {
+      const t = o.createdAt ? Date.parse(o.createdAt) : NaN;
+      if (!isNaN(t)) {
+        const e = etNow(new Date(t));
+        // 下单当天：只有在开盘前（美东 9:30 之前）下的单，才有资格吃当天的开盘价
+        if (e) return { date: e.date, sameDayOk: e.mins < 9 * 60 + 30 };
+      }
+      // 老订单没有 createdAt：保守处理，当天一律不给，只回放之后的交易日
+      const d = dateOf(o);
+      return d ? { date: d, sameDayOk: false } : null;
+    };
+    const eligible = (o, sd) => {
+      const g = gateOf(o);
+      if (!g) return false;
+      return sd > g.date || (sd === g.date && g.sameDayOk);
+    };
     const stale = [...SIM_PENDING, ...SIM_CLOSE_PENDING].filter(o => {
       const d = dateOf(o); return d && d < today;
     });
@@ -6332,7 +6355,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (!od || od >= today) continue;
         if (SIM_HOLDINGS.find(h => h.sym === order.sym)) continue;   // already open
         const key = _histYahooSym({ sym: order.sym, kind: order.kind });
-        const hit = sessionsFor(key).filter(s => s.d >= od).find(s => {
+        const hit = sessionsFor(key).filter(s => eligible(order, s.d)).find(s => {
           if (order.orderType === "market") return s.open != null;
           return s.lo != null && s.lo <= order.limitPrice;
         });
@@ -6375,7 +6398,7 @@ function rsAdjustGrade(grade, rsResult) {
           continue;
         }
         const key = _histYahooSym({ sym: order.sym, kind: order.kind });
-        const hit = sessionsFor(key).filter(s => s.d >= od).find(s => {
+        const hit = sessionsFor(key).filter(s => eligible(order, s.d)).find(s => {
           if (order.orderType === "market") return s.open != null;
           return s.hi != null && s.hi >= order.limitPrice;
         });
