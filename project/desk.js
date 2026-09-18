@@ -14738,9 +14738,15 @@ function rsAdjustGrade(grade, rsResult) {
           ${monthTicks}
         </div>
         ${legend}
-        <div class="mkp-sub"><span>阶段转换</span><em>Transitions</em>${
-          ph.transitions.length ? `<span class="mkp-filtered">${ph.transitions.length} 次</span>` : ""}</div>
-        <div class="mkp-trs">${trans}</div>
+        <details class="mkp-fold" data-mkp-fold="tr"${
+          localStorage.getItem("trendo_mkp_tr_open") === "1" ? " open" : ""}>
+          <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
+            <span>阶段转换</span><em>Transitions</em>${
+            ph.transitions.length
+              ? `<span class="mkp-filtered">${ph.transitions.length} 次 · 最近 ${ph.transitions[ph.transitions.length - 1].date}</span>`
+              : `<span class="mkp-filtered">本窗口内无转换</span>`}</summary>
+          <div class="mkp-trs">${trans}</div>
+        </details>
         <!-- Was 「距阶段转换还有多远」, which only described the first three rows: VIX moves
              the position cap and FGI/RSI move the sentiment tilt, neither of which is a
              phase transition. The heading now names what every row actually is. -->
@@ -15558,6 +15564,15 @@ function rsAdjustGrade(grade, rsResult) {
       <div id="cycle-card"></div>
       <div class="mkt-module-sep"></div>
       <div id="sector-rotation" class="sect-section"></div>`;
+    wireMarketFolds(el);
+  }
+
+  // 阶段周期卡里的可收起小节。renderMarket 每次都整块重建 DOM，展开状态因此
+  // 存 localStorage，切走再回来仍保持——与周期系统分析那张卡同一套做法。
+  function wireMarketFolds(root) {
+    $$("[data-mkp-fold]", root || document).forEach(d => d.addEventListener("toggle", () => {
+      try { localStorage.setItem(`trendo_mkp_${d.dataset.mkpFold}_open`, d.open ? "1" : "0"); } catch (_) {}
+    }));
   }
 
   async function fetchMarketData() {

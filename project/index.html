@@ -4234,6 +4234,18 @@
     text-transform:uppercase; letter-spacing:.07em; }
   .mkp-filtered { margin-left:auto; font-size:10px; color:var(--fg-3); font-family:var(--f-mono); }
 
+  /* 可收起的小节：summary 直接复用 .mkp-sub 的排版，只在前面多一个箭头，
+     收起时 .mkp-filtered 里的「N 次 · 最近 YYYY-MM-DD」就是这一节的摘要。 */
+  details.mkp-fold > summary { list-style:none; cursor:pointer; }
+  details.mkp-fold > summary::-webkit-details-marker { display:none; }
+  .mkp-fold-arrow { font-size:10px; color:var(--fg-3); transition:transform .15s;
+    display:inline-block; }
+  details.mkp-fold[open] .mkp-fold-arrow { transform:rotate(90deg); }
+  details.mkp-fold > summary:hover .mkp-fold-arrow { color:var(--fg-2); }
+  details.mkp-fold[open] > summary { margin-bottom:8px; }
+  /* 收起时不留下方间距——下一节自己的 margin-top 已经够了 */
+  details.mkp-fold:not([open]) > summary { margin-bottom:0; }
+
   /* Grid, not flex: the date / move / reason columns line up down the list instead of
      each row finding its own widths. */
   .mkp-trs { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
@@ -6334,8 +6346,8 @@
   </div>
 </div>
 
-<script src="data.js?v=781"></script>
-<script src="desk.js?v=781"></script>
+<script src="data.js?v=782"></script>
+<script src="desk.js?v=782"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
