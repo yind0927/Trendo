@@ -70,6 +70,14 @@ window.SIM_CLOSED      = [];
 window.SIM_PENDING     = []; // { id, sym, name, kind, qty, stop, target, orderType:"market"|"limit", limitPrice, entryDate, bx, createdAt }
 window.SIM_CLOSE_PENDING = []; // { id, sym, qty, orderType:"market"|"limit", limitPrice, createdAt }
 
+// 删除墓碑（v774）。删除一条模拟持仓/挂单只是把它从数组里移走，没有留下任何
+// "它被删过" 的痕迹——而 syncOnStartup 在 "本地更新" 分支会从云端旧快照里把
+// 本地没有的 simHoldings / simPending 捞回来（那是为了救另一台设备新建的单），
+// 于是刚删掉的东西每次同步都会被重新捞回来，而且还会被写回云端，永远删不掉。
+// 墓碑就是那条缺失的痕迹：删除时记下 key，合并时按 key 跳过。
+// { t:"h"|"o", k:<tradeIdOf 或 order.id>, at:ISO }，30 天后自然过期、上限 200 条。
+window.SIM_TOMBSTONES = [];
+
 // ── Model Picks: a forward-test ledger, deliberately separate from the sim book ──
 // This is NOT a backtest. An LLM asked today which stocks to buy already knows how
 // the past played out, so scoring its picks against history measures nothing. Each

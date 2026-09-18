@@ -37,11 +37,17 @@ export default async function handler(req, res) {
     return r.json();
   };
 
-  // Same gate as the client's isUSMarketOpen(): Mon–Fri, UTC 13:30–21:00
-  const now  = new Date();
-  const day  = now.getUTCDay();
-  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const marketOpen = day >= 1 && day <= 5 && mins >= 13 * 60 + 30 && mins < 21 * 60;
+  // Same gate as the client's isUSMarketOpen(): Eastern wall clock 9:30–16:00, Mon–Fri.
+  // (Was a fixed 13:30–21:00 UTC window, which is an hour of after-hours in EDT and an
+  // hour of pre-market in EST — orders could fill outside the real session.)
+  const now = new Date();
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York", hour12: false,
+    weekday: "short", hour: "2-digit", minute: "2-digit",
+  }).formatToParts(now).reduce((o, x) => (o[x.type] = x.value, o), {});
+  const dow  = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[p.weekday];
+  const mins = (+p.hour % 24) * 60 + +p.minute;
+  const marketOpen = dow >= 1 && dow <= 5 && mins >= 9 * 60 + 30 && mins < 16 * 60;
   if (!marketOpen) return res.status(200).json({ ok: true, skipped: "market closed" });
 
   const [{ result: keys }] = await redis([["SMEMBERS", "trendo:order_keys"]]);

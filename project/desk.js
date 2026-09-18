@@ -1150,6 +1150,34 @@ function rsAdjustGrade(grade, rsResult) {
   const newTradeId = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
   const tradeIdOf = h => h._tid || tradeKey(h);
 
+  // ── 删除墓碑（v774）──
+  // 记一条 "这个 key 被我删掉了"，让云端旧快照的合并逻辑知道该跳过它。没有墓碑时，
+  // 删除只是本地数组少了一项，而合并只会问 "云端有、本地没有的补进来吗"——答案永远是
+  // 补，于是删掉的仓位/挂单每次同步都复活，还会被推回云端固化下来。
+  const TOMB_DAYS = 30, TOMB_MAX = 200;
+  function tombAdd(t, k) {
+    if (!k) return;
+    SIM_TOMBSTONES.push({ t, k: String(k), at: new Date().toISOString() });
+    tombPrune();
+  }
+  function tombPrune() {
+    const cutoff = Date.now() - TOMB_DAYS * 86400000;
+    for (let i = SIM_TOMBSTONES.length - 1; i >= 0; i--) {
+      const at = Date.parse(SIM_TOMBSTONES[i].at);
+      if (!(at > cutoff)) SIM_TOMBSTONES.splice(i, 1);
+    }
+    if (SIM_TOMBSTONES.length > TOMB_MAX) SIM_TOMBSTONES.splice(0, SIM_TOMBSTONES.length - TOMB_MAX);
+  }
+  // 过期就不再拦截：一条 30 天前删掉的记录，云端不可能还带着它；再拦下去只会挡住
+  // 恰好复用了同一个 key 的新数据。
+  const tombHas = (t, k) => k != null &&
+    SIM_TOMBSTONES.some(x => x.t === t && x.k === String(k));
+  // 只给「用户主动删除/取消」立墓碑，**不给成交立墓碑**。成交本身已经留下了证据——
+  // 那个仓位就在 SIM_HOLDINGS 里，打捞逻辑靠 openSyms 就能跳过它。给成交也立墓碑看着
+  // 更严密，实际会造成数据丢失：当云端 savedAt 更新、整块覆盖把本地刚成交的仓位抹掉时，
+  // 原本那批挂单会被恢复、下一个 tick 重新成交自愈；立了墓碑挂单就永远回不来，仓位也就
+  // 真的没了。（v774 自测第 5 项抓到的，别再加回去。）
+
   // Freeze today's identity onto existing data. Doing it once means a later 加仓 (which
   // changes cost) can no longer break the link between a position and its own exits.
   // Two old trades that already share sym|entry|cost stay merged — that information was
@@ -1287,6 +1315,7 @@ function rsAdjustGrade(grade, rsResult) {
       holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
       simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
+      simTombstones: SIM_TOMBSTONES,
       simOptions: SIM_OPTIONS,
       realOptions: REAL_OPTIONS,
       modelPicks: MODEL_PICKS,
@@ -1338,6 +1367,13 @@ function rsAdjustGrade(grade, rsResult) {
       // and a blind push would overwrite cloud and destroy them forever).
       // Match by order id (Date.now().toString(36)); orders without id are legacy.
       let pendingMerged = false;
+      // 先吸收云端的墓碑，再做下面的打捞——否则在另一台设备上删掉的东西，会被这台设备
+      // 从自己的旧快照里当成"云端没有的新数据"救回来，方向正好反过来。
+      if (Array.isArray(cloudData.simTombstones) && cloudData.simTombstones.length) {
+        const have = new Set(SIM_TOMBSTONES.map(x => x.t + "|" + x.k));
+        cloudData.simTombstones.forEach(x => { if (x && !have.has(x.t + "|" + x.k)) SIM_TOMBSTONES.push(x); });
+        tombPrune();
+      }
       if (Array.isArray(cloudData.simPending) && cloudData.simPending.length) {
         const localIds  = new Set(SIM_PENDING.map(p => p.id).filter(Boolean));
         // Also skip if same sym is already open or already pending locally — prevents
@@ -1345,7 +1381,8 @@ function rsAdjustGrade(grade, rsResult) {
         const openSyms    = new Set(SIM_HOLDINGS.map(h => h.sym));
         const pendingSyms = new Set(SIM_PENDING.map(p => p.sym));
         const newOrders = cloudData.simPending.filter(p =>
-          p.id && !localIds.has(p.id) && !openSyms.has(p.sym) && !pendingSyms.has(p.sym));
+          p.id && !localIds.has(p.id) && !openSyms.has(p.sym) && !pendingSyms.has(p.sym) &&
+          !tombHas("o", p.id));
         if (newOrders.length) {
           SIM_PENDING.push(...newOrders);
           pendingMerged = true;
@@ -1363,7 +1400,8 @@ function rsAdjustGrade(grade, rsResult) {
       const closedKeys = new Set(SIM_CLOSED.map(tradeIdOf));
       if (Array.isArray(cloudData.simHoldings) && cloudData.simHoldings.length) {
         const localKeys = new Set(SIM_HOLDINGS.map(tradeIdOf));
-        const newH = cloudData.simHoldings.filter(h => !localKeys.has(tradeIdOf(h)) && !closedKeys.has(tradeIdOf(h)));
+        const newH = cloudData.simHoldings.filter(h =>
+          !localKeys.has(tradeIdOf(h)) && !closedKeys.has(tradeIdOf(h)) && !tombHas("h", tradeIdOf(h)));
         if (newH.length) {
           SIM_HOLDINGS.push(...newH);
           newH.forEach(h => { if (h.qty && h.cost && simNotional > 0) h.size = (h.qty * h.cost / simNotional) * 100; });
@@ -1378,7 +1416,8 @@ function rsAdjustGrade(grade, rsResult) {
         const closeSyms  = new Set(SIM_CLOSE_PENDING.map(p => p.sym));
         const openSyms   = new Set(SIM_HOLDINGS.map(h => h.sym));
         const newOrders = cloudData.simClosePending.filter(p =>
-          p.id && !localIds.has(p.id) && !closeSyms.has(p.sym) && openSyms.has(p.sym));
+          p.id && !localIds.has(p.id) && !closeSyms.has(p.sym) && openSyms.has(p.sym) &&
+          !tombHas("o", p.id));
         if (newOrders.length) {
           SIM_CLOSE_PENDING.push(...newOrders);
           pendingMerged = true;
@@ -1477,11 +1516,22 @@ function rsAdjustGrade(grade, rsResult) {
     }
     if (data.notional != null)           totalNotional = data.notional;
     if (Array.isArray(data.watchlist))   WATCHLIST.splice(0, WATCHLIST.length, ...data.watchlist);
-    if (Array.isArray(data.simHoldings)) SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings);
+    // 墓碑也要在这条「云端更新、整块覆盖」的路径上生效。否则场景是这样的：在这台设备上
+    // 删掉一个仓位，另一台设备（或上一次会话的 pagehide beacon）之后推了一份还带着它的
+    // 快照，云端 savedAt 就更新了，覆盖下来又把它装回去。墓碑先于云端合并，删除才是终态。
+    if (Array.isArray(data.simTombstones)) {
+      const have = new Set(SIM_TOMBSTONES.map(x => x.t + "|" + x.k));
+      data.simTombstones.forEach(x => { if (x && !have.has(x.t + "|" + x.k)) SIM_TOMBSTONES.push(x); });
+      tombPrune();
+    }
+    if (Array.isArray(data.simHoldings))
+      SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings.filter(h => !tombHas("h", tradeIdOf(h))));
     if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
     if (data.simNotional != null)        simNotional = data.simNotional;
-    if (Array.isArray(data.simPending))      SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending);
-    if (Array.isArray(data.simClosePending)) SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending);
+    if (Array.isArray(data.simPending))
+      SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending.filter(p => !tombHas("o", p.id)));
+    if (Array.isArray(data.simClosePending))
+      SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending.filter(p => !tombHas("o", p.id)));
     if (Array.isArray(data.simOptions))      SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...data.simOptions);
     if (Array.isArray(data.realOptions))     REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions);
     if (Array.isArray(data.modelPicks))      MODEL_PICKS.splice(0, MODEL_PICKS.length, ...data.modelPicks);
@@ -1614,6 +1664,7 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
       localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
+      localStorage.setItem("trendo_v4_sim_tombstones",    JSON.stringify(SIM_TOMBSTONES));
       localStorage.setItem("trendo_v4_sim_options",        JSON.stringify(SIM_OPTIONS));
       localStorage.setItem("trendo_v4_real_options",       JSON.stringify(REAL_OPTIONS));
       localStorage.setItem("trendo_v4_model_picks",        JSON.stringify(MODEL_PICKS));
@@ -1654,6 +1705,8 @@ function rsAdjustGrade(grade, rsResult) {
       if (sp)  { const parsed = JSON.parse(sp);  SIM_PENDING.splice(0, SIM_PENDING.length, ...parsed); }
       const scp = localStorage.getItem("trendo_v4_sim_close_pending");
       if (scp) { const parsed = JSON.parse(scp); SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...parsed); }
+      const tb = localStorage.getItem("trendo_v4_sim_tombstones");
+      if (tb) { const parsed = JSON.parse(tb); SIM_TOMBSTONES.splice(0, SIM_TOMBSTONES.length, ...parsed); tombPrune(); }
       const so = localStorage.getItem("trendo_v4_sim_options");
       if (so) { const parsed = JSON.parse(so); SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...parsed); }
       const ro = localStorage.getItem("trendo_v4_real_options");
@@ -6186,18 +6239,38 @@ function rsAdjustGrade(grade, rsResult) {
     Object.keys(dailyPnlLog).forEach(d => { if (d < cutoffStr) delete dailyPnlLog[d]; });
   }
 
-  function isUSMarketOpen() {
-    const now = new Date();
-    const day = now.getUTCDay(); // 0=Sun, 6=Sat
-    if (day === 0 || day === 6) return false;
-    const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-    if (mins < 13 * 60 + 30 || mins >= 21 * 60) return false; // 13:30–21:00 UTC covers EDT+EST
-    // Check US market holidays using Eastern Time calendar date
+  // 开盘判定按**美东挂钟时间** 9:30–16:00，而不是一个固定的 UTC 窗口（v774）。
+  // 旧版写死 13:30–21:00 UTC，注释说"EDT+EST 都覆盖"——覆盖是覆盖了，但它覆盖得太宽：
+  // 夏令时下 21:00 UTC 是美东 17:00，于是 16:00–17:00 的盘后一小时被当成开盘，市价单会
+  // 按盘后价成交；冬令时下 13:30 UTC 是美东 8:30，盘前一小时同理。用时区取真实的美东
+  // 时分，夏令时切换自动跟随，不需要维护任何偏移表。
+  function etNow(d = new Date()) {
     try {
-      const etDate = now.toLocaleDateString("en-CA", { timeZone: "America/New_York" }); // "YYYY-MM-DD"
-      const etYear = +etDate.slice(0, 4);
-      if (usMarketHolidays(etYear).includes(etDate)) return false;
-    } catch (_) {}
+      const p = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/New_York", hour12: false,
+        year: "numeric", month: "2-digit", day: "2-digit",
+        weekday: "short", hour: "2-digit", minute: "2-digit",
+      }).formatToParts(d).reduce((o, x) => (o[x.type] = x.value, o), {});
+      // en-CA 的 hour 在午夜会给 "24"，归一到 0，否则 24:05 会被算成 1445 分钟
+      const hh = +p.hour % 24;
+      return {
+        date: `${p.year}-${p.month}-${p.day}`,
+        mins: hh * 60 + +p.minute,
+        dow: { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[p.weekday],
+      };
+    } catch (_) { return null; }
+  }
+  function isUSMarketOpen() {
+    const et = etNow();
+    if (!et) {   // Intl 不可用时退回旧的 UTC 近似，宁可粗一点也不要整个功能失效
+      const now = new Date(), day = now.getUTCDay();
+      if (day === 0 || day === 6) return false;
+      const m = now.getUTCHours() * 60 + now.getUTCMinutes();
+      return m >= 13 * 60 + 30 && m < 21 * 60;
+    }
+    if (et.dow === 0 || et.dow === 6) return false;
+    if (et.mins < 9 * 60 + 30 || et.mins >= 16 * 60) return false;
+    if (usMarketHolidays(+et.date.slice(0, 4)).includes(et.date)) return false;
     return true;
   }
 
@@ -9251,10 +9324,10 @@ function rsAdjustGrade(grade, rsResult) {
         const type = btn.dataset.cancelType;
         if (type === "close") {
           const idx = SIM_CLOSE_PENDING.findIndex(p => p.id === id);
-          if (idx !== -1) { SIM_CLOSE_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
+          if (idx !== -1) { tombAdd("o", id); SIM_CLOSE_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
         } else {
           const idx = SIM_PENDING.findIndex(p => p.id === id);
-          if (idx !== -1) { SIM_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
+          if (idx !== -1) { tombAdd("o", id); SIM_PENDING.splice(idx, 1); saveToStorage(); renderSimPending(); }
         }
       });
     });
@@ -10868,6 +10941,7 @@ function rsAdjustGrade(grade, rsResult) {
   function simDeletePosition(sym) {
     const idx = SIM_HOLDINGS.findIndex(h => h.sym === sym);
     if (idx === -1) return;
+    tombAdd("h", tradeIdOf(SIM_HOLDINGS[idx]));   // 否则云端旧快照会在下次同步时把它捞回来
     SIM_HOLDINGS.splice(idx, 1);
     saveToStorage();
     if (simSelectedSym === sym) closeSimDrawer();
