@@ -2949,7 +2949,7 @@
   .pp-prog-labels { display:flex; justify-content:space-between; font-size:9px; color:var(--fg-3); font-family:var(--f-mono); }
   /* Active state: price-axis bar */
   .pp-axis-wrap { margin-top:12px; }
-  .pp-axis-track { height:6px; background:var(--bg-0); border-radius:3px; position:relative; margin-bottom:5px; overflow:visible; }
+  .pp-axis-track { height:8px; background:var(--bg-0); border-radius:3px; position:relative; margin-bottom:5px; overflow:visible; }
   .pp-axis-fill { height:100%; border-radius:3px; transition:width .3s; }
   .pp-axis-fill.safe   { background:color-mix(in oklch,var(--up) 60%,transparent); }
   .pp-axis-fill.breach { background:color-mix(in oklch,var(--down) 60%,transparent); }
@@ -2958,18 +2958,27 @@
   .pp-axis-pp-tag { font-size:9px; font-family:var(--f-mono); font-weight:600; }
   .pp-axis-pp-tag.safe   { color:var(--up); }
   .pp-axis-pp-tag.breach { color:var(--down); }
-  /* 回撤 45% 的第二道刻度：细虚线，比保护价那条实线弱一档，不抢主次 */
-  .pp-axis-dd-line { position:absolute; top:-2px; bottom:-2px; width:0;
-    border-left:1px dashed color-mix(in oklch,var(--fg-2) 55%,transparent); }
-  .pp-axis-dd-line.past { border-left-color:var(--down); }
-  .pp-axis-dd-note { display:flex; align-items:center; gap:5px; margin-top:4px;
-    font-size:9px; color:var(--fg-3); font-family:var(--f-mono); }
-  .pp-axis-dd-note i { display:block; width:9px; height:0; flex-shrink:0;
-    border-top:1px dashed color-mix(in oklch,var(--fg-2) 55%,transparent); }
-  .pp-axis-dd-note b { font-weight:600; color:var(--fg-2); }
-  .pp-axis-dd-note.past { color:var(--down); }
-  .pp-axis-dd-note.past i { border-top-color:var(--down); }
-  .pp-axis-dd-note.past b { color:var(--down); }
+  /* 45% = 出场质量分析里「低效出场」的分界（efficiency >= 45 ? mid : low）。
+     上一版做成细虚线 + 灰字，太弱、读不出来是条界线；改为「低效区染色 + 实心竖线 +
+     填充 chip」三件一起做，跟出场质量的 .eq-eff-chip 同一套标签语言。 */
+  .pp-axis-lowzone { position:absolute; left:0; top:0; bottom:0; width:45%;
+    background:color-mix(in oklch,var(--down) 12%,transparent);
+    border-radius:3px 0 0 3px; }
+  .pp-axis-lowzone.on { background:color-mix(in oklch,var(--down) 26%,transparent); }
+  .pp-axis-eff-line { position:absolute; left:45%; top:-4px; bottom:-4px; width:2px;
+    background:color-mix(in oklch,var(--down) 55%,transparent); border-radius:1px; }
+  .pp-axis-eff-line.past { background:var(--down); }
+  .pp-axis-eff-row { display:flex; align-items:center; gap:8px; margin-top:7px; flex-wrap:wrap; }
+  /* 与 .eq-eff-chip 同一套：pill 圆角 + 填充底色 + mono */
+  .pp-eff-chip { font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px;
+    font-family:var(--f-mono); white-space:nowrap; }
+  .pp-eff-chip.high { background:var(--up-dim); color:var(--up); }
+  .pp-eff-chip.mid  { background:color-mix(in oklch,var(--warn) 15%,transparent); color:var(--warn); }
+  .pp-eff-chip.low  { background:var(--down-dim); color:var(--down); }
+  .pp-eff-gate { font-size:10px; color:var(--fg-3); font-family:var(--f-mono); white-space:nowrap; }
+  .pp-eff-gate b { font-weight:600; color:var(--fg-2); }
+  .pp-eff-gate.past { color:var(--down); }
+  .pp-eff-gate.past b { color:var(--down); }
   .curve-labels { display: flex; justify-content: space-between; margin-top: 6px; padding: 0 2px; }
   .ec-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .ec-period-seg { display: flex; gap: 2px; background: var(--bg-2); border-radius: 8px; padding: 3px; flex-shrink: 0; }
@@ -6296,8 +6305,8 @@
   </div>
 </div>
 
-<script src="data.js?v=776"></script>
-<script src="desk.js?v=776"></script>
+<script src="data.js?v=777"></script>
+<script src="desk.js?v=777"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

@@ -3018,21 +3018,26 @@ function rsAdjustGrade(grade, rsResult) {
     // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice at 60% MFE
     const activeBar = (() => {
       if (!isActive || !h.last || mfe <= 0) return "";
+      // 这条轴本身就是「出场效率」：0% = 入场成本，100% = 历史峰值，填充到现价的位置
+      // 等于 `实际盈亏 ÷ 峰值盈亏`——跟出场质量分析里那个 efficiency 是同一个算式。
+      // 所以两处共用同一套分档：>70% high · ≥45% mid · <45% low（见 exitQualityHTML）。
       const pos       = Math.min(Math.max((h.last - h.cost) / mfe, 0), 1);
+      const curEff    = Math.round(pos * 100);
+      const effCls    = curEff > 70 ? "high" : curEff >= 45 ? "mid" : "low";
       const safe      = h.last >= ppP;
       const distPct   = (h.last - ppP) / h.last * 100;
       const ppLinePct = Math.min(Math.max((ppP - h.cost) / mfe * 100, 0), 100);
-      // 第二道参考刻度：回撤 45%（保留 55% 峰值盈利）。保护价那条是「回撤 40% 就该走」的
-      // 触发线，这一条在它右侧一点点，用来看「已经跌过头多少」——跌破它说明不只是触发，
-      // 是明显跌过了。做成细虚线 + 灰标签，跟实心的保护价线分主次，不抢它的注意力。
-      const dd45Px    = h.cost + mfe * 0.55;
-      const dd45Pct   = 55;
-      const past45    = h.last < dd45Px;
+      // 45% 这条线不是随便挑的：它就是出场质量分析里「低效出场」的分界。现价跌到它
+      // 左边，这笔一旦出场就会被评为 low —— 所以左侧整段染成低效区，而不是画一根细线
+      // 了事，让「已经掉进低效区」这件事一眼能看见。
+      const eff45Px   = h.cost + mfe * 0.45;
+      const past45    = curEff < 45;
       return `
         <div class="pp-axis-wrap">
           <div class="pp-axis-track">
+            <div class="pp-axis-lowzone${past45 ? " on" : ""}"></div>
             <div class="pp-axis-fill ${safe ? "safe" : "breach"}" style="width:${(pos*100).toFixed(1)}%"></div>
-            <div class="pp-axis-dd-line${past45 ? " past" : ""}" style="left:${dd45Pct}%"></div>
+            <div class="pp-axis-eff-line${past45 ? " past" : ""}"></div>
             <div class="pp-axis-pp-line" style="left:${ppLinePct.toFixed(1)}%" title="保护价 $${price(ppP)}"></div>
           </div>
           <div class="pp-axis-labels">
@@ -3040,8 +3045,9 @@ function rsAdjustGrade(grade, rsResult) {
             <span class="pp-axis-pp-tag ${safe ? "safe" : "breach"}">保护价 ${safe ? "▲" : "▼"} ${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%</span>
             <span title="历史峰值收盘价">$${price(peakPx)}</span>
           </div>
-          <div class="pp-axis-dd-note${past45 ? " past" : ""}">
-            <i></i>回撤45% <b>$${price(dd45Px)}</b>${past45 ? " · 已跌破" : ""}
+          <div class="pp-axis-eff-row">
+            <span class="pp-eff-chip ${effCls}">现在出场 ${curEff}% 效率</span>
+            <span class="pp-eff-gate${past45 ? " past" : ""}">低效线 45% · <b>$${price(eff45Px)}</b>${past45 ? " · 已跌入" : ""}</span>
           </div>
         </div>`;
     })();
