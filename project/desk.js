@@ -14815,68 +14815,68 @@ function rsAdjustGrade(grade, rsResult) {
   ];
 
   const CYCLE_ITEMS = [
-    { id: "capex_guide", tier: 1, terminal: true, days: 90, zh: "超大厂 capex 指引下调",
+    { id: "capex_guide", tier: 1, terminal: true, days: 90, zh: "超大厂 capex 指引下调", short: "capex 指引",
       what: "买方停止加码 = 卖方收入立刻塌。这是整轮周期机械性的终点。",
       where: "MSFT / GOOGL / AMZN / META 季度财报电话会的 capex guidance 段落",
       how: "有任何一家下调下季度或全年 capex 指引？",
       warn: "「增速放缓」不算，要实际 guide-down" },
 
-    { id: "depreciation", tier: 3, days: 90, zh: "折旧年限假设被拉长",
+    { id: "depreciation", tier: 3, days: 90, zh: "折旧年限假设被拉长", short: "折旧年限",
       what: "capex 滞后 3–6 年变成折旧打进利润表。把年限往后拉＝用会计手段护 EPS——这是金融化阶段的手法，不是周期终点。",
       where: "10-K / 10-Q 的「Property and Equipment」附注，找 useful life",
       how: "有没有哪家又把服务器折旧年限往后拉了？",
       warn: "往后拉＝看空信号；主动缩短反而是诚实的，算「未出现」" },
 
-    { id: "semi_orders", tier: 1, lead: true, days: 90, zh: "半导体订单 / backlog 掉头",
+    { id: "semi_orders", tier: 1, lead: true, days: 90, zh: "半导体订单 / backlog 掉头", short: "半导体订单",
       what: "卖铲子一端的领先指标，通常早于 capex 指引出现。",
       where: "NVDA / AVGO / TSM 财报里的 backlog 与交期；ODM 渠道库存",
       how: "交期缩短、订单取消、或渠道库存开始堆积？" },
 
-    { id: "credit_spread", tier: 2, days: 30, zh: "AI 相关信用利差走扩",
+    { id: "credit_spread", tier: 2, days: 30, zh: "AI 相关信用利差走扩", short: "信用利差",
       what: "信用几乎永远领先股票。这是性价比最高的单一同步指标。",
       where: "超大厂债利差 vs 同期限国债；数据中心项目债利差",
       how: "利差是否较上季明显走扩？" },
 
-    { id: "debt_ratio", tier: 2, days: 90, zh: "AI capex 债务融资占比", num: true, cuts: [25, 40],
+    { id: "debt_ratio", tier: 2, days: 90, zh: "AI capex 债务融资占比", short: "债务融资占比", num: true, cuts: [25, 40],
       what: "边际那一块钱从自由现金流变成债务时，这轮就挂上了一个偿债时钟。",
       where: "高盛 / 摩根大通 / BIS 的 AI 融资报告",
       how: "填一个百分比即可，阈值由系统判色",
       warn: "<25% 未出现 · 25–40% 观察中 · >40% 已触发" },
 
-    { id: "circular", tier: 2, days: 90, zh: "循环交易 / 表外融资结构",
+    { id: "circular", tier: 2, days: 90, zh: "循环交易 / 表外融资结构", short: "循环/表外融资",
       what: "供应商融资、SPV、芯片厂投资客户再买自家芯片 —— 1999 年电信同款结构。",
       where: "BIS 季报、公司债发行公告、10-Q 的 VIE / SPV 附注",
       how: "有没有 SPV、表外结构或循环股权交易的新证据？" },
 
-    { id: "breadth", tier: 3, days: 0, zh: "宽度背离（等权 vs 市值加权）", auto: true,
+    { id: "breadth", tier: 3, days: 0, zh: "宽度背离（等权 vs 市值加权）", short: "宽度背离", auto: true,
       what: "指数靠少数几只撑着 —— 派发期最客观的量化表达。",
       where: "RSP/VOO 与 QQQE/QQQ 的 60 交易日比值变化（本模块自动计算）",
       how: "自动：任一比值 60 日跌超 3% 记「已触发」，跌超 1% 记「观察中」" },
 
-    { id: "good_news_fail", tier: 3, days: 90, zh: "利好失效",
+    { id: "good_news_fail", tier: 3, days: 90, zh: "利好失效", short: "利好失效",
       what: "财报超预期但股价下跌 —— 典型的买盘衰竭信号。",
       where: "四家超大厂 + NVDA 财报后次日表现",
       how: "最近一个财报季，有没有出现「beat 却大跌」？" },
 
-    { id: "ai_roi", tier: 2, days: 90, zh: "AI 投入产出比转弱",
+    { id: "ai_roi", tier: 2, days: 90, zh: "AI 投入产出比转弱", short: "投入产出比",
       what: "capex 是投入，云收入是产出，整轮周期的合理性最终取决于这个比值。它通常先转弱，capex 指引才随之下调——清单上其余判据测的是投入、融资、成本与市场行为，只有这一条在问「钱有没有回来」。",
       where: "四家超大厂季报的云业务收入增速（Azure / Google Cloud / AWS）对比同期 capex 增速",
       how: "云收入增速是否明显跟不上 capex 增速？",
       warn: "单季波动不算，要连续两季；收入增速放缓但仍快于 capex 增速不算" },
 
-    { id: "fed_rate", tier: 2, days: 90, zh: "美联储政策利率（加息/降息）", num: true,
+    { id: "fed_rate", tier: 2, days: 90, zh: "美联储政策利率（加息/降息）", short: "政策利率", num: true,
       cuts: [3, 4.5], step: 0.25, min: 0, max: 8, unit: "%",
       what: "政策利率是整条融资链的地基。本轮 AI capex 约三分之一依赖举债，联邦基金利率上行会同时抬高超大厂发债、SPV 项目融资与私募信贷的成本，回本期越长的项目越先被砍。它与「AI 相关信用利差」不重叠：后者衡量市场为「借给这个行业」额外索取的溢价，本条衡量基准资金本身的价格——即使信用风险为零也必须支付。",
       where: "FOMC 会后声明的联邦基金利率目标区间；或任一财经站的 Fed Funds Target Rate",
       how: "填当前目标区间的<b>上限</b>（如 3.75–4.00% 就填 4.00），阈值由系统判色",
       warn: "<3% 未出现 · 3–4.5% 观察中 · >4.5% 已触发（3% 附近是 FOMC 点阵图的长期中性估计）。方向和水平一样重要：同样是 4%，处在加息通道里比处在降息通道里对 capex 的压制更强——方向写进下方备注，评分只看水平。参照：2023–24 峰值 5.25–5.50%" },
 
-    { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态",
+    { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态", short: "IPO 窗口",
       what: "测的是市场能不能消化叙事顶点的最大供给量。",
       where: "近期大型科技 IPO 的定价与首月表现",
       how: "有没有大型 IPO 破发、或发行人主动推迟？" },
 
-    { id: "new_metric", tier: 3, days: 0, zh: "新估值指标出现",
+    { id: "new_metric", tier: 3, days: 0, zh: "新估值指标出现", short: "新估值指标",
       what: "GAAP 撑不住时卖方会发明新口径。2000 年是 EBITDA 和 eyeballs。",
       where: "卖方研报、公司 IR 材料的措辞",
       how: "有没有出现「算力调整后收入」这类新造指标来论证估值？" },
@@ -15169,43 +15169,25 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
-  // 收起态的逐档摘要。收起时这张卡只有一行，等于把结论压成一个没有上下文的数字——
-  // 「3.6 分」本身不说明任何事：三档全是轻权重的行为性信号，和 T1 已经亮了一条，
-  // 是完全不同的处境。每档一行，给出名称、逐条状态、一个状态词和该档得分；
-  // 三档得分之和就是总分的分子，读者可以自己把总分拆回来源。
-  // 展开后下方有完整清单，这块就多余了，因此 [open] 时隐藏。
-  const CYCLE_TIER_ZH = {
-    1: { zh: "决定性", sub: "capex 指引与半导体订单" },
-    2: { zh: "结构性", sub: "融资结构、资金成本与投入产出" },
-    3: { zh: "行为性", sub: "会计手法与市场行为" },
-  };
-  // 每一档自己的状态词。用「该档已得分 ÷ 该档已核实满分」而不是条数——
-  // 一条 T1 亮起和三条 T3 亮起在条数上都是"有几条"，在含义上完全不是一回事。
-  function cycTierState(T) {
-    if (!T.maxV) return { k: "unset", zh: "未核实" };
-    const r = T.score / T.maxV;
-    return r === 0 ? { k: "clear", zh: "干净" }
-      : r < 1 / 3   ? { k: "watch", zh: "初现" }
-      : r < 2 / 3   ? { k: "warn2", zh: "承压" }
-      :               { k: "lit",   zh: "全面触发" };
-  }
-
+  // 收起态摘要。收起时这张卡只有一行，等于把结论压成一个没有上下文的数字——
+  // 「3.6 分」本身不说明任何事：三条轻权重的行为性信号亮着，和 T1 亮了一条，
+  // 是完全不同的处境。这里把 12 条判据全部列出，每条一个状态标签，
+  // 不展开也能看到这个分数具体由谁构成。
+  // 展开后下方有完整清单（含判据说明与输入控件），这块就多余了，[open] 时隐藏。
   function cycDigestHTML(p) {
-    const rows = p.tiers.map(T => {
-      const st = cycTierState(T);
-      const meta = CYCLE_TIER_ZH[T.t];
-      const sc = T.score % 1 ? T.score.toFixed(1) : String(T.score);
-      const dots = T.items.map(i =>
-        `<b class="${i.st}" title="${cycEsc(i.zh)}：${
-          i.st === "unset" ? "未填" : CYCLE_STATES.find(x => x.k === i.st).zh}"></b>`).join("");
-      return `<div class="cyc-dim">
-        <span class="cyc-dim-t t${T.t}">T${T.t}</span>
-        <span class="cyc-dim-zh">${meta.zh}<i>${meta.sub}</i></span>
-        <span class="cyc-dim-dots">${dots}</span>
-        <span class="cyc-dim-st ${st.k}">${st.zh}</span>
-        <span class="cyc-dim-sc"><b>${sc}</b><i>/${T.maxV || "—"}</i></span>
-      </div>`;
-    }).join("");
+    const stZh = k => k === "unset" ? "未填" : CYCLE_STATES.find(x => x.k === k).zh;
+    // 按档位排序：T1 决定性的排在最前，读的顺序与权重一致
+    const chips = CYCLE_ITEMS
+      .slice()
+      .sort((a, b) => a.tier - b.tier)
+      .map(it => {
+        const st = cycStateOf(it);
+        return `<span class="cyc-chip ${st}" title="${cycEsc(it.zh)}">
+          <i>T${it.tier}</i><b>${it.short || it.zh}</b><u>${stZh(st)}</u></span>`;
+      }).join("");
+
+    const sc = v => v % 1 ? v.toFixed(1) : String(v);
+    const tally = p.tiers.map(T => `T${T.t} <b>${sc(T.score)}</b>/${T.maxV || "—"}`).join(" · ");
 
     const H = CYCLE_CHECK.history || [];
     let trend = "";
@@ -15219,8 +15201,9 @@ function rsAdjustGrade(grade, rsResult) {
       : "";
     const foot = [edge, trend].filter(Boolean).join(" · ");
     return `<div class="cyc-dims">
-      <div class="cyc-dims-hd"><span>维度</span><span class="cyc-dims-hd-r">逐条状态 · 该档得分</span></div>
-      ${rows}
+      <div class="cyc-dims-hd"><span>${CYCLE_ITEMS.length} 条判据</span>
+        <span class="cyc-dims-tally">${tally}</span></div>
+      <div class="cyc-dims-grid">${chips}</div>
       ${foot ? `<div class="cyc-dims-foot">${foot}</div>` : ""}
     </div>`;
   }
