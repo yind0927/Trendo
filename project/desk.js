@@ -1238,15 +1238,15 @@ function rsAdjustGrade(grade, rsResult) {
   // Options module state — wheel strategy (CSP / Covered Call), manual entry.
   // Only the underlying ETF spot is live (via /api/quote, same path as stock
   // positions); strikes/premiums/expiries are typed in from the broker.
-  let simOptionsVisible = false;
-  // 期权页只剩实盘一个面板（模拟子 tab 已移除）。SIM_OPTIONS 数组与它的本地/云端存储都
-  // 保留着，历史记录没有被删，只是不再有入口——真要清掉需要单独的、明确的删除动作。
+  // 期权页只有实盘一个面板。模拟期权（SIM_OPTIONS / trendo_v4_sim_options / 云同步字段
+  // simOptions）已按要求整体删除：数组、本地存储、云端字段、以及首次加载时的一次性清理
+  // 都在下方 _purgeSimOptions() 里处理。
   let inspSubTab      = "journal"; // "journal" | "watchlist" — Inspirations sub-tab
   let _optsSettledOpen = false; // collapsed by default
   const _optsWheelExpanded  = new Set();
   const _optsSymGroupsOpen  = new Set(); // which symbol groups are expanded in settled section // group IDs of expanded wheel combo cards
-  let simOptionsSym   = "QQQ";  // sell-modal default
-  let simOptionsStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
+  let optSellSym   = "QQQ";  // sell-modal default
+  let optSellStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
   const OPT_WATCH_SYMS = ["MAGS", "SMH", "SOXL", "GLD", "IWM", "QQQ"];
   let _optSpot = {};            // { sym: last } — refreshed by fetchPrices()
   let newPositionContext = "desk"; // "desk" | "sim"
@@ -1330,7 +1330,6 @@ function rsAdjustGrade(grade, rsResult) {
       watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
       simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
       simTombstones: SIM_TOMBSTONES,
-      simOptions: SIM_OPTIONS,
       realOptions: REAL_OPTIONS,
       modelPicks: MODEL_PICKS,
       cycleCheck: CYCLE_CHECK,
@@ -1367,7 +1366,7 @@ function rsAdjustGrade(grade, rsResult) {
     // 记录、刚改的自选、刚填的周期清单，都会在切一次后台之后悄悄回滚。
     const localTotal   = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length
                        + SIM_PENDING.length + SIM_CLOSE_PENDING.length + SIM_CLOSED.length
-                       + WATCHLIST.length + REAL_OPTIONS.length + SIM_OPTIONS.length;
+                       + WATCHLIST.length + REAL_OPTIONS.length;
     const cloudTime    = cloudData.savedAt ? new Date(cloudData.savedAt).getTime() : 0;
     const localTime    = localSavedAt      ? new Date(localSavedAt).getTime()      : 0;
 
@@ -1552,7 +1551,6 @@ function rsAdjustGrade(grade, rsResult) {
       SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending.filter(p => !tombHas("o", p.id)));
     if (Array.isArray(data.simClosePending))
       SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending.filter(p => !tombHas("o", p.id)));
-    if (Array.isArray(data.simOptions))      SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...data.simOptions);
     if (Array.isArray(data.realOptions))     REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions);
     if (Array.isArray(data.modelPicks))      MODEL_PICKS.splice(0, MODEL_PICKS.length, ...data.modelPicks);
     if (data.cycleCheck && typeof data.cycleCheck === "object") {
@@ -1673,6 +1671,10 @@ function rsAdjustGrade(grade, rsResult) {
   };
 
   // ============ PERSISTENCE ============
+  // 模拟期权已整体删除。这行把本地残留的那份也清掉——云端那份会在下一次推送时随
+  // `simOptions` 字段从载荷里消失而被整体替换掉（POST 是整块覆盖，不是字段合并）。
+  try { localStorage.removeItem("trendo_v4_sim_options"); } catch (_) {}
+
   function saveLocalOnly(updateTimestamp = true) {
     try {
       localStorage.setItem("trendo_v4_holdings",     JSON.stringify(noMarket(HOLDINGS)));
@@ -1685,7 +1687,6 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
       localStorage.setItem("trendo_v4_sim_tombstones",    JSON.stringify(SIM_TOMBSTONES));
-      localStorage.setItem("trendo_v4_sim_options",        JSON.stringify(SIM_OPTIONS));
       localStorage.setItem("trendo_v4_real_options",       JSON.stringify(REAL_OPTIONS));
       localStorage.setItem("trendo_v4_model_picks",        JSON.stringify(MODEL_PICKS));
       localStorage.setItem("trendo_v4_cycle_check",        JSON.stringify(CYCLE_CHECK));
@@ -1727,8 +1728,6 @@ function rsAdjustGrade(grade, rsResult) {
       if (scp) { const parsed = JSON.parse(scp); SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...parsed); }
       const tb = localStorage.getItem("trendo_v4_sim_tombstones");
       if (tb) { const parsed = JSON.parse(tb); SIM_TOMBSTONES.splice(0, SIM_TOMBSTONES.length, ...parsed); tombPrune(); }
-      const so = localStorage.getItem("trendo_v4_sim_options");
-      if (so) { const parsed = JSON.parse(so); SIM_OPTIONS.splice(0, SIM_OPTIONS.length, ...parsed); }
       const ro = localStorage.getItem("trendo_v4_real_options");
       if (ro) { const parsed = JSON.parse(ro); REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...parsed); }
       const mp = localStorage.getItem("trendo_v4_model_picks");
@@ -8830,19 +8829,19 @@ function rsAdjustGrade(grade, rsResult) {
 
   function _optWireModalChips(modal) {
     $$(".opts-sym-chip", modal).forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.optsym === simOptionsSym);
+      btn.classList.toggle("active", btn.dataset.optsym === optSellSym);
       btn.onclick = () => {
-        simOptionsSym = btn.dataset.optsym;
-        modal.querySelector("#opts-sym-input").value = simOptionsSym;
-        $$(".opts-sym-chip", modal).forEach(b => b.classList.toggle("active", b.dataset.optsym === simOptionsSym));
+        optSellSym = btn.dataset.optsym;
+        modal.querySelector("#opts-sym-input").value = optSellSym;
+        $$(".opts-sym-chip", modal).forEach(b => b.classList.toggle("active", b.dataset.optsym === optSellSym));
         modal._recalc?.();
       };
     });
     $$(".opts-type-btn", modal).forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.optstrat === simOptionsStrat);
+      btn.classList.toggle("active", btn.dataset.optstrat === optSellStrat);
       btn.onclick = () => {
-        simOptionsStrat = btn.dataset.optstrat;
-        $$(".opts-type-btn", modal).forEach(b => b.classList.toggle("active", b.dataset.optstrat === simOptionsStrat));
+        optSellStrat = btn.dataset.optstrat;
+        $$(".opts-type-btn", modal).forEach(b => b.classList.toggle("active", b.dataset.optstrat === optSellStrat));
         modal._recalc?.();
       };
     });
@@ -8853,8 +8852,8 @@ function rsAdjustGrade(grade, rsResult) {
     const isPending = prefill.isPending === true;
     const modal = _optModalMode("sell");
     if (!modal) return;
-    if (prefill.sym) simOptionsSym = prefill.sym;
-    if (prefill.strat) simOptionsStrat = prefill.strat;
+    if (prefill.sym) optSellSym = prefill.sym;
+    if (prefill.strat) optSellStrat = prefill.strat;
     modal.querySelector(".opts-modal-title").textContent = isPending ? "预设期权单 · 盘前计划" : "卖出期权 · 手动记录";
     modal.querySelector("#opts-modal-meta").textContent = isPending
       ? "盘前规划期权参数，开盘成交后点击「记录成交」填入实际权利金激活仓位"
@@ -8868,7 +8867,7 @@ function rsAdjustGrade(grade, rsResult) {
     const premEl  = modal.querySelector("#opts-premium");
     const deltaEl = modal.querySelector("#opts-delta");
     premEl.placeholder = isPending ? "期望最低卖价（可不填）" : "券商成交价";
-    symIn.value = simOptionsSym;
+    symIn.value = optSellSym;
     strkIn.value = prefill.strike || "";
     expIn.value = prefill.expiry || "";
     expIn.min = new Date().toISOString().slice(0, 10);
@@ -8880,7 +8879,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     const recalc = () => {
       const sym = (symIn.value || "").toUpperCase().trim();
-      const isCSP = simOptionsStrat === "csp";
+      const isCSP = optSellStrat === "csp";
       const strike = parseFloat(strkIn.value) || 0;
       const qty = Math.max(1, parseInt(qtyEl.value) || 1);
       const prem = parseFloat(premEl.value) || 0;
@@ -8919,7 +8918,7 @@ function rsAdjustGrade(grade, rsResult) {
       const prem = parseFloat(premEl.value);
       if (!sym || !(strike > 0) || !expiry) { alert("请填写标的、行权价和到期日"); return; }
       if (!isPending && !(prem > 0)) { alert("请填写权利金"); return; }
-      const isCSP = simOptionsStrat === "csp";
+      const isCSP = optSellStrat === "csp";
       const entryDelta = deltaEl ? (parseFloat(deltaEl.value) || null) : null;
       const optArr = _activeOpts();
       if (isPending) {

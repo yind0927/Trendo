@@ -120,7 +120,7 @@ window.MODEL_PICKS = [];
 //   status:"open"|"closed"|"expired"|"assigned",
 //   manualMark?, manualMarkAt?,          — 手动记录的当前权利金（浮盈展示）
 //   closePremium?, settleSpot?, realized?, closedAt? }
-window.SIM_OPTIONS = [];
+
 window.REAL_OPTIONS = [];
 
 // AI 周期检查清单（Market 页）。低频、人工判断为主的结构性判据，

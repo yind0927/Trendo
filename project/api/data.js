@@ -128,7 +128,6 @@ const DEMO_BLOB = {
   ],
   simPending: [],
   simClosePending: [],
-  simOptions: [],
   realOptions: [],
 };
 
