@@ -14929,6 +14929,24 @@ function rsAdjustGrade(grade, rsResult) {
     renderCycleCard();
   }
 
+  // 「这一轮基线是不是已经载入了」。逐条比对当前状态与基线推导出的状态（数字项
+  // 连数值一起比），返回相同/不同的条数与最近一次复核日期。
+  // 只比状态与数值，**不比备注**——备注是用户自己的，载入基线本来就不覆盖它。
+  function cycBaselineStatus() {
+    const ids = Object.keys(CYCLE_BASELINE.items);
+    let same = 0, at = null;
+    ids.forEach(id => {
+      const b = CYCLE_BASELINE.items[id];
+      const rec = CYCLE_CHECK.items[id] || {};
+      const want = b.state === "num" ? cycNumState(b.value, CYCLE_ITEMS.find(i => i.id === id)) : b.state;
+      const ok = (rec.state || "unset") === want && (b.value == null || rec.value === b.value);
+      if (!ok) return;
+      same++;
+      if (rec.at && (!at || rec.at > at)) at = rec.at;
+    });
+    return { total: ids.length, same, diff: ids.length - same, loaded: same === ids.length, at };
+  }
+
   function cycleSeed() {
     let changed = false;
     for (const it of CYCLE_ITEMS) {
@@ -15219,6 +15237,7 @@ function rsAdjustGrade(grade, rsResult) {
 
   function cycleCardHTML() {
     const p = cyclePhase();
+    const bs = cycBaselineStatus();
     const recent = (CYCLE_CHECK.log || []).slice(-6).reverse();
     // 全部向下取整：四舍五入会把 34.85% 显示成 35%、69.6% 显示成 70%，
     // 而规则行写的是「≥35%」「≥70%」——显示值必须永不高于实际值，否则卡片自相矛盾。
@@ -15318,13 +15337,28 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="cyc-scope">本模块为季度级结构判据，独立于三轴模型，不产生交易信号；每个财报季复核一次即可。
         再次点击已选中的档位可清空回「未填」——「未填」表示尚未核实，不计入分母，与「未出现」含义不同。</div>
       <div class="cyc-apply">
-        <button class="cyc-apply-btn" data-cyc-apply>按今天日期载入基线 · ${cycToday()}</button>
-        <span>把 ${CYCLE_BASELINE.date} 调研的那一轮读数一次性写入除自动项外的 ${Object.keys(CYCLE_BASELINE.items).length} 条判据，
+        <button class="cyc-apply-btn${bs.loaded ? " loaded" : ""}" data-cyc-apply>${
+          bs.loaded ? `重新按今天日期确认 · ${cycToday()}` : `按今天日期载入基线 · ${cycToday()}`}</button>
+        <span class="cyc-apply-state ${bs.loaded ? "on" : "off"}">${bs.loaded
+          ? `✓ 已载入${bs.at ? ` · 复核日期 ${bs.at}` : ""}`
+          : `${bs.diff}/${bs.total} 条与基线不同`}</span>
+        <span>把 ${CYCLE_BASELINE.date} 调研的那一轮读数一次性写入除自动项外的 ${bs.total} 条判据，
           并把复核日期全部记为<b>今天</b>（完整度因此回到 100%、过期提示清零）。
           每条变更都会写入下方变更记录，可逐条改回。
-          <b>只有在你确认这些读数当下仍然成立时才点它</b>——按钮本身不会去核实任何东西。</span>
+          <b>只有在你确认这些读数当下仍然成立时才点它</b>——按钮本身不会去核实任何东西。
+          ${bs.loaded
+            ? "当前各条状态与这一轮基线一致；再次点击只会把复核日期重新记为今天，不改变任何状态。"
+            : "「与基线不同」既可能是你自己改过，也可能是基线本身更新了——两种都算正常。"}</span>
       </div>
-      <div class="cyc-list">${CYCLE_ITEMS.map(cycItemHTML).join("")}</div>
+      <div class="cyc-list">${[1, 2, 3].map(t => {
+        const group = CYCLE_ITEMS.filter(i => i.tier === t);
+        if (!group.length) return "";
+        return `<div class="cyc-group"><span class="cyc-group-t t${t}">T${t}</span>
+            <b>${CYCLE_TIER_DESC[t].replace(/^T\d\s*/, "").split("：")[0]}</b>
+            <i>${CYCLE_TIER_DESC[t].split("：")[1]}</i>
+            <span class="cyc-group-w">权重 ${CYCLE_TIER_W[t]} 分 · ${group.length} 条</span>
+          </div>${group.map(cycItemHTML).join("")}`;
+      }).join("")}</div>
       <details class="cyc-hist">
         <summary><span class="cyc-defs-tick"></span>得分走向 · SCORE TREND
           <i>本模块有价值的是方向，而非某一天的数字</i></summary>
@@ -15377,6 +15411,13 @@ function rsAdjustGrade(grade, rsResult) {
       renderCycleCard();
     }));
     $$("[data-cyc-apply]", host).forEach(b => b.addEventListener("click", () => {
+      if (cycBaselineStatus().loaded) {
+        if (!confirm(`各条状态已与 ${CYCLE_BASELINE.date} 的基线一致。\n\n`
+          + `继续将只把复核日期重新记为今天 ${cycToday()}，不改变任何状态。\n`
+          + "这等于声明「我确认这些读数今天仍然成立」。继续？")) return;
+        cycleApplyBaseline();
+        return;
+      }
       if (!confirm(`将用 ${CYCLE_BASELINE.date} 的调研读数覆盖各条判据（自动项不动），`
         + `并把复核日期全部记为今天 ${cycToday()}。\n\n`
         + "这等于声明「我确认这些读数今天仍然成立」——完整度会回到 100%、过期提示清零。\n"
