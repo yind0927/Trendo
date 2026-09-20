@@ -5390,7 +5390,7 @@
         <button class="filter-chip" data-filter="equity">美股 <span class="c" id="c-eq">0</span></button>
         <button class="filter-chip" data-filter="etf">ETF <span class="c" id="c-etf">0</span></button>
         <button class="filter-chip" data-filter="crypto">加密 <span class="c" id="c-cr">0</span></button>
-        <button class="filter-chip" data-filter="risk">近止损 <span class="c" id="c-rk">0</span></button>
+        <button class="filter-chip" data-filter="risk" title="从入场价回撤 ≥5% 的持仓（CC 权利金调整后成本为准）">近止损 <span class="c" id="c-rk">0</span></button>
         <button class="filter-chip" data-filter="target">近止盈 <span class="c" id="c-tg">0</span></button>
       </div>
       <div class="filters" id="filters-closed" style="display:none">
@@ -5719,7 +5719,7 @@
         <button class="filter-chip" data-simfilter="equity">美股 <span class="c" id="sim-c-eq">0</span></button>
         <button class="filter-chip" data-simfilter="etf">ETF <span class="c" id="sim-c-etf">0</span></button>
         <button class="filter-chip" data-simfilter="crypto">加密 <span class="c" id="sim-c-cr">0</span></button>
-        <button class="filter-chip" data-simfilter="risk">近止损 <span class="c" id="sim-c-rk">0</span></button>
+        <button class="filter-chip" data-simfilter="risk" title="从入场价回撤 ≥5% 的持仓（CC 权利金调整后成本为准）">近止损 <span class="c" id="sim-c-rk">0</span></button>
         <button class="filter-chip" data-simfilter="target">近止盈 <span class="c" id="sim-c-tg">0</span></button>
         <button class="filter-chip" data-simfilter="watch">候选 <span class="c" id="sim-c-watch">0</span></button>
       </div>
@@ -6346,8 +6346,8 @@
   </div>
 </div>
 
-<script src="data.js?v=782"></script>
-<script src="desk.js?v=782"></script>
+<script src="data.js?v=783"></script>
+<script src="desk.js?v=783"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

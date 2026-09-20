@@ -29,6 +29,19 @@ window.progressBucket = h => {
   return "Near Target";
 };
 
+// 「近止损」筛选的口径：从入场价算起回撤达到 5%。
+// 此前这个筛选用的是 progressBucket ∈ {Pullback, Near Stop}，而 Pullback 覆盖
+// 「低于入场价、但还没走到止损一半」的**全部**情形——一只只跌了 0.3% 的票也会被
+// 收进来，跟标签上写的「近止损」不是一回事，筛出来的列表基本等于「所有在亏的」。
+// 口径与 progressBucket 一致，用 CC 权利金调整后的成本作入场参考。
+window.NEAR_STOP_DD_PCT = 5;
+window.isNearStopPick = h => {
+  const ccNetAmt = (h.cc || []).reduce((s, c) => s + (c.total || 0), 0);
+  const cost = (ccNetAmt > 0 && h.qty > 0) ? h.cost - ccNetAmt / h.qty : h.cost;
+  if (!(cost > 0) || h.last == null) return false;
+  return (cost - h.last) / cost * 100 >= window.NEAR_STOP_DD_PCT;
+};
+
 window.BUCKET_STATUS = {
   "Pullback":    { label: "回调 · Pullback",        cls: "pullback",    color: "var(--down)"          },
   "Near Stop":   { label: "近止损 · Near Stop",     cls: "near-stop",   color: "var(--down)"          },

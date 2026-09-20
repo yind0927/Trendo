@@ -61,7 +61,9 @@
     // are called out separately rather than silently treated as zero-risk.
     const riskedPosns  = HOLDINGS.filter(h => h.stop != null && h.stop < h.cost && h.qty > 0);
     const totalRiskAmt = riskedPosns.reduce((s, h) => s + (h.cost - h.stop) * h.qty, 0);
-    const nearStopCount = HOLDINGS.filter(h => progressBucket(h) === "Near Stop").length;
+    // 与持仓列表「近止损」筛选同一口径（回撤 ≥5%），否则同一屏上两个都叫「近止损」
+    // 的数字会对不上——卡片按 progressBucket 的 Near Stop 档、筛选按回撤百分比。
+    const nearStopCount = HOLDINGS.filter(isNearStopPick).length;
     const noStopCount  = HOLDINGS.filter(h => (h.stop == null) && h.qty > 0).length;
     const totalRiskPct = totalNotional > 0 && HOLDINGS.length ? totalRiskAmt / totalNotional * 100 : null;
     const riskCard = HOLDINGS.length ? card({
@@ -2074,7 +2076,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (filter === "equity" && h.kind !== "equity") return false;
         if (filter === "etf"    && h.kind !== "etf") return false;
         if (filter === "crypto" && h.kind !== "crypto") return false;
-        if (filter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
+        if (filter === "risk"   && !isNearStopPick(h)) return false;
         if (filter === "target" && progressBucket(h) !== "Near Target") return false;
       }
       if (query) {
@@ -2212,7 +2214,7 @@ function rsAdjustGrade(grade, rsResult) {
       $("#c-eq").textContent   = data.filter(h => h.kind === "equity").length;
       $("#c-etf").textContent  = data.filter(h => h.kind === "etf").length;
       $("#c-cr").textContent   = data.filter(h => h.kind === "crypto").length;
-      $("#c-rk").textContent   = data.filter(h => ["Pullback", "Near Stop"].includes(progressBucket(h))).length;
+      $("#c-rk").textContent   = data.filter(isNearStopPick).length;
       $("#c-tg").textContent   = data.filter(h => progressBucket(h) === "Near Target").length;
     }
   }
@@ -10632,7 +10634,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (simFilter === "equity" && h.kind !== "equity") return false;
         if (simFilter === "etf"    && h.kind !== "etf") return false;
         if (simFilter === "crypto" && h.kind !== "crypto") return false;
-        if (simFilter === "risk"   && !["Pullback", "Near Stop"].includes(progressBucket(h))) return false;
+        if (simFilter === "risk"   && !isNearStopPick(h)) return false;
         if (simFilter === "target" && progressBucket(h) !== "Near Target") return false;
         if (simFilter === "watch"  && !h.flagged) return false;
       }
@@ -10681,7 +10683,7 @@ function rsAdjustGrade(grade, rsResult) {
       setCount("sim-c-eq",    SIM_HOLDINGS.filter(h => h.kind === "equity").length);
       setCount("sim-c-etf",   SIM_HOLDINGS.filter(h => h.kind === "etf").length);
       setCount("sim-c-cr",    SIM_HOLDINGS.filter(h => h.kind === "crypto").length);
-      setCount("sim-c-rk",    SIM_HOLDINGS.filter(h => ["Pullback","Near Stop"].includes(progressBucket(h))).length);
+      setCount("sim-c-rk",    SIM_HOLDINGS.filter(isNearStopPick).length);
       setCount("sim-c-tg",    SIM_HOLDINGS.filter(h => progressBucket(h) === "Near Target").length);
       setCount("sim-c-watch", SIM_HOLDINGS.filter(h => h.flagged).length);
     }
