@@ -166,7 +166,15 @@ export default async function handler(req, res) {
   }
 
   // ── 4. Build prompt ───────────────────────────────────────────────────────
+  // 前六个是客户端 progressBucket 的取值（现在传过来的就是它）；
+  // 后面一组是更早的遗留取值，留着让旧的缓存/请求仍能正确渲染。
   const statusMap = {
+    "Pullback":    "回调中",
+    "Near Stop":   "近止损",
+    "Early":       "盈利初期",
+    "Midway":      "盈利中段",
+    "On Track":    "进行中",
+    "Near Target": "近止盈",
     ok:       "正常",
     warn:     "注意",
     danger:   "近止损",

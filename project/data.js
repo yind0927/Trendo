@@ -3,12 +3,6 @@
 window.HOLDINGS = [];
 window.CLOSED_POSITIONS = [];
 
-// status label text
-window.STATUS_LABEL = {
-  ok: "正常持有", warn: "接近止损", danger: "计划失效", target: "接近目标",
-  trim: "可减仓", earnings: "财报临近", neutral: "—"
-};
-
 // Progress bucket function — dual-axis: loss zone (2 stages) + profit zone (4 stages)
 window.progressBucket = h => {
   // Use CC-adjusted cost as the entry reference so status and filters match the displayed entry price

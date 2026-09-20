@@ -1306,6 +1306,17 @@ function rsAdjustGrade(grade, rsResult) {
     } catch (_) { renderSyncStatus("error"); }
   }
 
+  // 立刻把待推送的内容送上云端，不等 2 秒去抖。sendBeacon 在页面关闭/切后台后仍保证送达，
+  // 且不需要鉴权头（key 走 URL）。
+  function _syncFlush() {
+    if (!syncKey) return;
+    clearTimeout(syncTimer);
+    try {
+      const blob = new Blob([JSON.stringify(_buildSyncPayload())], { type: "application/json" });
+      navigator.sendBeacon(`/api/data?key=${encodeURIComponent(syncKey)}`, blob);
+    } catch (_) {}
+  }
+
   function _buildSyncPayload() {
     const histForSync = [...analysisHistory]
       .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
@@ -1348,8 +1359,14 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     const localSavedAt = localStorage.getItem("trendo_v4_savedAt");
+    // 「这台设备本地是不是真的什么都没有」。**凡是会被 applyCloudData 整块替换的集合，
+    // 都必须数进来**——此前这里只数股票相关的五个数组，于是「只记了期权、没有任何股票
+    // 持仓」的用户永远满足 localTotal === 0，于是下面那条 `localTotal === 0` 的兜底分支
+    // **每一次 visibilitychange 拉取都会无视时间戳、用云端快照盖掉本地**：刚编辑完的期权
+    // 记录、刚改的自选、刚填的周期清单，都会在切一次后台之后悄悄回滚。
     const localTotal   = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length
-                       + SIM_PENDING.length + SIM_CLOSE_PENDING.length;
+                       + SIM_PENDING.length + SIM_CLOSE_PENDING.length + SIM_CLOSED.length
+                       + WATCHLIST.length + REAL_OPTIONS.length + SIM_OPTIONS.length;
     const cloudTime    = cloudData.savedAt ? new Date(cloudData.savedAt).getTime() : 0;
     const localTime    = localSavedAt      ? new Date(localSavedAt).getTime()      : 0;
 
@@ -2475,13 +2492,8 @@ function rsAdjustGrade(grade, rsResult) {
       case "pnld": return `<td class="right num ${fmt.sign(h.pnlDollar)}" style="font-weight:600">${fmt.signed(h.pnlDollar)}</td>`;
       case "pnlp": return `<td class="right num ${fmt.sign(h.pnlPct)}">${fmt.pct(h.pnlPct)}</td>`;
       case "rmult": return renderRCell(h);
-      case "status": return `<td><span class="status ${statusClass(h.status)}"><span class="dot"></span>${STATUS_LABEL[h.status]}</span></td>`;
     }
     return "<td></td>";
-  }
-
-  function statusClass(s) {
-    return { ok: "ok", warn: "warn", danger: "danger", target: "target", trim: "target", earnings: "warn", neutral: "neutral" }[s] || "neutral";
   }
 
   function renderRCell(h) {
@@ -15761,12 +15773,14 @@ function rsAdjustGrade(grade, rsResult) {
   }
   setInterval(_briefAgeTick, 60000);
 
-  // 简报过期多久就该重新生成。服务端按「北京 09:30 / 21:30」两档缓存，同一档里
-  // 无论点多少次都返回同一份（连 updatedAt 都是第一次生成的那个时刻）——所以只要
-  // 不强制刷新，时间戳在半天内根本不会变。这里在「进入 Market 页 / 展开卡片」时
-  // 检查一次，超过这个分钟数就带 force 重新生成，时间戳因此跟着你实际查看的时刻走。
-  const BRIEF_STALE_MIN = 30;
-  const _briefStale = at => { const m = _briefAgeMin(at); return m == null || m >= BRIEF_STALE_MIN; };
+  // 简报每天自动更新一次：缓存不是「今天」生成的就重新生成，是今天的就直接用。
+  // 服务端按「北京 09:30 / 21:30」两档缓存，同一档里无论点多少次都返回同一份（连
+  // updatedAt 都是第一次生成的那个时刻），所以不强制刷新时间戳半天都不会变——这里
+  // 在「进入 Market 页 / 展开卡片」时检查一次，跨天就带 force 重新生成。
+  // 按**本地自然日**判断（sv-SE locale 直接给 YYYY-MM-DD），跟用户感知的「今天」一致。
+  const _briefDay = at => at == null ? null
+    : new Date(at).toLocaleDateString("sv-SE");
+  const _briefStale = at => !at || _briefDay(at) !== _briefDay(Date.now());
   // Cache slot aligned to Beijing 09:30 / 21:30 — same logic as the API
   function _bjSlotKey() {
     const bjMs = Date.now() + 8 * 3600 * 1000;
@@ -15854,7 +15868,10 @@ function rsAdjustGrade(grade, rsResult) {
         const pnl  = h.pnlPct  != null ? h.pnlPct.toFixed(1)  : "0";
         const r    = h.rMult   != null ? h.rMult.toFixed(1)   : "0";
         const d    = h.days    ?? 0;
-        const s    = h.status  || "ok";
+        // h.status 是个从来没有人写入的遗留字段，此前这里恒为 "ok"，等于告诉 AI
+        // 「每一笔都正常」——近止损和近止盈在它眼里没有区别。改用列表上真正显示的
+        // progressBucket（服务端 statusMap 已补上这六个取值的中文映射）。
+        const s    = progressBucket(h) || "ok";
         const earn = h.earnings || "";
         // Partial close info: look up same sym+entry+cost in CLOSED_POSITIONS
         const partials = CLOSED_POSITIONS.filter(c =>
@@ -16877,6 +16894,14 @@ function rsAdjustGrade(grade, rsResult) {
   // resurrecting an already-executed order.
   document.addEventListener("visibilitychange", () => {
     document.body.classList.toggle("page-hidden", document.hidden);
+    if (document.hidden) {
+      // 切后台也要把还没到期的 2 秒去抖推上去。手机 PWA 切到别的 app 只会触发
+      // visibilitychange，**不一定触发 pagehide**——只靠下面那个 pagehide 兜底的话，
+      // 「改完立刻切后台」这条路上的改动就还没进云端；等再切回来时 syncOnStartup 拉到
+      // 的仍是旧快照，改动看起来就像没保存过。
+      _syncFlush();
+      return;
+    }
     if (!document.hidden) {
       if (syncKey) syncOnStartup();
       // Force immediate price refresh so pending orders execute as soon as the tab is active
@@ -16889,14 +16914,7 @@ function rsAdjustGrade(grade, rsResult) {
   // debounce timer didn't fire (e.g. tab closed immediately after adding an order).
   // sendBeacon is guaranteed to complete after page close; keepalive fetch would
   // also work but sendBeacon needs no auth header (key travels in the URL).
-  window.addEventListener("pagehide", () => {
-    if (!syncKey) return;
-    clearTimeout(syncTimer);
-    try {
-      const blob = new Blob([JSON.stringify(_buildSyncPayload())], { type: "application/json" });
-      navigator.sendBeacon(`/api/data?key=${encodeURIComponent(syncKey)}`, blob);
-    } catch (_) {}
-  });
+  window.addEventListener("pagehide", _syncFlush);
   // Restore last visited page so refresh doesn't always reset to Dashboard
   let _lastPage = localStorage.getItem("trendo_last_page");
   if (_lastPage === "journal" || _lastPage === "watchlist") _lastPage = "inspirations";

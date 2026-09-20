@@ -50,7 +50,7 @@ Vercel CDN 边缘缓存按 URL 缓存，URL 不变就会一直返回旧 `desk.js
 ```
 project/
   index.html      — 所有 CSS + HTML 结构（单文件，含内联 <style>）
-  desk.js         — 所有渲染逻辑和交互（单 IIFE，~3800行）
+  desk.js         — 所有渲染逻辑和交互（单 IIFE，约 1.7 万行）
   data.js         — 全局数据数组和配置（window.* 变量）
   sw.js           — Service Worker（PWA 自动更新）
   manifest.json   — PWA manifest
@@ -59,7 +59,10 @@ project/
     history.js         — 历史日线数据（Yahoo Finance）
     holdings.js        — ETF 成分股静态数据（top 20，手动维护）
     earnings.js        — 财报日期（Finnhub → Yahoo 降级）
-    feargreed.js       — CNN 恐慌贪婪指数代理；`?mode=rates` 分支返回 FRED 宏观利率/信用利差（DFII10 10年实际利率 / BAMLH0A0HYM2 高收益利差 / BAMLC0A0CM 投资级利差 / T10Y2Y 曲线，各带 3 个月变化）——`fredgraph.csv` 端点免 API key；挂这里而非新建文件是因为 Hobby 的 12 函数已满（GEX/做市商Gamma 模块已于 v613 整体移除）
+    feargreed.js       — CNN 恐慌贪婪指数代理（29 行的纯代理）。曾挂过 `?mode=rates` FRED 宏观利率分支，
+                         因 FRED 从 Vercel egress 不可达（连续三版都超时）已整块删除，不要再往这里加
+    news.js            — 个股新闻
+    stock-analysis.js  — 个股 AI 分析
     data.js            — 跨设备云同步（Upstash Redis）；POST 时按blob是否含挂单维护 `trendo:order_keys` 注册表
     order-check.js     — 模拟仓挂单后台成交 worker（Vercel Cron 开盘时段每分钟触发；扫描 `trendo:order_keys` → 读用户blob → 镜像客户端成交逻辑（市价/限价、部分/全部平仓、CC结算、calcTradingDays）→ 写回blob并更新savedAt；客户端 visibilitychange 时 pull-if-newer 接收成交结果；冲突模型=savedAt last-write-wins，页面活跃时客户端自己成交并覆盖，结果等价）
     market-summary.js  — 市场日报 AI 简报（Claude Sonnet 4.6，含新闻+市场数据）
@@ -77,10 +80,16 @@ window.CLOSED_POSITIONS  // 真实已平仓 []
 window.SIM_HOLDINGS      // 模拟现持仓 []
 window.SIM_CLOSED        // 模拟已平仓 []
 window.SIM_PENDING       // 模拟挂单队列 []
-window.SIM_OPTIONS       // 期权滚动策略仓位 []（CSP/CC 卖方，手动记录模型，v256）
+window.SIM_OPTIONS       // 模拟期权仓位 []（CSP/CC 卖方，手动记录模型）
+window.REAL_OPTIONS      // 实盘期权仓位 []（同结构，Options 页「实盘」子tab）
+window.SIM_TOMBSTONES    // 删除墓碑 []（防止云同步把刚删的模拟仓/挂单捞回来）
+window.CYCLE_CHECK       // 周期系统分析 { items, log, history, confirmedPhase, confirmedAt }
+window.MODEL_PICKS       // 模型选股 []
 window.WATCHLIST         // 自选股 []
 window.ERROR_TAGS        // 错误标签（Analytics）
 window.EVENTS            // 事件记录（Analytics）
+window.progressBucket    // 双轴状态判断（见下）
+window.isNearStopPick    // 「近止损」筛选口径：回撤 ≥ NEAR_STOP_DD_PCT(5)%
 ```
 
 ### 持仓对象字段（Holding）
@@ -96,8 +105,8 @@ window.EVENTS            // 事件记录（Analytics）
   risk1R, rMult,            // 1R风险额、R倍数
   days,                     // 持仓天数
   earnings, holdEarn,       // 财报日期、是否持有过财报
-  status,                   // "ok"|"warn"|"danger"|"target"|"trim"|"earnings"
   spark,                    // 价格历史数组（用于sparkline）
+  // 注意：没有 status 字段。状态一律由 progressBucket(h) 实时算，不落盘。
   bx: {                     // BX趋势评分
     dailyBars,              // "0-5" 格式
     weekly, monthly,        // 周线/月线评分
@@ -138,24 +147,40 @@ window.EVENTS            // 事件记录（Analytics）
 
 ## localStorage 键名
 
+**新增键必须同步四处**：`saveLocalOnly()` + `loadFromStorage()` + `applyCloudData()` + `_buildSyncPayload()`
+
 ```
-trendo_v4_holdings           → HOLDINGS[]
-trendo_v4_closed             → CLOSED_POSITIONS[]
-trendo_v4_notional           → totalNotional (默认60000)
-trendo_v4_watchlist          → WATCHLIST[]
-trendo_v4_sim_holdings       → SIM_HOLDINGS[]
-trendo_v4_sim_closed         → SIM_CLOSED[]
-trendo_v4_sim_notional       → simNotional (默认100000)
-trendo_v4_sim_pending        → SIM_PENDING[]
-trendo_v4_sim_close_pending  → SIM_CLOSE_PENDING[]
-trendo_v4_sim_options        → SIM_OPTIONS[]（期权滚动策略）
-trendo_v4_daily_pnl          → dailyPnlLog {}
-trendo_v4_savedAt            → ISO时间戳（防止旧云数据覆盖本地）
+# 持仓与交易
+trendo_v4_holdings / trendo_v4_closed / trendo_v4_notional
+trendo_v4_sim_holdings / trendo_v4_sim_closed / trendo_v4_sim_notional
+trendo_v4_sim_pending / trendo_v4_sim_close_pending
+trendo_v4_sim_tombstones     → SIM_TOMBSTONES[]（删除墓碑，30天过期/上限200）
+trendo_v4_watchlist / trendo_v4_model_picks
+trendo_v4_sim_options / trendo_v4_real_options
+trendo_v4_cycle_check        → CYCLE_CHECK（周期系统分析：items/log/history/confirmedPhase）
+trendo_v4_daily_pnl / trendo_v4_analysis_hist
+trendo_v4_savedAt            → ISO时间戳（冲突判定：cloud > local 才拉取）
 trendo_sync_key              → 云同步密钥
-trendo_brief_v1_market       → 市场简报缓存 { summary, headlines, updatedAt, _date }
-trendo_brief_v1_holdings     → 持仓分析缓存 { summary, updatedAt, hasNews, _date }
-trendo_brief_collapsed       → 市场简报收起状态 "0"|"1"
-trendo_holdings_brief_collapsed → 持仓分析收起状态 "0"|"1"
+
+# 简报缓存（按北京 09:30 / 21:30 两档 slot，跨档失效）
+trendo_brief_v1_market / trendo_brief_v1_holdings / trendo_drawdown_v2
+trendo_brief_collapsed / trendo_holdings_brief_collapsed / trendo_drawdown_collapsed
+
+# 折叠与视图状态（不进云同步）
+trendo_cyc_open              → 周期系统分析展开状态
+trendo_mkp_tr_open           → 阶段周期卡「阶段转换」展开状态（key 由 data-mkp-fold 拼出）
+trendo_holdings_view / trendo_sim_holdings_view / trendo_sim_tradelog_collapsed
+trendo_last_page             → 上次打开的页（journal/watchlist 自动迁移为 inspirations）
+trendo_rvw_* / trendo_mkp_*
+
+# 峰值记录（回撤计算）
+trendo_real_month_peak / trendo_real_closed_lifetime_peak
+trendo_sim_month_peak / trendo_sim_closed_lifetime_peak
+
+# 偏好与缓存
+trendo_ui_theme / trendo_ui_density / trendo_ui_font / trendo_ui_hue / trendo_ui_tape
+trendo_risk_pct / trendo_refresh_interval
+trendo_earnings_cache_v1 / trendo_etf_dist_v1 / trendo_etf_dist_v2
 ```
 
 ---
@@ -195,14 +220,22 @@ pp >= 0.90 → "Near Target" // 近止盈 green
   3. **检查 SIM_CLOSE_PENDING**（仅美股开盘时段）：市价单直接平仓；限价单在 price ≥ limitPrice 时平仓
   4. 成交的挂单从队列移除，结果写入持仓/已平仓
 
-### isUSMarketOpen()
+### isUSMarketOpen() / etNow()
+
+按**美东挂钟** 9:30–16:00 判定，夏令时自动跟随，不维护偏移表。
+固定 UTC 窗口的旧写法会把夏令时的盘后一小时、冬令时的盘前一小时误判为开盘。
 
 ```js
-// 周一至周五，UTC 13:30–21:00（美东 9:30–17:00）
-const day = now.getUTCDay(); // 0=Sun, 6=Sat
-const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
-return day >= 1 && day <= 5 && mins >= 13*60+30 && mins < 21*60;
+// etNow() 用 Intl.DateTimeFormat 取真实美东日期/星期/时分（hour 在午夜给 "24"，已归一到 0）
+function isUSMarketOpen() {
+  const et = etNow();                       // Intl 不可用时退回旧的 UTC 近似
+  if (et.dow === 0 || et.dow === 6) return false;
+  if (et.mins < 9 * 60 + 30 || et.mins >= 16 * 60) return false;
+  if (usMarketHolidays(+et.date.slice(0, 4)).includes(et.date)) return false;
+  return true;
+}
 ```
+`api/order-check.js` 里有同款门控，改动时两边要一起改。
 
 ### calcTradingDays(entryStr, endStr?)
 
@@ -242,13 +275,14 @@ P&L 日历仍使用原始 `CLOSED_POSITIONS`（每次平仓事件显示在对应
 ## 页面结构（switchPage）
 
 ```
-desk      → main + #desk-view（默认主页，持仓表格）
-journal   → #journal-view（日志，按持仓卡片展示）
-sim       → #sim-view（模拟仓）
-analytics → #analytics-view（分析：权益曲线(周/月/年，真实数据) + BX Bars效能 + P&L日历）
-watchlist → #watchlist-view（Preparation预备，自选股）
-market    → #market-view（市场：VIX/VXN + 板块轮动 + VOO基准 + 市场状态）
+desk         → main + #desk-view（默认主页，持仓表格 + 持仓总结 6 卡）
+sim          → #sim-view（模拟仓）
+market       → #market-view（三轴模型 + VIX/VXN + 阶段周期 + 周期系统分析 + 板块轮动）
+analytics    → #analytics-view（复盘概览 + 收益与盈亏 + 出场质量 + P&L日历/周几分布）
+inspirations → #inspirations-view（子tab：复盘 Journal / 准备 Preparation）
+options      → #options-view（子tab：实盘 Live / 模拟 Sim；`currentOptMode`）
 ```
+旧的 `journal` / `watchlist` 两页已合并进 inspirations，`trendo_last_page` 里的旧值会自动迁移。
 
 ### 页面标题格式（v7.1 统一）
 
@@ -265,9 +299,8 @@ CSS：`.page-title-en` 20px 700粗体，`.page-title-zh` 13px pill形状边框�
 ### 手机端 Tab Bar
 
 ```
-Dashboard / Simulation / Market / Analytics / Journal(🗂️) / Preparation(⭐)
+Dashboard / Simulation / Market / Analytics / Inspirations(💡) / Options(◎)
 ```
-- Watchlist 页已重命名为 Preparation，tab emoji 为 ⭐，nav label "Preparation"
 
 ---
 
@@ -277,6 +310,10 @@ Dashboard / Simulation / Market / Analytics / Journal(🗂️) / Preparation(⭐
 
 **真实持仓（#filters-open / #filters-closed）**
 - Open tab: `data-filter` → all / equity / etf / crypto / risk / target
+- `risk`（近止损）= `isNearStopPick(h)`：**从入场价回撤 ≥5%**（CC 权利金调整后成本为准），
+  不是 `progressBucket` 的 Pullback+Near Stop——那个口径等于「所有在亏的」。
+  筛选与计数共四处（真实/模拟 × 筛选/计数）+ Dashboard「总风险敞口」卡的 sub 都用同一个函数。
+- `target`（近止盈）仍按 `progressBucket(h) === "Near Target"`
 - Closed tab: `data-filter-closed` → all / profit / loss
 
 **模拟仓（#sim-filters-open / #sim-filters-closed）**
@@ -301,7 +338,9 @@ Closed tab 按 `pnlFinal ?? pnlDollar` 判断盈利/亏损。
 // 轴C 情绪（FGI+RSI）getSentimentAxis(fg, rsi, vixTrend) → tilt 倾斜
 //   过热 FGI>75||RSI>72 → trim（减仓）   偏热 FGI≥60||RSI≥65 → hold
 //   偏冷 FGI<40||RSI<45 → scale（小幅加） 极端恐惧 FGI<25&&RSI<38 → accumulate（分批进，等VIX回落）
-// combineAxes(dir,risk,sent) → { headline, color, detail } 综合建议
+// combineAxes(dir,risk,sent) → { headline, state, emoji, color, detail } 综合建议
+//   headline 说「怎么做」（防守/止盈/布局/分批参与/保持持仓/正常配置）
+//   state 说「为什么」（趋势逆风/极端过热/恐慌积累/情绪偏冷/情绪偏热/趋势顺风）
 //   方向逆风=闸门（禁新仓）> 情绪过热=止盈倾斜 > 加仓倾斜 > 正常进攻
 ```
 
@@ -383,16 +422,24 @@ const displayOrder = ["attack", "steady", "hot", "caution", "defense", "panic"];
 
 ```
 localStorage（浏览器端）
-  键：trendo_brief_v1_market / trendo_brief_v1_holdings
-  有效期：当天（_date字段与今日本地日期对比，跨日自动失效）
+  键：trendo_brief_v1_market / trendo_brief_v1_holdings / trendo_drawdown_v2
+  有效期：按 `_slot` 字段（北京 09:30 / 21:30 两档，`_bjSlotKey()`），跨档自动失效
   作用：页面加载零延迟展示，无API调用
 
 Redis（服务端，Upstash）
-  键：trendo:market_brief:YYYY-MM-DD:SLOT（2小时slot）
-      trendo:holdings_brief:YYYY-MM-DD:SLOT:sortedSyms（2小时slot+持仓指纹）
-  TTL：7200秒
-  作用：用户点击时去重，同一slot内命中不调Claude
+  键：trendo:market_brief_bj:<bjSlot>
+  TTL：43200 秒（12 小时）
+  作用：同一档内无论点多少次都返回同一份（连 updatedAt 都是第一次生成的时刻）
 ```
+
+**自动重生成（每天一次）**：`_briefStale(updatedAt)` 判断缓存是不是**今天本地日**生成的，
+不是就在「进入 Market 页 / 手动展开卡片」时带 `force=1` 重新生成。
+三条刻意保留的边界：卡片收起时不检查（用户没在看，不为它调 Claude）；
+无缓存时仍是「生成简报」按钮、不自动烧 API；过期时先渲染旧的再后台换新。
+目前只有 Market 页市场日报接了这条规则，持仓分析与历史回撤仍是纯手动。
+
+**「多久之前」标签**：时间戳写在 `data-brief-age` 上，由每 60 秒一次的 `_briefAgeTick()`
+统一刷新全页所有简报卡——否则它只在渲染那一刻算一次，页面开着不动就永远不变。
 
 ### 触发逻辑
 
@@ -424,6 +471,9 @@ fetchSectorData().then(sectors => {
 
 // fetchHoldingsBrief()里读取_lastMktCtx，编码为URL params传入API
 // 持仓编码格式：sym:pnlPct:rMult:days:status:earningsDate:trimInfo（7字段）
+// status 传的是 progressBucket(h) 的英文档位（Near Stop / Near Target …），
+// 服务端 holdings-brief.js 的 statusMap 负责转中文；早先传的是从没人写入的 h.status，
+// 恒为 "ok"，等于告诉 AI「每一笔都正常」
 // trimInfo 格式："{pct}p{avgR}R"，如 "33p+1.5R" = 已减仓33%@平均+1.5R
 // 无减仓时 trimInfo 为空字符串
 ```
@@ -803,6 +853,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v781 | **Market 页今日简报的时间戳「从来不变」**（用户报）。查下来是两件事叠在一起，都不是 bug、但合起来让这个时间失去意义：①**「X 分钟前」只在渲染那一刻算一次**——`_briefAgeTag` 是纯字符串，而三张简报卡都只在进入对应页面时渲染一次，页面开着不动，标签就永远停在当时那个数；②**服务端按「北京 09:30 / 21:30」两档缓存**（Redis `trendo:market_brief_bj:<slot>`，TTL 12h），同一档内无论点多少次都返回**同一份**，连 `updatedAt` 都是第一次生成的那个时刻——所以只要不点 ↻ 强制刷新，时间戳在半天之内根本不可能变。**修法**：(a) 时间戳写进 `data-brief-age`，新增每 60 秒跑一次的 `_briefAgeTick()` 统一刷新页面上所有简报卡的「多久之前」（市场日报 / 持仓分析 / 历史回撤三张共用同一套，`_briefAgeLbl` 顺带补齐「天前」档）；(b) 新增 `BRIEF_STALE_MIN = 30`：**进入 Market 页时、以及手动展开卡片时**各检查一次，缓存超过 30 分钟就带 `force=1` 重新生成——时间戳因此跟着「你实际查看的时刻」走，这正是用户要的。**刻意保留的三条边界**：收起状态下不检查（用户没在看，不为它调一次 Claude）；无缓存时仍是「生成简报」按钮、不自动烧 API；过期时**先渲染旧的再后台换新**，网络慢时至少有东西可读。`.brief-age` 从内联样式提为 class。**为什么是 30 分钟**：服务端 12 小时一档是为控 Claude 调用成本，而 `fetchMarketData()` 只在**切到 Market 页**时触发，所以这条规则的上限就是「每 30 分钟最多重生成一次」，改这个数只需动一个常量。Playwright 回归（新增 `v781.js` 25 项）：标签随时间推进而变（不再卡在渲染时刻）、95 分钟旧缓存进页面自动 force 重生成且时间戳变「刚刚」、12 分钟新鲜缓存完全不发请求、收起时 0 次调用且展开后恰好触发 1 次、展开但新鲜时仍 0 次、无缓存时保持手动按钮、手机端同样生效且无横向溢出。 |
 | v782 | **阶段周期卡的「阶段转换」改为可收起/展开**（用户要求）。这一节是全年窗口内的历次阶段切换记录，转换多的时候能排到七八行，夹在「色带 + 图例」和「离触发还差多少」之间把卡片拉得很长，而它本身是回看性质的——平时不需要一直摊开。改为 `<details class="mkp-fold" data-mkp-fold="tr">`，**默认收起**，`summary` 直接复用原来的 `.mkp-sub` 排版（中英标题不变），只在前面多一个 `.mkp-fold-arrow` 箭头（展开时 rotate 90°）。**收起态仍要能读出结论**：右侧 `.mkp-filtered` 从单纯的「N 次」扩成「**N 次 · 最近 YYYY-MM-DD**」，不展开也知道有没有新转换、上一次是什么时候；本窗口内没有转换时写「本窗口内无转换」（展开后仍是原有的空态文案，不是空白列表）。**展开状态存 `localStorage.trendo_mkp_tr_open`**——`renderMarket()` 每次进 Market 页都整块重建 DOM，不落盘的话切走再回来就会弹回默认值；新增 `wireMarketFolds(el)` 在渲染后接上 `toggle` 监听，key 由 `data-mkp-fold` 拼出（`trendo_mkp_<name>_open`），以后卡片里再加可折叠小节直接复用这一套，不用再写一遍。CSS 去掉浏览器默认三角（`list-style:none` + `::-webkit-details-marker`），并让收起时 `summary` 不留下边距——下一节自己的 `margin-top` 已经够了。实测收起 34px、展开 150px（3 次转换），手机端同样可点开且无横向溢出。卡片其余部分（色带、VIX 带、图例、离触发还差多少、底部说明）一行未动。Playwright 回归（新增 `v782.js` 28 项）：默认收起且只剩摘要行、摘要含次数与最近日期、点击展开后行数与摘要次数一致、箭头旋转、状态双向落盘、**切到别的页再回来仍保持展开**（覆盖 DOM 重建这条路径）、无转换时的摘要与空态、手机端可点开。 |
 | v783 | **「近止损」筛选改为「从入场价回撤 ≥5%」**（用户要求）。此前的口径是 `progressBucket ∈ {Pullback, Near Stop}`，而 **Pullback 覆盖「低于入场价、但还没走到止损一半」的全部情形**——一只只跌了 0.3% 的票也会被收进来，筛出来的列表基本等于「所有在亏的」，跟 chip 上写的「近止损」不是一回事。新增 `window.isNearStopPick(h)`（`data.js`，与 `progressBucket` 同源、同样用 CC 权利金调整后的成本作入场参考）+ `window.NEAR_STOP_DD_PCT = 5`，现持仓与模拟仓的**筛选与计数四处**全部改用它，chip 加 `title` 写明阈值（此前是个隐藏规则）。**顺带修掉一处同屏打架**：Dashboard「总风险敞口」卡的 sub「N 笔近止损」本来按 `progressBucket === "Near Stop"` 算，与 chip 计数是**两个都叫「近止损」却不同口径的数字**，现已统一为 `isNearStopPick`。**明确的取舍（已告知用户）**：止损设得很紧的仓位（如止损距入场仅 3%）可能已经走到止损的 80%、状态徽章显示「近止损」，但回撤不足 5% 因而**不进这个筛选**——徽章描述「位置」（离止损多近，按比例），筛选描述「程度」（跌了多少，按百分比），两者分工不同；要让它们完全一致，把筛选改成 `isNearStopPick(h) || progressBucket(h) === "Near Stop"` 即可（一行）。Playwright 回归（新增 `v783.js` 24 项）：构造 −0.3% / −4.9% / −5.0% / −8% / 盈利 / CC 调整后仅 −4.35% 六种仓位，现持仓与模拟仓均只筛出 −5.0% 与 −8% 两笔且计数一致、边界 −5.0% 取 ≥ 含在内、CC 权利金压低成本后不再达线、「近止盈」筛选与状态徽章均不受影响（FFF 徽章仍是「近止损」但不在筛选内，即上述取舍的实测）、手机端一致无溢出；`v782` 27 / `v781` 25 / `v778` 49 / `v776` 46 / `v775` 18 / `v774` 29 全过。 |
+| v784 | **修复「期权页编辑完没保存下来」的真正根因 + 简报改每天一次 + 清掉一个死字段（连带一个真 bug）**。**① 期权编辑被云端悄悄回滚——根因不在期权模块**：Playwright 先复现，发现编辑**确实**写进了 localStorage（`closePremium` 与 `editedAt` 都对），但切一次后台再回前台就被打回原值。查到 `syncOnStartup()` 里那条给全新设备做首次引导的兜底分支：`localTotal === 0 → 无视时间戳直接拉云端`，而 **`localTotal` 只数了股票相关的五个数组**（HOLDINGS / SIM_HOLDINGS / CLOSED_POSITIONS / SIM_PENDING / SIM_CLOSE_PENDING）。于是「只记了期权、没有任何股票持仓」的用户**永远**满足 `localTotal === 0`，每一次 `visibilitychange` 拉取都会用云端旧快照整块盖掉本地——实测连云端 `savedAt` 更旧的情况也照盖不误。同一个盲区还罩着 `SIM_CLOSED` / `WATCHLIST`，即「只有模拟已平仓记录」或「只有自选股」的设备同样中招。修法：把所有会被 `applyCloudData` 整块替换的集合都数进 `localTotal`。**② 顺带堵上推送窗口**：`saveToStorage` 的 `syncPush` 有 2 秒去抖，此前只有 `pagehide` 会提前 flush——但**手机 PWA 切到别的 app 只触发 `visibilitychange`，不一定触发 `pagehide`**，「改完立刻切后台」这条路上的改动根本没进云端。抽出 `_syncFlush()`（sendBeacon），`visibilitychange` 进入隐藏时也调用。**③ 简报自动更新 30 分钟 → 每天一次**（用户要求）：`BRIEF_STALE_MIN` 删除，改为 `_briefStale` 比较**本地自然日**（`toLocaleDateString("sv-SE")`）——同一天内不再重复生成，跨天才带 `force=1`。三条边界不变（收起不检查 / 无缓存保持手动按钮 / 先渲染旧的再后台换新）。**④ 死字段 `h.status` 清理，挖出一个真 bug**：`COLS` 里只有 `progstatus`、从来没有 `status` 列，所以 `desk.js` 的 `case "status"` 分支与 `statusClass()` 是走不到的死代码，`window.STATUS_LABEL` 也无人使用——全部删除。但**同一个字段还被 AI 持仓简报用着**：`sym:pnlPct:rMult:days:status:...` 的第 5 段传的就是 `h.status`，而这个字段**从来没有任何代码写入过**，于是恒为 `"ok"` → 服务端 `statusMap` 渲染成「正常」——**AI 一直被告知每一笔持仓都正常**，近止损和近止盈在它眼里没有区别。改为传真实的 `progressBucket(h)`，服务端 `statusMap` 补上六个档位的中文映射（旧取值保留，老缓存不受影响）。**⑤ CLAUDE.md 与代码对齐**（它是每次开新对话的上下文起点，错的上下文会直接让下一轮做错）：`isUSMarketOpen()` 代码块仍是 v774 之前那个把盘后当开盘的固定 UTC 窗口、`feargreed.js` 仍写着早已删除的 `?mode=rates`、`desk.js` 行数 3800→约 1.7 万、页面结构与 Tab Bar 仍列着已合并的 journal/watchlist、localStorage 键名少了约 20 个且简报缓存写成 `_date` 跨日（实为 `_slot` 北京双档）、Redis 键与 TTL 写错、`combineAxes` 少了 `state`/`emoji`、Holding 字段表仍列着 `status`——逐条更正，并新增两条操作规约：「新增会被云同步整块替换的数组时必须同步 `localTotal`」与云同步时序说明。Playwright 回归（新增 `v784.js` 37 项）：编辑期权 → 切后台 → 回前台三种时序（云端更旧/更新/去抖没到期）下改动全部保住且 `realized` 正确重算为 520、推给云端的也是改后的值；`localTotal` 口径与 `_syncFlush` 接入点的源码断言；简报同日 45 分钟/5 分钟均不重生成、26 小时前（跨天）恰好重生成 1 次；死字段清理与 AI 简报改传档位逐项核对。**自测抓到两个我自己的测试 bug**：`file://` 下页面内 `fetch('desk.js')` 被 CORS 挡掉返回空串，空串上跑 `!/.../` 断言会**假通过**（已改为 Node 侧读盘）；以及场景 5 漏了 `/api/history` mock，`fetchMarketData` 中途失败导致简报根本没初始化、每档都「0 次」假通过。 |
 
 
 ---
@@ -818,7 +869,18 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 `recomputeHolding(h, notional)` → `saveToStorage()` → render
 
 **新增 localStorage 键：**
-同步更新 `saveLocalOnly()` + `loadFromStorage()` + `applyCloudData()` + `syncPush()`（4处）
+同步更新 `saveLocalOnly()` + `loadFromStorage()` + `applyCloudData()` + `_buildSyncPayload()`（4处）
+
+**新增一个会被云同步整块替换的数组：**
+除上面四处外，**还必须把它加进 `syncOnStartup()` 的 `localTotal`**。那里有一条
+`localTotal === 0 → 无视时间戳直接拉云端` 的兜底分支，用来给全新设备做首次引导；
+漏数一个集合，就等于让「只有这类数据」的用户每次切回前台都被云端旧快照覆盖。
+（期权记录就踩过这个坑：编辑完切一次后台回来就回滚了。）
+
+**云同步的时序：**
+`saveToStorage()` → `saveLocalOnly()`（顺带 bump `trendo_v4_savedAt`）+ 2 秒去抖的 `syncPush()`；
+切后台（`visibilitychange` hidden）与页面关闭（`pagehide`）都会调 `_syncFlush()` 用 sendBeacon
+立刻推送——手机 PWA 切到别的 app 只触发前者，只靠 `pagehide` 兜不住。
 
 **修改 HTML 筛选器：**
 同步更新 desk.js 里的 filter 逻辑和 counter setCount 调用
