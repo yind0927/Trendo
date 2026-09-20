@@ -80,8 +80,9 @@ window.CLOSED_POSITIONS  // 真实已平仓 []
 window.SIM_HOLDINGS      // 模拟现持仓 []
 window.SIM_CLOSED        // 模拟已平仓 []
 window.SIM_PENDING       // 模拟挂单队列 []
-window.SIM_OPTIONS       // 模拟期权仓位 []（CSP/CC 卖方，手动记录模型）
-window.REAL_OPTIONS      // 实盘期权仓位 []（同结构，Options 页「实盘」子tab）
+window.REAL_OPTIONS      // 期权仓位 []（CSP/CC 卖方，手动记录模型）— Options 页唯一数据源
+window.SIM_OPTIONS       // 已停用：模拟子tab 已移除，数组与存储仍保留（历史数据没删），
+                         //   但不再渲染、不再参与行情轮询与到期结算
 window.SIM_TOMBSTONES    // 删除墓碑 []（防止云同步把刚删的模拟仓/挂单捞回来）
 window.CYCLE_CHECK       // 周期系统分析 { items, log, history, confirmedPhase, confirmedAt }
 window.MODEL_PICKS       // 模型选股 []
@@ -280,7 +281,7 @@ sim          → #sim-view（模拟仓）
 market       → #market-view（三轴模型 + VIX/VXN + 阶段周期 + 周期系统分析 + 板块轮动）
 analytics    → #analytics-view（复盘概览 + 收益与盈亏 + 出场质量 + P&L日历/周几分布）
 inspirations → #inspirations-view（子tab：复盘 Journal / 准备 Preparation）
-options      → #options-view（子tab：实盘 Live / 模拟 Sim；`currentOptMode`）
+options      → #options-view（只有实盘一个面板，`REAL_OPTIONS`）
 ```
 旧的 `journal` / `watchlist` 两页已合并进 inspirations，`trendo_last_page` 里的旧值会自动迁移。
 
@@ -432,8 +433,11 @@ Redis（服务端，Upstash）
   作用：同一档内无论点多少次都返回同一份（连 updatedAt 都是第一次生成的时刻）
 ```
 
-**自动重生成（每天一次）**：`_briefStale(updatedAt)` 判断缓存是不是**今天本地日**生成的，
-不是就在「进入 Market 页 / 手动展开卡片」时带 `force=1` 重新生成。
+**两条重生成路径**：
+- **展开卡片 → 立刻重生成**（`_briefExpandShouldFetch()`，60 秒内连点不重复发）。
+  展开＝「我现在要读它」，所以卡片上的「更新时间」永远是你把它展开的那一刻。
+- **卡片本来就是展开的、直接进 Market 页 → 每天最多一次**（`_briefStale()` 比较**本地自然日**）。
+  这条路上用户没主动点任何东西，所以按天限一次，不是每次进页面都重生成。
 三条刻意保留的边界：卡片收起时不检查（用户没在看，不为它调 Claude）；
 无缓存时仍是「生成简报」按钮、不自动烧 API；过期时先渲染旧的再后台换新。
 目前只有 Market 页市场日报接了这条规则，持仓分析与历史回撤仍是纯手动。
@@ -854,6 +858,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v782 | **阶段周期卡的「阶段转换」改为可收起/展开**（用户要求）。这一节是全年窗口内的历次阶段切换记录，转换多的时候能排到七八行，夹在「色带 + 图例」和「离触发还差多少」之间把卡片拉得很长，而它本身是回看性质的——平时不需要一直摊开。改为 `<details class="mkp-fold" data-mkp-fold="tr">`，**默认收起**，`summary` 直接复用原来的 `.mkp-sub` 排版（中英标题不变），只在前面多一个 `.mkp-fold-arrow` 箭头（展开时 rotate 90°）。**收起态仍要能读出结论**：右侧 `.mkp-filtered` 从单纯的「N 次」扩成「**N 次 · 最近 YYYY-MM-DD**」，不展开也知道有没有新转换、上一次是什么时候；本窗口内没有转换时写「本窗口内无转换」（展开后仍是原有的空态文案，不是空白列表）。**展开状态存 `localStorage.trendo_mkp_tr_open`**——`renderMarket()` 每次进 Market 页都整块重建 DOM，不落盘的话切走再回来就会弹回默认值；新增 `wireMarketFolds(el)` 在渲染后接上 `toggle` 监听，key 由 `data-mkp-fold` 拼出（`trendo_mkp_<name>_open`），以后卡片里再加可折叠小节直接复用这一套，不用再写一遍。CSS 去掉浏览器默认三角（`list-style:none` + `::-webkit-details-marker`），并让收起时 `summary` 不留下边距——下一节自己的 `margin-top` 已经够了。实测收起 34px、展开 150px（3 次转换），手机端同样可点开且无横向溢出。卡片其余部分（色带、VIX 带、图例、离触发还差多少、底部说明）一行未动。Playwright 回归（新增 `v782.js` 28 项）：默认收起且只剩摘要行、摘要含次数与最近日期、点击展开后行数与摘要次数一致、箭头旋转、状态双向落盘、**切到别的页再回来仍保持展开**（覆盖 DOM 重建这条路径）、无转换时的摘要与空态、手机端可点开。 |
 | v783 | **「近止损」筛选改为「从入场价回撤 ≥5%」**（用户要求）。此前的口径是 `progressBucket ∈ {Pullback, Near Stop}`，而 **Pullback 覆盖「低于入场价、但还没走到止损一半」的全部情形**——一只只跌了 0.3% 的票也会被收进来，筛出来的列表基本等于「所有在亏的」，跟 chip 上写的「近止损」不是一回事。新增 `window.isNearStopPick(h)`（`data.js`，与 `progressBucket` 同源、同样用 CC 权利金调整后的成本作入场参考）+ `window.NEAR_STOP_DD_PCT = 5`，现持仓与模拟仓的**筛选与计数四处**全部改用它，chip 加 `title` 写明阈值（此前是个隐藏规则）。**顺带修掉一处同屏打架**：Dashboard「总风险敞口」卡的 sub「N 笔近止损」本来按 `progressBucket === "Near Stop"` 算，与 chip 计数是**两个都叫「近止损」却不同口径的数字**，现已统一为 `isNearStopPick`。**明确的取舍（已告知用户）**：止损设得很紧的仓位（如止损距入场仅 3%）可能已经走到止损的 80%、状态徽章显示「近止损」，但回撤不足 5% 因而**不进这个筛选**——徽章描述「位置」（离止损多近，按比例），筛选描述「程度」（跌了多少，按百分比），两者分工不同；要让它们完全一致，把筛选改成 `isNearStopPick(h) || progressBucket(h) === "Near Stop"` 即可（一行）。Playwright 回归（新增 `v783.js` 24 项）：构造 −0.3% / −4.9% / −5.0% / −8% / 盈利 / CC 调整后仅 −4.35% 六种仓位，现持仓与模拟仓均只筛出 −5.0% 与 −8% 两笔且计数一致、边界 −5.0% 取 ≥ 含在内、CC 权利金压低成本后不再达线、「近止盈」筛选与状态徽章均不受影响（FFF 徽章仍是「近止损」但不在筛选内，即上述取舍的实测）、手机端一致无溢出；`v782` 27 / `v781` 25 / `v778` 49 / `v776` 46 / `v775` 18 / `v774` 29 全过。 |
 | v784 | **修复「期权页编辑完没保存下来」的真正根因 + 简报改每天一次 + 清掉一个死字段（连带一个真 bug）**。**① 期权编辑被云端悄悄回滚——根因不在期权模块**：Playwright 先复现，发现编辑**确实**写进了 localStorage（`closePremium` 与 `editedAt` 都对），但切一次后台再回前台就被打回原值。查到 `syncOnStartup()` 里那条给全新设备做首次引导的兜底分支：`localTotal === 0 → 无视时间戳直接拉云端`，而 **`localTotal` 只数了股票相关的五个数组**（HOLDINGS / SIM_HOLDINGS / CLOSED_POSITIONS / SIM_PENDING / SIM_CLOSE_PENDING）。于是「只记了期权、没有任何股票持仓」的用户**永远**满足 `localTotal === 0`，每一次 `visibilitychange` 拉取都会用云端旧快照整块盖掉本地——实测连云端 `savedAt` 更旧的情况也照盖不误。同一个盲区还罩着 `SIM_CLOSED` / `WATCHLIST`，即「只有模拟已平仓记录」或「只有自选股」的设备同样中招。修法：把所有会被 `applyCloudData` 整块替换的集合都数进 `localTotal`。**② 顺带堵上推送窗口**：`saveToStorage` 的 `syncPush` 有 2 秒去抖，此前只有 `pagehide` 会提前 flush——但**手机 PWA 切到别的 app 只触发 `visibilitychange`，不一定触发 `pagehide`**，「改完立刻切后台」这条路上的改动根本没进云端。抽出 `_syncFlush()`（sendBeacon），`visibilitychange` 进入隐藏时也调用。**③ 简报自动更新 30 分钟 → 每天一次**（用户要求）：`BRIEF_STALE_MIN` 删除，改为 `_briefStale` 比较**本地自然日**（`toLocaleDateString("sv-SE")`）——同一天内不再重复生成，跨天才带 `force=1`。三条边界不变（收起不检查 / 无缓存保持手动按钮 / 先渲染旧的再后台换新）。**④ 死字段 `h.status` 清理，挖出一个真 bug**：`COLS` 里只有 `progstatus`、从来没有 `status` 列，所以 `desk.js` 的 `case "status"` 分支与 `statusClass()` 是走不到的死代码，`window.STATUS_LABEL` 也无人使用——全部删除。但**同一个字段还被 AI 持仓简报用着**：`sym:pnlPct:rMult:days:status:...` 的第 5 段传的就是 `h.status`，而这个字段**从来没有任何代码写入过**，于是恒为 `"ok"` → 服务端 `statusMap` 渲染成「正常」——**AI 一直被告知每一笔持仓都正常**，近止损和近止盈在它眼里没有区别。改为传真实的 `progressBucket(h)`，服务端 `statusMap` 补上六个档位的中文映射（旧取值保留，老缓存不受影响）。**⑤ CLAUDE.md 与代码对齐**（它是每次开新对话的上下文起点，错的上下文会直接让下一轮做错）：`isUSMarketOpen()` 代码块仍是 v774 之前那个把盘后当开盘的固定 UTC 窗口、`feargreed.js` 仍写着早已删除的 `?mode=rates`、`desk.js` 行数 3800→约 1.7 万、页面结构与 Tab Bar 仍列着已合并的 journal/watchlist、localStorage 键名少了约 20 个且简报缓存写成 `_date` 跨日（实为 `_slot` 北京双档）、Redis 键与 TTL 写错、`combineAxes` 少了 `state`/`emoji`、Holding 字段表仍列着 `status`——逐条更正，并新增两条操作规约：「新增会被云同步整块替换的数组时必须同步 `localTotal`」与云同步时序说明。Playwright 回归（新增 `v784.js` 37 项）：编辑期权 → 切后台 → 回前台三种时序（云端更旧/更新/去抖没到期）下改动全部保住且 `realized` 正确重算为 520、推给云端的也是改后的值；`localTotal` 口径与 `_syncFlush` 接入点的源码断言；简报同日 45 分钟/5 分钟均不重生成、26 小时前（跨天）恰好重生成 1 次；死字段清理与 AI 简报改传档位逐项核对。**自测抓到两个我自己的测试 bug**：`file://` 下页面内 `fetch('desk.js')` 被 CORS 挡掉返回空串，空串上跑 `!/.../` 断言会**假通过**（已改为 Node 侧读盘）；以及场景 5 漏了 `/api/history` mock，`fetchMarketData` 中途失败导致简报根本没初始化、每档都「0 次」假通过。 |
+| v785 | **期权页删除模拟子tab + 今日简报展开即刷新 + 周期基线按今天日期载入**（三条用户要求）。**① 期权页只剩实盘**：删掉 `.page-subtab-bar` 与 `#opts-sim-panel`/`#sim-opts-inner`、子tab 切换逻辑、`currentOptMode` 变量，`_activeOpts()` 固定返回 `REAL_OPTIONS`，`renderOptions`/`wireOptions` 的容器 id 写死为 `real-opts-inner`。`_optLiveSyms`/`_optMigrate`/到期结算/轮组回溯等 7 处 `[...SIM_OPTIONS, ...REAL_OPTIONS]` 全部改为只扫实盘——看不见的仓位不该继续拉实时价（v270 的 serverless CPU 教训），也不该在后台被静默结算。**数据不删**：`SIM_OPTIONS` 数组、`trendo_v4_sim_options` 与云同步字段 `simOptions` 原样保留，历史记录还在，只是没有入口了——真要清掉需要一次明确的删除动作，不能顺手做掉。**② 简报「更新时间」跟着展开那一刻走**：新增 `_briefExpandShouldFetch()`，**展开卡片就重新生成**（60 秒内反复收起/展开不重复调用）；卡片本来就展开、直接进 Market 页的那条路仍按 `_briefStale()` 每天最多一次（这条路上用户没主动点任何东西）。收起时一律不调用。**③ 周期系统分析：基线按今天日期载入**。`cycleApplyBaseline()` 的 `rec.at` 从基线自己的调研日期（2026-09-17）改为 `cycToday()`——这个字段回答的是「最后一次有人确认过它」，点按钮就是你今天做的确认动作；读数的出处仍写在每条下方的 `.cyc-base` 里，两者是两回事。按钮文案改为「按今天日期载入基线 · YYYY-MM-DD」，说明里写明**会把复核日期全部记为今天、完整度因此回到 100%、过期提示清零**，并明确点破「按钮本身不会去核实任何东西，只有在你确认这些读数当下仍然成立时才点它」——否则它会被当成「自动更新」，而那正好会把这张表最有价值的东西（过期提醒）变成摆设。确认弹窗同步改写；条数不再写死，按 `CYCLE_BASELINE.items` 实际长度算。顺带把 `cycToday()` 从美东时区改为**本地自然日**：这是季度级人工调研，跟美股交易时段无关，用美东日期会让用户在自己的晚上看到「昨天」。Playwright 回归（新增 `v785.js` 38 项）：期权页桌面/手机两档均确认子tab与模拟面板不在 DOM、只渲染实盘卡片、模拟数据仍在存储与内存里、源码层确认 `currentOptMode` 已删且 `_optLiveSyms` 只扫实盘；简报四种时序（收起不发/展开发一次且时间戳变「刚刚」/60秒内连点不重复/展开态当天进页面不发、跨天发一次）；周期卡按钮文案带今天日期、载入后 11 条复核日期全为今天、过期提示清零、完整度回 100%、留痕。 |
 
 
 ---

@@ -1957,7 +1957,7 @@
      otherwise the "gap" between the two modules just shows this same bg-1
      backdrop instead of the page's darker background, and the separation
      reads as a thin border line rather than genuine open space. */
-  #opts-real-panel, #opts-sim-panel { margin-top: 12px; }
+  #opts-real-panel { margin-top: 12px; }
   /* Controls row */
   .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 0; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
   .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
@@ -5791,18 +5791,10 @@
       <span class="page-title-en">Options</span>
       <span class="page-title-zh">期权</span>
     </div>
-    <div class="page-subtab-bar">
-      <button class="page-subtab active" data-opts-tab="real"><span class="opts-real-badge">实盘</span> Live</button>
-      <button class="page-subtab" data-opts-tab="sim">模拟 Sim</button>
-    </div>
   </div>
-  <!-- Real options panel -->
+  <!-- 只剩实盘一个面板：模拟子 tab 已移除（历史数据仍在 SIM_OPTIONS 里存着，只是不再展示） -->
   <div id="opts-real-panel">
     <div id="real-opts-inner"></div>
-  </div>
-  <!-- Sim options panel -->
-  <div id="opts-sim-panel" style="display:none">
-    <div id="sim-opts-inner"></div>
   </div>
   <div class="page-end"><span class="page-end-rule"></span></div>
 </div>
@@ -6346,8 +6338,8 @@
   </div>
 </div>
 
-<script src="data.js?v=784"></script>
-<script src="desk.js?v=784"></script>
+<script src="data.js?v=785"></script>
+<script src="desk.js?v=785"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

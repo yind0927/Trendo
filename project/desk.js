@@ -1239,7 +1239,8 @@ function rsAdjustGrade(grade, rsResult) {
   // Only the underlying ETF spot is live (via /api/quote, same path as stock
   // positions); strikes/premiums/expiries are typed in from the broker.
   let simOptionsVisible = false;
-  let currentOptMode  = "real"; // "real" | "sim" — which Options sub-tab is active
+  // 期权页只剩实盘一个面板（模拟子 tab 已移除）。SIM_OPTIONS 数组与它的本地/云端存储都
+  // 保留着，历史记录没有被删，只是不再有入口——真要清掉需要单独的、明确的删除动作。
   let inspSubTab      = "journal"; // "journal" | "watchlist" — Inspirations sub-tab
   let _optsSettledOpen = false; // collapsed by default
   const _optsWheelExpanded  = new Set();
@@ -5866,19 +5867,6 @@ function rsAdjustGrade(grade, rsResult) {
       });
     });
 
-    // Options sub-tabs (Live / Sim)
-    $$("[data-opts-tab]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        currentOptMode = btn.dataset.optsTab;
-        $$("[data-opts-tab]").forEach(b => b.classList.toggle("active", b.dataset.optsTab === currentOptMode));
-        const rp = document.getElementById("opts-real-panel");
-        const sp = document.getElementById("opts-sim-panel");
-        if (rp) rp.style.display = currentOptMode === "real" ? "" : "none";
-        if (sp) sp.style.display = currentOptMode === "sim" ? "" : "none";
-        renderOptions();
-      });
-    });
-
     $("#search-input").addEventListener("input", e => { query = e.target.value; renderTable(); });
     document.addEventListener("click", e => {
       const b = e.target.closest("[data-filter]");
@@ -7323,7 +7311,8 @@ function rsAdjustGrade(grade, rsResult) {
   // Symbols that genuinely need a live spot: open positions (expiry settlement,
   // cushion, ITM estimate) and CSP-assigned stock still held (live equity P&L).
   function _optLiveSyms() {
-    return [...new Set([...SIM_OPTIONS, ...REAL_OPTIONS]
+    // 只看实盘：模拟仓已经没有展示入口，再为它拉实时价就是白烧 serverless CPU
+    return [...new Set(REAL_OPTIONS
       .filter(p => p.status === "open" || (p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold))
       .map(p => p.sym))];
   }
@@ -7333,7 +7322,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function _activeOpts() {
-    return currentOptMode === "real" ? REAL_OPTIONS : SIM_OPTIONS;
+    return REAL_OPTIONS;
   }
 
   // Live spot: quote map → any open stock holding with the same symbol → entry snapshot
@@ -7345,7 +7334,7 @@ function rsAdjustGrade(grade, rsResult) {
 
   // One-time migration of earlier-model entries into the manual wheel model
   function _optMigrate() {
-    [...SIM_OPTIONS, ...REAL_OPTIONS].forEach(p => {
+    REAL_OPTIONS.forEach(p => {
       if (!p.strat) {
         p.strat = p.type === "put" ? "csp" : "cc";
         p.qty = Math.abs(p.qty || 1);
@@ -7355,7 +7344,7 @@ function rsAdjustGrade(grade, rsResult) {
     // Retroactive Wheel link: CC positions created before v280 have no linkedCspId.
     // Auto-detect: if an open/pending CC has the same symbol as an assigned CSP
     // in the same array that still holds stock, link them now.
-    [SIM_OPTIONS, REAL_OPTIONS].forEach(arr => {
+    [REAL_OPTIONS].forEach(arr => {
       arr.filter(p => p.strat === "cc" && !p.linkedCspId && (p.status === "open" || p.status === "pending"))
         .forEach(cc => {
           const csp = arr.find(p =>
@@ -7373,7 +7362,7 @@ function rsAdjustGrade(grade, rsResult) {
     // 已结算权利金盈亏 and every aggregate built on it. Recomputing here is idempotent, so
     // it self-heals once and then costs nothing.
     let repaired = false;
-    [...SIM_OPTIONS, ...REAL_OPTIONS].forEach(p => {
+    REAL_OPTIONS.forEach(p => {
       if (p.status !== "expired" && p.status !== "closed" && p.status !== "assigned") return;
       if (!(p.premium > 0) || !(p.qty > 0)) return;
       let want;
@@ -7412,7 +7401,7 @@ function rsAdjustGrade(grade, rsResult) {
   function settleExpiredOptions() {
     let changed = false;
     const today = new Date().toISOString().slice(0, 10);
-    for (const pos of [...SIM_OPTIONS, ...REAL_OPTIONS]) {
+    for (const pos of REAL_OPTIONS) {
       if (pos.status !== "open") continue;
       if (pos.expiry >= today) continue;
       const spot = optSpot(pos.sym);
@@ -7438,7 +7427,7 @@ function rsAdjustGrade(grade, rsResult) {
           pos.realized = pos.premium * 100 * pos.qty;
           // Auto-complete Wheel: linked CSP's stock was called away at this strike
           if (pos.linkedCspId) {
-            const parentCsp = [...SIM_OPTIONS, ...REAL_OPTIONS].find(p => p.id === pos.linkedCspId);
+            const parentCsp = REAL_OPTIONS.find(p => p.id === pos.linkedCspId);
             if (parentCsp && parentCsp.status === "assigned" && !parentCsp.assignedStockSold) {
               parentCsp.assignedStockSold = true;
               parentCsp.assignedExitPrice = pos.strike;
@@ -7481,7 +7470,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (pos.status !== "assigned") return false;
     if (pos.strat === "csp") return !!(pos.assignedStockSold && pos.assignedExitPrice != null);
     if (pos.linkedCspId) {
-      const parent = [...SIM_OPTIONS, ...REAL_OPTIONS].find(p => p.id === pos.linkedCspId);
+      const parent = REAL_OPTIONS.find(p => p.id === pos.linkedCspId);
       // Only cede the stock leg if the parent is actually carrying it; if the parent was
       // deleted (or never recorded an exit) keep it so the move isn't silently lost.
       if (parent && parent.assignedStockSold && parent.assignedExitPrice != null) return false;
@@ -8579,8 +8568,7 @@ function rsAdjustGrade(grade, rsResult) {
   // ─────────────────────────────────────────────────────────────────────────
 
   function renderOptions() {
-    const innerId = currentOptMode === "real" ? "real-opts-inner" : "sim-opts-inner";
-    const inner = document.getElementById(innerId);
+    const inner = document.getElementById("real-opts-inner");
     if (!inner) return;
     const arr = _activeOpts();
     _optMigrate();
@@ -8703,7 +8691,7 @@ function rsAdjustGrade(grade, rsResult) {
     const body = (pending.length || open.length || done.length)
       ? `<div class="opts-positions-module">${positionsHTML}</div>
          ${_optSummaryHTML(open, done)}`
-      : `<div class="opts-empty">暂无${currentOptMode === "real" ? "实盘" : "模拟"}期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
+      : `<div class="opts-empty">暂无期权仓位 — 点击「卖出期权」手动记录一笔 CSP 或备兑 Call，或点击「预设单」盘前计划</div>`;
 
     inner.innerHTML = `
       <div class="opts-controls">
@@ -8725,8 +8713,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderSimOptions() { renderOptions(); }
 
   function wireOptions() {
-    const innerId = currentOptMode === "real" ? "real-opts-inner" : "sim-opts-inner";
-    const root = document.getElementById(innerId);
+    const root = document.getElementById("real-opts-inner");
     if (!root) return;
     const arr = _activeOpts();
     const settledToggle = root.querySelector(".opts-settled-toggle");
@@ -14933,7 +14920,10 @@ function rsAdjustGrade(grade, rsResult) {
       if ((rec.state || "unset") !== next) cycLog(id, rec.state || "unset", next);
       rec.state = next;
       if (v.value != null) rec.value = v.value;
-      rec.at = B.date;
+      // 复核日期记**今天**，不是基线自己的调研日期——这个字段回答的是「最后一次有人
+      // 确认过它」，点这个按钮就是你今天做的确认动作。读数的出处（哪一天查的）仍写在
+      // 每条下方的 `.cyc-base` 里，两者是两回事，不要混。
+      rec.at = cycToday();
       rec.seeded = false;
     });
     saveToStorage();
@@ -15329,8 +15319,11 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="cyc-scope">本模块为季度级结构判据，独立于三轴模型，不产生交易信号；每个财报季复核一次即可。
         再次点击已选中的档位可清空回「未填」——「未填」表示尚未核实，不计入分母，与「未出现」含义不同。</div>
       <div class="cyc-apply">
-        <button class="cyc-apply-btn" data-cyc-apply>载入核实基线 · ${CYCLE_BASELINE.date}</button>
-        <span>一次性覆盖除自动项外的 9 条判据（含备注与复核日期）。每条变更都会写入下方变更记录，可逐条改回。</span>
+        <button class="cyc-apply-btn" data-cyc-apply>按今天日期载入基线 · ${cycToday()}</button>
+        <span>把 ${CYCLE_BASELINE.date} 调研的那一轮读数一次性写入除自动项外的 ${Object.keys(CYCLE_BASELINE.items).length} 条判据，
+          并把复核日期全部记为<b>今天</b>（完整度因此回到 100%、过期提示清零）。
+          每条变更都会写入下方变更记录，可逐条改回。
+          <b>只有在你确认这些读数当下仍然成立时才点它</b>——按钮本身不会去核实任何东西。</span>
       </div>
       <div class="cyc-list">${CYCLE_ITEMS.map(cycItemHTML).join("")}</div>
       <details class="cyc-hist">
@@ -15352,7 +15345,9 @@ function rsAdjustGrade(grade, rsResult) {
     CYCLE_CHECK.log.push({ ts: new Date().toISOString(), id, from, to });
     if (CYCLE_CHECK.log.length > 200) CYCLE_CHECK.log.splice(0, CYCLE_CHECK.log.length - 200);
   }
-  const cycToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  // 按**本地自然日**取今天。这个模块是季度级人工调研，跟美股交易时段没有关系，
+  // 用美东日期会让用户在自己的晚上看到「昨天」。en-CA locale 天然输出 YYYY-MM-DD。
+  const cycToday = () => new Date().toLocaleDateString("en-CA");
 
   function wireCycleCard(root) {
     const host = root || document;
@@ -15383,8 +15378,10 @@ function rsAdjustGrade(grade, rsResult) {
       renderCycleCard();
     }));
     $$("[data-cyc-apply]", host).forEach(b => b.addEventListener("click", () => {
-      if (!confirm(`将用 ${CYCLE_BASELINE.date} 的核实结果覆盖 9 条判据（自动项不动）。\n`
-        + "你自己填过的状态与备注会被替换，但每条变更都会留痕，之后可以逐条改回。继续？")) return;
+      if (!confirm(`将用 ${CYCLE_BASELINE.date} 的调研读数覆盖各条判据（自动项不动），`
+        + `并把复核日期全部记为今天 ${cycToday()}。\n\n`
+        + "这等于声明「我确认这些读数今天仍然成立」——完整度会回到 100%、过期提示清零。\n"
+        + "你自己填过的状态会被替换，但每条变更都会留痕，之后可以逐条改回。继续？")) return;
       cycleApplyBaseline();
     }));
     $$("[data-cyc-note]", host).forEach(inp => inp.addEventListener("change", () => {
@@ -15773,7 +15770,18 @@ function rsAdjustGrade(grade, rsResult) {
   }
   setInterval(_briefAgeTick, 60000);
 
-  // 简报每天自动更新一次：缓存不是「今天」生成的就重新生成，是今天的就直接用。
+  // 展开卡片 = 「我现在要读它」，所以展开就重新生成一次，卡片上的「更新时间」因此
+  // 永远是你把它展开的那一刻。连点两下（收起→展开）不重复触发：60 秒内不再重发。
+  let _briefLastExpandFetch = 0;
+  const _briefExpandShouldFetch = () => {
+    const now = Date.now();
+    if (now - _briefLastExpandFetch < 60000) return false;
+    _briefLastExpandFetch = now;
+    return true;
+  };
+
+  // 没人动它的时候（卡片本来就是展开的、直接进 Market 页）则每天自动更新一次：
+  // 缓存不是「今天」生成的就重新生成，是今天的就直接用。
   // 服务端按「北京 09:30 / 21:30」两档缓存，同一档里无论点多少次都返回同一份（连
   // updatedAt 都是第一次生成的那个时刻），所以不强制刷新时间戳半天都不会变——这里
   // 在「进入 Market 页 / 展开卡片」时检查一次，跨天就带 force 重新生成。
@@ -15953,8 +15961,9 @@ function rsAdjustGrade(grade, rsResult) {
     el.querySelector(".brief-toggle")?.addEventListener("click", () => {
       const collapsed = el.classList.toggle("collapsed");
       localStorage.setItem("trendo_brief_collapsed", collapsed ? "1" : "0");
-      // 展开时才检查：收起状态下用户根本没在看，没必要为它调一次 Claude
-      if (!collapsed && _briefStale(updatedAt)) fetchMarketBrief(true, mktCtx);
+      // 展开 = 现在要读它 → 重新生成，时间戳跟着展开这一刻走。
+      // 收起时什么都不做：用户没在看，不为它调一次 Claude。
+      if (!collapsed && _briefExpandShouldFetch()) fetchMarketBrief(true, mktCtx);
     });
     el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
   }
@@ -15965,10 +15974,12 @@ function rsAdjustGrade(grade, rsResult) {
     const saved = _loadBrief(MARKET_BRIEF_LS);
     if (saved?.summary) {
       _renderMarketBrief(el, saved, mktCtx);
-      // 卡片是展开的（用户马上会读到它）且内容已过期 → 直接换成最新的一份。
-      // 先渲染旧的再刷新，而不是干等——网络慢时至少有东西可读。
-      if (!el.classList.contains("collapsed") && _briefStale(saved.updatedAt))
+      // 进 Market 页时卡片本来就是展开的：这也算「现在要读它」，但这条路上用户没有主动
+      // 点任何东西，所以只按天限一次，不是每次进页面都重生成。
+      if (!el.classList.contains("collapsed") && _briefStale(saved.updatedAt)) {
+        _briefLastExpandFetch = Date.now();
         fetchMarketBrief(true, mktCtx);
+      }
       return;
     }
     el.innerHTML = `
