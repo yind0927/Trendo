@@ -2362,21 +2362,35 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
+  // 卡片按日期分组，组间插入 .hc-date-hdr 小节标题（如"Aug 28"），组内按原有顺序
+  // 排列，组本身按日期降序（最近的在最上面）。此前只有「持仓中」页签按入场日期
+  // 分组，「已平仓」页签是一串没有任何分组的裸卡片——同一个模块的两种视图应该
+  // 用同一套展示逻辑，已平仓按 closedAt 分组即可。
+  function dateGroupedCardsHTML(rows, dateOf, cardHTML) {
+    const groups = {};
+    rows.forEach(h => { const d = dateOf(h)?.slice(0, 10) || "—"; (groups[d] = groups[d] || []).push(h); });
+    const thisYear = new Date().getFullYear();
+    return Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
+      const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
+      const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
+      return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(cardHTML).join("");
+    }).join("");
+  }
+
   function renderHoldingsCards(rows) {
     const el = document.getElementById("holdings-cards");
     if (!el) return;
     if (!rows.length) { el.innerHTML = `<div class="hc-empty">暂无持仓</div>`; return; }
+    const cardOf = h => holdingCard(h, { selected: tradeKey(h) === tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost }) });
     if (activeTab === "open") {
-      const groups = {};
-      rows.forEach(h => { const d = h.entry?.slice(0, 10) || "—"; (groups[d] = groups[d] || []).push(h); });
-      const thisYear = new Date().getFullYear();
-      el.innerHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
-        const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
-        const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
-        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h, { selected: tradeKey(h) === tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost }) })).join("");
-      }).join("");
+      el.innerHTML = dateGroupedCardsHTML(rows, h => h.entry, cardOf);
+    } else if (sortKey === "closedAt") {
+      // 已平仓页签自带排序下拉（收益率/R倍数/持仓天数…），选了别的字段就是要一份
+      // 跨日期的整体排名——这时按 closedAt 分组会打乱那个排名，所以分组只在默认
+      // 的「按平仓时间」排序下生效，其余排序退回不分组的整段列表。
+      el.innerHTML = dateGroupedCardsHTML(rows, h => h.closedAt, cardOf);
     } else {
-      el.innerHTML = rows.map(h => holdingCard(h, { selected: tradeKey(h) === tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost }) })).join("");
+      el.innerHTML = rows.map(cardOf).join("");
     }
     el.querySelectorAll(".hc-card").forEach(card => {
       card.addEventListener("click", e => {
@@ -2399,17 +2413,13 @@ function rsAdjustGrade(grade, rsResult) {
     if (!rows.length) { el.innerHTML = '<div class="hc-empty">暂无持仓</div>'; return; }
     const prevTab = activeTab;
     activeTab = simActiveTab;
+    const cardOf = h => holdingCard(h, { sim: true, selected: tradeKey(h) === tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost }) });
     if (simActiveTab === "open") {
-      const groups = {};
-      rows.forEach(h => { const d = h.entry?.slice(0, 10) || "—"; (groups[d] = groups[d] || []).push(h); });
-      const thisYear = new Date().getFullYear();
-      el.innerHTML = Object.keys(groups).sort((a, b) => b.localeCompare(a)).map(date => {
-        const dt = date !== "—" ? new Date(date + "T00:00:00") : null;
-        const label = dt ? dt.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(dt.getFullYear() !== thisYear && { year: "numeric" }) }) : "—";
-        return `<div class="hc-date-hdr">${label}</div>` + groups[date].map(h => holdingCard(h, { sim: true, selected: tradeKey(h) === tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost }) })).join("");
-      }).join("");
+      el.innerHTML = dateGroupedCardsHTML(rows, h => h.entry, cardOf);
+    } else if (simSortKey === "closedAt") {
+      el.innerHTML = dateGroupedCardsHTML(rows, h => h.closedAt, cardOf);
     } else {
-      el.innerHTML = rows.map(h => holdingCard(h, { sim: true, selected: tradeKey(h) === tradeKey({ sym: simSelectedSym, entry: simSelectedEntry, cost: simSelectedCost }) })).join("");
+      el.innerHTML = rows.map(cardOf).join("");
     }
     activeTab = prevTab;
     el.querySelectorAll(".hc-card").forEach(card => {
