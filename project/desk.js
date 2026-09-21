@@ -2322,6 +2322,9 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="meta">
             <div class="sym">${h.sym}</div>
             <div class="nm">${h.name}</div>
+            <div class="hc-meta-date muted">${isClosed
+              ? (h.closedAt ? `平仓 ${fmt.date(h.closedAt)}` : "")
+              : (h.entry ? `入场 ${fmt.date(h.entry)}` : "")}</div>
           </div>
         </div>
         <div class="hc-head-right">
@@ -2343,7 +2346,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="hc-pnl ${pnlSign}">${fmt.signed(pnl)}</span>
           <span class="hc-pct ${pnlSign}">${fmt.pct(pct)}</span>
           <span class="hc-sep muted">·</span>
-          <span class="hc-days muted">${isClosed && h.closedAt ? `${fmt.date(h.closedAt)} 平仓 · ` : ""}${h.days ?? 0}天${h._mergedCount > 1 ? ` · ${h._mergedCount}次出场` : ""}</span>
+          <span class="hc-days muted">${h.days ?? 0}天${h._mergedCount > 1 ? ` · ${h._mergedCount}次出场` : ""}</span>
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
