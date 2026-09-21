@@ -13,9 +13,13 @@
     rMult: v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "R",
     sign: v => v >= 0 ? "up" : "down",
     signed: v => (v >= 0 ? "+" : "−") + "$" + Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 }),
+    // "YYYY-MM-DD" 交给 new Date() 会按 **UTC** 解析，再用本地时区格式化时，美洲负时区
+    // 会整体回退一天（v584 在财报日历上踩的是同一个坑）——即入场 09-20 的仓位一直显示
+    // 成 "Sep 19"。按本地自然日逐字段解析，跟 parseLocalDate 同一套口径。
     date: iso => {
-      const d = new Date(iso);
-      return d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+      const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso);
+      return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
     },
   };
 
@@ -2002,7 +2006,7 @@ function rsAdjustGrade(grade, rsResult) {
   // <tbody> always share the exact same column widths — table-layout:auto lets long
   // wrapped ticker names / badges reflow the body's columns independently of the
   // header, visibly desyncing the two.
-  const COL_WEIGHT = { tk: 240, bxbars: 90, cost: 90, last: 90, qty: 65, stop: 90, target: 90, pnl: 110, progstatus: 165 };
+  const COL_WEIGHT = { tk: 240, bxbars: 90, cost: 90, last: 90, qty: 65, stop: 90, target: 90, closedAt: 100, pnl: 110, progstatus: 165 };
   function colgroupHTML(cols, actionsWidth) {
     const weights = cols.map(c => COL_WEIGHT[c.id] || 90);
     const total = weights.reduce((s, w) => s + w, 0) + actionsWidth;
@@ -2012,7 +2016,10 @@ function rsAdjustGrade(grade, rsResult) {
 
   // Visible list-view columns. stop/target default to on:false (data.js) so they're
   // hidden on desktop + mobile — still editable in the drawer + shown on the level bar.
-  const visTableCols = (isClosed) => COLS.filter(c => c.on && !(isClosed && c.closedHide));
+  // closedHide/openHide 是同一套机制的两侧：止损止盈在已平仓页签没有意义，
+  // 平仓日期在持仓中页签同样没有意义。
+  const visTableCols = (isClosed) => COLS.filter(c =>
+    c.on && !(isClosed && c.closedHide) && !(!isClosed && c.openHide));
 
   // ── Closed-tab range + sort controls ──────────────────────────────────────
   // Shared by the real book and the sim book. The two closed tabs are the same view over
@@ -2067,6 +2074,8 @@ function rsAdjustGrade(grade, rsResult) {
     const _visCols = visTableCols(activeTab === "closed");
     const _cg = $("#holdings-colgroup");
     if (_cg) _cg.innerHTML = colgroupHTML(_visCols, 60);
+    // 已平仓页签多一列，手机端横向滚动的 min-width 要跟着变（见 index.html .closed-tab）
+    _cg?.closest("table")?.classList.toggle("closed-tab", activeTab === "closed");
     thead.innerHTML = _visCols.map(c => {
       const sorted = sortKey === c.id ? "sorted" : "";
       const label = (activeTab === "closed" && c.id === "last") ? "平仓价"
@@ -2334,7 +2343,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="hc-pnl ${pnlSign}">${fmt.signed(pnl)}</span>
           <span class="hc-pct ${pnlSign}">${fmt.pct(pct)}</span>
           <span class="hc-sep muted">·</span>
-          <span class="hc-days muted">${h.days ?? 0}天${h._mergedCount > 1 ? ` · ${h._mergedCount}次出场` : ""}</span>
+          <span class="hc-days muted">${isClosed && h.closedAt ? `${fmt.date(h.closedAt)} 平仓 · ` : ""}${h.days ?? 0}天${h._mergedCount > 1 ? ` · ${h._mergedCount}次出场` : ""}</span>
         </div>
         ${!isClosed ? `<div class="hc-prog-wrap">
           <div class="hc-prog-fill" style="width:${(Math.abs(progPct)*100).toFixed(1)}%;background:${progColor};"></div>
@@ -2477,6 +2486,13 @@ function rsAdjustGrade(grade, rsResult) {
         const bucket = progressBucket(h);
         const status = BUCKET_STATUS[bucket];
         return `<td><span class="status ${status.cls}"><span class="dot"></span>${status.label}</span></td>`;
+      }
+      case "closedAt": {
+        if (!h.closedAt) return `<td><span style="color:var(--fg-3);font-size:12px">—</span></td>`;
+        // 分批出场的合并行，closedAt 是最后一次出场的日期（mergeClosedForDisplay 的口径）。
+        // title 补上整段区间，省得为了知道"拿了多久"再去开抽屉。
+        const span = h.entry ? `${fmt.date(h.entry)} → ${fmt.date(h.closedAt)} · ${h.days ?? "—"}d` : "";
+        return `<td class="num muted" style="font-size:11.5px"${span ? ` title="${span}"` : ""}>${fmt.date(h.closedAt)}</td>`;
       }
       case "setup": return `<td><span class="setup-chip">${h.setup}</span></td>`;
       case "entry": return `<td class="num muted" style="font-size:11.5px">${fmt.date(h.entry)}</td>`;
@@ -5963,7 +5979,7 @@ function rsAdjustGrade(grade, rsResult) {
     // cols list
     const cl = $("#cols-list");
     cl.innerHTML = COLS.map(c => `
-      <label><input type="checkbox" data-col="${c.id}" ${c.on ? "checked" : ""} ${c.locked ? "disabled" : ""}/> ${c.label}${c.locked ? " <span class='muted' style='font-size:10px'>(锁定)</span>" : ""}</label>
+      <label><input type="checkbox" data-col="${c.id}" ${c.on ? "checked" : ""} ${c.locked ? "disabled" : ""}/> ${c.label}${c.locked ? " <span class='muted' style='font-size:10px'>(锁定)</span>" : ""}${c.openHide ? " <span class='muted' style='font-size:10px'>(仅已平仓)</span>" : ""}${c.closedHide ? " <span class='muted' style='font-size:10px'>(仅持仓中)</span>" : ""}</label>
     `).join("");
     cl.addEventListener("change", e => {
       const id = e.target.dataset.col;
@@ -10607,6 +10623,7 @@ function rsAdjustGrade(grade, rsResult) {
     const _simActionsW = simActiveTab === "open" ? 72 : 60;
     const _simCg = $("#sim-holdings-colgroup");
     if (_simCg) _simCg.innerHTML = colgroupHTML(_simVisCols, _simActionsW);
+    _simCg?.closest("table")?.classList.toggle("closed-tab", simActiveTab === "closed");
     thead.innerHTML = _simVisCols.map(c => {
       const sorted = simSortKey === c.id ? "sorted" : "";
       const label = (simActiveTab === "closed" && c.id === "last") ? "平仓价"

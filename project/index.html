@@ -3997,8 +3997,10 @@
        phone's viewport and overlap the text; a min-width wider than the viewport lets
        the wrapper's overflow-x scroll instead, with the ticker column pinned. stop/
        target columns are hidden (data.js on:false), so this is sized for the ~7
-       remaining columns with roomy per-column padding. */
+       remaining columns with roomy per-column padding. 已平仓页签多一列「平仓日期」
+       （openHide），故单独给 .closed-tab 加宽，避免那一列被挤窄。 */
     table.holdings, table.sim-holdings { min-width: 640px; }
+    table.holdings.closed-tab, table.sim-holdings.closed-tab { min-width: 730px; }
     table.holdings td, table.holdings th,
     table.sim-holdings td, table.sim-holdings th { padding: 9px 14px; font-size: 12px; }
     table.holdings td:first-child,
@@ -6359,8 +6361,8 @@
   </div>
 </div>
 
-<script src="data.js?v=787"></script>
-<script src="desk.js?v=787"></script>
+<script src="data.js?v=788"></script>
+<script src="desk.js?v=788"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

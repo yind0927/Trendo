@@ -54,6 +54,9 @@ window.COLS = [
   { id: "qty",        label: "数量",    r: true,  on: true },
   { id: "stop",       label: "止损",    r: true,  on: false, closedHide: true },
   { id: "target",     label: "止盈",    r: true,  on: false, closedHide: true },
+  // 只在「已平仓」页签出现（openHide）——持仓中还没有平仓日期可言。
+  // 与 stop/target 的 closedHide 是同一套机制的另一侧。
+  { id: "closedAt",   label: "平仓日期", r: false, on: true, openHide: true },
   { id: "pnl",        label: "浮盈亏",  r: true,  on: true },
   { id: "progstatus", label: "状态",    r: false, on: true, locked: true },
 ];
