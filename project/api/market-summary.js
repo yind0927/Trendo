@@ -128,17 +128,18 @@ export default async function handler(req, res) {
   const isCron   = req.query.cron === "1";
   const kvHeaders = { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" };
 
-  // Slot aligned to Beijing 09:30 / 21:30 (UTC+8)
-  // am = 09:30–21:29 BJ · pm = 21:30–09:29 BJ next day
+  // Slot aligned to Beijing 07:30 (UTC+8) — one slot per calendar day, anchored to
+  // the daily cron's fire time (23:30 UTC = 07:30 next-day Beijing). Before 07:30
+  // Beijing still counts as the previous day's slot, so a page load right before
+  // the cron fires doesn't get treated as "stale" and force a client-side regen.
   function bjSlotKey(d) {
     const bjMs  = d.getTime() + 8 * 3600 * 1000;
     const bj    = new Date(bjMs);
     const h = bj.getUTCHours(), m = bj.getUTCMinutes();
-    const eve = h > 21 || (h === 21 && m >= 30);
-    const mor = !eve && (h > 9  || (h === 9  && m >= 30));
-    if (eve) return `${bj.toISOString().slice(0, 10)}:pm`;
-    if (mor) return `${bj.toISOString().slice(0, 10)}:am`;
-    return `${new Date(bjMs - 86400000).toISOString().slice(0, 10)}:pm`; // before 09:30 → prev pm
+    const before730 = h < 7 || (h === 7 && m < 30);
+    return before730
+      ? new Date(bjMs - 86400000).toISOString().slice(0, 10)
+      : bj.toISOString().slice(0, 10);
   }
   const cacheKey = `trendo:market_brief_bj:${bjSlotKey(now)}`;
 
@@ -151,7 +152,7 @@ export default async function handler(req, res) {
       });
       const [{ result }] = await r.json();
       if (result) {
-        res.setHeader("Cache-Control", "s-maxage=43200, stale-while-revalidate=7200");
+        res.setHeader("Cache-Control", "s-maxage=93600, stale-while-revalidate=7200");
         return res.json({ ...JSON.parse(result), cached: true });
       }
     } catch (_) {}
@@ -285,12 +286,12 @@ ${newsText}
         method: "POST", headers: kvHeaders,
         body: JSON.stringify([
           ["SET",    cacheKey, JSON.stringify(result)],
-          ["EXPIRE", cacheKey, 43200],
+          ["EXPIRE", cacheKey, 93600],
         ]),
       });
     } catch (_) {}
   }
 
-  res.setHeader("Cache-Control", "s-maxage=43200, stale-while-revalidate=7200");
+  res.setHeader("Cache-Control", "s-maxage=93600, stale-while-revalidate=7200");
   res.json({ ...result, cached: false });
 }

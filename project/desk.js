@@ -15883,26 +15883,12 @@ function rsAdjustGrade(grade, rsResult) {
   }
   setInterval(_briefAgeTick, 60000);
 
-  // 展开卡片 = 「我现在要读它」，所以展开就重新生成一次，卡片上的「更新时间」因此
-  // 永远是你把它展开的那一刻。连点两下（收起→展开）不重复触发：60 秒内不再重发。
-  let _briefLastExpandFetch = 0;
-  const _briefExpandShouldFetch = () => {
-    const now = Date.now();
-    if (now - _briefLastExpandFetch < 60000) return false;
-    _briefLastExpandFetch = now;
-    return true;
-  };
-
-  // 没人动它的时候（卡片本来就是展开的、直接进 Market 页）则每天自动更新一次：
-  // 缓存不是「今天」生成的就重新生成，是今天的就直接用。
-  // 服务端按「北京 09:30 / 21:30」两档缓存，同一档里无论点多少次都返回同一份（连
-  // updatedAt 都是第一次生成的那个时刻），所以不强制刷新时间戳半天都不会变——这里
-  // 在「进入 Market 页 / 展开卡片」时检查一次，跨天就带 force 重新生成。
-  // 按**本地自然日**判断（sv-SE locale 直接给 YYYY-MM-DD），跟用户感知的「今天」一致。
-  const _briefDay = at => at == null ? null
-    : new Date(at).toLocaleDateString("sv-SE");
-  const _briefStale = at => !at || _briefDay(at) !== _briefDay(Date.now());
-  // Cache slot aligned to Beijing 09:30 / 21:30 — same logic as the API
+  // 市场日报现在只由两条路径真正生成一次：①每天北京 07:30 的 Vercel Cron，
+  // ②手动点 ↻（次数无上限）。展开/收起卡片、进入 Market 页都只是「查看」，
+  // 不再调用 Claude——此前「展开即重新生成」「每天首次进页面重新生成」两条
+  // 客户端自发路径均已删除。
+  // Cache slot aligned to Beijing 09:30 / 21:30 — used by holdings-brief（仍是纯手动、
+  // 两档缓存这套没变）。
   function _bjSlotKey() {
     const bjMs = Date.now() + 8 * 3600 * 1000;
     const bj   = new Date(bjMs);
@@ -15913,15 +15899,31 @@ function rsAdjustGrade(grade, rsResult) {
     if (mor) return bj.toISOString().slice(0, 10) + ":am";
     return new Date(bjMs - 86400000).toISOString().slice(0, 10) + ":pm";
   }
-  function _saveBrief(key, data) {
-    try { localStorage.setItem(key, JSON.stringify({ ...data, _slot: _bjSlotKey() })); } catch (_) {}
+  // 市场日报专用槽位：以北京 07:30 为界，一天一个槽，跟 cron 的触发时刻对齐——
+  // 07:30 之前仍算「昨天」那个槽，避免 cron 还没跑就被判定过期。
+  function _briefSlotKey(t = Date.now()) {
+    const bjMs = t + 8 * 3600 * 1000;
+    const bj   = new Date(bjMs);
+    const h = bj.getUTCHours(), m = bj.getUTCMinutes();
+    const before730 = h < 7 || (h === 7 && m < 30);
+    return before730
+      ? new Date(bjMs - 86400000).toISOString().slice(0, 10)
+      : bj.toISOString().slice(0, 10);
   }
-  function _loadBrief(key) {
+  function _saveBrief(key, data, slotFn = _bjSlotKey) {
+    try { localStorage.setItem(key, JSON.stringify({ ...data, _slot: slotFn() })); } catch (_) {}
+  }
+  function _loadBrief(key, slotFn = _bjSlotKey) {
     try {
       const data = JSON.parse(localStorage.getItem(key) || "null");
-      if (!data || data._slot !== _bjSlotKey()) return null;
+      if (!data || data._slot !== slotFn()) return null;
       return data;
     } catch { return null; }
+  }
+  // 忽略槽位是否匹配，本地有什么就先返回什么——市场日报要先把旧的摆出来，
+  // 是否需要换新的判断另外做，不能因为跨槽就让卡片先空一下。
+  function _loadBriefRaw(key) {
+    try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
   }
   const MARKET_BRIEF_LS   = "trendo_brief_v1_market";
   const HOLDINGS_BRIEF_LS = "trendo_brief_v1_holdings";
@@ -16074,9 +16076,7 @@ function rsAdjustGrade(grade, rsResult) {
     el.querySelector(".brief-toggle")?.addEventListener("click", () => {
       const collapsed = el.classList.toggle("collapsed");
       localStorage.setItem("trendo_brief_collapsed", collapsed ? "1" : "0");
-      // 展开 = 现在要读它 → 重新生成，时间戳跟着展开这一刻走。
-      // 收起时什么都不做：用户没在看，不为它调一次 Claude。
-      if (!collapsed && _briefExpandShouldFetch()) fetchMarketBrief(true, mktCtx);
+      // 展开只是查看，不触发生成——生成只由每天 7:30 的定时任务或手动 ↻ 负责。
     });
     el.querySelector(".brief-refresh")?.addEventListener("click", () => fetchMarketBrief(true, mktCtx));
   }
@@ -16084,24 +16084,22 @@ function rsAdjustGrade(grade, rsResult) {
   function initMarketBriefCard(mktCtx) {
     const el = $("#market-brief");
     if (!el) return;
-    const saved = _loadBrief(MARKET_BRIEF_LS);
-    if (saved?.summary) {
-      _renderMarketBrief(el, saved, mktCtx);
-      // 进 Market 页时卡片本来就是展开的：这也算「现在要读它」，但这条路上用户没有主动
-      // 点任何东西，所以只按天限一次，不是每次进页面都重生成。
-      if (!el.classList.contains("collapsed") && _briefStale(saved.updatedAt)) {
-        _briefLastExpandFetch = Date.now();
-        fetchMarketBrief(true, mktCtx);
-      }
+    const saved = _loadBriefRaw(MARKET_BRIEF_LS);
+    if (!saved?.summary) {
+      el.innerHTML = `
+        <div class="brief-head">
+          <span class="brief-badge">AI</span>
+          <span class="brief-title"><span class="mkt-sl-zh">今日简报</span><span class="mkt-sl-en">Daily Brief</span></span>
+          <button class="brief-gen-btn" style="margin-left:auto">生成简报</button>
+        </div>`;
+      el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchMarketBrief(false, mktCtx));
       return;
     }
-    el.innerHTML = `
-      <div class="brief-head">
-        <span class="brief-badge">AI</span>
-        <span class="brief-title"><span class="mkt-sl-zh">今日简报</span><span class="mkt-sl-en">Daily Brief</span></span>
-        <button class="brief-gen-btn" style="margin-left:auto">生成简报</button>
-      </div>`;
-    el.querySelector(".brief-gen-btn")?.addEventListener("click", () => fetchMarketBrief(false, mktCtx));
+    _renderMarketBrief(el, saved, mktCtx);
+    // 本地缓存不是「今天 07:30 那个槽」的版本——去探一下 Redis 有没有 cron 刚生成的新版。
+    // force=false：命中 Redis 直接返回，不调 Claude；只有 Redis 也没有（cron 还没跑过/
+    // 失败）时这次请求才会真正生成一次，属于合理的兜底。
+    if (saved._slot !== _briefSlotKey()) fetchMarketBrief(false, mktCtx);
   }
 
   async function fetchMarketBrief(force = false, mktCtx = null) {
@@ -16138,7 +16136,7 @@ function rsAdjustGrade(grade, rsResult) {
       }
       const { summary, headlines, updatedAt } = await res.json();
       const data = { summary, headlines, updatedAt };
-      _saveBrief(MARKET_BRIEF_LS, data);
+      _saveBrief(MARKET_BRIEF_LS, data, _briefSlotKey);
       _renderMarketBrief(el, data, mktCtx);
     } catch (e) {
       el.innerHTML = `
