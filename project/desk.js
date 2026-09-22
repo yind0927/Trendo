@@ -2322,9 +2322,6 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="meta">
             <div class="sym">${h.sym}</div>
             <div class="nm">${h.name}</div>
-            <div class="hc-meta-date muted">${isClosed
-              ? (h.closedAt ? `平仓 ${fmt.date(h.closedAt)}` : "")
-              : (h.entry ? `入场 ${fmt.date(h.entry)}` : "")}</div>
           </div>
         </div>
         <div class="hc-head-right">

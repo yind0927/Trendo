@@ -3539,10 +3539,6 @@
   .hc-r   { font-family: var(--f-mono); font-size: 12px; font-weight: 600; }
   .hc-sep { font-size: 10px; opacity: .5; }
   .hc-days { font-size: 11px; color: var(--fg-3); }
-  /* 卡片上方：入场/平仓日期，与股票代码同一竖排、同一位置——两种状态用同一个坑位，
-     只是词和日期不同，不是各自发明一套展示。此前(v788)平仓日期只是塞进中段 hc-days
-     的文字前缀，读起来像临时补丁；现在挪到卡片最上方，跟持仓中一样的展示方式。 */
-  .hc-meta-date { font-size: 10px; margin-top: 1px; }
   .hc-bx   { font-size: 11px; color: var(--fg-3); font-family: var(--f-mono); }
   .hc-pnl.up, .hc-pct.up, .hc-r.up   { color: var(--up); }
   .hc-pnl.down, .hc-pct.down, .hc-r.down { color: var(--down); }
@@ -6365,8 +6361,8 @@
   </div>
 </div>
 
-<script src="data.js?v=790"></script>
-<script src="desk.js?v=790"></script>
+<script src="data.js?v=791"></script>
+<script src="desk.js?v=791"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
