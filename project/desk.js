@@ -2622,11 +2622,54 @@ function rsAdjustGrade(grade, rsResult) {
     updateDrawerNavCounter(isSim);
   }
 
+  // 抽屉打开时正在看的那笔持仓（仅持仓中；已平仓没有实时价可言）。价格轮询靠它
+  // 把抽屉里跟价格有关的部分刷新一遍——见 syncDrawerLive。
+  let _drawerLive = null;
+
+  // 抽屉此前是「打开那一刻的快照」：`fetchPrices()` 只重渲染表格与总结卡，抽屉本身
+  // 从不更新，于是开着不动时现价、盈亏、R、level bar 全都停在打开那一刻。
+  // **盈利保护受影响最明显**——「已跌破保护价」本来就是按当前价实时算的（价格涨回
+  // 保护价之上就该自己消失、回到「已激活」），但抽屉不刷新的话它会一直停在跌破那
+  // 一刻，看起来像个撤不掉的警告。
+  // 这里只就地更新跟价格有关的几块，不整块重建抽屉——那样会把用户正在编辑的输入框、
+  // BX 的入场/实时页签、滚动位置全部冲掉，30 秒一次显然不能这么干。
+  function syncDrawerLive() {
+    const dr = $("#drawer");
+    if (!_drawerLive || !dr || !dr.classList.contains("open")) return;
+    const h = _drawerLive.h;
+    if (!h) return;
+
+    const pnlSign = fmt.sign(h.pnlDollar);
+    const heroP   = $(".hero-price .p", dr);
+    const heroPct = $(".hero-price .pct", dr);
+    const heroPnl = $(".hero-price .pnl", dr);
+    const heroR   = $(".hero-price .hero-r", dr);
+    if (heroP)   heroP.textContent = `$${price(h.last)}`;
+    if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct); heroPct.className = `pct ${pnlSign}`; }
+    if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlDollar); heroPnl.className = `pnl ${pnlSign}`; }
+    if (heroR && h.rMult != null) { heroR.textContent = fmt.rMult(h.rMult); heroR.className = `hero-r ${fmt.sign(h.rMult)}`; }
+    const lb = $(".levelbar", dr);
+    if (lb) { const tmp = document.createElement("div"); tmp.innerHTML = levelBar(h); lb.replaceWith(tmp.firstElementChild); }
+    const rCell = $(".kv-grid .v.big", dr);
+    if (rCell) { rCell.textContent = fmt.rMult(h.rMult); rCell.className = `v big ${fmt.sign(h.rMult)}`; }
+
+    // 盈利保护整块重渲染（跌破提示/状态徽章/轴/效率 chip 都跟价格走）。
+    // 用户正在输入 ATR 时跳过——否则光标和还没填完的数字会被冲掉。
+    const ppWrap = $("#pp-block-wrap", dr);
+    if (ppWrap && document.activeElement?.id !== "drawer-pp-atr") {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = ppBlockHTML(h);
+      ppWrap.replaceWith(tmp.firstElementChild);
+      wirePPBlock(h, _drawerLive.sim ? simNotional : totalNotional);
+    }
+  }
+
   function openDrawer(h) {
     if (!h) return;
     selectedSym = h.sym;
     selectedEntry = h.entry || null;
     selectedCost = h.cost ?? null;
+    _drawerLive = activeTab === "open" ? { h, sim: false } : null;
     renderTable();
     $("#drawer").innerHTML = drawerHTML(h);
     wireBX(h);
@@ -2833,6 +2876,7 @@ function rsAdjustGrade(grade, rsResult) {
     selectedSym = null;
     selectedEntry = null;
     selectedCost = null;
+    _drawerLive = null;
     $("#drawer").classList.remove("open");
     $("#backdrop").classList.remove("open");
     document.body.classList.remove("drawer-open");
@@ -6681,6 +6725,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (currentPage === "desk")      renderDeskMonthly();
         if (currentPage === "sim")       { renderSimOverview();   renderSimTable();   renderSimMonthly(); }
         if (currentPage === "analytics") renderAnalytics();
+        syncDrawerLive();   // 抽屉开着时也跟着动，别停在打开那一刻
       }
 
     } catch (_) {
@@ -10928,6 +10973,7 @@ function rsAdjustGrade(grade, rsResult) {
     const isClosed = context === "closed";
     const prevTab = activeTab;
     activeTab = isClosed ? "closed" : "open";
+    _drawerLive = isClosed ? null : { h, sim: true };
     $("#drawer").innerHTML = drawerHTML(h, true);
     activeTab = prevTab;
     wireBX(h);
