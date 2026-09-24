@@ -14993,7 +14993,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (!ah) return "";
     if (ah.unavailable) {
       return `<div class="mkt-card mkt-advice">
-        ${atitle("建议走向", "Advice History")}
+        ${atitle("周期分析", "Cycle Analysis")}
         <div class="mkp-empty">暂时无法回放：逐日重算综合建议需要 FGI 日频历史（/api/feargreed 的 <code>history</code> 字段）与至少 200 个交易日的 VOO 数据，当前至少缺其中之一。</div>
       </div>`;
     }
@@ -15024,14 +15024,23 @@ function rsAdjustGrade(grade, rsResult) {
     // 色带上的六字标题（防守/止盈/兑现…）不解释自己是什么——只对出现在这个窗口里的
     // 几种状态给出「为什么 + 怎么做」，而不是把全部 7 种可能状态都列出来：没出现过
     // 的状态在这段时间里没有意义，列出来只会增加要读的行数。
+    // v800 默认展开常驻；用户反馈手机端信息太密，v801 改成跟「建议切换」同款的可收起
+    // 小节——折叠时只留「N 种状态」的摘要行，读者不需要解释就先跳过，需要时再展开。
+    const defsMeta = `${tallyList.length} 种状态`;
     const adviceDefs = `
-      <div class="mkp-advice-defs">${tallyList.map(t => `
-        <div class="mkp-advice-def">
-          <span class="mkp-advice-def-dot" style="background:${t.color}"></span>
-          <span class="mkp-advice-def-name" style="color:${t.color}">${t.headline}</span>
-          <span class="mkp-advice-def-state">${t.state}</span>
-          <span class="mkp-advice-def-detail">${t.detail}</span>
-        </div>`).join("")}</div>`;
+      <details class="mkp-fold" data-mkp-fold="adv-defs"${
+        localStorage.getItem("trendo_mkp_adv-defs_open") === "1" ? " open" : ""}>
+        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
+          <span>状态说明</span><em>Definitions</em>
+          <span class="mkp-filtered">${defsMeta}</span></summary>
+        <div class="mkp-advice-defs">${tallyList.map(t => `
+          <div class="mkp-advice-def">
+            <span class="mkp-advice-def-dot" style="background:${t.color}"></span>
+            <span class="mkp-advice-def-name" style="color:${t.color}">${t.headline}</span>
+            <span class="mkp-advice-def-state">${t.state}</span>
+            <span class="mkp-advice-def-detail">${t.detail}</span>
+          </div>`).join("")}</div>
+      </details>`;
 
     // 只列住够 ADVICE_MIN_SEG 天的转换。情绪轴天天在动，阈值附近的单日翻转会把列表
     // 淹掉；但折叠掉多少次是直接报出来的数字，不是悄悄扣掉——这一年到底碎不碎，由
@@ -15053,7 +15062,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     return `
       <div class="mkt-card mkt-advice">
-        ${atitle("建议走向", "Advice History")}
+        ${atitle("周期分析", "Cycle Analysis")}
         <div class="mkp-head">
           <span class="mkp-dot" style="background:${cur.color}"></span>
           <span class="mkp-now" style="color:${cur.color}">${cur.headline}</span>
@@ -15950,7 +15959,6 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       <div class="mkt-module-sep"></div>
       ${mkAxesHTML(axes)}
-      ${mkAdviceHTML(advice)}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
@@ -15966,6 +15974,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${mkPlaybookHTML()}
         </details>
       </div>
+      ${mkAdviceHTML(advice)}
       ${mkPhaseHTML(phase, axes || {}, phaseScope, pending, benchDate)}
       <div class="brief-card dd-card" id="drawdown-card"></div>
       <div class="mkt-module-sep"></div>

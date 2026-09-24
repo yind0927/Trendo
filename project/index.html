@@ -4230,11 +4230,15 @@
   .mkp-key i { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
   .mkp-key i.sq { border-radius:2px; width:9px; height:9px; }
 
-  /* 建议走向卡专用：只对图例里出现过的状态给出「是什么 + 怎么做」，不列全部 7 种
-     可能状态——没出现在这段窗口里的状态跟当前无关，列出来只会增加要读的行数。 */
-  .mkp-advice-defs { display:flex; flex-direction:column; gap:6px; margin:10px 0 0 41px; }
+  /* 周期分析卡专用：只对图例里出现过的状态给出「是什么 + 怎么做」，不列全部 7 种
+     可能状态——没出现在这段窗口里的状态跟当前无关，列出来只会增加要读的行数。
+     v801 起收进 details.mkp-fold，跟「建议切换」同款可收起——套用 .mkp-trs 那个
+     带边框的盒子格式，两个折叠小节现在是同一种排版语言，不是两套拼在一起的样式。 */
+  .mkp-advice-defs { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
   .mkp-advice-def { display:grid; grid-template-columns:60px 68px 1fr; align-items:baseline;
-    gap:8px; font-size:11px; }
+    gap:8px; font-size:11px; padding:9px 12px; }
+  .mkp-advice-def + .mkp-advice-def { border-top:1px solid var(--line); }
+  .mkp-advice-def:nth-child(odd) { background:color-mix(in oklch, var(--fg-1) 2.5%, transparent); }
   .mkp-advice-def-dot { width:7px; height:7px; border-radius:50%; align-self:center; }
   .mkp-advice-def-name { font-weight:700; }
   .mkp-advice-def-state { color:var(--fg-2); font-size:10px; }
@@ -4299,7 +4303,6 @@
     .mkp-legend { gap:11px; margin-left:33px; }
     /* 手机端信息本来就密——「是什么/为什么/怎么做」三段挤在一行会重叠，改成每段
        独立一行，靠左对齐读下来，不用横向找列。 */
-    .mkp-advice-defs { margin-left:0; gap:10px; }
     .mkp-advice-def { grid-template-columns:14px 1fr; grid-template-areas:"dot name" ". state" ". detail"; row-gap:2px; }
     .mkp-advice-def-dot { grid-area:dot; }
     .mkp-advice-def-name { grid-area:name; }
@@ -6388,8 +6391,8 @@
   </div>
 </div>
 
-<script src="data.js?v=800"></script>
-<script src="desk.js?v=800"></script>
+<script src="data.js?v=801"></script>
+<script src="desk.js?v=801"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
