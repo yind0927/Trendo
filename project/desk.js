@@ -5527,7 +5527,10 @@ function rsAdjustGrade(grade, rsResult) {
   function mpHeadlineKey(c) {
     const done = MP_CHECKPOINTS.filter(([k]) =>
       mpBenchReturn(c, k) != null && mpCohortReturn(c, k).pct != null);
-    if (!done.length) return MP_PRIMARY;
+    // 一个检查点都没走完（刚录入，甚至还没到最短的 1 周）时返回 null，让调用方展示一个
+    // 明确的"还没到"状态——此前这里借用 MP_PRIMARY（2 周）当占位符，导致"真的走满 2 周"
+    // 和"一个检查点都没有"两种天差地别的状态在头部标签上显示成同一句"2 周"，肉眼分不清。
+    if (!done.length) return null;
     return done.some(([k]) => k === MP_PRIMARY) ? MP_PRIMARY : done[done.length - 1][0];
   }
 
@@ -5754,8 +5757,9 @@ function rsAdjustGrade(grade, rsResult) {
 
     const body = MODEL_PICKS.length ? MODEL_PICKS.map(c => {
       const hk = mpHeadlineKey(c);
-      const hWeeks = Math.round((MP_CHECKPOINTS.find(([k]) => k === hk)?.[1] || 0) / 5);
-      const r = mpCohortReturn(c, hk), b = mpBenchReturn(c, hk);
+      const hWeeks = hk ? Math.round((MP_CHECKPOINTS.find(([k]) => k === hk)?.[1] || 0) / 5) : null;
+      const r = hk ? mpCohortReturn(c, hk) : { pct: null, n: 0 };
+      const b = hk ? mpBenchReturn(c, hk) : null;
       const alpha = (r.pct != null && b != null) ? r.pct - b : null;
       const waiting = c.picks.filter(p => p.entryPrice == null).length;
       const live = c.picks
@@ -5776,8 +5780,9 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mp-cohort-count">${c.picks.length} 个${
             waiting ? ` · <span class="mp-cohort-waiting">${waiting} 待定价</span>` : ""}</span>
           <div class="mp-cohort-num">
-            <span class="mp-cohort-hz"${hk === MP_PRIMARY ? "" : ' title="本批尚未走到主口径，先按已完成的最长周期显示"'
-              }>${hWeeks} 周${hk === MP_PRIMARY ? "" : " 已完成"}</span>
+            <span class="mp-cohort-hz"${hk == null ? ' title="还没有任何持有期走满，最短的 1 周检查点也还没到"'
+              : hk === MP_PRIMARY ? "" : ' title="本批尚未走到主口径，先按已完成的最长周期显示"'
+              }>${hk == null ? "不足 1 周" : `${hWeeks} 周${hk === MP_PRIMARY ? "" : " 已完成"}`}</span>
             <span class="mp-cohort-lbl">等权</span><span class="num ${cls(r.pct)}">${pct(r.pct)}</span>
             <span class="mp-cohort-lbl">VOO</span><span class="num ${cls(b)}">${pct(b)}</span>
             <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${ppf(alpha)}</span>
