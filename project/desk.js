@@ -15195,7 +15195,7 @@ function rsAdjustGrade(grade, rsResult) {
       .map(([cut, n, zh]) => ({ cut, n, zh, d: ratio - cut }))
       .filter(e => Math.abs(e.d) <= 0.02)
       .sort((a, b) => Math.abs(a.d) - Math.abs(b.d))[0] || null;
-    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, tiers, terminal, prev, edge, staleN };
+    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, tiers, terminal, prev, edge, staleN, wAll };
   }
 
   // 高可信（或直接观测到终点信号）时才把阶段"确认"下来并落盘——这是
@@ -15594,27 +15594,43 @@ function rsAdjustGrade(grade, rsResult) {
   // 得分快照。这个模块的价值在**趋势**而不是某一天的读数——只有逐条的文字变更记录、
   // 没有一条可比的得分序列，就等于看不出方向。
   // 每天最多留一条；同日内得分变化 ≥0.05 或阶段变了才覆盖，避免价格轮询把记录刷爆。
+  //
+  // `wa`（wAll，全部 12 条判据的权重总和，不管填没填）是这张表的「量尺签名」——它只在
+  // 新增/删除判据、或给已有判据重新分档（如 v769 的 2/8/2→2/5/5、v794 的 T3→T2）时才会变，
+  // 判据状态本身的变化不会碰它。记下它是为了让 `cycHistHTML()` 能区分「分数变了是因为量尺
+  // 换了」还是「分数变了是因为证据真的变了」——这两件事此前混在同一条曲线里，回看历史时
+  // 容易把"重新称重"误读成"周期风险在上升"。
   function cycleSnapshot(p) {
     if (!p || !p.maxV) return false;                  // 一条都没核实时不记
     CYCLE_CHECK.history = CYCLE_CHECK.history || [];
     const H = CYCLE_CHECK.history;
     const d = cycToday();
     const cur = { d, sc: +(p.ratio * 10).toFixed(2), n: p.shown ? p.shown.n : null,
-                  zh: p.shown ? p.shown.zh : null, conf: +(p.conf * 100).toFixed(0) };
+                  zh: p.shown ? p.shown.zh : null, conf: +(p.conf * 100).toFixed(0), wa: p.wAll };
     const last = H[H.length - 1];
     if (last && last.d === d) {
-      if (Math.abs(last.sc - cur.sc) < 0.05 && last.n === cur.n && last.conf === cur.conf) return false;
+      if (Math.abs(last.sc - cur.sc) < 0.05 && last.n === cur.n && last.conf === cur.conf && last.wa === cur.wa) return false;
       H[H.length - 1] = cur;
     } else {
-      if (last && Math.abs(last.sc - cur.sc) < 0.05 && last.n === cur.n) return false;
+      if (last && Math.abs(last.sc - cur.sc) < 0.05 && last.n === cur.n && last.wa === cur.wa) return false;
       H.push(cur);
     }
     if (H.length > 60) H.splice(0, H.length - 60);
     return true;
   }
 
+  // 逐条标记「这一步相对上一条，量尺是不是变了」——`wa` 缺失的老记录（本机制上线前存的）
+  // 一律不判定，避免旧数据被误报成"标尺调整"。
+  function cycHistFlag(full) {
+    return full.map((h, i) => {
+      const prev = i > 0 ? full[i - 1] : null;
+      const reweighted = !!(prev && h.wa != null && prev.wa != null && prev.wa !== h.wa);
+      return { ...h, reweighted, prevWa: prev ? prev.wa : null };
+    });
+  }
+
   function cycHistHTML() {
-    const H = (CYCLE_CHECK.history || []).slice(-12).reverse();
+    const H = cycHistFlag(CYCLE_CHECK.history || []).slice(-12).reverse();
     if (H.length < 2) {
       return `<div class="cyc-hist-empty">当前仅有 ${H.length} 个读数。每次改动判据都会记录一条，
         累计两条之后这里会显示得分走向——<b>本模块真正有价值的是方向，而非某一天的数字</b>。</div>`;
@@ -15625,12 +15641,22 @@ function rsAdjustGrade(grade, rsResult) {
       : delta > 0 ? `上行 +${delta.toFixed(2)} 分（更接近周期尾声）`
       : `回落 ${delta.toFixed(2)} 分（结构性压力在缓解）`;
     const dirCls = Math.abs(delta) < 0.05 ? "" : delta > 0 ? "down" : "up";
+    // 这段窗口内如果发生过量尺调整（新增/删除判据、或把某条重新分档），涨跌就不能整段
+    // 归因于证据变化——v769（档位重定义）、v794（换条目带升档）都属于这类，如实说明，
+    // 别让"重新称重"被读成"周期风险真的在升高"。
+    const hasReweight = H.some(h => h.reweighted);
+    const caveat = hasReweight
+      ? `<div class="cyc-hist-caveat">⚖ 这段区间内发生过评分口径调整（判据新增/删除或重新分档）——
+         上面这条走向不能整段归因于证据变化，哪一步是口径调整见下方「⚖ 标尺调整」标记。</div>`
+      : "";
     return `<div class="cyc-hist-sum ${dirCls}">${first.d} → ${now.d}：${first.sc.toFixed(1)} → ${now.sc.toFixed(1)} 分 · ${dirTxt}</div>
+      ${caveat}
       <div class="cyc-hist-rows">${H.map(h => `<div class="cyc-hist-row">
         <i>${h.d}</i>
         <span class="cyc-hist-bar"><b style="width:${Math.min(100, h.sc * 10)}%"></b></span>
         <em>${h.sc.toFixed(1)}</em>
         <s>${h.n ? "第 " + h.n + " 阶段" : "暂不判定"}</s>
+        ${h.reweighted ? `<u class="cyc-hist-rw" title="满分从 ${h.prevWa} 变为 ${h.wa}——这一步的分数变化部分或全部来自评分口径本身，不代表证据一定变了">⚖ 标尺调整</u>` : ""}
       </div>`).join("")}</div>`;
   }
 
