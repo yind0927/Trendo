@@ -5757,7 +5757,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     const body = MODEL_PICKS.length ? MODEL_PICKS.map(c => {
       const hk = mpHeadlineKey(c);
-      const hWeeks = hk ? Math.round((MP_CHECKPOINTS.find(([k]) => k === hk)?.[1] || 0) / 5) : null;
+      const hWeeks = hk ? Math.round((MP_CHECKPOINTS.find(([k]) => k === hk)?.[1] || 0) / 5) : 0;
       const r = hk ? mpCohortReturn(c, hk) : { pct: null, n: 0 };
       const b = hk ? mpBenchReturn(c, hk) : null;
       const alpha = (r.pct != null && b != null) ? r.pct - b : null;
@@ -5780,9 +5780,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mp-cohort-count">${c.picks.length} 个${
             waiting ? ` · <span class="mp-cohort-waiting">${waiting} 待定价</span>` : ""}</span>
           <div class="mp-cohort-num">
-            <span class="mp-cohort-hz"${hk == null ? ' title="还没有任何持有期走满，最短的 1 周检查点也还没到"'
-              : hk === MP_PRIMARY ? "" : ' title="本批尚未走到主口径，先按已完成的最长周期显示"'
-              }>${hk == null ? "不足 1 周" : `${hWeeks} 周${hk === MP_PRIMARY ? "" : " 已完成"}`}</span>
+            <span class="mp-cohort-hz">${hWeeks} 周</span>
             <span class="mp-cohort-lbl">等权</span><span class="num ${cls(r.pct)}">${pct(r.pct)}</span>
             <span class="mp-cohort-lbl">VOO</span><span class="num ${cls(b)}">${pct(b)}</span>
             <span class="mp-cohort-lbl">超额</span><span class="num ${cls(alpha)}">${ppf(alpha)}</span>
