@@ -2546,7 +2546,16 @@ function rsAdjustGrade(grade, rsResult) {
   // ============ DRAWER ============
   function _drawerNavList(isSim) {
     const tbodySel = isSim ? "#sim-tbody" : "#tbody";
-    const trs = $$(`${tbodySel} tr[data-idx]`);
+    let trs = $$(`${tbodySel} tr[data-idx]`);
+    if (!trs.length) {
+      // 卡片视图（手机端默认）没有 <tr>，改用渲染出来的 .hc-card——DOM 顺序就是当前
+      // 排序/筛选/日期分组后真正显示在屏幕上的顺序。此前这里直接退回 HOLDINGS/
+      // SIM_HOLDINGS 原始数组，那只是持仓的插入顺序（等价于按时间排），跟卡片视图
+      // 实际显示的顺序（可能已按收益率/R倍数等排序，或已平仓按 closedAt 分组）对不上，
+      // 键盘上下键和手机端左右滑动因此会跳到跟屏幕上不一致的下一张卡。
+      const cardSel = isSim ? "#sim-holdings-cards" : "#holdings-cards";
+      trs = $$(`${cardSel} .hc-card`);
+    }
     if (trs.length) return { mode: "table", trs };
     const data = isSim
       ? (simActiveTab === "open" ? SIM_HOLDINGS : mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS))
@@ -5993,36 +6002,26 @@ function rsAdjustGrade(grade, rsResult) {
           : tradeKey({ sym: selectedSym, entry: selectedEntry, cost: selectedCost });
         const curSym = isSim ? simSelectedSym : selectedSym;
 
-        // Try list-mode rows first
-        const tbodySel = isSim ? "#sim-tbody" : "#tbody";
-        const trs = $$(`${tbodySel} tr[data-idx]`);
-
-        if (trs.length) {
+        // 复用 _drawerNavList()：列表视图走 <tr>，卡片视图走 .hc-card，两者都是当前
+        // 屏幕上真正显示的 DOM 顺序（排序/筛选/日期分组之后的结果），跟表格/卡片
+        // 一致，不再退回 HOLDINGS/SIM_HOLDINGS 原始数组的插入顺序。
+        const nav = _drawerNavList(isSim);
+        if (nav.mode === "table" && nav.trs.length) {
           e.preventDefault();
-          const curIdx = trs.findIndex(tr => tradeKey({ sym: tr.dataset.sym, entry: tr.dataset.entry, cost: tr.dataset.cost }) === curKey);
+          const curIdx = nav.trs.findIndex(tr => tradeKey({ sym: tr.dataset.sym, entry: tr.dataset.entry, cost: tr.dataset.cost }) === curKey);
           const nextIdx = e.key === "ArrowDown"
-            ? (curIdx + 1) % trs.length
-            : (curIdx <= 0 ? trs.length - 1 : curIdx - 1);
-          trs[nextIdx].click();
-          trs[nextIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
-        } else if (curSym) {
-          // Card mode — navigate through the data array directly
+            ? (curIdx + 1) % nav.trs.length
+            : (curIdx <= 0 ? nav.trs.length - 1 : curIdx - 1);
+          nav.trs[nextIdx].click();
+          nav.trs[nextIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else if (nav.mode === "data" && curSym && nav.data.length) {
           e.preventDefault();
-          const data = isSim
-            ? (simActiveTab === "open" ? SIM_HOLDINGS : mergeClosedForDisplay(SIM_CLOSED, SIM_HOLDINGS))
-            : (activeTab === "open" ? HOLDINGS : mergeClosedForDisplay(CLOSED_POSITIONS, HOLDINGS));
-          const curIdx = data.findIndex(h => tradeKey(h) === curKey);
-          if (data.length) {
-            const nextIdx = e.key === "ArrowDown"
-              ? (curIdx + 1) % data.length
-              : (curIdx <= 0 ? data.length - 1 : curIdx - 1);
-            if (isSim) openSimDrawer(data[nextIdx], simActiveTab);
-            else        openDrawer(data[nextIdx]);
-            const cardSel = isSim ? "#sim-holdings-cards" : "#holdings-cards";
-            const nh = data[nextIdx];
-            document.querySelector(`${cardSel} [data-sym="${nh.sym}"][data-entry="${nh.entry || ''}"][data-cost="${nh.cost ?? ''}"]`)
-              ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-          }
+          const curIdx = nav.data.findIndex(h => tradeKey(h) === curKey);
+          const nextIdx = e.key === "ArrowDown"
+            ? (curIdx + 1) % nav.data.length
+            : (curIdx <= 0 ? nav.data.length - 1 : curIdx - 1);
+          if (isSim) openSimDrawer(nav.data[nextIdx], simActiveTab);
+          else        openDrawer(nav.data[nextIdx]);
         }
       }
     });
