@@ -14989,7 +14989,14 @@ function rsAdjustGrade(grade, rsResult) {
 
   // 复用阶段周期那套色带 DOM 与 CSS（.mkp-bars/.mkp-ribbon/.mkp-seg/.mkp-ticks/
   // .mkp-legend/.mkp-fold/.mkp-tr）——两张卡结构完全同构，没有理由再造一套。
-  function mkAdviceHTML(ah) {
+  //
+  // `live` 是 axes.combined——跟顶部「综合建议」横幅用的是同一个对象。回放的最后一段
+  // （ah.current）来自已收盘的历史 K 线，而横幅用的是盘中实时价（vooLive），两者在
+  // 收盘前可能不是同一天的判定——此前头部直接显示 ah.current，跟顶部横幅文案对不上、
+  // 用户会读成「同一件事两个说法」。现在头部改为直接展示 live（保证文案逐字一致），
+  // 只有当 live 与已收盘的最后一段状态不同时，才追加一条「待确认」提示——与阶段周期
+  // 卡的 pending 机制同一个模式。
+  function mkAdviceHTML(ah, live) {
     if (!ah) return "";
     if (ah.unavailable) {
       return `<div class="mkt-card mkt-advice">
@@ -14998,6 +15005,10 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }
     const cur = ah.current, held = cur.days.length, total = ah.days.length;
+    // 头部永远展示 live（跟顶部横幅同一个对象、同一份文案）；没有 live 时退回已收盘
+    // 的最后一段，不影响任何调用点缺 axes 时仍能正常渲染。
+    const now = live || cur;
+    const pendingMismatch = live && live.id !== cur.id;
 
     const ribbon = ah.segs.map((sg, i) => `
       <span class="mkp-seg${i === ah.segs.length - 1 ? " now" : ""}"
@@ -15024,21 +15035,28 @@ function rsAdjustGrade(grade, rsResult) {
     // 色带上的六字标题（防守/止盈/兑现…）不解释自己是什么——只对出现在这个窗口里的
     // 几种状态给出「为什么 + 怎么做」，而不是把全部 7 种可能状态都列出来：没出现过
     // 的状态在这段时间里没有意义，列出来只会增加要读的行数。
-    // v800 默认展开常驻；用户反馈手机端信息太密，v801 改成跟「建议切换」同款的可收起
-    // 小节——折叠时只留「N 种状态」的摘要行，读者不需要解释就先跳过，需要时再展开。
-    const defsMeta = `${tallyList.length} 种状态`;
+    // v800 默认展开常驻；v801 改成跟「建议切换」同款的可收起小节；v802 起把 live（头部
+    // 正在展示的那个状态）也强制并入这份清单——待确认状态下头部会显示一个还没进入色带
+    // 统计的 id，若不补它，读者展开说明会发现头部写的那句话根本找不到解释。
+    const defsSource = pendingMismatch && !tallyList.some(t => t.headline === live.headline)
+      ? [{ headline: live.headline, state: live.state, detail: live.detail, color: live.color }, ...tallyList]
+      : tallyList;
+    const defsMeta = `${defsSource.length} 种状态`;
+    // 单行格式：圆点 + 「名称 · 为什么 — 怎么做」连成一句话，跟顶部横幅
+    // 「emoji + headline + state」同一行、detail 另起一行的排版逻辑对齐——这里进一步
+    // 压成一行，展开态本来就是次要信息，不需要再分栏对齐。
     const adviceDefs = `
       <details class="mkp-fold" data-mkp-fold="adv-defs"${
         localStorage.getItem("trendo_mkp_adv-defs_open") === "1" ? " open" : ""}>
         <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
           <span>状态说明</span><em>Definitions</em>
           <span class="mkp-filtered">${defsMeta}</span></summary>
-        <div class="mkp-advice-defs">${tallyList.map(t => `
+        <div class="mkp-advice-defs">${defsSource.map(t => `
           <div class="mkp-advice-def">
             <span class="mkp-advice-def-dot" style="background:${t.color}"></span>
-            <span class="mkp-advice-def-name" style="color:${t.color}">${t.headline}</span>
-            <span class="mkp-advice-def-state">${t.state}</span>
-            <span class="mkp-advice-def-detail">${t.detail}</span>
+            <span class="mkp-advice-def-line">
+              <b style="color:${t.color}">${t.headline}</b> · ${t.state} — ${t.detail}
+            </span>
           </div>`).join("")}</div>
       </details>`;
 
@@ -15064,12 +15082,17 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="mkt-card mkt-advice">
         ${atitle("周期分析", "Cycle Analysis")}
         <div class="mkp-head">
-          <span class="mkp-dot" style="background:${cur.color}"></span>
-          <span class="mkp-now" style="color:${cur.color}">${cur.headline}</span>
+          <span class="mkp-dot" style="background:${now.color}"></span>
+          <span class="mkp-now" style="color:${now.color}">${now.headline}</span>
           <span class="mkp-held"><b>${held}</b> 个交易日</span>
           <span class="mkp-scope">${ah.span.from} → ${ah.span.to} · ${total} 个交易日</span>
-          <span class="mkp-axis-now" style="color:${cur.color}">现在 · ${cur.state}</span>
+          <span class="mkp-axis-now" style="color:${now.color}">现在 · ${now.state}</span>
         </div>
+        ${pendingMismatch ? `<div class="mkp-pending">
+          <span class="mkp-pending-dot" style="background:${live.color}"></span>
+          按当前三轴规则已进入<b style="color:${live.color}">${live.headline}</b> ——
+          下方色带只画已收盘的交易日，这一笔要等收盘才计入。
+        </div>` : ""}
         <div class="mkp-bars">
           <span class="mkp-bar-k">建议</span>
           <div class="mkp-ribbon">${ribbon}</div>
@@ -15974,7 +15997,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${mkPlaybookHTML()}
         </details>
       </div>
-      ${mkAdviceHTML(advice)}
+      ${mkAdviceHTML(advice, axes?.combined)}
       ${mkPhaseHTML(phase, axes || {}, phaseScope, pending, benchDate)}
       <div class="brief-card dd-card" id="drawdown-card"></div>
       <div class="mkt-module-sep"></div>

@@ -4233,16 +4233,19 @@
   /* 周期分析卡专用：只对图例里出现过的状态给出「是什么 + 怎么做」，不列全部 7 种
      可能状态——没出现在这段窗口里的状态跟当前无关，列出来只会增加要读的行数。
      v801 起收进 details.mkp-fold，跟「建议切换」同款可收起——套用 .mkp-trs 那个
-     带边框的盒子格式，两个折叠小节现在是同一种排版语言，不是两套拼在一起的样式。 */
+     带边框的盒子格式，两个折叠小节现在是同一种排版语言，不是两套拼在一起的样式。
+     v802 起每条压成单行连续文字（圆点 + 「名称 · 为什么 — 怎么做」），不再拆成
+     多列对齐——桌面/手机同一套排版，文字多时自然换行，不需要再为手机端单独写一套
+     纵向堆叠规则。 */
   .mkp-advice-defs { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
-  .mkp-advice-def { display:grid; grid-template-columns:60px 68px 1fr; align-items:baseline;
-    gap:8px; font-size:11px; padding:9px 12px; }
+  .mkp-advice-def { display:flex; align-items:baseline; gap:8px; font-size:11px;
+    line-height:1.6; padding:9px 12px; }
   .mkp-advice-def + .mkp-advice-def { border-top:1px solid var(--line); }
   .mkp-advice-def:nth-child(odd) { background:color-mix(in oklch, var(--fg-1) 2.5%, transparent); }
-  .mkp-advice-def-dot { width:7px; height:7px; border-radius:50%; align-self:center; }
-  .mkp-advice-def-name { font-weight:700; }
-  .mkp-advice-def-state { color:var(--fg-2); font-size:10px; }
-  .mkp-advice-def-detail { color:var(--fg-3); font-size:10px; }
+  .mkp-advice-def-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0;
+    margin-top:6px; }
+  .mkp-advice-def-line { color:var(--fg-2); }
+  .mkp-advice-def-line b { font-weight:700; }
 
   .mkp-sub { display:flex; align-items:baseline; gap:7px; margin:18px 0 8px; }
   .mkp-sub span { font-size:11px; font-weight:600; color:var(--fg-1); }
@@ -4301,13 +4304,6 @@
     .mkp-scope { margin-left:0; text-align:left; }
     .mkp-bars { grid-template-columns:26px 1fr; gap:6px 7px; }
     .mkp-legend { gap:11px; margin-left:33px; }
-    /* 手机端信息本来就密——「是什么/为什么/怎么做」三段挤在一行会重叠，改成每段
-       独立一行，靠左对齐读下来，不用横向找列。 */
-    .mkp-advice-def { grid-template-columns:14px 1fr; grid-template-areas:"dot name" ". state" ". detail"; row-gap:2px; }
-    .mkp-advice-def-dot { grid-area:dot; }
-    .mkp-advice-def-name { grid-area:name; }
-    .mkp-advice-def-state { grid-area:state; }
-    .mkp-advice-def-detail { grid-area:detail; }
     .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
     .mkp-tr-why { grid-column:1 / -1; }
     .mkp-th-row { grid-template-columns:100px 66px; row-gap:2px; }
@@ -6391,8 +6387,8 @@
   </div>
 </div>
 
-<script src="data.js?v=801"></script>
-<script src="desk.js?v=801"></script>
+<script src="data.js?v=802"></script>
+<script src="desk.js?v=802"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
