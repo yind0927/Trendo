@@ -14516,7 +14516,9 @@ function rsAdjustGrade(grade, rsResult) {
   // first value, so a 400-calendar-day window (~276 sessions) can only be replayed for
   // the ~76 sessions after that. The card states the span it actually covers rather
   // than implying it goes back further.
-  const PHASE_SESSIONS = 252;          // one trading year
+  // 跟周期分析卡的 ADVICE_SESSIONS 保持同一个值（200），两张回放色带卡现在挨在一起
+  // 展示，同窗口才能直接对照同一段时间；改一个记得改另一个。
+  const PHASE_SESSIONS = 200;
 
   function buildPhaseHistory(vooCloses, vooDates, vixByDate, maxSessions) {
     if (!vooCloses?.length) return null;
@@ -14639,7 +14641,7 @@ function rsAdjustGrade(grade, rsResult) {
       return { id: "euphoria", label: "极端过热", color: "var(--down)", tilt: "trim",
         desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
     if (cooled)
-      return { id: "cooldown", label: "恐慌降温期", color: "var(--orange)", tilt: "cooldown",
+      return { id: "cooldown", label: "恐慌降温期", color: "var(--blue)", tilt: "cooldown",
         desc: `VIX 已从 ${vix60Max.toFixed(0)} 回落至 ${vix.toFixed(1)}，容易的钱已经赚完：不加新仓，分批兑现利润`,
         evidence: "历史同形态后 60 日中位低于基线 1.9pp、胜率 57%（n=21，样本偏少）" };
     if (fg >= 60 || rsi >= 65)
@@ -14672,7 +14674,10 @@ function rsAdjustGrade(grade, rsResult) {
       return { id: "trim", headline: "止盈", emoji: "🟠", state: `极端过热`, color: "var(--orange)",
         detail: "减仓止盈，收紧保护。" };
     if (sent.tilt === "cooldown")
-      return { id: "cooldown", headline: "兑现", emoji: "🟠", state: `恐慌降温期`, color: "var(--orange)",
+      // 「兑现」与上面的「止盈」此前共用 var(--orange)，同一橙色在横幅/图例/色带里读不出
+      // 区别——两者触发条件、紧迫程度都不同（止盈=情绪过热主动减仓，兑现=VIX 从恐慌回落
+      // 后了结，更从容），改用调色板里另一个未被 combineAxes 占用的色相 var(--blue)。
+      return { id: "cooldown", headline: "兑现", emoji: "🔷", state: `恐慌降温期`, color: "var(--blue)",
         detail: "不开新仓，分批兑现这一轮的利润。" };
     if (sent.tilt === "accumulate")
       return { id: "accumulate", headline: "布局", emoji: "🟢", state: `恐慌积累`, color: "var(--up)",
@@ -14870,7 +14875,12 @@ function rsAdjustGrade(grade, rsResult) {
     return rows.join("");
   }
 
-  function mkPhaseHTML(ph, axes, scope = "YTD", pending = null, settledDate = null) {
+  // 旧签名里的 `scope` 参数（`fetchMarketData` 算出的「近一年」/「近 N 个交易日」文案）
+  // 从来没在下面的模板里被用过——死参数，调用方算了但卡片上从来没显示过。改用
+  // `ph.span.from → ph.span.to` 直接给出真实起止日期，跟周期分析卡 `.mkp-scope` 的
+  // 格式统一（那张卡从建卡起就这么写），一并把 `fetchMarketData` 里的 `phaseScope`
+  // 死代码删掉。
+  function mkPhaseHTML(ph, axes, pending = null, settledDate = null) {
     if (!ph) {
       return `<div class="mkt-card mkt-phase">
         ${atitle("阶段周期", "Market Cycle")}
@@ -14948,7 +14958,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mkp-dot" style="background:${cur.color}"></span>
           <span class="mkp-now" style="color:${cur.color}">${cur.label}区</span>
           <span class="mkp-held"><b>${held}</b> 个交易日</span>
-          <span class="mkp-scope">${total} 个交易日</span>
+          <span class="mkp-scope">${ph.span.from} → ${ph.span.to} · ${total} 个交易日</span>
           <span class="mkp-axis-now" style="color:${cur.color}">现在 · ${cur.label}</span>
         </div>
         ${pending ? `<div class="mkp-pending">
@@ -15962,7 +15972,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate, advice } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -15998,7 +16008,7 @@ function rsAdjustGrade(grade, rsResult) {
         </details>
       </div>
       ${mkAdviceHTML(advice, axes?.combined)}
-      ${mkPhaseHTML(phase, axes || {}, phaseScope, pending, benchDate)}
+      ${mkPhaseHTML(phase, axes || {}, pending, benchDate)}
       <div class="brief-card dd-card" id="drawdown-card"></div>
       <div class="mkt-module-sep"></div>
       <div id="cycle-card"></div>
@@ -16150,11 +16160,6 @@ function rsAdjustGrade(grade, rsResult) {
       const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS);
       // 综合建议逐日回放。用的全是上面那两次请求已经拿回来的数据，无额外调用。
       const advice = buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, ADVICE_SESSIONS);
-      // Says "近一年" only when a full year is actually there; a shorter history is
-      // reported at its real length rather than mislabelled.
-      const phaseScope = !phase ? ""
-        : phase.days.length >= PHASE_SESSIONS ? "近一年"
-        : `近 ${phase.days.length} 个交易日`;
       // The ribbon is built from settled daily bars. If the live price already implies a
       // different phase, that is a pending turn, not a completed one — say so rather than
       // either back-dating it into the history or leaving the card looking stale.
@@ -16168,7 +16173,7 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate, advice });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,
