@@ -14479,6 +14479,30 @@ function rsAdjustGrade(grade, rsResult) {
     return out;
   }
 
+  // RSI at every point, same relationship to calcRSI that calcEMASeries has to calcEMA.
+  // 刻意逐点复刻 calcRSI 的实现，包括它那个「seed 之后从 period+1 起步、跳过
+  // closes[period] 那根 bar」的细节——那跟教科书 RSI 差一根 bar，但全站一直是这么
+  // 算的。回放的最后一格必须等于卡片上现在显示的 RSI，两套数字对不上是用户看得见
+  // 的 bug；跟教科书差一根 bar 是看不见的，而且是一致的。
+  function calcRSISeries(closes, period = 14) {
+    const out = new Array(closes?.length || 0).fill(null);
+    if (!closes || closes.length < period + 2) return out;
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+      const diff = closes[i] - closes[i - 1];
+      if (diff > 0) avgGain += diff; else avgLoss -= diff;
+    }
+    avgGain /= period;
+    avgLoss /= period;
+    for (let i = period + 1; i < closes.length; i++) {
+      const diff = closes[i] - closes[i - 1];
+      avgGain = (avgGain * (period - 1) + (diff > 0 ? diff : 0)) / period;
+      avgLoss = (avgLoss * (period - 1) + (diff < 0 ? -diff : 0)) / period;
+      out[i] = avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(1);
+    }
+    return out;
+  }
+
   // ── Phase history ─────────────────────────────────────────────────────────
   // The direction axis is the phase backbone on purpose. All three axes are pure
   // functions of that day's inputs, so any of them can be replayed — but VIX and
@@ -14637,26 +14661,29 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
+  // `id` 是这条建议的稳定标识，供回放色带分段用——headline 是给人读的文案，改过好
+  // 几版（动作词 → 状态标签 → 又改回动作词），拿它当分段键，文案一改历史就会碎成
+  // 两段。id 一旦定下就不再改。
   function combineAxes(dir, risk, sent) {
     if (!dir.eligible)
-      return { headline: "防守", emoji: "🔴", state: `趋势逆风`, color: "var(--down)",
+      return { id: "defense", headline: "防守", emoji: "🔴", state: `趋势逆风`, color: "var(--down)",
         detail: "禁止新开多仓，保护已有仓位。" };
     if (sent.tilt === "trim")
-      return { headline: "止盈", emoji: "🟠", state: `极端过热`, color: "var(--orange)",
+      return { id: "trim", headline: "止盈", emoji: "🟠", state: `极端过热`, color: "var(--orange)",
         detail: "减仓止盈，收紧保护。" };
     if (sent.tilt === "cooldown")
-      return { headline: "兑现", emoji: "🟠", state: `恐慌降温期`, color: "var(--orange)",
+      return { id: "cooldown", headline: "兑现", emoji: "🟠", state: `恐慌降温期`, color: "var(--orange)",
         detail: "不开新仓，分批兑现这一轮的利润。" };
     if (sent.tilt === "accumulate")
-      return { headline: "布局", emoji: "🟢", state: `恐慌积累`, color: "var(--up)",
+      return { id: "accumulate", headline: "布局", emoji: "🟢", state: `恐慌积累`, color: "var(--up)",
         detail: "控制仓位，分批买入强势标的。" };
     if (sent.tilt === "scale")
-      return { headline: "分批参与", emoji: "🔵", state: `情绪偏冷`, color: "var(--accent)",
+      return { id: "scale", headline: "分批参与", emoji: "🔵", state: `情绪偏冷`, color: "var(--accent)",
         detail: "小幅优选加仓，保留后续资金。" };
     if (sent.tilt === "hold")
-      return { headline: "保持持仓", emoji: "🟡", state: `情绪偏热`, color: "var(--warn)",
+      return { id: "hold", headline: "保持持仓", emoji: "🟡", state: `情绪偏热`, color: "var(--warn)",
         detail: "持有，不新增风险。" };
-    return { headline: "正常配置", emoji: "🟢", state: `趋势顺风`, color: "var(--up)",
+    return { id: "normal", headline: "正常配置", emoji: "🟢", state: `趋势顺风`, color: "var(--up)",
       detail: "按风险预算正常布局。" };
   }
 
@@ -14666,6 +14693,129 @@ function rsAdjustGrade(grade, rsResult) {
     const sent = getSentimentAxis(fg, rsi, vixTrend, vix, vix60Max);
     const combined = combineAxes(dir, risk, sent);
     return { dir, risk, sent, combined, vix, fg, rsi, price, ma50, ma200 };
+  }
+
+  // ── Advice history ────────────────────────────────────────────────────────
+  // 综合建议的逐日回放，跟 buildPhaseHistory 同构（同一套 days/segs/transitions/
+  // months 结构，因此复用那套色带 DOM 与 CSS），但回放的是 combineAxes 的完整输出
+  // 而不只是方向轴。
+  //
+  // 为什么是回放而不是每天攒快照：三轴都是当日输入的纯函数，拿到那天的 VOO/VIX/FGI
+  // 就能重算。攒快照有两个硬伤——只有上线之后才有数据，且用户不开 app 的那些天会
+  // 断档，而那恰恰是最需要回看的时段。FGI 历史一直躺在 /api/feargreed 那个 graphdata
+  // 端点的响应里，此前被代理整个丢掉了。
+  //
+  // buildPhaseHistory 顶部的注释否决过「用综合状态画色带」，理由是阈值抖动
+  // （19.8 → 20.2 → 19.9 一周三次"转换"）。那个判断针对的是用它去定义**市场阶段的
+  // 边界**，至今成立，所以阶段周期卡仍然只由方向轴定义。这里回答的是另一个问题：
+  // 这条建议是什么时候变成现在这样的。抖动因此不是要消除的东西，而是要如实呈现的
+  // 属性——色带逐日照画，转换列表折叠短段并把折叠掉的次数报出来。
+  const ADVICE_SESSIONS = 252;   // 与阶段周期同窗口，两张卡的时间轴才可比
+  const ADVICE_MIN_SEG  = 3;     // 短于此的段按阈值抖动处理：列表折叠，但计数照报
+
+  function buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, maxSessions) {
+    if (!vooCloses?.length || !vooDates?.length) return null;
+    // FGI 历史是唯一无法从已有行情推导的输入。拿不到就如实说「历史不可用」，而不是
+    // 拿今天的 FGI 去回填过去——那会造出一条看着完整、实则虚构的历史线。
+    if (!fgByDate || !Object.keys(fgByDate).length) return { unavailable: true };
+
+    const e50  = calcEMASeries(vooCloses, 50);
+    const e200 = calcEMASeries(vooCloses, 200);
+    const rsiS = calcRSISeries(vooCloses);
+    const n    = vooDates.length;
+
+    // VIX 与 FGI 按 VOO 的交易日对齐，缺口用**前值**补。这跟「用今天的值回填历史」
+    // 是两回事：前值补齐是这两个指标在那天的真实状态（它们只在交易日更新），不引入
+    // 未来信息；序列开始之前没有前值可补，那些天直接不回放。
+    const vixAl = new Array(n).fill(null), fgAl = new Array(n).fill(null);
+    let cv = null, cf = null;
+    for (let i = 0; i < n; i++) {
+      if (vixByDate?.[vooDates[i]] != null) cv = vixByDate[vooDates[i]];
+      if (fgByDate?.[vooDates[i]]  != null) cf = fgByDate[vooDates[i]];
+      vixAl[i] = cv; fgAl[i] = cf;
+    }
+
+    // vixTrend 逐日：EMA10 与 3 个交易日前的 EMA10 比、±0.5，与 calcEMA10Trend 同判据
+    // （那里只算最新一天）。头部可能还没有 VIX，从第一个有值的位置起算，不用 0 填
+    // ——0 会把 EMA 的种子彻底毁掉。
+    const vixE10 = new Array(n).fill(null);
+    const v0 = vixAl.findIndex(v => v != null);
+    if (v0 >= 0) {
+      const ser = calcEMASeries(vixAl.slice(v0), 10);
+      for (let i = 0; i < ser.length; i++) vixE10[v0 + i] = ser[i];
+    }
+    const trendAt = i => {
+      const a = vixE10[i], b = vixE10[i - 3];
+      if (a == null || b == null) return "flat";
+      return a > b + 0.5 ? "up" : a < b - 0.5 ? "down" : "flat";
+    };
+    // 最近 60 个交易日（含当天）的 VIX 最高收盘，与 fetchMarketData 里那段 slice(-60)
+    // 同口径——只是这里要的是每一天各自的窗口。
+    const max60At = i => {
+      let m = null;
+      for (let j = Math.max(0, i - 59); j <= i; j++)
+        if (vixAl[j] != null && (m == null || vixAl[j] > m)) m = vixAl[j];
+      return m;
+    };
+
+    const days = [];
+    for (let i = 0; i < n; i++) {
+      // 四个输入缺任何一个都不回放这一天。EMA200 要 200 个交易日预热，FGI 历史约一年，
+      // 实际覆盖是两者的交集——卡片按真实跨度报数，不笼统写「近一年」。
+      if (e200[i] == null || rsiS[i] == null || vixAl[i] == null || fgAl[i] == null) continue;
+      const dir  = getDirectionAxis(vooCloses[i], +e50[i].toFixed(2), +e200[i].toFixed(2));
+      const risk = getRiskAxis(vixAl[i]);
+      const sent = getSentimentAxis(fgAl[i], rsiS[i], trendAt(i), vixAl[i], max60At(i));
+      const c    = combineAxes(dir, risk, sent);
+      days.push({
+        date: vooDates[i], id: c.id, headline: c.headline, state: c.state, color: c.color,
+        dirId: dir.id, dir: dir.label, posMax: risk.posMax, sentId: sent.id, sent: sent.label,
+        px: vooCloses[i], vix: vixAl[i], fg: fgAl[i], rsi: rsiS[i],
+      });
+    }
+    if (!days.length) return { unavailable: true };
+    if (maxSessions && days.length > maxSessions) days.splice(0, days.length - maxSessions);
+
+    const segs = [];
+    days.forEach(d => {
+      const last = segs[segs.length - 1];
+      if (last && last.id === d.id) { last.days.push(d); last.end = d.date; }
+      else segs.push({ id: d.id, headline: d.headline, state: d.state, color: d.color,
+                       from: d.date, end: d.date, days: [d] });
+    });
+
+    // 每次切换都记，包括单日翻转——跟阶段周期同样的取舍：确认延迟会把转折报晚，而
+    // 一段只持续一天这件事，它自己的持续天数列就说明了，读者可以自行掂量。渲染层
+    // 再按 ADVICE_MIN_SEG 决定折叠哪些。
+    const transitions = [];
+    for (let i = 1; i < segs.length; i++) {
+      const seg = segs[i], prev = segs[i - 1];
+      const p = prev.days[prev.days.length - 1], f = seg.days[0];
+      // 指名道姓是哪一轴翻的、翻到哪个数——这样每一行都能拿去对着图核，而不是只能
+      // 当结论接受。三轴可能同时变，所以是列表不是单选。
+      const bits = [];
+      if (p.dirId  !== f.dirId)  bits.push(`方向 ${p.dir} → ${f.dir}`);
+      if (p.sentId !== f.sentId) bits.push(`情绪 ${p.sent} → ${f.sent}（FGI ${f.fg} · RSI ${f.rsi}）`);
+      if (p.posMax !== f.posMax) bits.push(`仓位上限 ${p.posMax}% → ${f.posMax}%（VIX ${f.vix.toFixed(1)}）`);
+      transitions.push({
+        date: f.date, from: prev.headline, to: seg.headline, color: seg.color,
+        why: bits.length ? bits.join(" · ") : "阈值附近抖动",
+        lasted: seg.days.length, ongoing: i === segs.length - 1,
+      });
+    }
+
+    const months = [];
+    days.forEach(d => {
+      const m = d.date.slice(0, 7);
+      const last = months[months.length - 1];
+      if (last && last.m === m) last.n++; else months.push({ m, n: 1 });
+    });
+
+    return {
+      days, segs, transitions, current: segs[segs.length - 1], months,
+      span: { from: days[0].date, to: days[days.length - 1].date },
+      shortCount: transitions.filter(t => t.lasted < ADVICE_MIN_SEG).length,
+    };
   }
 
   // How far each axis is from the threshold that would flip it. Needs no history and is
@@ -14829,6 +14979,90 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mkp-sub-note">越过这些线，上面的判断就会变</span></div>
         <div class="mkp-th">${mkThresholdsHTML(axes)}</div>
         <div class="mkp-note">均线是回看的，阶段只能事后确认 —— 这里说明现在处在什么阶段、已经多久，不预测下一阶段。</div>
+      </div>`;
+  }
+
+  // 复用阶段周期那套色带 DOM 与 CSS（.mkp-bars/.mkp-ribbon/.mkp-seg/.mkp-ticks/
+  // .mkp-legend/.mkp-fold/.mkp-tr）——两张卡结构完全同构，没有理由再造一套。
+  function mkAdviceHTML(ah) {
+    if (!ah) return "";
+    if (ah.unavailable) {
+      return `<div class="mkt-card mkt-advice">
+        ${atitle("建议走向", "Advice History")}
+        <div class="mkp-empty">暂时无法回放：逐日重算综合建议需要 FGI 日频历史（/api/feargreed 的 <code>history</code> 字段）与至少 200 个交易日的 VOO 数据，当前至少缺其中之一。</div>
+      </div>`;
+    }
+    const cur = ah.current, held = cur.days.length, total = ah.days.length;
+
+    const ribbon = ah.segs.map((sg, i) => `
+      <span class="mkp-seg${i === ah.segs.length - 1 ? " now" : ""}"
+            style="flex:${sg.days.length};background-color:${sg.color}"
+            title="${sg.headline} · ${sg.state} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日"></span>`).join("");
+
+    const monthTicks = `
+      <div class="mkp-ticks">${ah.months.map(m => `
+        <span class="mkp-tick" style="flex:${m.n}"><i>${+m.m.slice(5)}月</i></span>`).join("")}</div>`;
+
+    // 图例顺便承担「这一年主要待在哪个状态」——色带看得出形状，看不出占比，而占比
+    // 恰恰是这张卡最容易被问到的问题。零新增布局，只是在本来就要画的图例里带上天数。
+    const tally = {};
+    ah.days.forEach(d => {
+      (tally[d.id] || (tally[d.id] = { n: 0, headline: d.headline, color: d.color })).n++;
+    });
+    const legend = `
+      <div class="mkp-legend"><span class="mkp-legend-g">${
+        Object.values(tally).sort((a, b) => b.n - a.n).map(t =>
+          `<span class="mkp-key"><i style="background:${t.color}"></i>${t.headline} ${t.n}天 · ${Math.round(t.n / total * 100)}%</span>`
+        ).join("")}</span></div>`;
+
+    // 只列住够 ADVICE_MIN_SEG 天的转换。情绪轴天天在动，阈值附近的单日翻转会把列表
+    // 淹掉；但折叠掉多少次是直接报出来的数字，不是悄悄扣掉——这一年到底碎不碎，由
+    // 真实数据自己回答。
+    const major = ah.transitions.filter(t => t.lasted >= ADVICE_MIN_SEG);
+    const trans = major.length
+      ? major.slice().reverse().map(t => `
+        <div class="mkp-tr">
+          <span class="mkp-tr-date num">${t.date}</span>
+          <span class="mkp-tr-move"><i style="background:${t.color}"></i>${t.from} → ${t.to}</span>
+          <span class="mkp-tr-held">${t.lasted}d${t.ongoing ? " 至今" : ""}</span>
+          <span class="mkp-tr-why">${t.why}</span>
+        </div>`).join("")
+      : `<div class="mkp-tr-none">这段窗口内没有持续 ${ADVICE_MIN_SEG} 个交易日以上的建议切换。</div>`;
+
+    const summaryMeta = ah.transitions.length
+      ? `${ah.transitions.length} 次切换${ah.shortCount ? ` · ${ah.shortCount} 次短于 ${ADVICE_MIN_SEG} 日未列出` : ""} · 最近 ${ah.transitions[ah.transitions.length - 1].date}`
+      : "本窗口内无切换";
+
+    return `
+      <div class="mkt-card mkt-advice">
+        ${atitle("建议走向", "Advice History")}
+        <div class="mkp-head">
+          <span class="mkp-dot" style="background:${cur.color}"></span>
+          <span class="mkp-now" style="color:${cur.color}">${cur.headline}</span>
+          <span class="mkp-held"><b>${held}</b> 个交易日</span>
+          <span class="mkp-scope">${ah.span.from} → ${ah.span.to} · ${total} 个交易日</span>
+          <span class="mkp-axis-now" style="color:${cur.color}">现在 · ${cur.state}</span>
+        </div>
+        <div class="mkp-bars">
+          <span class="mkp-bar-k">建议</span>
+          <div class="mkp-ribbon">${ribbon}</div>
+          <span></span>
+          ${monthTicks}
+        </div>
+        ${legend}
+        <details class="mkp-fold" data-mkp-fold="adv"${
+          localStorage.getItem("trendo_mkp_adv_open") === "1" ? " open" : ""}>
+          <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
+            <span>建议切换</span><em>Transitions</em>
+            <span class="mkp-filtered">${summaryMeta}</span></summary>
+          <div class="mkp-trs">${trans}</div>
+        </details>
+        <div class="mkp-note">
+          这条色带是用<b>今天这套三轴规则</b>回放历史行情算出来的，即「当时若用现在的规则会给什么建议」，
+          不是当时页面上真的显示过什么——规则本身改过多版。覆盖范围同时受 FGI 历史（约一年）与
+          EMA200 预热（200 个交易日）限制，上方跨度是两者的实际交集。情绪轴每日波动，阈值附近的
+          短暂翻转照实画进色带、但不进切换列表。
+        </div>
       </div>`;
   }
 
@@ -15676,7 +15910,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate, advice } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -15696,6 +15930,7 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       <div class="mkt-module-sep"></div>
       ${mkAxesHTML(axes)}
+      ${mkAdviceHTML(advice)}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
         ${mkIndicatorHTML("vxn", vxn, vxnChg, vxnAbs, ema10Tag(vxnEMA10, vxnTrend))}
@@ -15815,10 +16050,14 @@ function rsAdjustGrade(grade, rsResult) {
       const { ema10: vxnEMA10, trend: vxnTrend } = calcEMA10Trend(histResults, "^VXN");
 
       // Fear & Greed
-      let fg = 50, fgPrev = null;
+      let fg = 50, fgPrev = null, fgByDate = null;
       if (fgRes.status === "fulfilled" && fgRes.value?.score != null) {
         fg = fgRes.value.score;
         fgPrev = fgRes.value.prevScore ?? null;
+        // 日频 FGI，供综合建议逐日回放。上游改了结构就退化为「历史不可用」，
+        // 不影响这里其余几个读数。
+        fgByDate = fgRes.value.history && typeof fgRes.value.history === "object"
+          ? fgRes.value.history : null;
       }
 
       const fgAbs = fgPrev != null ? +(fg - fgPrev).toFixed(1) : null;
@@ -15857,6 +16096,8 @@ function rsAdjustGrade(grade, rsResult) {
       })();
       const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend, vix60Max });
       const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS);
+      // 综合建议逐日回放。用的全是上面那两次请求已经拿回来的数据，无额外调用。
+      const advice = buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, ADVICE_SESSIONS);
       // Says "近一年" only when a full year is actually there; a shorter history is
       // reported at its real length rather than mislabelled.
       const phaseScope = !phase ? ""
@@ -15875,7 +16116,7 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, phaseScope, pending, benchDate, advice });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,

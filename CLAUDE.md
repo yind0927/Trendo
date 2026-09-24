@@ -59,8 +59,12 @@ project/
     history.js         — 历史日线数据（Yahoo Finance）
     holdings.js        — ETF 成分股静态数据（top 20，手动维护）
     earnings.js        — 财报日期（Finnhub → Yahoo 降级）
-    feargreed.js       — CNN 恐慌贪婪指数代理（29 行的纯代理）。曾挂过 `?mode=rates` FRED 宏观利率分支，
-                         因 FRED 从 Vercel egress 不可达（连续三版都超时）已整块删除，不要再往这里加
+    feargreed.js       — CNN 恐慌贪婪指数代理。返回 `{score, rating, prevScore, history}`——`history` 是
+                         `{"YYYY-MM-DD": 分数}` 的日频序列（约一年），供「建议走向」逐日回放；它一直躺在
+                         CNN 那个 `graphdata` 端点的响应里（`fear_and_greed_historical.data`），v799 前被整个
+                         丢掉了。日期按**美东**转（v594 的教训）。上游改结构时 `history` 退化为 null，不连累
+                         另外三个字段。曾挂过 `?mode=rates` FRED 宏观利率分支，因 FRED 从 Vercel egress
+                         不可达（连续三版都超时）已整块删除，不要再往这里加
     news.js            — 个股新闻
     stock-analysis.js  — 个股 AI 分析
     data.js            — 跨设备云同步（Upstash Redis）；POST 时按blob是否含挂单维护 `trendo:order_keys` 注册表
@@ -172,6 +176,7 @@ trendo_brief_collapsed / trendo_holdings_brief_collapsed / trendo_drawdown_colla
 # 折叠与视图状态（不进云同步）
 trendo_cyc_open              → 周期系统分析展开状态
 trendo_mkp_tr_open           → 阶段周期卡「阶段转换」展开状态（key 由 data-mkp-fold 拼出）
+trendo_mkp_adv_open          → 建议走向卡「建议切换」展开状态（同上，wireMarketFolds 通用）
 trendo_holdings_view / trendo_sim_holdings_view / trendo_sim_tradelog_collapsed
 trendo_last_page             → 上次打开的页（journal/watchlist 自动迁移为 inspirations）
 trendo_rvw_* / trendo_mkp_*
@@ -280,7 +285,7 @@ P&L 日历仍使用原始 `CLOSED_POSITIONS`（每次平仓事件显示在对应
 ```
 desk         → main + #desk-view（默认主页，持仓表格 + 持仓总结 6 卡）
 sim          → #sim-view（模拟仓）
-market       → #market-view（三轴模型 + VIX/VXN + 阶段周期 + 周期系统分析 + 板块轮动）
+market       → #market-view（三轴模型 + 建议走向 + VIX/VXN + 阶段周期 + 周期系统分析 + 板块轮动）
 analytics    → #analytics-view（复盘概览 + 收益与盈亏 + 出场质量 + P&L日历/周几分布）
 inspirations → #inspirations-view（子tab：复盘 Journal / 准备 Preparation）
 options      → #options-view（只有实盘一个面板，`REAL_OPTIONS`）
@@ -351,6 +356,33 @@ Closed tab 按 `pnlFinal ?? pnlDollar` 判断盈利/亏损。
 
 - `buildAxes({price,ma50,ma200,vix,fg,rsi,vixTrend})` 在 `fetchMarketData` 中调用，结果传入 `renderMarket(data.axes)`。
 - `mkAxesHTML(axes)` 渲染：综合建议横幅 + 三轴卡片（方向/风险容量/情绪）。
+- `combined.id`（defense/trim/cooldown/accumulate/scale/hold/normal）是**稳定标识**，专供建议走向色带分段。
+  `headline` 是给人读的文案、改过多版，拿它当分段键会让文案一改历史就碎成两段——别这么干。
+
+### 建议走向（`mkAdviceHTML`，v799）—— 综合建议的逐日回放
+
+`buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, ADVICE_SESSIONS)` 把 `combineAxes`
+的输出**逐日重算一遍**，产出与 `buildPhaseHistory` 同构的 `{days, segs, transitions, current,
+months, span, shortCount}`，因此直接复用阶段周期那套色带 DOM 与 CSS（`.mkp-bars`/`.mkp-ribbon`/
+`.mkp-seg`/`.mkp-ticks`/`.mkp-legend`/`.mkp-fold`/`.mkp-tr`），零新增布局。
+
+**是回放不是攒快照**：三轴都是当日输入的纯函数，拿到那天的 VOO/VIX/FGI 就能重算。攒快照有两个
+硬伤——只有上线之后才有数据，且用户不开 app 的那些天会断档，而那恰恰最该被回看。逐日 RSI 由
+`calcRSISeries` 提供（**刻意逐点复刻 `calcRSI`，包括它"seed 后从 period+1 起步、跳过
+closes[period]"那个跟教科书差一根 bar 的细节**——回放最后一格必须等于卡片上现在显示的 RSI）；
+逐日 `vixTrend`/`vix60Max` 同样按各自原判据逐日算。
+
+**三条如实写在卡片上的边界**：
+1. 用**今天的规则**跑历史 → 是"当时若用现在的规则会给什么建议"，**不是当时页面上真的显示过什么**（三轴规则改过多版）。
+2. 覆盖 = FGI 历史（约一年）∩ EMA200 预热（200 个交易日），按**实际跨度**报数，不笼统写"近一年"。
+3. FGI/VIX 缺口用**前值**补（那是它们当天的真实状态，无 look-ahead）；序列开始之前没有前值可补，那些天不回放。FGI 历史整个拿不到 → `{unavailable:true}`，卡片明说缺什么，**绝不用今天的 FGI 回填历史**。
+
+**抖动是如实呈现、不是消除**：`buildPhaseHistory` 顶部注释否决过"用综合状态画色带"（`19.8 → 20.2
+→ 19.9` 一周三次转换）——那个判断针对的是用它**定义市场阶段的边界**，至今成立，阶段周期卡仍只由
+方向轴定义。这张卡回答的是另一个问题（这条建议何时变成现在这样）。所以色带**逐日照画不平滑**，
+只有转换列表按 `ADVICE_MIN_SEG`(3) 折叠短段，且把折叠掉的次数直接报在摘要行里。压力实测（FGI
+精确地每天在 59/61 跳这种病态输入）：201 天 → 147 段/146 次切换，列表仍只列 11 条、卡片 302px
+没被撑爆，图例的占比在色带碎掉时接管了"主要待在哪个状态"这个问题。
 - VOO 价格/50MA/200MA/RSI 来自 `/api/history?symbols=VOO...&from=`（v7.8 起 `from` 改为 **400 天**以满足 200MA；v7.9 起方向轴与 RSI 基准统一为 VOO）。
 - 旧 `MKT_REGIMES` 6 态保留为 `<details>` 折叠的"旧版参考手册"（`mkPlaybookHTML`），`mkStrategyHTML` 已删除。
 - AI 简报：`_lastMktCtx.regime` 改为综合建议 headline，并新增 `direction/posMax/sentiment` 传入 `market-summary.js`（URL params `dir/posmax/senti`），prompt 增加三轴框架解释。
@@ -935,6 +967,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v796 | **现持仓/模拟仓抽屉：键盘上下键 + 手机端左右滑动改为按「屏幕上实际显示的顺序」导航**（用户：「现在键盘和手机端的滑动是按照时间来排序的应该是，更新为按照表格顺序来交互」）。**根因**——`_drawerNavList()` 一直有"列表视图走 `<tr>` DOM 顺序"的正确逻辑，但**卡片视图（手机端默认）完全没有对应分支**：找不到 `<tr>` 就直接退回 `mode:"data"`，用 `HOLDINGS`/`SIM_HOLDINGS`/`mergeClosedForDisplay(...)` 的**原始数组顺序**——那基本等价于"插入顺序＝时间顺序"，跟卡片视图实际显示的顺序（持仓中固定按 `entry` 日期降序分组，已平仓页签选了非默认排序时按该字段整体排名）根本不是一回事。键盘处理函数（`document.addEventListener("keydown", ...)`）里还平行维护着一份几乎一样但**独立写死走原始数组**的分支（注释"Card mode — navigate through the data array directly"），跟 `_drawerNavList()` 是两套逻辑、这次修的时候都要照到。**修法**：①`_drawerNavList()` 新增卡片 DOM 兜底——`<tr>` 找不到时改查 `${cardSel} .hc-card`（`cardSel` 为 `#holdings-cards`/`#sim-holdings-cards`），这些卡片自带 `data-sym`/`data-entry`/`data-cost`，DOM 顺序就是排序/筛选/日期分组后真正显示的顺序；只有真的两者都查不到（理论上不该发生）才落到原始数组的 `mode:"data"` 兜底。②键盘上下键的处理**整段重写为直接调用 `_drawerNavList(isSim)`**，删掉了此前那份重复且用错顺序的独立分支——现在列表/卡片两种视图、真实仓/模拟仓，键盘、滑动、抽屉计数器（`updateDrawerNavCounter`）三处消费方全部走同一份顺序判定，不会再出现"滑动对了、键盘错了"这类分叉。`wireDrawerSwipe()`/`updateDrawerNavCounter()` 本身不用改——它们早就是通用地读 `nav.trs`，之前只是 `_drawerNavList()` 喂给它们的卡片视图数据顺序不对，这次把喂料源头修对，两个消费方自动跟着修好。Playwright 回归（新增 `v796.js` 14 项）：故意乱序插入持仓（AAA 09-01 最早 → BBB 09-20 最新 → CCC 09-10 中间，插入顺序 AAA,BBB,CCC），验证卡片按入场日期降序显示为 BBB,CCC,AAA；键盘 ArrowDown 从 BBB 依次到 CCC→AAA→回绕 BBB（而不是插入顺序会给出的 BBB→AAA→CCC），ArrowUp 反向验证；手机端触摸滑动（`Touch`+`TouchEvent` 合成事件）同样按 BBB→CCC 走；模拟仓复现同一场景；源码层确认键盘处理已改为复用 `_drawerNavList()`、旧的独立数组分支已删除。`v792` 31 / `v790` 24 / `v791` 20 / `closedsort` 25 / `v788` 56 全过（`v789.js` 1 项预期失败——测的是 v791 已删除的功能，与本次改动无关，早在 v791 就已作废退出回归集）。 |
 | v797 | **模型选股：修复批次头部"N周"标签把"真的走满 N 周"和"一个检查点都没到"显示成同一句话的 bug + 补上此前完全没有文档的这块功能**（用户：「每周卡片是不是有bug…最早那周标签写的2周，然后第二批写的是1周已完成，第三批写的2周，这里是啥意思？」）。**①先解释顶部六张卡片**（用户第一问）：那六张卡是 `MP_CHECKPOINTS` 的**六个持有期**（1/2/4/6/8/12 周），不是六批股票；每张卡都汇总**全部**已录批次里"活过这个持有期"的那些，回答"选出来的股票拿 N 周平均比 VOO 多赚多少"——代码里其实已经有 `.mp-stats-hint` 说明这件事，只是容易被当套话跳过，本版把这段解释也写进了 CLAUDE.md 的新增「模型选股」小节。**②真 bug（用户第二问）**——`mpHeadlineKey(c)` 决定每批折叠卡头部该显示哪个持有期：批次一个检查点都没走完（刚录入当天，`done.length === 0`）时，旧代码 `return MP_PRIMARY` 把"2 周"当占位符返回，跟"真的已经走满 2 周（主口径）"命中的是**同一个返回值**，两种状态在头部标签上显示成完全相同的"2 周"文本，唯一的区别只在下面的等权/VOO/超额三个数字是不是全是"—"——用户口中"最早那周 2周、第二批 1周已完成、第三批又是 2周"正是这个现象：第三批（最新录入、还没等到第一个检查点）被误显示成跟第一批（真的完成了2周）一样的"2周"。**修法**：`mpHeadlineKey` 零数据时改返回 `null`，调用方新增第三个分支——`hk == null` 时显示**"不足 1 周"**（`title`："还没有任何持有期走满，最短的 1 周检查点也还没到"），彻底跟"2 周"（真完成）、"N 周 已完成"（部分完成）区分开，三种状态三句不同的话。`hzGrid()`（展开后的六格明细）不受影响，那里每个持有期本来就独立判断、未到就显示 `—`，没有这个歧义。Playwright 回归（新增 `v797.js` 17 项）：构造三种真实场景（真走满2周/只走满1周/零检查点）验证三句标签互不相同、`title` 各自正确、零数据批次三个数字全"—"而真完成批次有真实数字、手机端一致无溢出、空态不受影响、源码层确认旧的"零数据借用主口径"回退已删除。这是 `MODEL_PICKS` 功能自 CLAUDE.md 建档以来第一次被记录在案，本版顺带把整套机制（数据结构/入场价来源/检查点冻结规则/六卡与批次头两层展示的关系）写进了新增的「模型选股」章节。 |
 | v798 | **模型选股批次头部标签进一步简化：只给周数，去掉 v797 加的说明文字**（用户对 v797 的直接反馈：「标签的话还是就给出对应的几周就行，其他的不用写」）。v797 为了把"真的走满 N 周"和"一个检查点都没到"两种此前撞在一起的状态区分开，加了三套不同措辞（`"2 周"`/`"N 周 已完成"`/`"不足 1 周"`）+ 对应 `title` 说明——问题解决了，但读起来比需要的啰嗦。改法更简单：`hWeeks` 零数据时不再是 `null`（此前用来触发"不足 1 周"文案），改为 `0`，标签统一渲染成纯 `${hWeeks} 周`，不带后缀也不带 `title`。**三态区分依然成立、且更直接**——"0 周"/"1 周"/"2 周" 三个数字本身互不相同，不需要额外文字再解释一遍状态，v797 要解决的"零数据 vs 真完成显示成同一句话"的问题不会走回头路。CLAUDE.md「模型选股」章节的头部标签小节同步改写。Playwright 回归（新增 `v798.js` 20 项，取代 `v797.js`）：三种场景标签分别为 "0 周"/"1 周"/"2 周" 且互不相同、三者均不带 `title`、零数据批次三个指标仍全 "—"、真完成批次有真实数字、手机端 390px 一致无溢出、空态不受影响、源码层确认 v797 的三套措辞与 `null` 占位符已彻底删除。`v795.js` 16 / `v796.js` 14 保持通过。 |
+| v799 | **Market 页新增「建议走向」卡片（`mkAdviceHTML`）——综合建议的逐日回放色带**（用户讨论后选定做成独立模块，而不是并进阶段周期卡）。**①关键发现：不用攒快照，数据一直都在**——我最初设想的是"每天存一条慢慢攒"，那方案有两个硬伤（只有上线后才有数据、用户不开 app 的那些天断档）。查下来发现 `combineAxes` 的每个输入都能逐日重算：方向轴/风险容量轴本来就在 `buildPhaseHistory` 里逐日算了，RSI、`vixTrend`、`vix60Max` 都是 VOO/VIX 历史的派生值（此前只是**只算了最新一天**），**唯一看似缺口的 FGI 其实也在手上**——`api/feargreed.js` 请求的 CNN 端点叫 `graphdata`，它本来就是给官网那条一年期曲线供数的，响应里一直带着 `fear_and_greed_historical.data`，而代理只取了今天和昨天两个数、把整段历史丢掉了。所以零新数据源、零新 serverless 函数（Hobby 那 12 个的限制不受影响）、零额外请求。**②新增 `calcRSISeries`**（与 `calcEMASeries` 对 `calcEMA` 同样的关系）：**刻意逐点复刻 `calcRSI`，包括它"seed 之后从 period+1 起步、跳过 `closes[period]` 那根 bar"这个跟教科书 RSI 差一根 bar 的细节**——回放的最后一格必须等于卡片上现在显示的 RSI，两套数字对不上是用户看得见的 bug，跟教科书差一根 bar 是看不见的、而且全站一致。测试逐点比对 55 个采样点确认零偏差。**③`combineAxes` 新增稳定 `id`**（defense/trim/cooldown/accumulate/scale/hold/normal）供色带分段——`headline` 是给人读的文案、v538→v560 之间改过好几版，拿它当分段键会让文案一改历史就碎成两段。**④刻意不做的三件事，都如实印在卡片上**：用**今天的规则**跑历史，所以它是"当时若用现在这套规则会给什么建议"、**不是当时页面上真的显示过什么**；覆盖范围 = FGI 历史（约一年）∩ EMA200 预热（200 个交易日），按**实际跨度**报数而不是笼统写"近一年"；FGI/VIX 缺口用**前值**补（那是它们当天的真实状态，不引入 look-ahead），序列开始之前没有前值可补的那些天直接不回放，FGI 整个拿不到就明说"无法回放"并列出缺什么——**绝不用今天的 FGI 回填历史**，那会造出一条看着完整、实则虚构的线。**⑤关于抖动（`buildPhaseHistory` 顶部注释早就否决过"用综合状态画色带"）**：那个否决针对的是用它**定义市场阶段的边界**，至今成立，所以阶段周期卡仍然只由方向轴定义；这张卡回答的是另一个问题——这条建议是什么时候变成现在这样的，抖动因此是要如实呈现的属性、不是要消除的东西。色带**逐日照画不做平滑**，只有转换列表按 `ADVICE_MIN_SEG`(3) 折叠短段，且把折叠掉的次数直接报在摘要行（"146 次切换 · 135 次短于 3 日未列出"）。外网在本环境不可达、拿不到真实数据实测碎片化程度，所以改为**把实际次数印在卡片上让真实数据自己回答**。**压力实测**（病态构造：方向/风险轴全程不动，只让 FGI 精确地每天在 59/61 之间跳、且价格震荡把 RSI 压在中性区使 FGI 成为唯一翻转来源）：201 个交易日 → 147 段、146 次切换，而切换列表仍只列 11 条、卡片高度 302px 没被撑爆，图例的占比（保持持仓 64% · 正常配置 20% · 分批参与 16%）在色带碎成条纹时接管了"主要待在哪个状态"这个问题——最坏情况下卡片依然可读。**⑥复用**：与 `buildPhaseHistory` 同构的返回结构，因此直接套用 `.mkp-bars`/`.mkp-ribbon`/`.mkp-seg`/`.mkp-ticks`/`.mkp-legend`/`.mkp-fold`/`.mkp-tr` 整套 CSS，零新增布局；折叠状态走 `wireMarketFolds` 已有的通用机制（`data-mkp-fold="adv"` → `trendo_mkp_adv_open`），不用再写一遍。图例顺带带上每态天数与占比——色带看得出形状、看不出占比，而占比恰恰是最容易被问到的。Playwright 回归（新增 `v799.js` 54 项）：`calcRSISeries` 逐点一致性、色带分段/各段天数之和 = 头部总数/不超过 252 天窗口、图例占比合计 100%、**回放确实用当天 FGI 而非今天的值回填**（今天传 fg=50，早期 FGI=80 的那段仍正确回放出"止盈"）、切换列表不含短于 3 日的段且每条都指名翻转的轴、折叠状态落盘且跨页重建后保持、FGI 缺失时优雅降级且不连累综合建议横幅与阶段周期色带、手机端 390px 无溢出、抖动压力测试 7 项、源码层接线。`v782` 27 / `v793` 17 / `v795` 16 / `v796` 14 / `v798` 20 / `v787` 42 / `v792` 32 / `v794` 20 复跑全绿。（`cycle5.js` 的 7 项红灯**与本版无关**——已用 `git stash` 对照确认改动前同样是 53/7，是 v794 把 `new_metric` 换成 `capex_breadth`、满分 21→22、得分 3.6→3.7 时只更新了 v769/v771/v787、漏掉了 cycle5，产品是对的、断言过期了，单独订正。） |
 
 
 ---
