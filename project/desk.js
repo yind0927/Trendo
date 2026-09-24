@@ -14688,9 +14688,37 @@ function rsAdjustGrade(grade, rsResult) {
     if (sent.tilt === "hold")
       return { id: "hold", headline: "保持持仓", emoji: "🟡", state: `情绪偏热`, color: "var(--warn)",
         detail: "持有，不新增风险。" };
-    return { id: "normal", headline: "正常配置", emoji: "🟢", state: `趋势顺风`, color: "var(--up)",
+    // 「正常配置」与上面的「布局」此前同用 var(--up) 绿色——一个是恐慌区主动分批买入
+    // （罕见、机会性），一个是顺风区的默认基线状态（最常见、没有特殊操作）,两者含义
+    // 完全不同却读不出区别。「正常配置」本质是「没有特殊信号，按既定计划走」，改用
+    // 调色板里语义为中性/基线的 var(--neutral)（灰）而非再借一个方向色，避免与其余
+    // 6 个状态里任何一个产生新的混淆；emoji 同步从 🟢 改为 ⚪ 呼应"没有特殊颜色"。
+    return { id: "normal", headline: "正常配置", emoji: "⚪", state: `趋势顺风`, color: "var(--neutral)",
       detail: "按风险预算正常布局。" };
   }
+
+  // combineAxes 的 7 种状态 + 各自的判定条件，供周期分析卡「全部状态与规则」小节渲染。
+  // 与 combineAxes 函数体本身刻意保持同一份文案（headline/state/detail/color/emoji）、
+  // 只多一个 `cond` 字段描述触发条件——两处分开维护是因为 combineAxes 的判断是用代码
+  // 表达的（`if (!dir.eligible)` 等），这里需要给人看的文字版，只能手动对照写一份。
+  // **改 combineAxes 的任何一条分支时，记得同步这张表**，否则规则说明会跟实际判定脱节。
+  // 顺序即优先级顺序（从上到下依次判定，第一条满足即采用）。
+  const ADVICE_RULES = [
+    { id: "defense", headline: "防守", emoji: "🔴", color: "var(--down)", state: "趋势逆风",
+      cond: "方向轴逆风：50/200 日均线死叉，或价格跌破 200 日均线", detail: "禁止新开多仓，保护已有仓位。" },
+    { id: "trim", headline: "止盈", emoji: "🟠", color: "var(--orange)", state: "极端过热",
+      cond: "情绪过热：FGI > 75 或 RSI > 72", detail: "减仓止盈，收紧保护。" },
+    { id: "cooldown", headline: "兑现", emoji: "🔷", color: "var(--blue)", state: "恐慌降温期",
+      cond: "VIX 曾在 60 个交易日内高于 30、现已回落到 20 以下", detail: "不开新仓，分批兑现这一轮的利润。" },
+    { id: "accumulate", headline: "布局", emoji: "🟢", color: "var(--up)", state: "恐慌积累",
+      cond: "极端恐惧：VIX ≥ 30，或 FGI < 25 且 RSI < 38", detail: "控制仓位，分批买入强势标的。" },
+    { id: "scale", headline: "分批参与", emoji: "🔵", color: "var(--accent)", state: "情绪偏冷",
+      cond: "情绪偏冷：FGI < 40 或 RSI < 45", detail: "小幅优选加仓，保留后续资金。" },
+    { id: "hold", headline: "保持持仓", emoji: "🟡", color: "var(--warn)", state: "情绪偏热",
+      cond: "情绪偏热：FGI ≥ 60 或 RSI ≥ 65", detail: "持有，不新增风险。" },
+    { id: "normal", headline: "正常配置", emoji: "⚪", color: "var(--neutral)", state: "趋势顺风",
+      cond: "以上条件均不满足（方向顺风，情绪不冷不热不过热）", detail: "按风险预算正常布局。" },
+  ];
 
   function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend, vix60Max }) {
     const dir  = getDirectionAxis(price, ma50, ma200);
@@ -15070,6 +15098,27 @@ function rsAdjustGrade(grade, rsResult) {
           </div>`).join("")}</div>
       </details>`;
 
+    // 「状态说明」只列这段窗口里实际出现过的状态；这里补一份完整参考——不管窗口内
+    // 出现没出现，7 种状态各自的定义、判定规则与含义全部列出，且按优先级顺序排列。
+    // 默认收起（跟其余两个小节一样，平时不占地方），当前状态（now.id）高亮标出。
+    const rulesList = `
+      <details class="mkp-fold" data-mkp-fold="adv-rules"${
+        localStorage.getItem("trendo_mkp_adv-rules_open") === "1" ? " open" : ""}>
+        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
+          <span>全部状态与规则</span><em>All States &amp; Rules</em>
+          <span class="mkp-filtered">${ADVICE_RULES.length} 种</span></summary>
+        <div class="mkp-rule-note">按下列顺序依次判定，第一条满足即采用该结果——方向逆风是闸门，一票否决；其余按情绪信号从上到下排列优先级。</div>
+        <div class="mkp-advice-defs">${ADVICE_RULES.map(t => `
+          <div class="mkp-advice-def${t.id === now.id ? " mkp-rule-now" : ""}">
+            <span class="mkp-advice-def-dot" style="background:${t.color}"></span>
+            <span class="mkp-advice-def-line">
+              <b style="color:${t.color}">${t.headline}</b> · ${t.state} — ${t.detail}
+              <span class="mkp-rule-cond">规则：${t.cond}</span>
+            </span>
+            ${t.id === now.id ? `<span class="mkp-rule-tag">当前</span>` : ""}
+          </div>`).join("")}</div>
+      </details>`;
+
     // 只列住够 ADVICE_MIN_SEG 天的转换。情绪轴天天在动，阈值附近的单日翻转会把列表
     // 淹掉；但折叠掉多少次是直接报出来的数字，不是悄悄扣掉——这一年到底碎不碎，由
     // 真实数据自己回答。
@@ -15111,6 +15160,7 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         ${legend}
         ${adviceDefs}
+        ${rulesList}
         <details class="mkp-fold" data-mkp-fold="adv"${
           localStorage.getItem("trendo_mkp_adv_open") === "1" ? " open" : ""}>
           <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
