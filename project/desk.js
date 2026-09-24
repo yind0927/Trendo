@@ -14690,10 +14690,13 @@ function rsAdjustGrade(grade, rsResult) {
         detail: "持有，不新增风险。" };
     // 「正常配置」与上面的「布局」此前同用 var(--up) 绿色——一个是恐慌区主动分批买入
     // （罕见、机会性），一个是顺风区的默认基线状态（最常见、没有特殊操作）,两者含义
-    // 完全不同却读不出区别。「正常配置」本质是「没有特殊信号，按既定计划走」，改用
-    // 调色板里语义为中性/基线的 var(--neutral)（灰）而非再借一个方向色，避免与其余
-    // 6 个状态里任何一个产生新的混淆；emoji 同步从 🟢 改为 ⚪ 呼应"没有特殊颜色"。
-    return { id: "normal", headline: "正常配置", emoji: "⚪", state: `趋势顺风`, color: "var(--neutral)",
+    // 完全不同却读不出区别。v804 先改用中性灰 var(--neutral)，用户随后指定改用浅蓝色：
+    // 新增调色板 token var(--skyblue)（比既有 var(--blue) 更淡更亮，两者拉开区分度，
+    // var(--blue) 已被「兑现」占用），emoji 从 🟢 改为 🔹（与「兑现」的 🔷、「分批参与」
+    // 的 🔵 都不撞形）。这个颜色/emoji 是 combineAxes 返回对象里唯一的定义来源——顶部
+    // 综合建议横幅、周期分析卡的色带/图例/全部状态与规则，全部直接读这个对象，因此
+    // 颜色天然保持一致，不需要在别处再维护一份映射。
+    return { id: "normal", headline: "正常配置", emoji: "🔹", state: `趋势顺风`, color: "var(--skyblue)",
       detail: "按风险预算正常布局。" };
   }
 
@@ -14716,7 +14719,7 @@ function rsAdjustGrade(grade, rsResult) {
       cond: "情绪偏冷：FGI < 40 或 RSI < 45", detail: "小幅优选加仓，保留后续资金。" },
     { id: "hold", headline: "保持持仓", emoji: "🟡", color: "var(--warn)", state: "情绪偏热",
       cond: "情绪偏热：FGI ≥ 60 或 RSI ≥ 65", detail: "持有，不新增风险。" },
-    { id: "normal", headline: "正常配置", emoji: "⚪", color: "var(--neutral)", state: "趋势顺风",
+    { id: "normal", headline: "正常配置", emoji: "🔹", color: "var(--skyblue)", state: "趋势顺风",
       cond: "以上条件均不满足（方向顺风，情绪不冷不热不过热）", detail: "按风险预算正常布局。" },
   ];
 
@@ -14911,7 +14914,7 @@ function rsAdjustGrade(grade, rsResult) {
   function mkPhaseHTML(ph, axes, pending = null, settledDate = null) {
     if (!ph) {
       return `<div class="mkt-card mkt-phase">
-        ${atitle("阶段周期", "Market Cycle")}
+        ${atitle("VOO 和 VIX周期", "VOO & VIX Cycle")}
         <div class="mkp-empty">历史数据不足以回放阶段（EMA200 需要 200 个交易日才有第一个值）。</div>
       </div>`;
     }
@@ -14981,7 +14984,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     return `
       <div class="mkt-card mkt-phase">
-        ${atitle("阶段周期", "Market Cycle")}
+        ${atitle("VOO 和 VIX周期", "VOO & VIX Cycle")}
         <div class="mkp-head">
           <span class="mkp-dot" style="background:${cur.color}"></span>
           <span class="mkp-now" style="color:${cur.color}">${cur.label}区</span>
@@ -15070,37 +15073,14 @@ function rsAdjustGrade(grade, rsResult) {
           `<span class="mkp-key"><i style="background:${t.color}"></i>${t.headline} ${t.n}天 · ${Math.round(t.n / total * 100)}%</span>`
         ).join("")}</span></div>`;
 
-    // 色带上的六字标题（防守/止盈/兑现…）不解释自己是什么——只对出现在这个窗口里的
-    // 几种状态给出「为什么 + 怎么做」，而不是把全部 7 种可能状态都列出来：没出现过
-    // 的状态在这段时间里没有意义，列出来只会增加要读的行数。
-    // v800 默认展开常驻；v801 改成跟「建议切换」同款的可收起小节；v802 起把 live（头部
-    // 正在展示的那个状态）也强制并入这份清单——待确认状态下头部会显示一个还没进入色带
-    // 统计的 id，若不补它，读者展开说明会发现头部写的那句话根本找不到解释。
-    const defsSource = pendingMismatch && !tallyList.some(t => t.headline === live.headline)
-      ? [{ headline: live.headline, state: live.state, detail: live.detail, color: live.color }, ...tallyList]
-      : tallyList;
-    const defsMeta = `${defsSource.length} 种状态`;
-    // 单行格式：圆点 + 「名称 · 为什么 — 怎么做」连成一句话，跟顶部横幅
-    // 「emoji + headline + state」同一行、detail 另起一行的排版逻辑对齐——这里进一步
-    // 压成一行，展开态本来就是次要信息，不需要再分栏对齐。
-    const adviceDefs = `
-      <details class="mkp-fold" data-mkp-fold="adv-defs"${
-        localStorage.getItem("trendo_mkp_adv-defs_open") === "1" ? " open" : ""}>
-        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
-          <span>状态说明</span><em>Definitions</em>
-          <span class="mkp-filtered">${defsMeta}</span></summary>
-        <div class="mkp-advice-defs">${defsSource.map(t => `
-          <div class="mkp-advice-def">
-            <span class="mkp-advice-def-dot" style="background:${t.color}"></span>
-            <span class="mkp-advice-def-line">
-              <b style="color:${t.color}">${t.headline}</b> · ${t.state} — ${t.detail}
-            </span>
-          </div>`).join("")}</div>
-      </details>`;
-
-    // 「状态说明」只列这段窗口里实际出现过的状态；这里补一份完整参考——不管窗口内
-    // 出现没出现，7 种状态各自的定义、判定规则与含义全部列出，且按优先级顺序排列。
-    // 默认收起（跟其余两个小节一样，平时不占地方），当前状态（now.id）高亮标出。
+    // 「状态说明」（v800 新增、v801 改可收起、v802 改单行格式）已删除——「全部状态与
+    // 规则」覆盖了同样的信息（7 种状态全列，含判定条件，还比它多一层触发规则），两份
+    // 内容重复的清单没必要都留着。`pendingMismatch`/`live` 仍用于头部对齐与下方待确认
+    // 提示，未受影响。
+    //
+    // 「全部状态与规则」——不管窗口内出现没出现，7 种状态各自的定义、判定规则与含义
+    // 全部列出，且按优先级顺序排列。默认收起（跟「建议切换」同一套折叠机制），当前
+    // 状态（now.id）高亮标出。
     const rulesList = `
       <details class="mkp-fold" data-mkp-fold="adv-rules"${
         localStorage.getItem("trendo_mkp_adv-rules_open") === "1" ? " open" : ""}>
@@ -15159,7 +15139,6 @@ function rsAdjustGrade(grade, rsResult) {
           ${monthTicks}
         </div>
         ${legend}
-        ${adviceDefs}
         ${rulesList}
         <details class="mkp-fold" data-mkp-fold="adv"${
           localStorage.getItem("trendo_mkp_adv_open") === "1" ? " open" : ""}>

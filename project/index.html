@@ -44,6 +44,11 @@
     --blue-dim: oklch(0.72 0.15 245 / .15);
     --blue-line: oklch(0.72 0.15 245 / .35);
 
+    /* sky blue — 浅蓝色，比 --blue 更淡更亮，用于「正常配置」这类不需要方向色的基线状态 */
+    --skyblue: oklch(0.82 0.08 225);
+    --skyblue-dim: oklch(0.82 0.08 225 / .15);
+    --skyblue-line: oklch(0.82 0.08 225 / .35);
+
     /* P&L semantics: US convention — green up, red down */
     --up:   oklch(0.77 0.15 158);
     --up-faint: oklch(0.77 0.15 158 / .07);
@@ -6397,8 +6402,8 @@
   </div>
 </div>
 
-<script src="data.js?v=804"></script>
-<script src="desk.js?v=804"></script>
+<script src="data.js?v=805"></script>
+<script src="desk.js?v=805"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

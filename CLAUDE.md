@@ -177,8 +177,8 @@ trendo_brief_collapsed / trendo_holdings_brief_collapsed / trendo_drawdown_colla
 trendo_cyc_open              → 周期系统分析展开状态
 trendo_mkp_tr_open           → 阶段周期卡「阶段转换」展开状态（key 由 data-mkp-fold 拼出）
 trendo_mkp_adv_open          → 周期分析卡「建议切换」展开状态（同上，wireMarketFolds 通用）
-trendo_mkp_adv-defs_open     → 周期分析卡「状态说明」展开状态（v801，与上面那条各自独立不联动）
-trendo_mkp_adv-rules_open    → 周期分析卡「全部状态与规则」展开状态（v804，与上面两条各自独立不联动）
+trendo_mkp_adv-rules_open    → 周期分析卡「全部状态与规则」展开状态（v804，与上面一条各自独立不联动）
+                                （原 trendo_mkp_adv-defs_open「状态说明」小节的 key，v805 随该小节删除已作废）
 trendo_holdings_view / trendo_sim_holdings_view / trendo_sim_tradelog_collapsed
 trendo_last_page             → 上次打开的页（journal/watchlist 自动迁移为 inspirations）
 trendo_rvw_* / trendo_mkp_*
@@ -287,7 +287,7 @@ P&L 日历仍使用原始 `CLOSED_POSITIONS`（每次平仓事件显示在对应
 ```
 desk         → main + #desk-view（默认主页，持仓表格 + 持仓总结 6 卡）
 sim          → #sim-view（模拟仓）
-market       → #market-view（三轴模型 + VIX/VXN + 周期分析 + 阶段周期 + 周期系统分析 + 板块轮动）
+market       → #market-view（三轴模型 + VIX/VXN + 周期分析 + VOO和VIX周期(原「阶段周期」，v805更名) + 周期系统分析 + 板块轮动）
 analytics    → #analytics-view（复盘概览 + 收益与盈亏 + 出场质量 + P&L日历/周几分布）
 inspirations → #inspirations-view（子tab：复盘 Journal / 准备 Preparation）
 options      → #options-view（只有实盘一个面板，`REAL_OPTIONS`）
@@ -367,14 +367,19 @@ Closed tab 按 `pnlFinal ?? pnlDollar` 判断盈利/亏损。
   一并改色，避免情绪轴卡片跟横幅对不上颜色），emoji 从 🟠 改 🔷（与 `scale`(分批参与) 的 🔵 也不再撞色）。
 - **颜色（v804）**：`accumulate`(布局) 与 `normal`(正常配置) 此前同样共用 `var(--up)` + 🟢——同一个问题，
   只是这次没有直接体现在横幅/色带里（两者出现在色带上时颜色相同，读不出这段时间到底是「恐慌区主动
-  买入」还是「顺风区默认基线」）。`normal` 改用 `var(--neutral)`（灰，调色板里唯一还没被 `combineAxes`
-  用过的中性色）+ emoji ⚪，语义上也说得通——"正常配置"就是没有特殊信号、按计划走，用中性色而非再借
-  一个方向色，比强行分配另一个饱和色更不容易混淆。`accumulate` 保持 `var(--up)` + 🟢 不变（它确实是
-  一个主动买入的看多信号，绿色语义贴切）。`getSentimentAxis` 里没有与 `normal` 直接对应的同名状态可
-  同步（它是 `combineAxes` 的默认兜底分支，不来自某个单一的 `sent.tilt` 值），故这次只改了 `combineAxes`
-  一处，不需要像 v803 的 `cooldown` 那样再改一遍情绪轴卡片。
+  买入」还是「顺风区默认基线」）。`normal` 当时改用 `var(--neutral)`（灰）+ emoji ⚪，语义上说得通——
+  "正常配置"就是没有特殊信号、按计划走。`accumulate` 保持 `var(--up)` + 🟢 不变（它确实是一个主动买入
+  的看多信号，绿色语义贴切）。
+- **颜色（v805）**：用户指定「正常配置」改用**浅蓝色**——新增调色板 token `var(--skyblue)`（比既有
+  `var(--blue)` 更淡更亮，两者拉开区分度；`var(--blue)` 已被 v803 的 `cooldown`(兑现) 占用，不能再借），
+  取代 v804 的灰色方案；emoji 同步从 ⚪ 改为 🔹（与「兑现」的 🔷、「分批参与」的 🔵 都不撞形）。
+  **颜色单一来源**：`combineAxes` 返回对象的 `color`/`emoji` 字段是唯一定义处，顶部综合建议横幅
+  （`mkAxesHTML`）、周期分析卡的色带/图例/全部状态与规则（`mkAdviceHTML`）全部直接读同一个对象，
+  因此"周期分析卡颜色需要和综合建议对齐"这条要求是**结构性保证**——只要改的是 `combineAxes` 本身，
+  两处永远同步，不需要在第二个地方再维护一份映射。`getSentimentAxis` 里没有与 `normal` 直接对应的
+  同名状态可同步（它是 `combineAxes` 的默认兜底分支，不来自某个单一的 `sent.tilt` 值）。
 
-### 周期分析（`mkAdviceHTML`，v799 起，原名「建议走向」，v801 更名+改版+改位置，v804 新增全部状态与规则参考）—— 综合建议的逐日回放
+### 周期分析（`mkAdviceHTML`，v799 起，原名「建议走向」，v801 更名+改版+改位置，v804 新增全部状态与规则参考，v805 删除状态说明小节）—— 综合建议的逐日回放
 
 `buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, ADVICE_SESSIONS)` 把 `combineAxes`
 的输出**逐日重算一遍**，产出与 `buildPhaseHistory` 同构的 `{days, segs, transitions, current,
@@ -395,20 +400,16 @@ v800 当时的理由是这张卡最多 7 态、段数天生比阶段周期（只
 `buildPhaseHistory` 上方）也改成 200，两个常量各自独立、但**约定保持同一个值**，改一个记得改另一个
 （两处代码注释互相指了对方）。
 
-**状态说明列表（`.mkp-advice-defs`，v800 新增内容，v801 改为可收起，v802 改为单行格式）**：图例只有
-颜色+天数+占比，不解释"防守"/"止盈"这些标题本身是什么意思。说明列表**只列这段窗口里实际出现过的
-状态**（不是把 7 种可能状态全列一遍——没出现过的跟当前无关，列出来只增加要读的行数），内容直接
-取自 `combineAxes` 返回的 `state`/`detail` 字段（回放时随 `day` 对象一起存下来），不是另造的文案，
-跟横幅、色带 tooltip 用的是同一份措辞。**v801 起收进 `<details data-mkp-fold="adv-defs">`，默认
-收起**（跟卡片里原有的"建议切换"是同一套折叠机制、各自独立的 `localStorage` key：
-`trendo_mkp_adv-defs_open` / `trendo_mkp_adv_open`，互不联动），折叠时的摘要行只留「N 种状态」；
-展开后的列表套用跟"建议切换"的 `.mkp-trs` 同款带边框盒子。**v802 起每条压成单行连续文字**「圆点 +
-`<b>名称</b> · 为什么 — 怎么做`」，不再拆成 name/state/detail 三个独立节点分栏对齐——`.mkp-advice-def`
-从 `display:grid` 改为 `display:flex`，桌面/手机同一套排版，文字多就自然折行，不需要再给手机端单独
-写一套 `grid-template-areas` 纵向堆叠规则（已删除）。**排查记录**：这个环境的 Chromium 对未展开的
-`<details>` 内容仍会正常参与布局（`getBoundingClientRect()` 返回真实非零坐标、`getComputedStyle().
-display` 报 `block`），跟 v762 排查 GEX 收起态时记录的现象一致——判断"是否真的收起"必须量
-`<details>` 元素本身，不能拿子元素的坐标当证据。
+**状态说明列表（`.mkp-advice-defs`，v800 新增，v801 改为可收起，v802 改为单行格式，v805 删除）**：
+图例只有颜色+天数+占比，不解释"防守"/"止盈"这些标题本身是什么意思。此前的说明列表只列这段窗口里
+实际出现过的状态，内容取自 `combineAxes` 返回的 `state`/`detail` 字段——**v805 起整块删除**：v804
+新增的「全部状态与规则」覆盖了同样的信息（7 种状态全列，含判定条件，还比它多一层触发规则），两份
+内容重复的清单没有必要都留着，用户明确要求删掉这块。`localStorage` key `trendo_mkp_adv-defs_open`
+随之作废（`trendo_mkp_adv_open`/`trendo_mkp_adv-rules_open` 两个仍在用，见下）。**排查记录（对后续
+折叠小节仍适用）**：这个环境的 Chromium 对未展开的 `<details>` 内容仍会正常参与布局
+（`getBoundingClientRect()` 返回真实非零坐标、`getComputedStyle().display` 报 `block`），跟 v762
+排查 GEX 收起态时记录的现象一致——判断"是否真的收起"必须量 `<details>` 元素本身，不能拿子元素的
+坐标当证据。
 
 **全部状态与规则（`.mkp-rule-*`，v804 新增）**：「状态说明」刻意只列窗口里出现过的状态（避免读一堆
 跟当前无关的行），但这样就没有地方能查到"7 种状态到底各自是什么、什么条件会触发"这种完整参考。
@@ -417,8 +418,9 @@ display` 报 `block`），跟 v762 排查 GEX 收起态时记录的现象一致�
 （即 `combineAxes` 的 `if` 判断顺序，方向逆风闸门在最前）列出全部 7 种状态各自的 `headline`/`state`/
 `detail`/`color`/`emoji`，再加一个 `cond` 字段描述触发条件的文字版（如防守="方向轴逆风：50/200 日
 均线死叉，或价格跌破 200 日均线"）。渲染在新增的 `<details data-mkp-fold="adv-rules">`「全部状态与
-规则 · All States & Rules」折叠块里（默认收起，跟"状态说明""建议切换"是第三个各自独立的 `localStorage`
-key：`trendo_mkp_adv-rules_open`，互不联动），复用 `.mkp-advice-defs`/`.mkp-advice-def` 同一套单行
+规则 · All States & Rules」折叠块里（默认收起，跟"建议切换"是各自独立的 `localStorage`
+key：`trendo_mkp_adv-rules_open` / `trendo_mkp_adv_open`，互不联动——v800 起同时存在过的第三个
+"状态说明" key `trendo_mkp_adv-defs_open` 已随该小节在 v805 一并删除），复用 `.mkp-advice-defs`/`.mkp-advice-def` 同一套单行
 排版，只多一行 `.mkp-rule-cond` 触发条件、以及命中当前状态（`t.id === now.id`）时的高亮背景
 （`.mkp-rule-now`）与「当前」徽章（`.mkp-rule-tag`）——展开后一眼就能看出现在处在 7 条规则里的哪一条、
 以及它上下相邻的两条分别是什么条件。列表开头带一句判定顺序说明（"按下列顺序依次判定，第一条满足即
@@ -1053,6 +1055,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v802 | **周期分析卡：头部文案强制与顶部「综合建议」横幅一致 + 状态说明改为单行格式**（用户两条要求：「这里的状态和顶部的状态逻辑和文案这些需要完全能对上」+「状态的展开详解可以把文案做成一排的格式」）。**①头部对齐横幅**——排查发现此前卡片头部（`.mkp-now`/`.mkp-axis-now`）直接展示 `ah.current`，那是**纯粹用已收盘的历史 K 线回放**出来的最后一段；而顶部横幅用的是**盘中实时价**（`vooLive`）算出的 `axes.combined`，FGI 更是两个不同来源（横幅用 `/api/feargreed` 的 `score` 今天读数，回放用 `history` 里逐日的历史值，且 History 端点可能压根不含"今天"）——收盘前两者不同步是常态，此前卡片会显示一句跟顶部横幅文案对不上的状态，读者会当成"两处算出了不一样的结论"，而不是"同一套规则、只是数据时点不同"。修法：`mkAdviceHTML(ah, live)` 新增第二参数，调用处传 `axes.combined`（跟横幅同一个对象），头部统一显示 `live`（没有才退回 `ah.current` 兜底），保证文案逐字一致；`live.id !== ah.current.id` 时追加 `.mkp-pending` 提示条，跟阶段周期卡的 `pending` 机制同一个模式（"按当前三轴规则已进入 X —— 下方色带只画已收盘的交易日，这一笔要等收盘才计入"），如实说明色带暂时没画上这一天、不是算错了。**状态说明清单联动**：若 `live` 的状态还没进过历史色带的统计，把它的定义插到清单最前面（`defsSource`），保证展开说明时头部正在显示的那句话一定能在清单里找到解释。**②单行格式**——`.mkp-advice-def` 从"圆点+名称+state+detail"三列/三行的分栏布局，改为单行连续文字「圆点 + `<b>名称</b>` · 为什么 — 怎么做」，`display:grid` 改 `display:flex`，桌面/手机同一套排版，文字多就自然折行；手机端此前专门写的 `grid-template-areas` 纵向堆叠规则整段删除，不需要再维护两套布局。**自测抓到一个真陷阱**：第一版验证头部对齐的测试沿用了全套件共享的合成数据集，结果末尾恰好跌破 EMA200（方向轴=防守），而 `combineAxes` 的防守分支在检查情绪之前就直接短路返回——同一份数据把 FGI 从 50 改到 90，头部文案纹丝不动，一度误判"改动没生效"；排查后发现是数据集选错了（防守是最高优先级闸门），另起一份方向轴全程顺风的独立小数据集才测出真实差异。Playwright 回归（`v802.js`，在 `v801.js` 基础上重写场景 10/11 并新增场景 14/15，共 74 项）：单行格式断言（`名称 · 为什么 — 怎么做`正则匹配）、桌面手机同一套 `display:flex` 不再切换网格、FGI 历史值与今天读数刻意不同时头部与横幅逐字一致、pending 提示正确出现、状态说明清单能对上头部正在显示的状态；`v782` 27 / `v793` 17 / `v795` 16 / `v796` 14 / `v798` 20 / `v787` 42 / `v792` 32 / `v794` 20 / `cycle5` 60 复跑全绿。 |
 | v803 | **「兑现」与「止盈」颜色区分 + 阶段周期卡窗口同步改为 200 个交易日 + 一并修掉一个死参数**（用户两条要求：「综合建议模块的状态是否有兑现这个状态？并且兑现和止盈需要做颜色区分」+「阶段周期模块也使用200个交易日，并且计算逻辑这些都一起更新」）。**①「兑现」确实存在**——`combineAxes` 的 `sent.tilt === "cooldown"` 分支，headline 是"兑现"，测的是"VIX 从 60 日内的高点(>30)回落到 <20"这种恐慌降温后了结利润的场景，跟"止盈"（`sent.tilt === "trim"`，FGI/RSI 过热触发的主动减仓）是两个不同分支、不同触发条件、不同紧迫程度，但此前两者的 `color` 字段都写的 `var(--orange)`——横幅、色带、图例、周期分析卡的状态说明四处都读不出区别，读者只能靠文字辨认。改 `cooldown` 为调色板里另一个未被 `combineAxes` 占用的色相 `var(--blue)`（`getSentimentAxis` 里同名的情绪轴状态一并改色，否则第三张"情绪"轴卡片会跟横幅对不上颜色），emoji 从 🟠 改 🔷（原先跟"分批参与"的 🔵 也很像，现在形状也区分开）。**②阶段周期卡窗口改回 200**——v800 曾把周期分析卡的窗口从 252 单独收窄到 200、不强求跟阶段周期同窗口，理由是周期分析最多 7 态、段数天生更碎；但 v801 把两张卡挪到相邻位置后，"挨在一起却看不同时间段"反而更容易读错。`buildPhaseHistory` 上方的 `PHASE_SESSIONS` 常量同步改成 200（两个常量独立定义、约定保持同一个值，代码注释互相指向对方，改一个记得改另一个）。**③顺带查出并修掉一个死参数**——`mkPhaseHTML(ph, axes, scope, pending, settledDate)` 的第三个参数 `scope`（`fetchMarketData` 里算出的"近一年"/"近 N 个交易日"文案）**从函数定义起就从未在模板里被引用过**，调用方每次都在算一个永远不会显示的字符串，卡片头部的 `.mkp-scope` 一直只显示裸交易日数（`${total} 个交易日`），从没显示过起止日期。既然要顺手更新这块的计算逻辑，一并修了：改用 `buildPhaseHistory` 早就在返回的 `ph.span.from/to`，跟周期分析卡 `.mkp-scope` 的格式（`YYYY-MM-DD → YYYY-MM-DD · N 个交易日`）统一，`scope` 参数与 `fetchMarketData` 里的死代码 `phaseScope` 变量一并删除。Playwright 回归（新增 `v803.js` 19 项）：源码层确认 `trim` 仍是 orange、`cooldown` 的两处定义（`combineAxes`+`getSentimentAxis`）都改成 blue 且互不相同、emoji 与 `scale` 不再撞色；两个 CSS token 在当前主题下渲染值确实不同；阶段周期与周期分析两卡在同一份数据下算出同样长的窗口（≤200）且源码确认 `PHASE_SESSIONS = 200`；阶段周期卡头部显示真实起止日期而非"近一年"、死代码 `phaseScope`/`scope` 参数确认已清除、调用点同步更新；手机端两张卡新头部文案均无横向溢出、无 JS 报错。`v782` 27（阶段周期卡"阶段转换"折叠机制不受影响）/ `v802` 74 / `v793` 17 / `v795` 16 / `v796` 14 / `v798` 20 / `v787` 42 / `v792` 32 / `v794` 20 / `cycle5` 60 复跑全绿。 |
 | v804 | **「正常配置」与「布局」颜色区分 + 周期分析卡新增「全部状态与规则」参考**（用户两条要求：「正常配置和布局颜色给出区分」+「在这里给出每个阶段的定义和规则可以」）。**①颜色区分**——排查 `combineAxes` 全部 7 档颜色时发现 `accumulate`(布局) 与 `normal`(正常配置) 同样共用 `var(--up)` + 🟢，跟 v803 刚修过的"止盈/兑现"是同一类问题，只是没有那么显眼（不会同时出现在同一句话里，但两者出现在色带/图例上时颜色相同，读不出这段时间到底是"恐慌区主动买入"还是"顺风区默认基线"）。改 `normal` 为调色板里唯一还没被 `combineAxes` 占用的中性色 `var(--neutral)`（灰）+ emoji ⚪——语义上也贴切，"正常配置"本来就是没有特殊信号、按计划走，用中性色比再借一个方向色更不容易和其余 6 个状态混淆；`accumulate` 保留 `var(--up)` + 🟢（它是恐慌区主动买入的看多信号，绿色语义没问题）。`normal` 是 `combineAxes` 的默认兜底分支（不对应 `getSentimentAxis` 里任何一个单一 `id`），因此这次不需要像 v803 的 `cooldown` 那样再同步改一遍情绪轴卡片。**②新增「全部状态与规则」**——「状态说明」（v800）刻意只列窗口里出现过的状态，没有地方能查到 7 种状态完整的判定条件。新增 `ADVICE_RULES` 常量（与 `combineAxes` 函数体分开维护，一份判断逻辑一份人读文案，**改 `combineAxes` 任何一条分支时要同步这张表**，代码注释里已互相提醒），按优先级顺序列出全部 7 条，每条比"状态说明"多一个 `cond` 字段（触发条件的文字版，如防守="方向轴逆风：50/200 日均线死叉，或价格跌破 200 日均线"）。渲染为第三个独立折叠块 `<details data-mkp-fold="adv-rules">`「全部状态与规则 · All States & Rules」（默认收起，`localStorage` key `trendo_mkp_adv-rules_open`，与"状态说明""建议切换"各自独立互不联动），复用 `.mkp-advice-defs`/`.mkp-advice-def` 同一套单行排版，命中当前状态（`t.id === now.id`）的那一行加高亮背景 `.mkp-rule-now` + 「当前」徽章 `.mkp-rule-tag`，一眼能看出现在落在 7 条规则里的哪一条。列表开头带判定顺序说明，防止被读成互斥并列条件（实际是短路判断，方向逆风一票否决，其余按情绪信号优先级从上到下，"正常配置"是"以上都不满足"的兜底而非独立触发条件）。Playwright 回归（新增 `v804.js` 26 项）：源码层确认两处颜色/emoji 不再重复、`--up`/`--neutral` 渲染值确实不同、规则列表 7 条且顺序=优先级顺序、每条都带触发条件文字、当前状态高亮且徽章仅出现一次、独立折叠状态落盘且跨页保持、与另两个小节互不联动、手机端可展开且无横向溢出无报错。`v782` 27 / `v793` 17 / `v795` 16 / `v796` 14 / `v798` 20 / `v787` 42 / `v792` 32 / `v794` 20 / `cycle5` 60 / `v803` 19 / `v802` 74 复跑全绿；`v801.js`（其场景 10/11 测的 `.mkp-advice-def-name/-state/-detail` 选择器在 v802 改为单行格式 `.mkp-advice-def-line` 时已被替换，属于 v802 引入时就该退役、本次核查时才发现仍留在回归列表里的旧套件）确认与本次改动无关，其现行有效版本是 `v802.js`，后续回归改以 `v802.js` 为准、不再运行 `v801.js`。 |
+| v805 | **周期分析卡颜色与综合建议对齐（结构性核实）+「正常配置」改浅蓝色 + 删除「状态说明」小节 + 「阶段周期」更名「VOO 和 VIX周期」**（用户四条要求）。**①颜色对齐**——核实结论：`combineAxes` 返回对象的 `color`/`emoji` 字段是**唯一**定义来源，顶部综合建议横幅（`mkAxesHTML`）与周期分析卡的色带/图例/全部状态与规则（`mkAdviceHTML`）全部直接读同一个对象，因此"颜色对齐"是**结构性保证**——本版没有另建一份映射表去同步，只是在改 `normal` 颜色时确认了这一点仍然成立。**②「正常配置」改浅蓝色**——v804 当时用的是中性灰 `var(--neutral)`，用户这次明确要浅蓝色：新增调色板 token `var(--skyblue)`（`oklch(0.82 0.08 225)`，比既有 `var(--blue)` 更淡更亮，两者拉开区分度——`var(--blue)` 已被 v803 的 `cooldown`(兑现) 占用，不能复用），`combineAxes` 与 `ADVICE_RULES` 参考表两处同步改色，emoji 同步从 ⚪ 改为 🔹（与"兑现"的 🔷、"分批参与"的 🔵 都不撞形）。**③删除「状态说明」**——v800 新增、v801 改可收起、v802 改单行格式的那个折叠小节（`data-mkp-fold="adv-defs"`，只列窗口内出现过的状态）整块删除：v804 新增的「全部状态与规则」已经覆盖同样的信息（7 种状态全列，还多一层判定条件），两份重复清单没必要都留，用户明确要求删掉。`localStorage` key `trendo_mkp_adv-defs_open` 随之作废；`pendingMismatch`/`live`/`tallyList` 等底层变量仍在用（头部对齐、legend、"全部状态与规则"高亮都要用），只删了这一段渲染与它专属的 `defsSource`/`defsMeta` 计算。**④「阶段周期」更名**——卡片标题 `atitle("阶段周期", "Market Cycle")` 两处（空数据兜底 + 正常渲染）改为 `atitle("VOO 和 VIX周期", "VOO & VIX Cycle")`；`.mkt-phase`/`mkPhaseHTML`/`PHASE_SESSIONS`/`buildPhaseHistory` 等内部函数名/类名/常量名保留不变（它们是代码架构的内部标识，不是用户可见文案，重命名它们只会增加改动面而不产生任何用户可见收益）。Playwright 回归（新增 `v805.js` 19 项）：源码层确认 `normal` 与 `ADVICE_RULES` 参考表两处颜色/emoji 同步为 `var(--skyblue)`/🔹；`--skyblue` 与 `--up`/`--blue` 渲染值均不同；周期分析卡头部圆点有渲染颜色（对齐关系已由源码单一来源保证，此处只做存在性检查）；DOM 层确认 `adv-defs` 折叠块与"状态说明"字样均已消失，"全部状态与规则"和"建议切换"仍在，源码层确认 `trendo_mkp_adv-defs_open` 引用清零；阶段周期卡标题含新中英文、不再出现旧标题；手机端同样验证，无横向溢出无报错。`v782` 27 / `v793` 17 / `v795` 16 / `v796` 14 / `v798` 20 / `v787` 42 / `v792` 32 / `v794` 20 / `cycle5` 60 / `v803` 19 复跑全绿。**两套件确认作废退出回归集**：`v804.js`（场景1"正常配置改 var(--neutral)"与场景5"状态说明不受联动影响"，测的正是本版改掉的两处，2/26 转红，其余 24 项仍反映未变的逻辑）；`v802.js`（场景10"状态说明单行格式"与场景12"状态说明可收起"，测的是本版删除的整块小节，5/74 转红并在场景 12 尝试点击已不存在的元素而崩溃，其余 69 项——包括核心的头部/横幅文案一致性逻辑——仍然有效），后续回归改以 `v805.js` 为准，`v801.js`/`v804.js`/`v802.js` 三套历史记录保留在仓库里、不再运行。 |
 
 
 ---
