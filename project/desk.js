@@ -14710,7 +14710,12 @@ function rsAdjustGrade(grade, rsResult) {
   // 边界**，至今成立，所以阶段周期卡仍然只由方向轴定义。这里回答的是另一个问题：
   // 这条建议是什么时候变成现在这样的。抖动因此不是要消除的东西，而是要如实呈现的
   // 属性——色带逐日照画，转换列表折叠短段并把折叠掉的次数报出来。
-  const ADVICE_SESSIONS = 252;   // 与阶段周期同窗口，两张卡的时间轴才可比
+  // 窗口比阶段周期短——那张卡只有 3 态、段落天生少；这张卡最多 7 态，段数天然更多
+  // （压力测试里一年能碎到 147 段），窗口越长手机端色带就越挤、图例与说明列表也越长。
+  // 200 个交易日（约 10 个月）在"看得出走向"与"手机端不至于密到读不出来"之间取了个
+  // 折中，不再跟阶段周期的 252 天强行同窗口——两张卡回答的问题不同，不需要同窗口才
+  // 能比较。
+  const ADVICE_SESSIONS = 200;
   const ADVICE_MIN_SEG  = 3;     // 短于此的段按阈值抖动处理：列表折叠，但计数照报
 
   function buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, maxSessions) {
@@ -14768,7 +14773,7 @@ function rsAdjustGrade(grade, rsResult) {
       const sent = getSentimentAxis(fgAl[i], rsiS[i], trendAt(i), vixAl[i], max60At(i));
       const c    = combineAxes(dir, risk, sent);
       days.push({
-        date: vooDates[i], id: c.id, headline: c.headline, state: c.state, color: c.color,
+        date: vooDates[i], id: c.id, headline: c.headline, state: c.state, color: c.color, detail: c.detail,
         dirId: dir.id, dir: dir.label, posMax: risk.posMax, sentId: sent.id, sent: sent.label,
         px: vooCloses[i], vix: vixAl[i], fg: fgAl[i], rsi: rsiS[i],
       });
@@ -15007,13 +15012,26 @@ function rsAdjustGrade(grade, rsResult) {
     // 恰恰是这张卡最容易被问到的问题。零新增布局，只是在本来就要画的图例里带上天数。
     const tally = {};
     ah.days.forEach(d => {
-      (tally[d.id] || (tally[d.id] = { n: 0, headline: d.headline, color: d.color })).n++;
+      (tally[d.id] || (tally[d.id] = { n: 0, headline: d.headline, state: d.state, detail: d.detail, color: d.color })).n++;
     });
+    const tallyList = Object.values(tally).sort((a, b) => b.n - a.n);
     const legend = `
       <div class="mkp-legend"><span class="mkp-legend-g">${
-        Object.values(tally).sort((a, b) => b.n - a.n).map(t =>
+        tallyList.map(t =>
           `<span class="mkp-key"><i style="background:${t.color}"></i>${t.headline} ${t.n}天 · ${Math.round(t.n / total * 100)}%</span>`
         ).join("")}</span></div>`;
+
+    // 色带上的六字标题（防守/止盈/兑现…）不解释自己是什么——只对出现在这个窗口里的
+    // 几种状态给出「为什么 + 怎么做」，而不是把全部 7 种可能状态都列出来：没出现过
+    // 的状态在这段时间里没有意义，列出来只会增加要读的行数。
+    const adviceDefs = `
+      <div class="mkp-advice-defs">${tallyList.map(t => `
+        <div class="mkp-advice-def">
+          <span class="mkp-advice-def-dot" style="background:${t.color}"></span>
+          <span class="mkp-advice-def-name" style="color:${t.color}">${t.headline}</span>
+          <span class="mkp-advice-def-state">${t.state}</span>
+          <span class="mkp-advice-def-detail">${t.detail}</span>
+        </div>`).join("")}</div>`;
 
     // 只列住够 ADVICE_MIN_SEG 天的转换。情绪轴天天在动，阈值附近的单日翻转会把列表
     // 淹掉；但折叠掉多少次是直接报出来的数字，不是悄悄扣掉——这一年到底碎不碎，由
@@ -15050,6 +15068,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${monthTicks}
         </div>
         ${legend}
+        ${adviceDefs}
         <details class="mkp-fold" data-mkp-fold="adv"${
           localStorage.getItem("trendo_mkp_adv_open") === "1" ? " open" : ""}>
           <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span>
@@ -15059,9 +15078,10 @@ function rsAdjustGrade(grade, rsResult) {
         </details>
         <div class="mkp-note">
           这条色带是用<b>今天这套三轴规则</b>回放历史行情算出来的，即「当时若用现在的规则会给什么建议」，
-          不是当时页面上真的显示过什么——规则本身改过多版。覆盖范围同时受 FGI 历史（约一年）与
-          EMA200 预热（200 个交易日）限制，上方跨度是两者的实际交集。情绪轴每日波动，阈值附近的
-          短暂翻转照实画进色带、但不进切换列表。
+          不是当时页面上真的显示过什么——规则本身改过多版。覆盖范围最多 ${ADVICE_SESSIONS} 个交易日（约
+          ${Math.round(ADVICE_SESSIONS / 21)} 个月），同时受 FGI 历史（约一年）与 EMA200 预热（200 个
+          交易日）限制，上方跨度是三者的实际交集。情绪轴每日波动，阈值附近的短暂翻转照实画进色带、
+          但不进切换列表。
         </div>
       </div>`;
   }

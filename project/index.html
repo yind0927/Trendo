@@ -4155,6 +4155,9 @@
   .mkt-bar-ptr { position: absolute; top: 0; transform: translateX(-50%); width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 7px solid var(--fg-0); }
   /* ── Regime Trail ── */
   .mkt-phase { margin-bottom: 20px; }
+  /* mkt-card 单独使用（不在 .mkt-row 的 grid 里）时不带 margin，紧跟着的下一个模块
+     此前直接贴上来、零间距——阶段周期卡靠这条规则才有间隔，这张卡一直漏了它。 */
+  .mkt-advice { margin-bottom: 20px; }
 
   /* Header reads as one line of hierarchy: state, then how long, then the window it
      covers pushed to the far edge. */
@@ -4227,6 +4230,16 @@
   .mkp-key i { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
   .mkp-key i.sq { border-radius:2px; width:9px; height:9px; }
 
+  /* 建议走向卡专用：只对图例里出现过的状态给出「是什么 + 怎么做」，不列全部 7 种
+     可能状态——没出现在这段窗口里的状态跟当前无关，列出来只会增加要读的行数。 */
+  .mkp-advice-defs { display:flex; flex-direction:column; gap:6px; margin:10px 0 0 41px; }
+  .mkp-advice-def { display:grid; grid-template-columns:60px 68px 1fr; align-items:baseline;
+    gap:8px; font-size:11px; }
+  .mkp-advice-def-dot { width:7px; height:7px; border-radius:50%; align-self:center; }
+  .mkp-advice-def-name { font-weight:700; }
+  .mkp-advice-def-state { color:var(--fg-2); font-size:10px; }
+  .mkp-advice-def-detail { color:var(--fg-3); font-size:10px; }
+
   .mkp-sub { display:flex; align-items:baseline; gap:7px; margin:18px 0 8px; }
   .mkp-sub span { font-size:11px; font-weight:600; color:var(--fg-1); }
   /* Trailing note on a section head — says what the rows below are for, so the heading
@@ -4284,6 +4297,14 @@
     .mkp-scope { margin-left:0; text-align:left; }
     .mkp-bars { grid-template-columns:26px 1fr; gap:6px 7px; }
     .mkp-legend { gap:11px; margin-left:33px; }
+    /* 手机端信息本来就密——「是什么/为什么/怎么做」三段挤在一行会重叠，改成每段
+       独立一行，靠左对齐读下来，不用横向找列。 */
+    .mkp-advice-defs { margin-left:0; gap:10px; }
+    .mkp-advice-def { grid-template-columns:14px 1fr; grid-template-areas:"dot name" ". state" ". detail"; row-gap:2px; }
+    .mkp-advice-def-dot { grid-area:dot; }
+    .mkp-advice-def-name { grid-area:name; }
+    .mkp-advice-def-state { grid-area:state; }
+    .mkp-advice-def-detail { grid-area:detail; }
     .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
     .mkp-tr-why { grid-column:1 / -1; }
     .mkp-th-row { grid-template-columns:100px 66px; row-gap:2px; }
@@ -6367,8 +6388,8 @@
   </div>
 </div>
 
-<script src="data.js?v=799"></script>
-<script src="desk.js?v=799"></script>
+<script src="data.js?v=800"></script>
+<script src="desk.js?v=800"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
