@@ -14681,33 +14681,35 @@ function rsAdjustGrade(grade, rsResult) {
   //   · VIX 的连续方向（5日均 vs 20日均）没有预测力——各档位下差异都在 1pp 以内
   //     且符号不一致，纯噪音。
   //   · 「低位上穿 15」只有 5 日 −0.6pp 的短期噪音，20/60 日转正，不构成中期信号。
+  // 情绪轴每个状态的颜色 = 它在综合建议里对应那一档的颜色（过热→止盈、偏热→保持持仓…），
+  // 两处读同一组 --adv-* token，情绪轴卡片与横幅不会对不上。
   function getSentimentAxis(fg, rsi, vixTrend = "flat", vix = null, vix60Max = null) {
     // 降温完成：曾恐慌、现已平静。排在过热之后、恐惧之前——它是减仓倾斜，但没有
     // 极端过热那么急迫。n=21 是小样本，界面上如实标注。
     const cooled = vix != null && vix60Max != null && vix60Max > 30 && vix < 20;
     if (fg > 75 || rsi > 72)
-      return { id: "euphoria", label: "极端过热", color: "var(--down)", tilt: "trim",
+      return { id: "euphoria", label: "极端过热", color: "var(--adv-trim)", tilt: "trim",
         desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
     if (cooled)
-      return { id: "cooldown", label: "恐慌降温期", color: "var(--blue)", tilt: "cooldown",
+      return { id: "cooldown", label: "恐慌降温期", color: "var(--adv-cooldown)", tilt: "cooldown",
         desc: `VIX 已从 ${vix60Max.toFixed(0)} 回落至 ${vix.toFixed(1)}，容易的钱已经赚完：不加新仓，分批兑现利润`,
         evidence: "历史同形态后 60 日中位低于基线 1.9pp、胜率 57%（n=21，样本偏少）" };
     if (fg >= 60 || rsi >= 65)
-      return { id: "warm", label: "偏热", color: "var(--orange)", tilt: "hold",
+      return { id: "warm", label: "偏热", color: "var(--adv-hold)", tilt: "hold",
         desc: "可持仓，不加仓，盯紧止损" };
     // VIX ≥ 30 单独即可触发；FGI/RSI 双极端仍保留为另一条入口。
     if ((vix != null && vix >= 30) || (fg < 25 && rsi < 38)) {
       const byVix = vix != null && vix >= 30;
-      return { id: "panic", label: "极端恐惧", color: "var(--up)", tilt: "accumulate",
+      return { id: "panic", label: "极端恐惧", color: "var(--adv-accumulate)", tilt: "accumulate",
         desc: byVix
           ? `VIX ${vix.toFixed(1)}：分批建仓候选，仓位仍受风险容量轴压制`
           : (vixTrend === "down" ? "分批建仓候选，VIX 已回落" : "分批建仓候选，待 VIX 回落确认"),
         evidence: byVix ? "历史 VIX≥30 后 60 日中位高于基线 4.4pp、胜率 78%（n=736 个交易日，约 7 轮危机）" : null };
     }
     if (fg < 40 || rsi < 45)
-      return { id: "cool", label: "偏冷", color: "var(--accent)", tilt: "scale",
+      return { id: "cool", label: "偏冷", color: "var(--adv-scale)", tilt: "scale",
         desc: "可小幅分批加仓，不追高" };
-    return { id: "neutral", label: "中性", color: "var(--warn)", tilt: "normal", desc: "正常操作" };
+    return { id: "neutral", label: "中性", color: "var(--adv-normal)", tilt: "normal", desc: "正常操作" };
   }
 
   // 合并三轴 → 综合操作建议。方向轴是闸门，情绪轴做倾斜，风险轴给上限。
@@ -14716,60 +14718,53 @@ function rsAdjustGrade(grade, rsResult) {
   // 两段。id 一旦定下就不再改。
   function combineAxes(dir, risk, sent) {
     if (!dir.eligible)
-      return { id: "defense", headline: "防守", emoji: "🔴", state: `趋势逆风`, color: "var(--down)",
+      return { id: "defense", headline: "防守", state: `趋势逆风`, color: "var(--adv-defense)",
         detail: "禁止新开多仓，保护已有仓位。" };
     if (sent.tilt === "trim")
-      return { id: "trim", headline: "止盈", emoji: "🟠", state: `极端过热`, color: "var(--orange)",
+      return { id: "trim", headline: "止盈", state: `极端过热`, color: "var(--adv-trim)",
         detail: "减仓止盈，收紧保护。" };
     if (sent.tilt === "cooldown")
-      // 「兑现」与上面的「止盈」此前共用 var(--orange)，同一橙色在横幅/图例/色带里读不出
-      // 区别——两者触发条件、紧迫程度都不同（止盈=情绪过热主动减仓，兑现=VIX 从恐慌回落
-      // 后了结，更从容），改用调色板里另一个未被 combineAxes 占用的色相 var(--blue)。
-      return { id: "cooldown", headline: "兑现", emoji: "🔷", state: `恐慌降温期`, color: "var(--blue)",
+      return { id: "cooldown", headline: "兑现", state: `恐慌降温期`, color: "var(--adv-cooldown)",
         detail: "不开新仓，分批兑现这一轮的利润。" };
     if (sent.tilt === "accumulate")
-      return { id: "accumulate", headline: "布局", emoji: "🟢", state: `恐慌积累`, color: "var(--up)",
+      return { id: "accumulate", headline: "布局", state: `恐慌积累`, color: "var(--adv-accumulate)",
         detail: "控制仓位，分批买入强势标的。" };
     if (sent.tilt === "scale")
-      return { id: "scale", headline: "分批参与", emoji: "🔵", state: `情绪偏冷`, color: "var(--accent)",
+      return { id: "scale", headline: "分批参与", state: `情绪偏冷`, color: "var(--adv-scale)",
         detail: "小幅优选加仓，保留后续资金。" };
     if (sent.tilt === "hold")
-      return { id: "hold", headline: "保持持仓", emoji: "🟡", state: `情绪偏热`, color: "var(--warn)",
+      return { id: "hold", headline: "保持持仓", state: `情绪偏热`, color: "var(--adv-hold)",
         detail: "持有，不新增风险。" };
-    // 「正常配置」与上面的「布局」此前同用 var(--up) 绿色——一个是恐慌区主动分批买入
-    // （罕见、机会性），一个是顺风区的默认基线状态（最常见、没有特殊操作）,两者含义
-    // 完全不同却读不出区别。v804 先改用中性灰 var(--neutral)，用户随后指定改用浅蓝色：
-    // 新增调色板 token var(--skyblue)（比既有 var(--blue) 更淡更亮，两者拉开区分度，
-    // var(--blue) 已被「兑现」占用），emoji 从 🟢 改为 🔹（与「兑现」的 🔷、「分批参与」
-    // 的 🔵 都不撞形）。这个颜色/emoji 是 combineAxes 返回对象里唯一的定义来源——顶部
-    // 综合建议横幅、周期分析卡的色带/图例/全部状态与规则，全部直接读这个对象，因此
-    // 颜色天然保持一致，不需要在别处再维护一份映射。
-    return { id: "normal", headline: "正常配置", emoji: "🔹", state: `趋势顺风`, color: "var(--skyblue)",
+    // 7 档颜色统一走 --adv-* token（index.html 顶部定义，暗/亮主题各一套），按 OKLab 距离选定、
+    // 两两可分辨；图标统一为同尺寸圆点（advDot），不再用 emoji。
+    return { id: "normal", headline: "正常配置", state: `趋势顺风`, color: "var(--adv-normal)",
       detail: "按风险预算正常布局。" };
   }
 
   // combineAxes 的 7 种状态 + 各自的判定条件，供周期分析卡「全部状态与规则」小节渲染。
-  // 与 combineAxes 函数体本身刻意保持同一份文案（headline/state/detail/color/emoji）、
+  // 与 combineAxes 函数体本身刻意保持同一份文案（headline/state/detail/color）、
   // 只多一个 `cond` 字段描述触发条件——两处分开维护是因为 combineAxes 的判断是用代码
   // 表达的（`if (!dir.eligible)` 等），这里需要给人看的文字版，只能手动对照写一份。
   // **改 combineAxes 的任何一条分支时，记得同步这张表**，否则规则说明会跟实际判定脱节。
   // 顺序即优先级顺序（从上到下依次判定，第一条满足即采用）。
   const ADVICE_RULES = [
-    { id: "defense", headline: "防守", emoji: "🔴", color: "var(--down)", state: "趋势逆风",
+    { id: "defense", headline: "防守", color: "var(--adv-defense)", state: "趋势逆风",
       cond: "方向轴逆风：50/200 日均线死叉，或价格跌破 200 日均线", detail: "禁止新开多仓，保护已有仓位。" },
-    { id: "trim", headline: "止盈", emoji: "🟠", color: "var(--orange)", state: "极端过热",
+    { id: "trim", headline: "止盈", color: "var(--adv-trim)", state: "极端过热",
       cond: "情绪过热：FGI > 75 或 RSI > 72", detail: "减仓止盈，收紧保护。" },
-    { id: "cooldown", headline: "兑现", emoji: "🔷", color: "var(--blue)", state: "恐慌降温期",
+    { id: "cooldown", headline: "兑现", color: "var(--adv-cooldown)", state: "恐慌降温期",
       cond: "VIX 曾在 60 个交易日内高于 30、现已回落到 20 以下", detail: "不开新仓，分批兑现这一轮的利润。" },
-    { id: "accumulate", headline: "布局", emoji: "🟢", color: "var(--up)", state: "恐慌积累",
+    { id: "accumulate", headline: "布局", color: "var(--adv-accumulate)", state: "恐慌积累",
       cond: "极端恐惧：VIX ≥ 30，或 FGI < 25 且 RSI < 38", detail: "控制仓位，分批买入强势标的。" },
-    { id: "scale", headline: "分批参与", emoji: "🔵", color: "var(--accent)", state: "情绪偏冷",
+    { id: "scale", headline: "分批参与", color: "var(--adv-scale)", state: "情绪偏冷",
       cond: "情绪偏冷：FGI < 40 或 RSI < 45", detail: "小幅优选加仓，保留后续资金。" },
-    { id: "hold", headline: "保持持仓", emoji: "🟡", color: "var(--warn)", state: "情绪偏热",
+    { id: "hold", headline: "保持持仓", color: "var(--adv-hold)", state: "情绪偏热",
       cond: "情绪偏热：FGI ≥ 60 或 RSI ≥ 65", detail: "持有，不新增风险。" },
-    { id: "normal", headline: "正常配置", emoji: "🔹", color: "var(--skyblue)", state: "趋势顺风",
+    { id: "normal", headline: "正常配置", color: "var(--adv-normal)", state: "趋势顺风",
       cond: "以上条件均不满足（方向顺风，情绪不冷不热不过热）", detail: "按风险预算正常布局。" },
   ];
+
+  const advDot = color => `<span class="adv-dot" style="background:${color}"></span>`;
 
   function buildAxes({ price, ma50, ma200, vix, fg, rsi, vixTrend, vix60Max }) {
     const dir  = getDirectionAxis(price, ma50, ma200);
@@ -14989,10 +14984,10 @@ function rsAdjustGrade(grade, rsResult) {
     const gapTxt = r => r.pct != null
       ? `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.pct).toFixed(1)}%`
       : `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.gap).toFixed(r.key === "fg" ? 0 : 1)}`;
-    const SHOW = 4;
+    const SHOW = 2;   // 只列最近的两条；其余只报条数
     const rows = list.slice(0, SHOW).map(r => `
       <div class="nx-row">
-        <span class="nx-to" style="color:${r.to.color}"><span class="nx-arrow">→</span>${r.to.emoji} ${r.to.headline}</span>
+        <span class="nx-to" style="color:${r.to.color}"><span class="nx-arrow">→</span>${advDot(r.to.color)} ${r.to.headline}</span>
         <span class="nx-cond">${condTxt(r)}</span>
         <span class="nx-gap num">${fmtV(r.key, r.cur)} → ${fmtV(r.key, r.t)} <b>${gapTxt(r)}</b></span>
         <span class="nx-z num${r.z != null && r.z < 1 ? " near" : ""}">${r.z != null ? `${r.z < 10 ? r.z.toFixed(1) : r.z.toFixed(0)}×<i class="nx-z-u">日波动</i>` : "—"}</span>
@@ -15001,7 +14996,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="mkt-card mkt-next">
         ${atitle("距下一状态", "Next State")}
         <div class="nx-head">
-          <span class="nx-now" style="color:${now.color}">${now.emoji} ${now.headline}</span>
+          <span class="nx-now" style="color:${now.color}">${advDot(now.color)} ${now.headline}</span>
           ${held}
         </div>
         ${list.length ? `<div class="nx-rows">
@@ -15324,7 +15319,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkt-section-label"><span class="mkt-sl-zh">综合建议</span><span class="mkt-sl-en">Market Model</span></div>
         <div class="mkt-combine" style="border-color:${mkAlpha(combined.color,33)};background:${mkAlpha(combined.color,7)}">
           <div class="mkt-combine-eyebrow">Recommendation</div>
-          <div class="mkt-combine-head" style="color:${combined.color}"><span class="mkt-combine-emoji">${combined.emoji}</span>${combined.headline}<span class="mkt-combine-state">${combined.state}</span></div>
+          <div class="mkt-combine-head" style="color:${combined.color}">${advDot(combined.color)}${combined.headline}<span class="mkt-combine-state">${combined.state}</span></div>
           <div class="mkt-combine-detail">${combined.detail}</div>
         </div>
         <div class="mkt-axis-grid">

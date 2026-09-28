@@ -45,6 +45,15 @@
     --blue-line: oklch(0.72 0.15 245 / .35);
 
     /* sky blue — 浅蓝色，比 --blue 更淡更亮，用于「正常配置」这类不需要方向色的基线状态 */
+    /* 综合建议 7 档状态色（单一来源：combineAxes / 情绪轴 / 周期分析色带 / 距下一状态全部读这组）。
+       按 OKLab 距离选定，任意两档最小距离 0.108（旧配色 0.076，分批参与与正常配置最接近）。 */
+    --adv-defense:    oklch(0.70 0.18 25);
+    --adv-trim:       oklch(0.76 0.16 55);
+    --adv-hold:       oklch(0.85 0.15 95);
+    --adv-accumulate: oklch(0.77 0.15 155);
+    --adv-normal:     oklch(0.84 0.09 220);
+    --adv-cooldown:   oklch(0.64 0.17 262);
+    --adv-scale:      oklch(0.72 0.16 315);
     --skyblue: oklch(0.82 0.08 225);
     --skyblue-dim: oklch(0.82 0.08 225 / .15);
     --skyblue-line: oklch(0.82 0.08 225 / .35);
@@ -1222,6 +1231,13 @@
   /* ============ LIGHT THEME ============ */
   body[data-theme="light"]{
     --bg-0: oklch(0.985 0.003 250);
+    --adv-defense:    oklch(0.56 0.19 25);
+    --adv-trim:       oklch(0.62 0.17 55);
+    --adv-hold:       oklch(0.68 0.15 90);
+    --adv-accumulate: oklch(0.56 0.15 155);
+    --adv-normal:     oklch(0.62 0.11 225);
+    --adv-cooldown:   oklch(0.48 0.18 262);
+    --adv-scale:      oklch(0.54 0.18 315);
     --bg-1: oklch(1.00 0.000 250);
     --bg-2: oklch(0.965 0.004 250);
     --bg-3: oklch(0.935 0.006 250);
@@ -4405,7 +4421,9 @@
   .mkt-combine { border: 1px solid; border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
   .mkt-combine-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 6px; }
   .mkt-combine-head { font-size: 26px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.01em; display: flex; align-items: baseline; gap: 10px; }
-  .mkt-combine-emoji { font-size: 22px; line-height: 1; }
+  /* 状态图标统一为同尺寸实心圆点，颜色直接取状态色 token——不再用 emoji（形状不一、颜色与 token 对不上） */
+  .adv-dot { display:inline-block; width:9px; height:9px; border-radius:50%; flex-shrink:0; vertical-align:middle; }
+  .mkt-combine-head .adv-dot { width:14px; height:14px; align-self:center; }
   .mkt-combine-state { font-size: 13px; font-weight: 600; color: var(--fg-3); letter-spacing: 0; }
   .mkt-combine-detail { font-size: 12.5px; color: var(--fg-2); line-height: 1.55; }
   .mkt-axis-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -4886,7 +4904,7 @@
     .mkt-strat-grid { grid-template-columns: 1fr; gap: 8px; }
     .mkt-axis-grid { grid-template-columns: 1fr; gap: 8px; }
     .mkt-combine-head { font-size: 20px; gap: 7px; }
-    .mkt-combine-emoji { font-size: 16px; }
+    .mkt-combine-head .adv-dot { width:11px; height:11px; }
     .mkt-combine-state { font-size: 11.5px; }
     .mkt-pb-table td:last-child { font-size: 11px; }
   }
@@ -6446,8 +6464,8 @@
   </div>
 </div>
 
-<script src="data.js?v=808"></script>
-<script src="desk.js?v=808"></script>
+<script src="data.js?v=809"></script>
+<script src="desk.js?v=809"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
