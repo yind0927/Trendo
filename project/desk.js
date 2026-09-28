@@ -14907,6 +14907,114 @@ function rsAdjustGrade(grade, rsResult) {
     };
   }
 
+  // ── 距下一状态 · Next State ──────────────────────────────────────────────
+  // 顶部卡片只说「现在是什么」；这里回答「离相邻的哪一档最近、要变多少」。
+  // 做法：每个输入沿两个方向找它的阈值，把越线后的值**代回 combineAxes**，只保留
+  // 真的会改变综合建议的那条线。判定顺序因此天然正确——方向逆风时 FGI 离 60 再近
+  // 也改变不了「防守」，就不会被列出来；也不用再手写一份规则去跟 combineAxes 对账。
+  // 距离换算成「过去 60 个交易日该指标日变动标准差的几倍」，FGI 的点、RSI 的点、
+  // VIX 的点和价格才能放在一起比；它说的是「多容易被正常波动越过」，不是天数预测。
+  const NEXT_SIGMA_N = 60;
+  function nextSigma(arr) {
+    const v = (arr || []).filter(x => x != null && isFinite(x));
+    const d = [];
+    for (let i = Math.max(1, v.length - NEXT_SIGMA_N); i < v.length; i++) d.push(v[i] - v[i - 1]);
+    if (d.length < 10) return null;
+    const m = d.reduce((a, b) => a + b, 0) / d.length;
+    const s = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / (d.length - 1));
+    return s > 0 ? s : null;
+  }
+
+  function buildNextStates(axes, { vixTrend = "flat", vix60Max = null, sig = {} } = {}) {
+    if (!axes) return null;
+    const { price, ma50, ma200, vix, fg, rsi } = axes;
+    const base = { price, ma50, ma200, vix, fg, rsi };
+    const run = o => {
+      const x = { ...base, ...o };
+      // VIX 往上越线时，那一天本身就会成为 60 日最高——跟 fetchMarketData 把当天 VIX
+      // 并进 vix60Max 的口径一致
+      const v60 = x.vix != null && vix60Max != null ? Math.max(vix60Max, x.vix) : vix60Max;
+      return combineAxes(getDirectionAxis(x.price, x.ma50, x.ma200), getRiskAxis(x.vix),
+        getSentimentAxis(x.fg, x.rsi, vixTrend, x.vix, v60));
+    };
+    const now = run({});
+    const vars = [
+      { key: "price", name: "VOO", cur: price, sig: sig.price,
+        cuts: [[ma50, "EMA50"], [ma200, "EMA200"]] },
+      { key: "ma50", name: "EMA50", cur: ma50, sig: sig.gap, cuts: [[ma200, "EMA200"]] },
+      { key: "vix", name: "VIX", cur: vix, sig: sig.vix, cuts: [15, 20, 30, 50].map(t => [t, String(t)]) },
+      { key: "fg",  name: "FGI", cur: fg,  sig: sig.fg,  cuts: [25, 40, 60, 75].map(t => [t, String(t)]) },
+      { key: "rsi", name: "RSI", cur: rsi, sig: sig.rsi, cuts: [38, 45, 65, 72].map(t => [t, String(t)]) },
+    ];
+    const out = [];
+    for (const v of vars) {
+      if (v.cur == null) continue;
+      for (const dir of [1, -1]) {
+        const ahead = v.cuts.filter(([t]) => t != null && (dir > 0 ? t > v.cur : t < v.cur))
+          .sort((a, b) => Math.abs(a[0] - v.cur) - Math.abs(b[0] - v.cur));
+        for (const [t, tl] of ahead) {
+          // 严格越线：`> 75` 与 `>= 60` 两种写法都要满足
+          const eps = Math.max(Math.abs(t) * 1e-6, 0.001);
+          const to = run({ [v.key]: t + dir * eps });
+          if (to.id === now.id) continue;
+          const gap = t - v.cur;
+          out.push({ key: v.key, name: v.name, cur: v.cur, t, tl, dir, gap, to,
+            z: v.sig ? Math.abs(gap) / v.sig : null,
+            pct: v.key === "price" || v.key === "ma50" ? gap / v.cur * 100 : null });
+          break;
+        }
+      }
+    }
+    out.sort((a, b) => (a.z ?? Infinity) - (b.z ?? Infinity) || Math.abs(a.gap) - Math.abs(b.gap));
+    return { now, list: out };
+  }
+
+  function mkNextStateHTML(next, advice) {
+    if (!next) return "";
+    const { now, list } = next;
+    // 持续多久：只有回放的最后一段就是现在这一档时才说得出来（收盘前两者可能不同步）
+    let held = "";
+    const cur = advice && !advice.unavailable ? advice.current : null;
+    if (cur && cur.id === now.id) {
+      const past = advice.segs.slice(0, -1).filter(s => s.id === now.id).map(s => s.days.length).sort((a, b) => a - b);
+      const med = past.length ? past[Math.floor((past.length - 1) / 2)] : null;
+      held = `<span class="nx-held">已持续 <b>${cur.days.length}</b> 个交易日${
+        med != null ? ` · 本窗口内此前 ${past.length} 段中位 ${med} 天` : " · 本窗口内此前未出现过"}</span>`;
+    }
+    const fmtV = (key, v) => key === "price" || key === "ma50" ? `$${v.toFixed(2)}`
+      : key === "fg" ? v.toFixed(0) : v.toFixed(1);
+    const condTxt = r => r.key === "price" ? `VOO ${r.dir > 0 ? "涨回" : "跌破"} ${r.tl}`
+      : r.key === "ma50" ? (r.dir > 0 ? "EMA50 上穿 EMA200" : "EMA50 下穿 EMA200（死叉）")
+      : `${r.name} ${r.dir > 0 ? "涨破" : "跌破"} ${r.tl}`;
+    const gapTxt = r => r.pct != null
+      ? `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.pct).toFixed(1)}%`
+      : `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.gap).toFixed(r.key === "fg" ? 0 : 1)}`;
+    const SHOW = 4;
+    const rows = list.slice(0, SHOW).map(r => `
+      <div class="nx-row">
+        <span class="nx-to" style="color:${r.to.color}"><span class="nx-arrow">→</span>${r.to.emoji} ${r.to.headline}</span>
+        <span class="nx-cond">${condTxt(r)}</span>
+        <span class="nx-gap num">${fmtV(r.key, r.cur)} → ${fmtV(r.key, r.t)} <b>${gapTxt(r)}</b></span>
+        <span class="nx-z num${r.z != null && r.z < 1 ? " near" : ""}">${r.z != null ? `${r.z < 10 ? r.z.toFixed(1) : r.z.toFixed(0)}×<i class="nx-z-u">日波动</i>` : "—"}</span>
+      </div>`).join("");
+    return `
+      <div class="mkt-card mkt-next">
+        ${atitle("距下一状态", "Next State")}
+        <div class="nx-head">
+          <span class="nx-now" style="color:${now.color}">${now.emoji} ${now.headline}</span>
+          ${held}
+        </div>
+        ${list.length ? `<div class="nx-rows">
+          <div class="nx-row nx-row-hd"><span>会切到</span><span>条件</span><span>现值 → 阈值</span><span title="距离 ÷ 过去 60 个交易日的日变动标准差">日波动倍数</span></div>
+          ${rows}
+        </div>
+        ${list.length > SHOW ? `<div class="nx-more">另有 ${list.length - SHOW} 条更远的切换未列出</div>` : ""}`
+        : `<div class="nx-empty">单项指标变动都不会改变当前建议。</div>`}
+        <div class="nx-note">只列<b>会改变综合建议</b>的阈值：把越线后的值代回三轴规则判定，被更高优先级条件挡住的线不列（例如方向逆风时情绪指标怎么变都仍是防守）。
+          日波动倍数 = 距离 ÷ 该指标过去 60 个交易日的日变动标准差，越小越容易被一两天的正常波动越过；它不是天数预测。每一行都假设只有这一项在变、其余不动。</div>
+      </div>`;
+  }
+
   // How far each axis is from the threshold that would flip it. Needs no history and is
   // the only forward-looking piece here: a phase label sitting 0.4% from its boundary is
   // far more fragile than the same label 8% clear of it, and nothing on the page said so.
@@ -16049,7 +16157,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice, next } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -16078,6 +16186,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
+      ${mkNextStateHTML(next, advice)}
       <div class="mkt-playbook-ref">
         <details>
           <summary>市场模型详情 · 点击展开</summary>
@@ -16237,6 +16346,18 @@ function rsAdjustGrade(grade, rsResult) {
       const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS);
       // 综合建议逐日回放。用的全是上面那两次请求已经拿回来的数据，无额外调用。
       const advice = buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, ADVICE_SESSIONS);
+      // 距下一状态：日波动标准差全部取自上面已经拿到的序列，无额外请求
+      const next = buildNextStates(axes, { vixTrend, vix60Max, sig: vooCloses ? (() => {
+        const e50 = calcEMASeries(vooCloses, 50), e200 = calcEMASeries(vooCloses, 200);
+        const vixSer = histResults?.["^VIX"];
+        return {
+          price: nextSigma(vooCloses),
+          gap:   nextSigma(e50.map((v, i) => v != null && e200[i] != null ? v - e200[i] : null)),
+          vix:   vixSer ? nextSigma(Object.keys(vixSer).sort().map(d => vixSer[d])) : null,
+          fg:    fgByDate ? nextSigma(Object.keys(fgByDate).sort().map(d => fgByDate[d])) : null,
+          rsi:   nextSigma(calcRSISeries(vooCloses)),
+        };
+      })() : {} });
       // The ribbon is built from settled daily bars. If the live price already implies a
       // different phase, that is a pending turn, not a completed one — say so rather than
       // either back-dating it into the history or leaving the card looking stale.
@@ -16250,7 +16371,7 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice, next });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,

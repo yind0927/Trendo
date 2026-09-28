@@ -4166,6 +4166,29 @@
   /* mkt-card 单独使用（不在 .mkt-row 的 grid 里）时不带 margin，紧跟着的下一个模块
      此前直接贴上来、零间距——阶段周期卡靠这条规则才有间隔，这张卡一直漏了它。 */
   .mkt-advice { margin-bottom: 20px; }
+  /* 距下一状态：放在「市场模型详情」上方。四列网格让「会切到 / 条件 / 距离 / 倍数」上下对齐。 */
+  .mkt-next { margin-top: 4px; }
+  .nx-head { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; margin:4px 0 12px; }
+  .nx-now { font-size:15px; font-weight:700; }
+  .nx-held { font-size:11px; color:var(--fg-3); }
+  .nx-held b { color:var(--fg-1); font-family:var(--f-mono); }
+  .nx-rows { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+  .nx-row { display:grid; grid-template-columns:150px 1fr 190px 72px; gap:10px; align-items:center;
+    padding:9px 12px; font-size:11.5px; }
+  .nx-row + .nx-row { border-top:1px solid var(--line); }
+  .nx-row-hd { font-size:10px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.05em;
+    background:color-mix(in oklch, var(--fg-1) 2.5%, transparent); }
+  .nx-to { font-weight:700; white-space:nowrap; }
+  .nx-arrow { color:var(--fg-3); margin-right:5px; font-weight:400; }
+  .nx-cond { color:var(--fg-1); }
+  .nx-gap { font-family:var(--f-mono); color:var(--fg-2); white-space:nowrap; }
+  .nx-gap b { color:var(--fg-1); margin-left:4px; }
+  .nx-z { font-family:var(--f-mono); text-align:right; color:var(--fg-2); }
+  .nx-z.near { color:var(--warn); font-weight:700; }
+  .nx-z-u { display:none; font-style:normal; font-size:10px; font-weight:400; color:var(--fg-3); margin-left:3px; }
+  .nx-more, .nx-empty { font-size:11px; color:var(--fg-3); margin-top:8px; }
+  .nx-note { font-size:10px; color:var(--fg-3); line-height:1.6; margin-top:12px; padding-top:10px;
+    border-top:1px solid var(--line); }
 
   /* Header reads as one line of hierarchy: state, then how long, then the window it
      covers pushed to the far edge. */
@@ -4328,6 +4351,14 @@
     .mkp-bars { grid-template-columns:26px 1fr; gap:6px 7px; }
     .mkp-legend { gap:11px; margin-left:33px; }
     .mkp-tr, .mkt-advice .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
+    /* 手机：第一行「会切到 + 倍数」，第二行条件，第三行距离 */
+    .nx-row { grid-template-columns:1fr auto; row-gap:3px; padding:9px 11px; }
+    .nx-row-hd { display:none; }
+    .nx-z-u { display:inline; }
+    .nx-to { grid-column:1; grid-row:1; }
+    .nx-z { grid-column:2; grid-row:1; }
+    .nx-cond { grid-column:1 / -1; }
+    .nx-gap { grid-column:1 / -1; font-size:11px; }
     .mkp-tr-why { grid-column:1 / -1; }
     /* 可收起小节的标题行：手机上标题 + 摘要挤一行会把「建议切换」折成两行、摘要也断成两截。
        标题不许断行；摘要整条换到下一行，与标题文字左对齐（让出箭头宽度）。 */
@@ -6415,8 +6446,8 @@
   </div>
 </div>
 
-<script src="data.js?v=807"></script>
-<script src="desk.js?v=807"></script>
+<script src="data.js?v=808"></script>
+<script src="desk.js?v=808"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
