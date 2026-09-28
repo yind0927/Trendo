@@ -1899,23 +1899,18 @@ function rsAdjustGrade(grade, rsResult) {
 
     // MFE Profit Protection (only for open positions with an entry ATR recorded)
     if (h.entryATR > 0 && h.last > 0 && h.cost > 0) {
-      // The protection peak is monotonic and persisted (h.ppPeak), and ppPrice / ppActive are
-      // derived from it — never ratcheted separately. A separate ratchet on ppPrice over a
-      // freshly-recomputed MFE let the two drift: an intraday high counted in h.last, or a
-      // crypto high scrolling out of the short h.spark window, shrank the displayed peak while
-      // the ratcheted ppPrice stayed put, so 保护价 no longer equalled 入场价 + 60% × 峰值涨幅.
-      const basis = `${h.cost}|${h.entryATR}`;
-      if (h.ppBasis !== basis) {
-        // Cost (加仓/编辑入场) or ATR changed: the plan changed, re-derive from scratch.
-        // Exception — first run on a holding saved before ppPeak existed: back out the peak its
-        // ratcheted ppPrice implied, so the upgrade never silently lowers a protection level.
-        h.ppPeak = (h.ppBasis == null && h.ppPrice > h.cost)
-          ? h.cost + (h.ppPrice - h.cost) / PP_KEEP
-          : 0;
-        h.ppBasis = basis;
-      }
-      const knownPeak = h.peakPrice || (h.spark?.length ? Math.max(...h.spark) : h.cost);
-      h.ppPeak = Math.max(h.ppPeak || 0, knownPeak, h.last, h.cost);
+      // The protection peak is the highest CLOSE since entry — intraday prints never count.
+      // It is monotonic and persisted (h.ppPeak); ppPrice / ppActive are derived from it, never
+      // ratcheted separately, so 保护价 always equals 入场价 + 60% × 峰值涨幅.
+      // Sources: h.peakPrice (daily-close high since entry, fetchPeakPrices) plus h.last only
+      // while the US market is shut — then it IS the latest settled close, which may not be in
+      // the fetched history yet. Crypto never closes, so it relies on its daily closes alone.
+      // The "close|" prefix re-derives every holding once: earlier builds let intraday highs
+      // into ppPeak, and those must not survive as a floor.
+      const basis = `close|${h.cost}|${h.entryATR}`;
+      if (h.ppBasis !== basis) { h.ppPeak = 0; h.ppBasis = basis; }   // plan changed → from scratch
+      const settledClose = (h.kind !== "crypto" && !isUSMarketOpen()) ? h.last : 0;
+      h.ppPeak = Math.max(h.ppPeak || 0, h.peakPrice || 0, settledClose, h.cost);
       h.mfe = h.ppPeak - h.cost;
       h.ppActive = h.mfe >= 2 * h.entryATR;
       if (h.ppActive) h.ppPrice = h.cost + h.mfe * PP_KEEP;
@@ -3123,12 +3118,12 @@ function rsAdjustGrade(grade, rsResult) {
     const chipCls  = !hasATR ? "" : isBreach ? " pp-chip-breach" : isActive ? " pp-chip-on" : " pp-chip-pend";
     const chipTxt  = !hasATR ? "未启用" : isBreach ? "已触及" : isActive ? "已激活" : "待激活";
 
-    // 峰值来源：ppPeak 与日线收盘最高价一致时报「第N天」；高于它说明峰值来自实时价（盘中
-    // 或尚未进入日线数据的当日收盘）；都没有时是 sparkline 临时估算。
+    // 峰值只取收盘价。与日线收盘最高价一致时报「第N天」；高于它说明是休市后刚落定、还没进
+    // 日线数据的最新一根收盘；还没拉到日线数据时如实写「待日线数据」。
     const peakSrcNote = h.peakPrice && Math.abs(peakPx - h.peakPrice) < 0.005
-      ? (h.peakDay ? `第${h.peakDay}天` : "")
-      : h.peakPrice && peakPx > h.peakPrice ? "含实时高点"
-      : "临时估算";
+      ? (h.peakDay ? `第${h.peakDay}天收盘` : "收盘")
+      : h.peakPrice && peakPx > h.peakPrice ? "最新收盘"
+      : "待日线数据";
 
     // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice at 60% MFE
     const activeBar = (() => {
@@ -3158,7 +3153,7 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="pp-axis-labels">
             <span title="入场成本">$${price(h.cost)}</span>
             <span class="pp-axis-pp-tag ${safe ? "safe" : "breach"}">保护价 ${safe ? "▲" : "▼"} ${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%</span>
-            <span title="保护价所依据的峰值">$${price(peakPx)}</span>
+            <span title="收盘峰值">$${price(peakPx)}</span>
           </div>
           <div class="pp-axis-eff-row">
             <span class="pp-eff-chip ${effCls}">现在出场 ${curEff}% 效率</span>
@@ -3194,14 +3189,14 @@ function rsAdjustGrade(grade, rsResult) {
 
     const metricsHTML = isActive
       ? `<div class="pp-metric-table">
-          ${mrow("峰值价格", `$${price(peakPx)}`, "var(--up)", `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}`)}
-          ${mrow("保护价", `$${price(ppP)}`, isBreach ? "var(--down)" : "var(--accent)", "入场价 + 60% MFE")}
+          ${mrow("收盘峰值", `$${price(peakPx)}`, "var(--up)", `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}`)}
+          ${mrow("保护价", `$${price(ppP)}`, isBreach ? "var(--down)" : "var(--accent)", "入场价 + 60% × 收盘峰值涨幅")}
         </div>
         ${isBreach ? `<div class="pp-breach-note">⚠️ 当前价已跌破保护价，止损信号触发</div>` : ""}
         ${activeBar}`
       : `<div class="pp-metric-table">
           ${mrow("激活阈值", `$${price(h.cost + atr2)}`, "var(--fg-1)", "入场价 + 2×ATR")}
-          ${mrow("当前峰值", `$${price(peakPx)}`, mfe > 0 ? "var(--up)" : "var(--fg-2)", mfe > 0 ? `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}` : "尚未超过入场价")}
+          ${mrow("收盘峰值", `$${price(peakPx)}`, mfe > 0 ? "var(--up)" : "var(--fg-2)", mfe > 0 ? `+$${price(mfe)}${peakSrcNote ? " · " + peakSrcNote : ""}` : "收盘尚未高于入场价")}
         </div>
         ${pendingBar}`;
 
@@ -3448,12 +3443,14 @@ function rsAdjustGrade(grade, rsResult) {
     const now = Date.now();
     const allHoldings = [...HOLDINGS, ...SIM_HOLDINGS];
     // Also re-fetch if peakDate is missing (holdings saved by v625/v626 before this field existed)
+    // Crypto used to be skipped here, which left its profit-protection peak with no
+    // closing-price source at all; Yahoo serves its daily closes under the "-USD" symbol.
     const needUpdate = allHoldings.filter(h =>
-      h.entry && h.kind !== "crypto" && (!h.peakPriceAt || now - h.peakPriceAt > STALE_MS || !h.peakDate)
+      h.entry && (!h.peakPriceAt || now - h.peakPriceAt > STALE_MS || !h.peakDate)
     );
     if (!needUpdate.length) return;
 
-    const syms = [...new Set(needUpdate.map(h => h.sym))];
+    const syms = [...new Set(needUpdate.map(_histYahooSym))];
     const earliest = needUpdate.reduce((min, h) => (!min || h.entry < min ? h.entry : min), null);
     if (!earliest || !syms.length) return;
 
@@ -3472,9 +3469,10 @@ function rsAdjustGrade(grade, rsResult) {
     const closes = data?.results || {};
     let changed = false;
     allHoldings.forEach(h => {
-      if (!h.entry || !closes[h.sym]) return;
+      const series = closes[_histYahooSym(h)];
+      if (!h.entry || !series) return;
       let peakPrice = 0, peakDate = null;
-      Object.entries(closes[h.sym]).forEach(([d, v]) => {
+      Object.entries(series).forEach(([d, v]) => {
         if (d >= h.entry && v > peakPrice) { peakPrice = v; peakDate = d; }
       });
       if (!peakPrice) return;
@@ -5512,15 +5510,32 @@ function rsAdjustGrade(grade, rsResult) {
     const wk = Math.ceil(((t - yStart) / 86400000 + 1) / 7);
     return `${t.getUTCFullYear()}-W${String(wk).padStart(2, "0")}`;
   }
-  // ISO week of the ET trading date, not of the UTC clock. After 20:00 ET the UTC date
-  // has already rolled over, so on a Sunday evening this used to file a batch under next
-  // week while weekOf (mpToday, ET) still said today — an id and a date that disagree.
+  // The session a batch entered right now will actually be priced at: the next US trading
+  // day whose 09:30 ET open has not happened yet. The batch's week and weekOf both come from
+  // it. Keying the week off the ET calendar date instead had two faults:
+  //  · From Asia, Monday morning is still Sunday in New York, so "this week" resolved to
+  //    last week's already-priced batch — locked, so the entry box disappeared.
+  //  · A batch entered after an open (e.g. Friday evening) was dated that day and priced at
+  //    its open — a price that was already known when the picks were made.
+  function mpEntrySession(now = new Date()) {
+    const et = etNow(now);
+    const fmtD = t => t.toISOString().slice(0, 10);
+    const isSession = s => {
+      const t = new Date(s + "T12:00:00Z"), dow = t.getUTCDay();
+      return dow !== 0 && dow !== 6 && !usMarketHolidays(t.getUTCFullYear()).includes(s);
+    };
+    let d = et ? et.date : fmtD(now);
+    if (et && isSession(d) && et.mins < 9 * 60 + 30) return d;
+    do {
+      const t = new Date(d + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + 1); d = fmtD(t);
+    } while (!isSession(d));
+    return d;
+  }
   const mpThisWeek = () => {
-    const [y, m, d] = mpToday().split("-").map(Number);
+    const [y, m, d] = mpEntrySession().split("-").map(Number);
     return mpIsoWeek(new Date(Date.UTC(y, m - 1, d)));
   };
   const mpCohort   = id => MODEL_PICKS.find(c => c.id === id);
-  const mpToday    = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
   // Deletable only on the day it was written and only while still unpriced. Once an
   // entry price exists the record stands — being able to drop the weeks that went
@@ -5571,7 +5586,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (existing) {
       // Still drafting (same day, nothing priced yet) → append rather than reject, so a
       // ticker deleted by mistake can be put back. Once anything is priced, the week is closed.
-      if (!mpDeletable(existing)) return { error: `本周（${weekId}）批次已定价，不可再修改` };
+      if (!mpDeletable(existing)) return { error: `本周（${weekId}）批次已锁定，不可再修改` };
       const add = syms.filter(s => !existing.picks.some(p => p.sym === s));
       if (!add.length) return { error: "这些代码本周已录入" };
       existing.picks.push(...add.map(sym => ({
@@ -5584,7 +5599,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     MODEL_PICKS.unshift({
       id: weekId,
-      weekOf: mpToday(),                       // US trading date, not the local one
+      weekOf: mpEntrySession(),                // the session whose open prices this batch
       pickedAt: new Date().toISOString(),
       source: (note || "").slice(0, 80),
       picks: syms.map(sym => ({
@@ -5694,6 +5709,11 @@ function rsAdjustGrade(grade, rsResult) {
     const el = $("#sim-picks-panel"); if (!el) return;
     const s = mpStats(), weekId = mpThisWeek(), cur = mpCohort(weekId);
     const has = !!cur && !mpDeletable(cur);   // "closed" only once something is priced
+    const session = mpEntrySession();
+    const sessLbl = `${session.slice(5).replace("-", "/")}（周${"日一二三四五六"[new Date(session + "T12:00:00Z").getUTCDay()]}）`;
+    // Locked for one of two reasons; saying "已定价" when nothing is priced yet (entered on an
+    // earlier day) would send the user looking for a price that isn't there.
+    const priced = !!cur && cur.picks.some(p => p.entryPrice != null);
     const pct = v => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
     // Excess return is the gap between two percentages, so it reads in percentage points.
     // The cohort grid already said pp; the summary tiles were still saying %, which made
@@ -5706,10 +5726,12 @@ function rsAdjustGrade(grade, rsResult) {
         <div style="flex:1;min-width:260px">
           <div class="mp-gen-title">录入本周选股 · ${weekId}</div>
           <div class="mp-gen-sub">${has
-            ? "本周批次已定价锁定，不可再修改。"
+            ? (priced
+              ? "本周批次已定价锁定，不可再修改。"
+              : `本周批次已于 ${(cur.pickedAt || "").slice(0, 10)} 录入，只能在录入当天修改；入场价将取 ${cur.weekOf} 开盘价。`)
             : cur
-            ? "本周批次仍在起草：可继续补录代码，或删除录错的。一旦拿到开盘价即锁定。"
-            : "粘贴或输入股票代码，空格或逗号分隔。入场价自动取<b>入场日开盘价</b>，无需手动挂单。"}</div>
+            ? `本周批次仍在起草：可继续补录代码，或删除录错的。入场价取 <b>${sessLbl}开盘价</b>，拿到后即锁定。`
+            : `粘贴或输入股票代码，空格或逗号分隔。入场价自动取下一个未开盘交易日 <b>${sessLbl}的开盘价</b>，无需手动挂单。`}</div>
         </div>
         ${has ? "" : `
         <div class="mp-entry">

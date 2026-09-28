@@ -4266,13 +4266,15 @@
     padding:2px 8px; margin-left:auto; }
 
   .mkp-sub { display:flex; align-items:baseline; gap:7px; margin:18px 0 8px; }
-  .mkp-sub span { font-size:11px; font-weight:600; color:var(--fg-1); }
+  .mkp-sub span { font-size:11px; font-weight:600; color:var(--fg-1); white-space:nowrap; }
   /* Trailing note on a section head — says what the rows below are for, so the heading
      itself can stay short. */
   .mkp-sub .mkp-sub-note { margin-left:auto; font-size:10px; font-weight:400; color:var(--fg-3); }
   .mkp-sub em { font-style:normal; font-size:9.5px; color:var(--fg-3);
     text-transform:uppercase; letter-spacing:.07em; }
-  .mkp-filtered { margin-left:auto; font-size:10px; color:var(--fg-3); font-family:var(--f-mono); }
+  .mkp-filtered { margin-left:auto; font-size:10px; color:var(--fg-3); font-family:var(--f-mono);
+    white-space:normal; }
+  .mkp-sub .mkp-sub-note { white-space:normal; }
 
   /* 可收起的小节：summary 直接复用 .mkp-sub 的排版，只在前面多一个箭头，
      收起时 .mkp-filtered 里的「N 次 · 最近 YYYY-MM-DD」就是这一节的摘要。 */
@@ -4300,6 +4302,9 @@
   .mkp-tr-held { font-family:var(--f-mono); font-size:11px; color:var(--fg-2); text-align:right; }
   .mkp-tr-why { font-size:10px; color:var(--fg-3); font-family:var(--f-mono); }
   .mkp-tr-none { font-size:11px; color:var(--fg-3); padding:12px; }
+  /* 周期分析卡的状态名比阶段周期长（「正常配置 → 分批参与」），112px 装不下会把名字折成两行。 */
+  .mkt-advice .mkp-tr { grid-template-columns:88px 168px 62px 1fr; }
+  .mkp-tr-move { white-space:nowrap; }
 
   .mkp-th { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
   .mkp-th-row { display:grid; grid-template-columns:132px 74px 1fr; align-items:center;
@@ -4322,8 +4327,13 @@
     .mkp-scope { margin-left:0; text-align:left; }
     .mkp-bars { grid-template-columns:26px 1fr; gap:6px 7px; }
     .mkp-legend { gap:11px; margin-left:33px; }
-    .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
+    .mkp-tr, .mkt-advice .mkp-tr { grid-template-columns:70px 1fr 58px; row-gap:3px; }
     .mkp-tr-why { grid-column:1 / -1; }
+    /* 可收起小节的标题行：手机上标题 + 摘要挤一行会把「建议切换」折成两行、摘要也断成两截。
+       标题不许断行；摘要整条换到下一行，与标题文字左对齐（让出箭头宽度）。 */
+    details.mkp-fold > summary.mkp-sub { flex-wrap:wrap; row-gap:3px; }
+    details.mkp-fold > summary.mkp-sub .mkp-filtered { flex-basis:100%; margin-left:17px;
+      line-height:1.5; }
     .mkp-th-row { grid-template-columns:100px 66px; row-gap:2px; }
     .mkp-th-note { grid-column:1 / -1; }
   }
@@ -6405,8 +6415,8 @@
   </div>
 </div>
 
-<script src="data.js?v=806"></script>
-<script src="desk.js?v=806"></script>
+<script src="data.js?v=807"></script>
+<script src="desk.js?v=807"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
