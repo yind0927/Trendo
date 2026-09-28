@@ -3,6 +3,7 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
   const autoResizeTA = ta => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+  const PP_KEEP = 0.6;   // 盈利保护：保护价 = 入场价 + 60% × 峰值涨幅（MFE）
 
   const fmt = {
     usd: v => (v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
@@ -671,7 +672,7 @@ function rsAdjustGrade(grade, rsResult) {
   function bxHistoryBodyHTML(h) {
     const hist = h.bxHistory || [];
     const entryPoint = h.bx?.entryFinalGrade
-      ? { date: h.entry, finalGrade: h.bx.entryFinalGrade, rsResult: h.bx.entryRsResult, isEntry: true }
+      ? { date: h.entry, finalGrade: h.bx.entryFinalGrade, rsResult: h.bx.entryRsResult, st: h.bx.entryST, isEntry: true }
       : null;
     const full = entryPoint ? [entryPoint, ...hist] : hist;
 
@@ -682,19 +683,26 @@ function rsAdjustGrade(grade, rsResult) {
     const rowsChrono = full.map((rec, i) => {
       const meta = BX_GRADE_META[rec.finalGrade] || BX_GRADE_META["C"];
       const prev = i > 0 ? full[i - 1] : null;
-      let trendCls = "flat", trendArr = "–";
+      // 等级变化用 ↑/↓，做多/做空用 ▲/▼ 加文字——两者此前都是 ▲/▼，挨在一起读不出
+      // 哪个是方向、哪个是升降级。
+      let trendCls = "flat", trendArr = "–", trendTip = prev ? "等级不变" : "首条记录";
       if (prev) {
         const d = GRADE_LADDER.indexOf(rec.finalGrade) - GRADE_LADDER.indexOf(prev.finalGrade);
         trendCls = d > 0 ? "up" : d < 0 ? "down" : "flat";
-        trendArr = d > 0 ? "▲" : d < 0 ? "▼" : "–";
+        trendArr = d > 0 ? "↑" : d < 0 ? "↓" : "–";
+        if (d) trendTip = `较上次 ${prev.finalGrade} ${d > 0 ? "升" : "降"} ${Math.abs(d)} 级`;
       }
       const rs = rec.rsResult ? `<span class="dsc-hist-rs">RS ${rec.rsResult.score}/${rec.rsResult.max}</span>` : `<span class="dsc-hist-rs dsc-na">—</span>`;
-      const stTag = rec.isEntry ? "" : (rec.st === true ? `<span class="dsc-hist-st up">▲</span>` : rec.st === false ? `<span class="dsc-hist-st down">▼</span>` : "");
+      // 空位也占住同样宽度，保证后面的等级变化列上下对齐
+      const stTag = rec.st === true  ? `<span class="dsc-hist-st up">▲ 多</span>`
+                  : rec.st === false ? `<span class="dsc-hist-st down">▼ 空</span>`
+                  : `<span class="dsc-hist-st none"></span>`;
       return `<div class="dsc-hist-row">
         <span class="dsc-hist-date">${rec.date}${rec.isEntry ? ' <span class="dsc-hist-tag">入场</span>' : ""}</span>
         <span class="dsc-hist-grade" style="color:${meta.color}">${rec.finalGrade}</span>
-        <span class="dsc-hist-trend ${trendCls}">${trendArr}</span>
-        ${stTag}${rs}
+        ${stTag}
+        <span class="dsc-hist-trend ${trendCls}" title="${trendTip}">${trendArr}</span>
+        ${rs}
       </div>`;
     });
     const listHTML = rowsChrono.length
@@ -1596,13 +1604,15 @@ function rsAdjustGrade(grade, rsResult) {
       const lv = live[h.sym];
       h.prevClose = lv ? lv.prevClose : null;
       h.changePct = lv ? lv.changePct : null;
-      if (lv && lv.last > 0) { h.last = lv.last; recomputeHolding(h, totalNotional); }
+      if (lv && lv.last > 0) h.last = lv.last;
+      if (h.last > 0) recomputeHolding(h, totalNotional);   // cloud copy's derived fields may predate this build
     });
     SIM_HOLDINGS.forEach(h => {
       const lv = live[h.sym];
       h.prevClose = lv ? lv.prevClose : null;
       h.changePct = lv ? lv.changePct : null;
-      if (lv && lv.last > 0) { h.last = lv.last; recomputeHolding(h, simNotional); }
+      if (lv && lv.last > 0) h.last = lv.last;
+      if (h.last > 0) recomputeHolding(h, simNotional);   // cloud copy's derived fields may predate this build
     });
     // Refresh quotes right away (next tick) instead of waiting out the 30s interval
     lastPriceFetch = 0;
@@ -1889,18 +1899,27 @@ function rsAdjustGrade(grade, rsResult) {
 
     // MFE Profit Protection (only for open positions with an entry ATR recorded)
     if (h.entryATR > 0 && h.last > 0 && h.cost > 0) {
-      // MFE is always recomputed fresh, not ratcheted, so it never drifts from the
-      // card's own peak display. h.peakPrice is the authoritative entry-to-date daily-close
-      // high (fetchPeakPrices(), same value the card's peak tick shows) — use it when present;
-      // h.spark is only a short display window for the sparkline and can under-report the
-      // true peak, so it's just a fallback for symbols peakPrice hasn't been fetched for yet.
-      const knownPeak = h.peakPrice || (h.spark?.length ? Math.max(...h.spark) : h.cost);
-      h.mfe = Math.max(knownPeak, h.last, h.cost) - h.cost;
-      if (!h.ppActive && h.mfe >= 2 * h.entryATR) h.ppActive = true;
-      if (h.ppActive) {
-        const newPP = h.cost + h.mfe * 0.6;
-        if (!h.ppPrice || newPP > h.ppPrice) h.ppPrice = newPP; // protection level only moves up
+      // The protection peak is monotonic and persisted (h.ppPeak), and ppPrice / ppActive are
+      // derived from it — never ratcheted separately. A separate ratchet on ppPrice over a
+      // freshly-recomputed MFE let the two drift: an intraday high counted in h.last, or a
+      // crypto high scrolling out of the short h.spark window, shrank the displayed peak while
+      // the ratcheted ppPrice stayed put, so 保护价 no longer equalled 入场价 + 60% × 峰值涨幅.
+      const basis = `${h.cost}|${h.entryATR}`;
+      if (h.ppBasis !== basis) {
+        // Cost (加仓/编辑入场) or ATR changed: the plan changed, re-derive from scratch.
+        // Exception — first run on a holding saved before ppPeak existed: back out the peak its
+        // ratcheted ppPrice implied, so the upgrade never silently lowers a protection level.
+        h.ppPeak = (h.ppBasis == null && h.ppPrice > h.cost)
+          ? h.cost + (h.ppPrice - h.cost) / PP_KEEP
+          : 0;
+        h.ppBasis = basis;
       }
+      const knownPeak = h.peakPrice || (h.spark?.length ? Math.max(...h.spark) : h.cost);
+      h.ppPeak = Math.max(h.ppPeak || 0, knownPeak, h.last, h.cost);
+      h.mfe = h.ppPeak - h.cost;
+      h.ppActive = h.mfe >= 2 * h.entryATR;
+      if (h.ppActive) h.ppPrice = h.cost + h.mfe * PP_KEEP;
+      else delete h.ppPrice;
     }
   }
 
@@ -3104,8 +3123,11 @@ function rsAdjustGrade(grade, rsResult) {
     const chipCls  = !hasATR ? "" : isBreach ? " pp-chip-breach" : isActive ? " pp-chip-on" : " pp-chip-pend";
     const chipTxt  = !hasATR ? "未启用" : isBreach ? "已触及" : isActive ? "已激活" : "待激活";
 
-    const peakSrcNote = h.peakPrice
+    // 峰值来源：ppPeak 与日线收盘最高价一致时报「第N天」；高于它说明峰值来自实时价（盘中
+    // 或尚未进入日线数据的当日收盘）；都没有时是 sparkline 临时估算。
+    const peakSrcNote = h.peakPrice && Math.abs(peakPx - h.peakPrice) < 0.005
       ? (h.peakDay ? `第${h.peakDay}天` : "")
+      : h.peakPrice && peakPx > h.peakPrice ? "含实时高点"
       : "临时估算";
 
     // Active state: price-axis bar from cost(0%) to peak(100%), ppPrice at 60% MFE
@@ -3136,7 +3158,7 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="pp-axis-labels">
             <span title="入场成本">$${price(h.cost)}</span>
             <span class="pp-axis-pp-tag ${safe ? "safe" : "breach"}">保护价 ${safe ? "▲" : "▼"} ${distPct >= 0 ? "+" : ""}${distPct.toFixed(1)}%</span>
-            <span title="历史峰值收盘价">$${price(peakPx)}</span>
+            <span title="保护价所依据的峰值">$${price(peakPx)}</span>
           </div>
           <div class="pp-axis-eff-row">
             <span class="pp-eff-chip ${effCls}">现在出场 ${curEff}% 效率</span>
@@ -3216,7 +3238,8 @@ function rsAdjustGrade(grade, rsResult) {
       const raw = input.value.trim();
       const v   = parseFloat(raw);
       if (raw === "" || v === 0) {
-        delete h.entryATR; h.mfe = 0; h.ppActive = false; delete h.ppPrice;
+        delete h.entryATR; h.mfe = 0; h.ppActive = false;
+        delete h.ppPrice; delete h.ppPeak; delete h.ppBasis;
       } else if (!isNaN(v) && v > 0) {
         h.entryATR = v;
       } else {
@@ -3455,13 +3478,16 @@ function rsAdjustGrade(grade, rsResult) {
         if (d >= h.entry && v > peakPrice) { peakPrice = v; peakDate = d; }
       });
       if (!peakPrice) return;
-      if (peakPrice !== h.peakPrice || !h.peakDate || !h.peakPriceAt) {
+      // Stamp the fetch time even when the peak is unchanged — otherwise a stale stamp keeps
+      // this holding in needUpdate and every startup re-downloads its full history.
+      h.peakPriceAt = now;
+      if (peakPrice !== h.peakPrice || !h.peakDate) {
         h.peakPrice   = peakPrice;
         h.peakDate    = peakDate;
         h.peakDay     = peakDate ? Math.max(1, calcTradingDays(h.entry, peakDate)) : null;
-        h.peakPriceAt = now;
-        changed = true;
+        recomputeHolding(h, SIM_HOLDINGS.includes(h) ? simNotional : totalNotional);
       }
+      changed = true;
     });
 
     if (changed) {
@@ -17285,6 +17311,12 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   loadFromStorage();
+  // Derived fields (P&L, R, 盈利保护…) are otherwise only recomputed when a quote *changes*
+  // the price, so after a reload they'd show whatever was persisted — e.g. a protection level
+  // computed under an older rule or before a cost edit on another device. Recompute once, in
+  // memory only: saving here would bump savedAt and let stale local data beat a newer cloud copy.
+  HOLDINGS.forEach(h => { if (h.last > 0) recomputeHolding(h, totalNotional); });
+  SIM_HOLDINGS.forEach(h => { if (h.last > 0) recomputeHolding(h, simNotional); });
 
   // Retroactively stamp existing data saved before savedAt tracking was added.
   // Use epoch 0 so cloud always wins on first sync — prevents mobile from pushing stale data.
