@@ -12626,7 +12626,11 @@ function rsAdjustGrade(grade, rsResult) {
       const res = await fetch(`/api/quote?stocks=${encodeURIComponent(sym)}`);
       const { results } = await res.json();
       const r = results?.[sym];
-      if (r && r.changePct != null && isFinite(r.changePct)) return { pct: r.changePct, live: true };
+      // `live` 决定标签写「今日」还是「最近收盘」。只有真的在盘中，这个 changePct 才是
+      // 「今天到现在为止」；盘前/盘后/周末拿到的是最近一个收盘日相对它前一天的涨跌，
+      // 那时候写「今日」是错的。
+      if (r && r.changePct != null && isFinite(r.changePct))
+        return { pct: r.changePct, live: isUSMarketOpen(), name: r.name || null };
     } catch (_) {}
     return null;
   }
@@ -12644,6 +12648,7 @@ function rsAdjustGrade(grade, rsResult) {
   function mvCacheWrite(sym, data) {
     try {
       const all = JSON.parse(localStorage.getItem(mvCacheKey()) || "{}");
+      delete all[sym];                      // 先删再写：让刚用过的排到末尾，淘汰的才是最久没碰的
       all[sym] = { day: new Date().toLocaleDateString("en-CA"), data };
       const keys = Object.keys(all);
       if (keys.length > MV_CACHE_MAX) keys.slice(0, keys.length - MV_CACHE_MAX).forEach(k => delete all[k]);
@@ -12663,7 +12668,9 @@ function rsAdjustGrade(grade, rsResult) {
   async function mvLoad(raw) {
     const sym = String(raw || "").toUpperCase().trim();
     if (!sym) return;
-    _mvSym = sym; _mvError = null; _mvToday = null; _mvWin = "qtr";
+    // 刻意**不**重置 `_mvWin`：窗口是一个阅读偏好，不是某个标的的属性。连着看好几个标的的
+    // 全历史时，每换一个就被打回「一个季度」要重点一次，没有道理。
+    _mvSym = sym; _mvError = null; _mvToday = null;
     const cached = mvCacheRead(sym);
     if (cached) {
       _mvData = cached; _mvLoading = false;
@@ -12736,8 +12743,10 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
       </div>`;
     }).join("");
+    // 这里刻意**不写**「两列之和是 X%」：屏幕上那十个数字各自取整到 1 位小数，读者照着
+    // 加一遍会得到一个跟 X 差 0.1 的数（实测 96.2 vs 96.1），那种自相矛盾比不给数更糟。
     const flatNote = p.flat
-      ? `<div class="mv-flat-note">另有 ${p.flat} 个平盘日（涨跌 0.00%），不计入上面任何一侧——两列之和因此是 ${((p.n - p.flat) / p.n * 100).toFixed(1)}% 而不是 100%。</div>`
+      ? `<div class="mv-flat-note">另有 <b>${p.flat}</b> 个平盘日（涨跌恰为 0.00%），占 ${(p.flat / p.n * 100).toFixed(1)}%。上面两列只统计涨跌日，加起来因此不到 100%——差的就是这些平盘日。</div>`
       : "";
     return `<div class="mv-freq">
       <div class="mv-freq-hd">
@@ -12785,10 +12794,6 @@ function rsAdjustGrade(grade, rsResult) {
   // 这一段是把分布翻译成能拿来做决定的东西。
   function mvUseHTML(d, p) {
     const u = d.unit;
-    const share = (lo, hi) => {             // |涨跌| 落在 [lo, hi) 的日子占比
-      const c = p.bands.reduce((s, b) => s + (b.loPct >= lo - 1e-9 && b.hiPct <= hi + 1e-9 ? b.dn + b.up : 0), 0);
-      return c / p.n * 100;
-    };
     const dnBeyond = x => p.bands.reduce((s, b) => s + (b.loPct >= x - 1e-9 ? b.dn : 0), 0) / p.n * 100;
     const oneU = u, twoU = u * 2, threeU = u * 3;
     const todayIdx = _mvToday ? mvBandOf(_mvToday.pct, u) : -1;
@@ -12804,20 +12809,33 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function moveProfileHTML() {
-    const recent = mvRecent();
-    const owned = [...new Set([...HOLDINGS, ...SIM_HOLDINGS].map(h => h.sym))].slice(0, 8);
-    const watch = [...new Set(WATCHLIST.map(w => w.sym))].filter(s => !owned.includes(s)).slice(0, 8);
+    // 一个代码只出现一次，落在最具体的那一行（持仓 > 自选 > 最近）——同一个 chip 在
+    // 三行里各出现一次只是噪音，点哪个的效果完全一样。
+    const seen = new Set();
+    const take = arr => arr.filter(s => s && !seen.has(s) && (seen.add(s), true)).slice(0, 8);
+    const owned  = take([...new Set([...HOLDINGS, ...SIM_HOLDINGS].map(h => h.sym))]);
+    const watch  = take([...new Set(WATCHLIST.map(w => w.sym))]);
+    const recent = take(mvRecent());
     const chipRow = (label, arr) => arr.length
       ? `<div class="mv-chiprow"><span class="mv-chiprow-l">${label}</span>${
-          arr.map(s => `<button class="mv-chip${s === _mvSym ? " active" : ""}" data-mv-sym="${s}">${s}</button>`).join("")}</div>`
+          arr.map(s => `<button type="button" class="mv-chip${s === _mvSym ? " active" : ""}" data-mv-sym="${s}">${s}</button>`).join("")}</div>`
       : "";
 
     let body;
     if (_mvLoading) {
-      body = `<div class="mv-empty">正在拉取 ${_mvSym} 的全部历史日线…</div>`;
+      // 骨架屏而不是一行「加载中…」：卡片高度基本不变，出结果时不会整页跳一下
+      body = `<div class="mv-skel" aria-live="polite" aria-busy="true">
+        <div class="mv-skel-hd"><i style="width:120px;height:26px"></i><i style="width:90px;height:22px"></i></div>
+        <div class="mv-skel-grid">${"<i></i>".repeat(4)}</div>
+        <div class="mv-skel-rows">${`<i></i>`.repeat(5)}</div>
+        <div class="mv-skel-note">正在拉取 ${_mvSym} 的全部历史日线…</div>
+      </div>`;
     } else if (_mvError) {
-      body = `<div class="mv-empty mv-err">拿不到 <b>${_mvSym}</b> 的历史数据${
-        _mvError === "no-data" ? "——代码可能拼错了，或这个标的在 Yahoo 上没有足够的日线（少于 30 根）" : `：${_mvError}`}。</div>`;
+      body = `<div class="mv-empty mv-err">
+        <div>拿不到 <b>${_mvSym}</b> 的历史数据${
+          _mvError === "no-data" ? "——代码可能拼错了，或这个标的在 Yahoo 上没有足够的日线（少于 30 根）" : `：${_mvError}`}。</div>
+        <button type="button" class="mv-retry" data-mv-retry>重试</button>
+      </div>`;
     } else if (!_mvData) {
       body = `<div class="mv-empty">输入一个代码，看它自己平时一天能动多少。档位不是写死的百分比，而是按这只票的典型波动长出来的。</div>`;
     } else {
@@ -12829,6 +12847,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mv-hd">
           <div class="mv-hd-sym">
             <b>${d.sym}</b>
+            ${_mvToday?.name ? `<i class="mv-hd-name">${_mvToday.name}</i>` : ""}
             ${d.resolved !== d.sym ? `<i class="mv-hd-res">按 ${d.resolved} 取数</i>` : ""}
           </div>
           <div class="mv-hd-today">
@@ -12837,8 +12856,8 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>
         <div class="mv-winbar">
-          <button class="mv-win${_mvWin === "qtr" ? " active" : ""}" data-mv-win="qtr">一个季度</button>
-          <button class="mv-win${_mvWin === "all" ? " active" : ""}" data-mv-win="all">全部历史</button>
+          <button type="button" class="mv-win${_mvWin === "qtr" ? " active" : ""}" aria-pressed="${_mvWin === "qtr"}" data-mv-win="qtr">一个季度</button>
+          <button type="button" class="mv-win${_mvWin === "all" ? " active" : ""}" aria-pressed="${_mvWin === "all"}" data-mv-win="all">全部历史</button>
           <span class="mv-winmeta">N = ${p.n.toLocaleString("en-US")} 个交易日 · ${p.from} → ${p.to}${
             d.adj ? "" : " · 无分红调整数据，用裸收盘价"}</span>
         </div>
@@ -12854,9 +12873,9 @@ function rsAdjustGrade(grade, rsResult) {
       <form class="mv-form" id="mv-form" autocomplete="off" novalidate>
         <input id="mv-input" class="mv-input" data-upper placeholder="输入代码看它的日波动分布… e.g. SMH"
                autocapitalize="characters" spellcheck="false" maxlength="12" />
-        <button type="submit" class="mv-go">查看</button>
+        <button type="submit" class="mv-go${_mvLoading ? " loading" : ""}"${_mvLoading ? " disabled" : ""}>${_mvLoading ? "查询中" : "查看"}</button>
       </form>
-      ${chipRow("最近", recent)}${chipRow("持仓", owned)}${chipRow("自选", watch)}
+      ${chipRow("持仓", owned)}${chipRow("自选", watch)}${chipRow("最近", recent)}
       ${body}
     </div>`;
   }
@@ -12864,24 +12883,41 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMoveProfile() {
     const el = $("#move-profile");
     if (!el) return;
-    const keep = document.activeElement?.id === "mv-input" ? $("#mv-input")?.value : null;
+    // 整块重建前先记下输入框状态：正在打字时保留光标，否则回填当前查的代码——点 chip 或
+    // 点「查看」之后焦点不在输入框上，不回填的话框会空掉，看不出现在展示的是哪一个。
+    const prev = $("#mv-input");
+    const typing = document.activeElement === prev;
+    const keep = typing ? prev.value : null;
+    const caret = typing ? prev.selectionStart : null;
+
     el.innerHTML = moveProfileHTML();
-    if (keep != null) { const i = $("#mv-input"); if (i) { i.value = keep; i.focus(); } }
+
+    const input = $("#mv-input", el);
+    if (input) {
+      input.value = keep != null ? keep : (_mvSym || "");
+      if (typing) { input.focus(); try { input.setSelectionRange(caret, caret); } catch (_) {} }
+    }
+
     $$("[data-mv-sym]", el).forEach(b => b.addEventListener("click", () => mvLoad(b.dataset.mvSym)));
     $$("[data-mv-win]", el).forEach(b => b.addEventListener("click", () => {
       _mvWin = b.dataset.mvWin; renderMoveProfile();
     }));
-    const form = $("#mv-form", el);
-    const input = $("#mv-input", el);
+    $$("[data-mv-retry]", el).forEach(b => b.addEventListener("click", () => _mvSym && mvLoad(_mvSym)));
+
     input?.addEventListener("input", () => {
       const p = input.selectionStart;
       input.value = input.value.toUpperCase();
       try { input.setSelectionRange(p, p); } catch (_) {}
     });
-    form?.addEventListener("submit", e => {
+    input?.addEventListener("keydown", e => {
+      if (e.key === "Escape") { e.preventDefault(); input.value = ""; }
+    });
+    $("#mv-form", el)?.addEventListener("submit", e => {
       e.preventDefault();
       const v = (input?.value || "").toUpperCase().trim();
       if (!v) { formErr("请输入一个股票代码", "#mv-input"); return; }
+      // 刻意**不**短路「已经在看这个代码了」：再查一次会走当天缓存、不发网络请求，而跨日
+      // 之后缓存失效时又能拉到新数据。加了短路就等于用户再也没有办法刷新一张过期的卡。
       mvLoad(v);
     });
   }
