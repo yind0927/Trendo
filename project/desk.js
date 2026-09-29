@@ -8,6 +8,11 @@
   const fmt = {
     usd: v => (v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 }),
     usd2: v => (v < 0 ? "−" : "") + "$" + Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    // 紧凑金额，给空间紧张的地方用（仓位分布的代码 chip）：$840 / $18.4k / $1.2M
+    usdK: v => { const a = Math.abs(v), s = v < 0 ? "−" : "";
+      if (a >= 1e6) return s + "$" + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + "M";
+      if (a >= 1000) return s + "$" + (a / 1000).toFixed(a >= 1e5 ? 0 : 1) + "k";
+      return s + "$" + a.toFixed(0); },
     num: v => v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     pct: v => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(2) + "%",
     pctRaw: v => v.toFixed(1) + "%",
@@ -228,6 +233,19 @@
     return `<div class="disc-bars">${weeks.map((w, i) => `<span style="height:${w * 0.22}px${i === weeks.length - 1 ? ';background:var(--accent);opacity:1' : ''}"></span>`).join("")}</div>`;
   }
 
+  // 一个板块画几段 / 列几个 chip。超过上限的尾部合并为「+N 只」，金额取它们之和，
+  // 所以各段之和恒等于板块总额，不会出现「chip 加起来对不上板块金额」。
+  const ALLOC_SYM_MAX = 5;
+  function allocSegs(s) {
+    const list = s.syms || [];
+    if (!list.length) return [];
+    if (list.length <= ALLOC_SYM_MAX) return list.map(x => ({ label: x.sym, amt: x.amt }));
+    const head = list.slice(0, ALLOC_SYM_MAX - 1).map(x => ({ label: x.sym, amt: x.amt }));
+    const rest = list.slice(ALLOC_SYM_MAX - 1);
+    head.push({ label: `+${rest.length} 只`, amt: rest.reduce((a, b) => a + b.amt, 0), rest: true });
+    return head;
+  }
+
   function pieCard() {
     // Allocation is computed from the REAL committed capital (cost × qty), not from the
     // user-entered `size` field — size can drift from the actual position value, and once
@@ -242,12 +260,14 @@
       if (!sectorMap[nm]) sectorMap[nm] = { name: nm, color: col, amt: 0, n: 0, syms: [] };
       sectorMap[nm].amt += amt;
       sectorMap[nm].n   += 1;
-      sectorMap[nm].syms.push(h.sym);
+      sectorMap[nm].syms.push({ sym: h.sym, amt });
       investedAmt += amt;
     });
     const base     = totalNotional > 0 ? totalNotional : investedAmt;
     const cashAmt  = Math.max(0, base - investedAmt);
     const rows     = Object.values(sectorMap).sort((a, b) => b.amt - a.amt);
+    // 板块内按投入金额降序——此前是 HOLDINGS 的录入顺序，第一个代码不一定是最大的那只。
+    rows.forEach(s => s.syms && s.syms.sort((a, b) => b.amt - a.amt));
     if (cashAmt > 0.5) rows.push({ name: "现金", color: "oklch(0.42 0.015 250)", amt: cashAmt, n: null, isCash: true });
     const investedPct = base > 0 ? investedAmt / base * 100 : 0;
 
@@ -271,15 +291,25 @@
         <div class="alloc-bars">
           ${rows.slice(0, 7).map(s => {
             const pct = base > 0 ? s.amt / base * 100 : 0;
+            // 板块条按个股切段：段宽 = 该股占板块的比例，段间留 2px 缝。整条的宽度仍然是
+            // 板块占总资产的比例（缝由内部 flex 扣掉），跨板块横向比较不受影响。
+            const segs = allocSegs(s);
+            const w = Math.min(100, pct).toFixed(1);
+            const dim = i => (1 - i * 0.14).toFixed(2);
+            const fill = segs.length
+              ? `<div class="alloc-fill alloc-fill-split" style="width:${w}%">${segs.map((g, i) =>
+                  `<i class="alloc-seg" style="flex:${g.amt};background:${s.color};opacity:${dim(i)}" title="${g.label} ${fmt.usd(g.amt)}"></i>`).join("")}</div>`
+              : `<div class="alloc-fill" style="width:${w}%;background:${s.color}"></div>`;
             return `
             <div class="alloc-row${s.isCash ? " is-cash" : ""}" title="${s.name} ${fmt.usd(s.amt)} · 占总资产 ${pct.toFixed(1)}%${s.n ? ` · ${s.n} 笔持仓` : ""}">
               <span class="alloc-name">${s.name}${s.n ? `<i class="alloc-n">${s.n}</i>` : ""}</span>
-              <div class="alloc-track">
-                <div class="alloc-fill" style="width:${Math.min(100, pct).toFixed(1)}%;background:${s.color}"></div>
-              </div>
+              <div class="alloc-track">${fill}</div>
               <span class="alloc-amt">${fmt.usd(s.amt)}</span>
               <span class="alloc-pct">${pct.toFixed(1)}%</span>
-              ${s.syms && s.syms.length ? `<div class="alloc-syms">${s.syms.map(sym => `<span class="alloc-sym-chip">${sym}</span>`).join("")}</div>` : ""}
+              ${segs.length ? `<div class="alloc-syms">${segs.map((g, i) => `<span class="alloc-sym-chip${
+                g.rest ? " is-rest" : ""}" title="${g.label} ${fmt.usd(g.amt)} · 占总资产 ${
+                (base > 0 ? g.amt / base * 100 : 0).toFixed(1)}%"><i class="alloc-sym-dot" style="background:${
+                s.color};opacity:${dim(i)}"></i>${g.label}<b>${fmt.usdK(g.amt)}</b></span>`).join("")}</div>` : ""}
             </div>`;
           }).join("")}
         </div>

@@ -1739,15 +1739,33 @@
     border: 1px solid var(--line); border-radius: 4px; padding: 0 3px; flex-shrink: 0; }
   .alloc-track { flex: 1; min-width: 40px; height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
   .alloc-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  /* 分段条：外层只负责「板块占总资产多少」这个宽度，内部按个股切段，2px 缝从内部扣，
+     所以跨板块比较条长仍然成立。段与 chip 同序同色、透明度逐级递减，一一对应。 */
+  .alloc-fill-split { display: flex; gap: 2px; background: transparent; }
+  .alloc-seg { height: 100%; border-radius: 3px; min-width: 2px; }
   .alloc-amt { font-family: var(--f-mono); font-size: 11px; font-weight: 700; color: var(--fg-0);
     letter-spacing: -.02em; min-width: 62px; text-align: right; flex-shrink: 0; }
   .alloc-pct { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-3); width: 42px; text-align: right; flex-shrink: 0; }
   .alloc-row.is-cash .alloc-name, .alloc-row.is-cash .alloc-amt { color: var(--fg-3); font-weight: 500; }
   .alloc-empty { font-size: 11px; color: var(--fg-3); padding: 6px 0; }
   .alloc-syms { display: flex; flex-wrap: wrap; gap: 3px; padding: 3px 0 2px; flex-basis: 100%; margin-top: -2px; }
-  .alloc-sym-chip { font-family: var(--f-mono); font-size: 9px; font-weight: 500; letter-spacing: .04em;
-    padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line);
-    color: var(--fg-3); background: transparent; line-height: 1.5; }
+  .alloc-sym-chip { display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--f-mono); font-size: 9.5px; font-weight: 500; letter-spacing: .04em;
+    padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line);
+    color: var(--fg-3); background: transparent; line-height: 1.6; }
+  /* 金额比代码重一档：代码是标签，金额才是这一行要回答的问题 */
+  .alloc-sym-chip b { font-weight: 700; color: var(--fg-1); letter-spacing: -.02em; }
+  .alloc-sym-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .alloc-sym-chip.is-rest { border-style: dashed; }
+  .alloc-sym-chip.is-rest b { color: var(--fg-3); font-weight: 500; }
+  /* 手机端：板块名/金额/占比三列占掉 390px 里的大半，分段条只剩约 112px、切成几段后
+     几乎看不出来。把三列各收窄一点，把省下的宽度还给条本身。 */
+  @media (max-width: 768px) {
+    .alloc-name { width: 66px; font-size: 10.5px; }
+    .alloc-amt { min-width: 54px; font-size: 10.5px; }
+    .alloc-pct { width: 34px; font-size: 10px; }
+    .alloc-row { gap: 6px; }
+  }
 
   /* BX ALIGN GRID (Sector + Overall vs VOO) */
   .bx-align-grid { border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
@@ -6464,8 +6482,8 @@
   </div>
 </div>
 
-<script src="data.js?v=810"></script>
-<script src="desk.js?v=810"></script>
+<script src="data.js?v=811"></script>
+<script src="desk.js?v=811"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
