@@ -4791,6 +4791,22 @@
   .cyc-next-arrow { font-family: var(--f-mono); font-size: 13px; font-weight: 700; }
   .cyc-next-row.up .cyc-next-arrow { color: var(--down); }
   .cyc-next-row.down .cyc-next-arrow { color: var(--up); }
+  /* 当前那一档：整行浅底高亮 + 左侧色条，五档列在一起时一眼看出自己在哪 */
+  .cyc-next-row.now { background: var(--bg-3); box-shadow: inset 2px 0 0 0 var(--accent); }
+  .cyc-next-row.now .cyc-next-arrow { color: var(--accent); }
+  .cyc-next-row.term .cyc-next-arrow { color: var(--warn); }
+  /* 得分所在档 ≠ 当前阶段（硬规则绕开了分数）：弱一档的高亮，跟「当前阶段」区分开 */
+  .cyc-next-row.atscore { box-shadow: inset 2px 0 0 0 var(--fg-3); }
+  .cyc-next-row.atscore .cyc-next-arrow { color: var(--fg-2); }
+  .cyc-next-tag.sc { color: var(--fg-2); background: var(--bg-3); }
+  .cyc-next-tag { font-size: 9px; font-weight: 700; letter-spacing: .06em; color: var(--accent);
+    background: color-mix(in oklch, var(--accent) 14%, transparent); border-radius: 4px; padding: 1px 6px; }
+  /* 本档的分数区间——五档并列时，没有它就读不出各档的宽窄 */
+  .cyc-next-band { font-family: var(--f-mono); font-size: 10px; color: var(--fg-3);
+    background: var(--bg-2); border-radius: 4px; padding: 1px 6px; }
+  .cyc-next-row.now .cyc-next-band { background: var(--bg-1); }
+  .cyc-next-alt { margin-top: 4px; color: var(--warn); }
+  .cyc-next-alt b, .cyc-next-row.term .cyc-next-list b { color: var(--warn); font-weight: 600; }
   .cyc-next-hd em { font-style: normal; font-family: var(--f-mono); font-size: 11.5px;
     font-weight: 700; margin-left: auto; padding: 1px 8px; border-radius: 999px;
     border: 1px solid currentColor; white-space: nowrap; }
@@ -6516,8 +6532,8 @@
   </div>
 </div>
 
-<script src="data.js?v=814"></script>
-<script src="desk.js?v=814"></script>
+<script src="data.js?v=815"></script>
+<script src="desk.js?v=815"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

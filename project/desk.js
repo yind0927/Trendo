@@ -16024,16 +16024,23 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // 「距下一阶段还差什么」——把这张表从**描述**变成**监视清单**。
-  // 只告诉你现在在第几阶段，等于给了个结论却没给下一步；这里算出最少需要哪几条
-  // 改变状态才会跨线，两个方向都算：往上要多少、往下只差多少。
+  // 只告诉你现在在第几阶段，等于给了个结论却没给下一步。
   //
-  // 两条**硬规则**单独列出，因为它们完全绕开分数：capex 指引下调直接判第 6 阶段，
-  // 半导体订单掉头直接把下限抬到第 5 阶段——攒再多 T2/T3 也不如这两条里的任何一条。
+  // 早期版本只算**上下相邻的两档**（往上要多少、往下只差多少）。那样看不出整个梯子的
+  // 形状：离更远的那几档到底是"再亮一条就到"还是"全点满也到不了"，读者无从判断，而
+  // 这恰恰决定了这张表值不值得继续盯。现在**第 2–6 阶段五档全列**，每档各自算最少需要
+  // 动哪几条判据。相邻那两档算出来的数跟早期版本一致，只是不再只有它们。
+  //
+  // 第 6 阶段单独一类：它**只由硬规则触达**（capex 指引下调），分数再高也到不了；
+  // 第 5 阶段除了分数线，还有一条硬规则入口（半导体订单掉头直接抬下限）。
+  const CYCLE_LADDER = [
+    { n: 2, zh: "起步",   cls: "flat", lo: 0 },
+    { n: 3, zh: "机构化", cls: "flat", lo: 0.15 },
+    { n: 4, zh: "金融化", cls: "warn", lo: 0.35 },
+    { n: 5, zh: "派发",   cls: "down", lo: 0.60 },
+  ];
   function cycNextSteps(p) {
     if (!p.maxV) return null;
-    const asc = [...CYCLE_RATIO_CUT].sort((a, b) => a[0] - b[0]);
-    const upCut = asc.find(c => c[0] > p.ratio + 1e-9) || null;
-    const dnCut = [...asc].reverse().find(c => c[0] <= p.ratio + 1e-9) || null;
 
     const ups = [], dns = [];
     for (const it of CYCLE_ITEMS) {
@@ -16054,56 +16061,81 @@ function rsAdjustGrade(grade, rsResult) {
       return acc >= need ? { list: out, acc } : null;
     };
 
-    const up = upCut ? (() => {
-      const need = upCut[0] * p.maxV - p.score + 1e-9;
-      const r = pick(ups, "gain", need);
-      return { cut: upCut, need, ...(r || { list: null, acc: 0 }) };
-    })() : null;
+    // **阶段**与**得分所在档**是两件事，必须分开：两条硬规则（capex 指引下调 → 第 6；
+    // 半导体订单掉头 → 下限抬到第 5）完全绕开分数，命中时阶段会跑到分数所在档之上。
+    // 早期版本只用一个"当前档"，于是在硬规则生效时会算出「要掉回第 5 阶段、只差 4.85 分、
+    // 最少需要 0 条」这种自相矛盾的行——分数其实早就在它下面了。
+    // 距离一律相对 **得分所在档** 算，"当前阶段"只是一个标记。
+    const curN = p.terminal ? 6 : p.raw.n;
+    let scoreN = 2;
+    for (const [cut, n] of CYCLE_RATIO_CUT) if (p.ratio >= cut) { scoreN = n; break; }
+    const hardTerm = CYCLE_ITEMS.find(it => it.terminal && cycStateOf(it) !== "lit") || null;
+    const hardLead = CYCLE_ITEMS.find(it => it.lead && cycStateOf(it) !== "lit") || null;
 
-    const dn = dnCut ? (() => {
-      const need = p.score - dnCut[0] * p.maxV + 1e-9;   // 需要跌破这条线
-      // dnCut 是**当前所处**那一档的门槛，跌破它落到的是**再下一档**——
-      // 直接用 dnCut[1] 会把"掉回第 3 阶段"写成"掉回第 4 阶段"
-      const below = asc.filter(c => c[0] < dnCut[0]).pop();
-      const to = below ? { n: below[1], zh: below[2] } : { n: 2, zh: "尚无足够信号" };
-      const r = pick(dns, "drop", need);
-      return { cut: dnCut, to, need, ...(r || { list: null, acc: 0 }) };
-    })() : null;
-
-    const hard = [];
-    for (const it of CYCLE_ITEMS) {
-      if (cycStateOf(it) === "lit") continue;
-      if (it.terminal) hard.push({ zh: it.zh, txt: "任意一家真的下调 → 直接判第 6 阶段，不看分数、也不受完整度门控" });
-      else if (it.lead) hard.push({ zh: it.zh, txt: "单独点亮 → 阶段下限直接抬到第 5 阶段，不看分数" });
-    }
-    return { up, dn, hard };
+    const ladder = CYCLE_LADDER.map((b, i) => {
+      const above = CYCLE_LADDER[i + 1] || null;             // 本档的上沿 = 上一档的下沿
+      const row = { ...b, cur: curN === b.n, atScore: scoreN === b.n, dir: null,
+        need: 0, list: null, lo10: b.lo * 10, hi10: above ? above.lo * 10 : null, hard: null };
+      // 硬规则入口只在这一档确实在当前阶段**之上**时才算"另一条路"
+      if (b.n === 5 && hardLead && b.n > curN) row.hard = `<b>${hardLead.zh}</b>：单独点亮 → 下限直接抬到这一档，不看分数`;
+      if (row.atScore) return row;
+      if (b.n > scoreN) {                                     // 往上：越过本档下沿
+        row.dir = "up";
+        row.need = b.lo * p.maxV - p.score;
+        Object.assign(row, pick(ups, "gain", row.need + 1e-9) || { list: null });
+        row.cut10 = row.lo10;
+      } else {                                                // 往下：跌破本档上沿
+        row.dir = "down";
+        row.need = p.score - (above ? above.lo : 1) * p.maxV;
+        Object.assign(row, pick(dns, "drop", row.need + 1e-9) || { list: null });
+        row.cut10 = row.hi10;
+      }
+      return row;
+    });
+    // 第 6 阶段不在分数梯子上，单列在最上面
+    ladder.push({ n: 6, zh: "认知", cls: "down", cur: curN === 6, termOnly: true,
+      hard: curN === 6 ? "阶段由这条硬规则直接判定，与当前得分无关"
+          : hardTerm ? `<b>${hardTerm.zh}</b>：任意一家真的下调 → 直接判第 6 阶段，不看分数、也不受完整度门控`
+          : "已触发" });
+    return { ladder, curN, scoreN, cur10: sc10(p.ratio) };
   }
 
   function cycNextHTML(p) {
     const n = cycNextSteps(p);
     if (!n) return "";
-    const row = (dir, o, verb) => {
-      if (!o) return "";
-      const to = dir === "up" ? { n: o.cut[1], zh: o.cut[2] } : o.to;
-      const d = (o.need * 10 / p.maxV);
-      const names = o.list && o.list.map(c =>
+    const d2 = v => Math.abs(v * 10 / p.maxV).toFixed(2);
+    const bandTxt = r => r.termOnly ? "硬规则触达"
+      : r.hi10 == null ? `≥ ${r.lo10.toFixed(1)} 分`
+      : r.lo10 === 0   ? `< ${r.hi10.toFixed(1)} 分`
+      : `${r.lo10.toFixed(1)}–${r.hi10.toFixed(1)} 分`;
+    const row = r => {
+      const names = r.list && r.list.map(c =>
         `<b>${c.it.zh}</b><i>→${c.to}</i>${c.it.auto ? `<u>自动项</u>` : ""}`).join(" · ");
-      return `<div class="cyc-next-row ${dir}">
-        <div class="cyc-next-hd"><span class="cyc-next-arrow">${dir === "up" ? "↑" : "↓"}</span>
-          ${verb}<b>第 ${to.n} 阶段 · ${to.zh}</b>（${dir === "up" ? "越过" : "跌破"} ${(o.cut[0] * 10).toFixed(1)} 分线）
-          <em>${dir === "up" ? "还差" : "只差"} ${Math.abs(d).toFixed(2)} 分</em></div>
-        <div class="cyc-next-list">${o.list
-          ? `最少需要这 ${o.list.length} 条：${names}`
-          : `<span class="cyc-next-none">把剩下所有能动的都动到底也不够——这个方向暂时到不了</span>`}</div>
+      const arrow = r.cur ? "●" : r.termOnly ? "⚑" : r.atScore ? "◆" : r.dir === "up" ? "↑" : "↓";
+      const body = r.termOnly
+        ? `<div class="cyc-next-list">${r.hard}</div>`
+        : r.atScore
+          ? `<div class="cyc-next-list">当前得分 <b>${n.cur10.toFixed(1)} 分</b>落在这一档${
+              r.cur ? "" : "——阶段之所以不是这一档，是因为硬规则绕开了分数"}</div>`
+          : `<div class="cyc-next-list">${r.list
+              ? `最少需要这 ${r.list.length} 条：${names}`
+              : `<span class="cyc-next-none">把剩下所有能动的都动到底也不够——这个方向暂时到不了</span>`}${
+              r.hard ? `<div class="cyc-next-alt">⚑ 另一条路：${r.hard}</div>` : ""}</div>`;
+      const cls = r.cur ? "now" : r.termOnly ? "term" : r.atScore ? "atscore" : r.dir;
+      return `<div class="cyc-next-row ${cls}">
+        <div class="cyc-next-hd"><span class="cyc-next-arrow">${arrow}</span>
+          <b>第 ${r.n} 阶段 · ${r.zh}</b><span class="cyc-next-band">${bandTxt(r)}</span>
+          ${r.cur ? `<span class="cyc-next-tag">当前阶段</span>` : ""}
+          ${r.atScore && !r.cur ? `<span class="cyc-next-tag sc">得分所在</span>` : ""}
+          ${r.termOnly || r.atScore ? ""
+            : `<em>${r.dir === "up" ? "还差" : "只差"} ${d2(r.need)} 分</em>`}</div>
+        ${body}
       </div>`;
     };
     return `<div class="cyc-next">
-      <div class="cyc-next-lbl"><span class="cyc-defs-tick"></span>距下一阶段 · WHAT WOULD CHANGE IT</div>
-      ${row("up", n.up, "要到 ")}
-      ${row("down", n.dn, "要掉回 ")}
-      ${n.hard.length ? `<div class="cyc-next-hard">${n.hard.map(h =>
-        `<div>⚑ <b>${h.zh}</b>：${h.txt}</div>`).join("")}</div>` : ""}
-      <div class="cyc-next-note">以上给出的是<b>所需条数最少的一条路径</b>（优先选取单条影响最大的判据），并非唯一路径。
+      <div class="cyc-next-lbl"><span class="cyc-defs-tick"></span>各阶段距离 · WHAT WOULD CHANGE IT</div>
+      ${[...n.ladder].reverse().map(row).join("")}
+      <div class="cyc-next-note">按得分从高到低排列（越靠上越接近周期尾声）。每档给出的是<b>所需条数最少的一条路径</b>（优先选取单条影响最大的判据），并非唯一路径。
         「未填」的判据不参与计算：改动它们会同时影响分子与分母，效果不是单纯的加减分。</div>
     </div>`;
   }
