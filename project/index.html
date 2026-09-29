@@ -3331,6 +3331,97 @@
   .sa-hist-del:hover { color: var(--down); }
   /* Scoring rules panel */
   .wl-scoring-panel { max-width:960px; margin:6px auto 0; padding:0 20px; }
+
+  /* ── 波动画像 · Move Profile ─────────────────────────────────────────── */
+  .mv-card { margin-top: 4px; }
+  .mv-form { display:flex; gap:8px; margin:12px 0 10px; }
+  .mv-input { flex:1; min-width:0; box-sizing:border-box; background:var(--bg-2); border:1px solid var(--line);
+    border-radius:8px; padding:9px 12px; color:var(--fg-1); font-size:13px; font-family:var(--f-mono);
+    letter-spacing:.04em; text-transform:uppercase; }
+  .mv-input::placeholder { text-transform:none; letter-spacing:0; color:var(--fg-3); font-family:var(--f-sans); }
+  .mv-input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in oklch, var(--accent) 18%, transparent); }
+  .mv-go { flex-shrink:0; background:var(--accent); color:var(--bg-0); border:none; border-radius:8px;
+    padding:0 16px; font-size:12px; font-weight:700; cursor:pointer; }
+  .mv-go:hover { filter:brightness(1.08); }
+  .mv-chiprow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+  .mv-chiprow-l { font-size:9.5px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.06em; margin-right:2px; min-width:24px; }
+  .mv-chip { background:var(--bg-2); border:1px solid var(--line); border-radius:999px; padding:3px 10px;
+    font-size:10.5px; font-family:var(--f-mono); color:var(--fg-2); cursor:pointer; }
+  .mv-chip:hover { border-color:var(--accent); color:var(--fg-1); }
+  .mv-chip.active { background:color-mix(in oklch, var(--accent) 16%, transparent); border-color:var(--accent); color:var(--fg-1); }
+  .mv-empty { padding:28px 16px; text-align:center; color:var(--fg-3); font-size:12px; line-height:1.7; }
+  .mv-empty.mv-err { color:var(--down); }
+  .mv-warn { margin:10px 0 0; padding:8px 11px; border-radius:8px; font-size:11px; line-height:1.6;
+    color:var(--warn); background:color-mix(in oklch, var(--warn) 10%, transparent); }
+
+  .mv-hd { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:14px;
+    padding-bottom:10px; border-bottom:1px solid var(--line); }
+  .mv-hd-sym b { font-size:22px; font-weight:800; letter-spacing:-.01em; }
+  .mv-hd-res { font-size:10px; color:var(--fg-3); font-style:normal; margin-left:8px; }
+  .mv-hd-today { text-align:right; }
+  .mv-hd-today-l { display:block; font-size:9px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.06em; }
+  .mv-hd-today-v { font-size:20px; font-weight:700; font-family:var(--f-mono); letter-spacing:-.02em; }
+
+  .mv-winbar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:12px 0 4px; }
+  .mv-win { background:transparent; border:1px solid var(--line); border-radius:999px; padding:4px 12px;
+    font-size:11px; color:var(--fg-2); cursor:pointer; }
+  .mv-win.active { background:color-mix(in oklch, var(--accent) 16%, transparent); border-color:var(--accent); color:var(--fg-1); font-weight:600; }
+  .mv-winmeta { font-size:10px; color:var(--fg-3); font-family:var(--f-mono); margin-left:auto; }
+
+  .mv-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:12px 0 4px; }
+  .mv-stat { background:var(--bg-2); border-radius:10px; padding:11px 12px; }
+  .mv-stat-l { font-size:9.5px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:5px; }
+  .mv-stat-v { font-size:19px; font-weight:700; font-family:var(--f-mono); letter-spacing:-.02em; }
+  .mv-stat-u { font-size:9.5px; font-style:normal; color:var(--fg-3); font-family:var(--f-sans); margin-left:5px; letter-spacing:0; }
+  .mv-stat-s { font-size:10px; color:var(--fg-3); margin-top:4px; line-height:1.5; }
+  .mv-stat-pair { display:flex; gap:14px; }
+  .mv-stat-pair b { display:block; font-size:15px; font-weight:700; font-family:var(--f-mono); letter-spacing:-.02em; }
+  .mv-stat-pair i { display:block; font-size:9.5px; font-style:normal; color:var(--fg-3); margin-top:2px; }
+
+  .mv-freq { margin-top:14px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .mv-freq-hd { display:flex; align-items:center; justify-content:space-between; padding:9px 12px;
+    background:var(--bg-2); border-bottom:1px solid var(--line); }
+  .mv-freq-t { font-size:10px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+  .mv-freq-legend { display:flex; gap:14px; }
+  .mv-freq-legend i { font-size:9.5px; font-style:normal; color:var(--fg-3); white-space:nowrap; }
+  .mv-row { display:grid; grid-template-columns:1fr minmax(0,1.3fr) 1fr; align-items:center; gap:8px;
+    padding:11px 12px; border-top:1px solid var(--line); }
+  .mv-row:first-of-type { border-top:none; }
+  .mv-row-now { background:color-mix(in oklch, var(--accent) 7%, transparent); }
+  .mv-side-v { font-size:17px; font-weight:700; font-family:var(--f-mono); letter-spacing:-.02em; }
+  .mv-side-v.mv-zero { color:var(--fg-3); font-weight:600; }
+  .mv-side-s { font-size:9.5px; color:var(--fg-3); font-family:var(--f-mono); margin-top:2px; }
+  .mv-side-up { text-align:right; }
+  .mv-mid { text-align:center; }
+  .mv-mid-name { font-size:11.5px; font-weight:600; color:var(--fg-2); }
+  .mv-mid-mult { font-size:9.5px; color:var(--fg-3); margin-top:2px; font-family:var(--f-mono); }
+  .mv-now-tag { display:inline-block; margin-top:5px; padding:1px 7px; border-radius:999px;
+    border:1px solid var(--accent); color:var(--accent); font-size:9px; font-weight:700; letter-spacing:.04em; }
+  .mv-flat-note { padding:8px 12px; border-top:1px solid var(--line); background:var(--bg-2);
+    font-size:10px; color:var(--fg-3); line-height:1.6; }
+
+  .mv-use { margin-top:12px; padding:11px 13px; background:var(--bg-2); border-radius:10px; }
+  .mv-use-hd { font-size:10px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+  .mv-use-l { font-size:11.5px; color:var(--fg-2); line-height:1.75; }
+  .mv-use-l b { font-family:var(--f-mono); color:var(--fg-1); }
+  .mv-note { margin-top:10px; font-size:10px; color:var(--fg-3); line-height:1.7; }
+  .mv-note b { color:var(--fg-2); }
+
+  @media (max-width: 768px) {
+    .mv-stats { grid-template-columns:repeat(2,1fr); }
+    .mv-hd-sym b { font-size:19px; }
+    .mv-hd-today-v { font-size:17px; }
+    .mv-winmeta { margin-left:0; width:100%; }
+    .mv-row { grid-template-columns:1fr minmax(0,1fr) 1fr; gap:4px; padding:10px 8px; }
+    .mv-side-v { font-size:14px; }
+    .mv-side-s { font-size:8.5px; }
+    .mv-mid-name { font-size:10px; }
+    .mv-mid-mult { font-size:8.5px; }
+    .mv-use-l { font-size:11px; }
+    .mv-freq-t { font-size:9px; }
+    .mv-freq-legend { gap:9px; }
+    .mv-freq-legend i { font-size:8.5px; }
+  }
   .wl-scoring-toggle { display:flex; align-items:center; gap:6px; background:none; border:none; cursor:pointer; color:var(--fg-3); font-size:9px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; padding:6px 2px; width:100%; text-align:left; }
   .wl-scoring-toggle:hover { color:var(--fg-1); }
   .wl-scoring-chevron { transition:transform .2s; font-size:10px; line-height:1; }
@@ -5814,6 +5905,8 @@
     <div id="wl-analyze-history" class="wl-history" style="display:none"></div>
     <!-- Collapsible scoring rules panel -->
     <div id="wl-scoring-rules" class="wl-scoring-panel"></div>
+    <!-- Move Profile: 按标的自身波动特性自适应分档的日涨跌频率分布 -->
+    <div id="move-profile" style="max-width:960px;margin:0 auto;padding:16px 20px 0"></div>
     <!-- Watchlist Section -->
     <div style="max-width:960px;margin:0 auto;padding:0 20px">
       <div class="sim-section-label is-major" style="margin-top:20px">
@@ -6532,8 +6625,8 @@
   </div>
 </div>
 
-<script src="data.js?v=816"></script>
-<script src="desk.js?v=816"></script>
+<script src="data.js?v=817"></script>
+<script src="desk.js?v=817"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

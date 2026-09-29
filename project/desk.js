@@ -1698,7 +1698,7 @@ function rsAdjustGrade(grade, rsResult) {
     renderEvents();
     fetchAllEarnings();
     fetchPeakPrices();
-    if (currentPage === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
+    if (currentPage === "inspirations") { if (inspSubTab === "journal") renderJournal(); else { renderWatchlist(); renderMoveProfile(); } }
     renderSim();
     if (currentPage === "analytics") renderAnalytics();
     if (currentPage === "options") renderOptions();
@@ -6031,7 +6031,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (jp) jp.style.display = inspSubTab === "journal" ? "" : "none";
         if (wp) wp.style.display = inspSubTab === "watchlist" ? "" : "none";
         if (inspSubTab === "journal") renderJournal();
-        else renderWatchlist();
+        else { renderWatchlist(); renderMoveProfile(); }
       });
     });
 
@@ -7027,7 +7027,7 @@ function rsAdjustGrade(grade, rsResult) {
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
     positionNavPill();
     applySidebarActiveColor(page);
-    if (page === "inspirations") { if (inspSubTab === "journal") renderJournal(); else renderWatchlist(); }
+    if (page === "inspirations") { if (inspSubTab === "journal") renderJournal(); else { renderWatchlist(); renderMoveProfile(); } }
     if (page === "sim")          setSimSubTab(simSubTab);
     if (page === "analytics")    { fetchAndBuildHistory(); }
     if (page === "options")      renderOptions();
@@ -12514,6 +12514,375 @@ function rsAdjustGrade(grade, rsResult) {
     });
     $$("[data-wl-grade-all]", content).forEach(btn => {
       btn.addEventListener("click", () => { _wlGradeFilter = null; renderWatchlist(); });
+    });
+  }
+
+  // ============ 波动画像 · MOVE PROFILE ============
+  // 「这只票平时一天能动多少」的频率分布。五档的边界不是写死的 ±1/2/3/5%——那套固定
+  // 档位跨标的不可比（典型波动 0.87% 的 MAGS 有 55% 的日子落在 ±1% 内，典型波动 1.99%
+  // 的 SMH 只有 30%，并排读会被当成「SMH 常规日更少」，其实只是尺子不对）。改为由该标的
+  // 自己的典型波动长出来：边界固定在 1×/2×/3×/5×，绝对百分比随标的变。
+  const MV_QTR_SESSIONS = 63;          // 「一个季度」窗口
+  const MV_RECENT_MAX   = 8;           // 最近查过的代码
+  const MV_CACHE_MAX    = 12;          // 统计结果缓存的标的数
+  const MV_BANDS = [
+    { zh: "常规", en: "Normal",   lo: 0, hi: 1 },
+    { zh: "中等", en: "Moderate", lo: 1, hi: 2 },
+    { zh: "显著", en: "Elevated", lo: 2, hi: 3 },
+    { zh: "大幅", en: "Large",    lo: 3, hi: 5 },
+    { zh: "极端", en: "Extreme",  lo: 5, hi: Infinity },
+  ];
+
+  let _mvSym = null;       // 当前展示的标的
+  let _mvData = null;      // { sym, unit, all, qtr, meta }
+  let _mvWin = "qtr";      // "qtr" | "all"
+  let _mvToday = null;     // { pct, date, live } — 一次性拉的报价，不并进 30 秒轮询
+  let _mvLoading = false;
+  let _mvError = null;
+
+  // 基准单位取「日涨跌幅绝对值的中位数」而不是标准差：中位数对几根极端 bar 免疫，而尾部
+  // 恰恰是这张卡要测的东西——用一个被尾部污染的尺子去量尾部是循环论证。
+  function mvMedianAbs(moves) {
+    const v = moves.map(m => Math.abs(m.pct)).sort((a, b) => a - b);
+    if (!v.length) return null;
+    const mid = v.length >> 1;
+    return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+  }
+
+  // 日收益率一律走**分红调整后**收盘价（adjResults），缺失才退回裸收盘价：除息日的裸价会
+  // 凭空掉一截，被记成一个下跌日。与月度 VOO 基准同一套口径——算比率用调整后价，算「当天
+  // 实际值多少钱」才用裸价。
+  function mvDailyMoves(series) {
+    const ds = Object.keys(series || {}).sort();
+    const out = [];
+    for (let i = 1; i < ds.length; i++) {
+      const a = series[ds[i - 1]], b = series[ds[i]];
+      if (!(a > 0) || !(b > 0)) continue;
+      out.push({ d: ds[i], pct: (b - a) / a * 100 });
+    }
+    return out;
+  }
+
+  // 一个窗口的画像。`unit` 由**全历史**传入、不随窗口变——档位跟着窗口一起动的话，不管
+  // 波动怎么变「常规」档永远占差不多的比例，「这个季度动得比平时大吗」这个信号会被构造性
+  // 地抹掉。尺子固定，季度视图里分布整体右移才是真的在说波动变大了。
+  function mvProfile(moves, unit) {
+    const n = moves.length;
+    if (!n || !(unit > 0)) return null;
+    const up = moves.filter(m => m.pct > 0);
+    const dn = moves.filter(m => m.pct < 0);
+    const flat = n - up.length - dn.length;
+    const inBand = (m, b) => {
+      const a = Math.abs(m.pct);
+      return a >= b.lo * unit && (b.hi === Infinity || a < b.hi * unit);
+    };
+    const bands = MV_BANDS.map(b => ({
+      ...b,
+      loPct: b.lo * unit,
+      hiPct: b.hi === Infinity ? Infinity : b.hi * unit,
+      dn: dn.filter(m => inBand(m, b)).length,
+      up: up.filter(m => inBand(m, b)).length,
+    }));
+    const maxUp = up.reduce((a, m) => (!a || m.pct > a.pct ? m : a), null);
+    const maxDn = dn.reduce((a, m) => (!a || m.pct < a.pct ? m : a), null);
+    const avg = arr => arr.length ? arr.reduce((s, m) => s + m.pct, 0) / arr.length : null;
+    return {
+      n, bands, flat,
+      typ: mvMedianAbs(moves),
+      up: { n: up.length, pct: up.length / n * 100, avg: avg(up) },
+      dn: { n: dn.length, pct: dn.length / n * 100, avg: avg(dn) },
+      maxUp, maxDn,
+      from: moves[0].d, to: moves[n - 1].d,
+    };
+  }
+
+  function mvBandOf(pct, unit) {
+    const a = Math.abs(pct);
+    return MV_BANDS.findIndex(b => a >= b.lo * unit && (b.hi === Infinity || a < b.hi * unit));
+  }
+
+  // ── 取数：零新增 serverless 函数 ──────────────────────────────────────────
+  // api/ 目录已经顶着 Vercel Hobby 的 12 个函数上限，这个模块只能纯客户端算。好在
+  // /api/history 已经返回了需要的一切（adjResults 分红调整后收盘序列）。
+  async function mvFetch(sym) {
+    const tryOne = async s => {
+      const res = await fetch(`/api/history?symbols=${encodeURIComponent(s)}&from=1970-01-01`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j = await res.json();
+      const series = j.adjResults?.[s] || j.results?.[s];
+      return series && Object.keys(series).length >= 30 ? { s, series, adj: !!j.adjResults?.[s] } : null;
+    };
+    let hit = await tryOne(sym);
+    // crypto 在 Yahoo 只认 "-USD" 后缀（computeEntryRS/computeFrozenMonth 都踩过这个坑）
+    if (!hit && !sym.includes("-")) hit = await tryOne(`${sym}-USD`);
+    if (!hit) throw new Error("no-data");
+    return hit;
+  }
+
+  // 「今日」单独一次性拉报价，**不并进 fetchPrices 的 30 秒轮询**——往那里加 symbol 会
+  // 直接推高 serverless CPU。休市时它本来就等于最近收盘。
+  async function mvFetchToday(sym) {
+    try {
+      const res = await fetch(`/api/quote?stocks=${encodeURIComponent(sym)}`);
+      const { results } = await res.json();
+      const r = results?.[sym];
+      if (r && r.changePct != null && isFinite(r.changePct)) return { pct: r.changePct, live: true };
+    } catch (_) {}
+    return null;
+  }
+
+  // 缓存算好的统计值、不缓存原始日线：几十年的 bar 序列放进 localStorage 会很快撑爆，
+  // 而统计结果只有几百字节。日线一天只变一次，按本地自然日失效。
+  function mvCacheKey() { return "trendo_mv_stats_v1"; }
+  function mvCacheRead(sym) {
+    try {
+      const all = JSON.parse(localStorage.getItem(mvCacheKey()) || "{}");
+      const hit = all[sym];
+      return hit && hit.day === new Date().toLocaleDateString("en-CA") ? hit.data : null;
+    } catch (_) { return null; }
+  }
+  function mvCacheWrite(sym, data) {
+    try {
+      const all = JSON.parse(localStorage.getItem(mvCacheKey()) || "{}");
+      all[sym] = { day: new Date().toLocaleDateString("en-CA"), data };
+      const keys = Object.keys(all);
+      if (keys.length > MV_CACHE_MAX) keys.slice(0, keys.length - MV_CACHE_MAX).forEach(k => delete all[k]);
+      localStorage.setItem(mvCacheKey(), JSON.stringify(all));
+    } catch (_) {}
+  }
+
+  function mvRecent() {
+    try { return JSON.parse(localStorage.getItem("trendo_mv_recent") || "[]").filter(Boolean); }
+    catch (_) { return []; }
+  }
+  function mvPushRecent(sym) {
+    const list = [sym, ...mvRecent().filter(s => s !== sym)].slice(0, MV_RECENT_MAX);
+    try { localStorage.setItem("trendo_mv_recent", JSON.stringify(list)); } catch (_) {}
+  }
+
+  async function mvLoad(raw) {
+    const sym = String(raw || "").toUpperCase().trim();
+    if (!sym) return;
+    _mvSym = sym; _mvError = null; _mvToday = null; _mvWin = "qtr";
+    const cached = mvCacheRead(sym);
+    if (cached) {
+      _mvData = cached; _mvLoading = false;
+    } else {
+      _mvData = null; _mvLoading = true;
+    }
+    renderMoveProfile();
+    mvPushRecent(sym);
+
+    if (!cached) {
+      try {
+        const { s, series, adj } = await mvFetch(sym);
+        const moves = mvDailyMoves(series);
+        const unit = mvMedianAbs(moves);
+        if (!(unit > 0)) throw new Error("no-data");
+        const data = {
+          sym, resolved: s, adj, unit,
+          all: mvProfile(moves, unit),
+          qtr: mvProfile(moves.slice(-MV_QTR_SESSIONS), unit),
+        };
+        if (_mvSym !== sym) return;            // 用户已经查了别的代码
+        _mvData = data; mvCacheWrite(sym, data);
+      } catch (err) {
+        if (_mvSym !== sym) return;
+        _mvError = err && err.message === "no-data" ? "no-data" : (err?.message || "failed");
+        _mvData = null;
+      }
+      _mvLoading = false;
+      renderMoveProfile();
+    }
+
+    const t = await mvFetchToday(_mvData?.resolved || sym);
+    if (_mvSym !== sym) return;
+    _mvToday = t;
+    renderMoveProfile();
+  }
+
+  // ── 渲染 ──────────────────────────────────────────────────────────────────
+  const mvPct1 = v => (v == null || !isFinite(v) ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}%`);
+  const mvAbs1 = v => (v == null || !isFinite(v) ? "—" : `${v.toFixed(2)}%`);
+
+  // 边界用精确值算、只有显示时才取整——反过来（先取整再分桶）会让相邻两档重叠或漏掉，
+  // 占比加不到 100%。
+  function mvBandRange(b) {
+    if (b.hi === Infinity) return `${mvAbs1(b.loPct)} 以上`;
+    if (b.lo === 0) return `±${mvAbs1(b.hiPct)} 以内`;
+    return `${mvAbs1(b.loPct)} ~ ${mvAbs1(b.hiPct)}`;
+  }
+  function mvMultLabel(b) {
+    return b.hi === Infinity ? `>${b.lo}×` : b.lo === 0 ? `<${b.hi}×` : `${b.lo}–${b.hi}×`;
+  }
+
+  function mvFreqHTML(p, unit, todayIdx) {
+    const rows = p.bands.map((b, i) => {
+      const dnPct = b.dn / p.n * 100, upPct = b.up / p.n * 100;
+      const hit = i === todayIdx;
+      return `<div class="mv-row${hit ? " mv-row-now" : ""}">
+        <div class="mv-side mv-side-dn">
+          <div class="mv-side-v num${b.dn ? " down" : " mv-zero"}">${dnPct.toFixed(1)}%</div>
+          <div class="mv-side-s">${b.hi === Infinity ? `< −${mvAbs1(b.loPct)}` : `−${mvAbs1(b.hiPct)} ~ ${b.lo === 0 ? "" : "−"}${mvAbs1(b.loPct)}`}</div>
+        </div>
+        <div class="mv-mid">
+          <div class="mv-mid-name">${b.zh} · ${b.en}</div>
+          <div class="mv-mid-mult">${mvMultLabel(b)} 典型波动 · ${mvBandRange(b)}</div>
+          ${hit ? `<span class="mv-now-tag">${_mvToday?.live ? "今日 · TODAY" : "最近收盘"}</span>` : ""}
+        </div>
+        <div class="mv-side mv-side-up">
+          <div class="mv-side-v num${b.up ? " up" : " mv-zero"}">${upPct.toFixed(1)}%</div>
+          <div class="mv-side-s">${b.hi === Infinity ? `> +${mvAbs1(b.loPct)}` : `${b.lo === 0 ? "" : "+"}${mvAbs1(b.loPct)} ~ +${mvAbs1(b.hiPct)}`}</div>
+        </div>
+      </div>`;
+    }).join("");
+    const flatNote = p.flat
+      ? `<div class="mv-flat-note">另有 ${p.flat} 个平盘日（涨跌 0.00%），不计入上面任何一侧——两列之和因此是 ${((p.n - p.flat) / p.n * 100).toFixed(1)}% 而不是 100%。</div>`
+      : "";
+    return `<div class="mv-freq">
+      <div class="mv-freq-hd">
+        <span class="mv-freq-t">涨跌频率 · MOVE FREQUENCY</span>
+        <span class="mv-freq-legend"><i class="down">下跌 · Down</i><i class="up">上涨 · Up</i></span>
+      </div>
+      ${rows}
+      ${flatNote}
+    </div>`;
+  }
+
+  function mvStatsHTML(d, p) {
+    const q = d.qtr, a = d.all;
+    const drift = q && a && a.typ > 0 ? (q.typ - a.typ) / a.typ * 100 : null;
+    const driftTxt = drift == null ? ""
+      : Math.abs(drift) < 5 ? "与平时相当"
+      : `比平时${drift > 0 ? "大" : "小"} ${Math.abs(drift).toFixed(0)}%`;
+    return `<div class="mv-stats">
+      <div class="mv-stat">
+        <div class="mv-stat-l">上涨日 · UP DAYS</div>
+        <div class="mv-stat-v up num">${p.up.pct.toFixed(1)}%</div>
+        <div class="mv-stat-s">${p.up.n} 天 · 平均 ${mvPct1(p.up.avg)}</div>
+      </div>
+      <div class="mv-stat">
+        <div class="mv-stat-l">下跌日 · DOWN DAYS</div>
+        <div class="mv-stat-v down num">${p.dn.pct.toFixed(1)}%</div>
+        <div class="mv-stat-s">${p.dn.n} 天 · 平均 ${mvPct1(p.dn.avg)}</div>
+      </div>
+      <div class="mv-stat">
+        <div class="mv-stat-l">典型波动 · TYPICAL MOVE</div>
+        <div class="mv-stat-v num">${mvAbs1(a.typ)}<i class="mv-stat-u">全历史</i></div>
+        <div class="mv-stat-s">${q ? `${mvAbs1(q.typ)} 近一季度${driftTxt ? ` · ${driftTxt}` : ""}` : "—"}</div>
+      </div>
+      <div class="mv-stat">
+        <div class="mv-stat-l">最大单日 · LARGEST DAY</div>
+        <div class="mv-stat-pair">
+          <span><b class="down num">${mvPct1(p.maxDn?.pct)}</b><i>${p.maxDn ? fmt.date(p.maxDn.d) : "—"}</i></span>
+          <span><b class="up num">${mvPct1(p.maxUp?.pct)}</b><i>${p.maxUp ? fmt.date(p.maxUp.d) : "—"}</i></span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 「怎么用」——三句带当前标的真实数字的话。纯描述统计很容易做成打开一次就再也不点，
+  // 这一段是把分布翻译成能拿来做决定的东西。
+  function mvUseHTML(d, p) {
+    const u = d.unit;
+    const share = (lo, hi) => {             // |涨跌| 落在 [lo, hi) 的日子占比
+      const c = p.bands.reduce((s, b) => s + (b.loPct >= lo - 1e-9 && b.hiPct <= hi + 1e-9 ? b.dn + b.up : 0), 0);
+      return c / p.n * 100;
+    };
+    const dnBeyond = x => p.bands.reduce((s, b) => s + (b.loPct >= x - 1e-9 ? b.dn : 0), 0) / p.n * 100;
+    const oneU = u, twoU = u * 2, threeU = u * 3;
+    const todayIdx = _mvToday ? mvBandOf(_mvToday.pct, u) : -1;
+    const todayLine = todayIdx >= 0
+      ? `${_mvToday.live ? "今天" : "最近收盘"} ${mvPct1(_mvToday.pct)} 落在 <b>${MV_BANDS[todayIdx].zh}</b> 档，本窗口内这个量级的日子占 <b>${((p.bands[todayIdx].dn + p.bands[todayIdx].up) / p.n * 100).toFixed(1)}%</b>。`
+      : "";
+    return `<div class="mv-use">
+      <div class="mv-use-hd">怎么用 · HOW TO USE</div>
+      <div class="mv-use-l">止损设在 <b>−${mvAbs1(oneU)}</b> 以内 ≈ 不到 1 个典型波动，本窗口内有 <b>${dnBeyond(oneU).toFixed(1)}%</b> 的日子单日就会跌穿它。</div>
+      <div class="mv-use-l">卖方安全垫要挡住 3 个典型波动需留 <b>${mvAbs1(threeU)}</b>；历史上单日跌穿 <b>−${mvAbs1(twoU)}</b>（2×）的日子占 <b>${dnBeyond(twoU).toFixed(1)}%</b>。</div>
+      ${todayLine ? `<div class="mv-use-l">${todayLine}</div>` : ""}
+    </div>`;
+  }
+
+  function moveProfileHTML() {
+    const recent = mvRecent();
+    const owned = [...new Set([...HOLDINGS, ...SIM_HOLDINGS].map(h => h.sym))].slice(0, 8);
+    const watch = [...new Set(WATCHLIST.map(w => w.sym))].filter(s => !owned.includes(s)).slice(0, 8);
+    const chipRow = (label, arr) => arr.length
+      ? `<div class="mv-chiprow"><span class="mv-chiprow-l">${label}</span>${
+          arr.map(s => `<button class="mv-chip${s === _mvSym ? " active" : ""}" data-mv-sym="${s}">${s}</button>`).join("")}</div>`
+      : "";
+
+    let body;
+    if (_mvLoading) {
+      body = `<div class="mv-empty">正在拉取 ${_mvSym} 的全部历史日线…</div>`;
+    } else if (_mvError) {
+      body = `<div class="mv-empty mv-err">拿不到 <b>${_mvSym}</b> 的历史数据${
+        _mvError === "no-data" ? "——代码可能拼错了，或这个标的在 Yahoo 上没有足够的日线（少于 30 根）" : `：${_mvError}`}。</div>`;
+    } else if (!_mvData) {
+      body = `<div class="mv-empty">输入一个代码，看它自己平时一天能动多少。档位不是写死的百分比，而是按这只票的典型波动长出来的。</div>`;
+    } else {
+      const d = _mvData;
+      const p = _mvWin === "qtr" ? (d.qtr || d.all) : d.all;
+      const shortQtr = _mvWin === "qtr" && d.qtr && d.qtr.n < MV_QTR_SESSIONS;
+      const todayIdx = _mvToday ? mvBandOf(_mvToday.pct, d.unit) : -1;
+      body = `
+        <div class="mv-hd">
+          <div class="mv-hd-sym">
+            <b>${d.sym}</b>
+            ${d.resolved !== d.sym ? `<i class="mv-hd-res">按 ${d.resolved} 取数</i>` : ""}
+          </div>
+          <div class="mv-hd-today">
+            <span class="mv-hd-today-l">${_mvToday?.live ? "今日 · TODAY" : "最近收盘"}</span>
+            <span class="mv-hd-today-v num ${_mvToday ? (_mvToday.pct >= 0 ? "up" : "down") : ""}">${_mvToday ? mvPct1(_mvToday.pct) : "—"}</span>
+          </div>
+        </div>
+        <div class="mv-winbar">
+          <button class="mv-win${_mvWin === "qtr" ? " active" : ""}" data-mv-win="qtr">一个季度</button>
+          <button class="mv-win${_mvWin === "all" ? " active" : ""}" data-mv-win="all">全部历史</button>
+          <span class="mv-winmeta">N = ${p.n.toLocaleString("en-US")} 个交易日 · ${p.from} → ${p.to}${
+            d.adj ? "" : " · 无分红调整数据，用裸收盘价"}</span>
+        </div>
+        ${shortQtr ? `<div class="mv-warn">这个标的上市不久，一个季度只有 ${d.qtr.n} 个交易日，尾部档位的占比基本读不出信息。</div>` : ""}
+        ${mvStatsHTML(d, p)}
+        ${mvFreqHTML(p, d.unit, todayIdx)}
+        ${mvUseHTML(d, p)}
+        <div class="mv-note">档位边界固定在典型波动（日涨跌幅绝对值的中位数）的 1×/2×/3×/5×，<b>一律由全历史算出、不随窗口变</b>——尺子跟着窗口一起动的话，不管波动怎么变「常规」档都会占差不多的比例，「这个季度动得比平时大吗」就被抹掉了。日涨跌幅走分红调整后收盘价，除息日不会被记成一个下跌日。占比是历史频率，不是对明天的预测。</div>`;
+    }
+
+    return `<div class="analytics-card mv-card">
+      ${atitle("波动画像", "Move Profile")}
+      <form class="mv-form" id="mv-form" autocomplete="off" novalidate>
+        <input id="mv-input" class="mv-input" data-upper placeholder="输入代码看它的日波动分布… e.g. SMH"
+               autocapitalize="characters" spellcheck="false" maxlength="12" />
+        <button type="submit" class="mv-go">查看</button>
+      </form>
+      ${chipRow("最近", recent)}${chipRow("持仓", owned)}${chipRow("自选", watch)}
+      ${body}
+    </div>`;
+  }
+
+  function renderMoveProfile() {
+    const el = $("#move-profile");
+    if (!el) return;
+    const keep = document.activeElement?.id === "mv-input" ? $("#mv-input")?.value : null;
+    el.innerHTML = moveProfileHTML();
+    if (keep != null) { const i = $("#mv-input"); if (i) { i.value = keep; i.focus(); } }
+    $$("[data-mv-sym]", el).forEach(b => b.addEventListener("click", () => mvLoad(b.dataset.mvSym)));
+    $$("[data-mv-win]", el).forEach(b => b.addEventListener("click", () => {
+      _mvWin = b.dataset.mvWin; renderMoveProfile();
+    }));
+    const form = $("#mv-form", el);
+    const input = $("#mv-input", el);
+    input?.addEventListener("input", () => {
+      const p = input.selectionStart;
+      input.value = input.value.toUpperCase();
+      try { input.setSelectionRange(p, p); } catch (_) {}
+    });
+    form?.addEventListener("submit", e => {
+      e.preventDefault();
+      const v = (input?.value || "").toUpperCase().trim();
+      if (!v) { formErr("请输入一个股票代码", "#mv-input"); return; }
+      mvLoad(v);
     });
   }
 
