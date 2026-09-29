@@ -15023,8 +15023,10 @@ function rsAdjustGrade(grade, rsResult) {
     const gapTxt = r => r.pct != null
       ? `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.pct).toFixed(1)}%`
       : `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.gap).toFixed(r.key === "fg" ? 0 : 1)}`;
-    const SHOW = 2;   // 只列最近的两条；其余只报条数
-    const rows = list.slice(0, SHOW).map(r => `
+    // 全部列出。早先只列最近两条、其余折成一句「另有 N 条未列出」——但被折掉的恰恰是
+    // 「要变多少才会翻到那一档」的答案，而这张卡存在的理由就是回答这个；行本身按日波动
+     // 倍数升序，远的自然沉到下面，不列出来并不会让它更好读。
+    const rows = list.map(r => `
       <div class="nx-row">
         <span class="nx-to" style="color:${r.to.color}"><span class="nx-arrow">→</span>${advDot(r.to.color)} ${r.to.headline}</span>
         <span class="nx-cond">${condTxt(r)}</span>
@@ -15042,7 +15044,7 @@ function rsAdjustGrade(grade, rsResult) {
           <div class="nx-row nx-row-hd"><span>会切到</span><span>条件</span><span>现值 → 阈值</span><span title="距离 ÷ 过去 60 个交易日的日变动标准差">日波动倍数</span></div>
           ${rows}
         </div>
-        ${list.length > SHOW ? `<div class="nx-more">另有 ${list.length - SHOW} 条更远的切换未列出</div>` : ""}`
+`
         : `<div class="nx-empty">单项指标变动都不会改变当前建议。</div>`}
         <div class="nx-note">只列<b>会改变综合建议</b>的阈值：把越线后的值代回三轴规则判定，被更高优先级条件挡住的线不列（例如方向逆风时情绪指标怎么变都仍是防守）。
           日波动倍数 = 距离 ÷ 该指标过去 60 个交易日的日变动标准差，越小越容易被一两天的正常波动越过；它不是天数预测。每一行都假设只有这一项在变、其余不动。</div>
