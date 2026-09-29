@@ -12809,16 +12809,21 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function moveProfileHTML() {
-    // 一个代码只出现一次，落在最具体的那一行（持仓 > 自选 > 最近）——同一个 chip 在
-    // 三行里各出现一次只是噪音，点哪个的效果完全一样。
+    // 一个代码只出现一次，落在最具体的那一行（现持仓 > 最近）——同一个 chip 在两行里各出现
+    // 一次只是噪音，点哪个的效果完全一样。
+    // 「现持仓」= `HOLDINGS`（真实仓），不含模拟仓；**不设上限**，持有几只就列几只。
     const seen = new Set();
-    const take = arr => arr.filter(s => s && !seen.has(s) && (seen.add(s), true)).slice(0, 8);
-    const owned  = take([...new Set([...HOLDINGS, ...SIM_HOLDINGS].map(h => h.sym))]);
-    const watch  = take([...new Set(WATCHLIST.map(w => w.sym))]);
-    const recent = take(mvRecent());
+    const take = (arr, cap) => {
+      const out = arr.filter(s => s && !seen.has(s) && (seen.add(s), true));
+      return cap ? out.slice(0, cap) : out;
+    };
+    const owned  = take([...new Set(HOLDINGS.map(h => h.sym))]);
+    const recent = take(mvRecent(), MV_RECENT_MAX);
+    // chips 套一层 `.mv-chips`：现持仓不再设上限，十几只在手机端会折成三四行，不加这层
+    // 包裹的话换行后的 chip 会顶到标签正下方、跟第一行对不齐。
     const chipRow = (label, arr) => arr.length
-      ? `<div class="mv-chiprow"><span class="mv-chiprow-l">${label}</span>${
-          arr.map(s => `<button type="button" class="mv-chip${s === _mvSym ? " active" : ""}" data-mv-sym="${s}">${s}</button>`).join("")}</div>`
+      ? `<div class="mv-chiprow"><span class="mv-chiprow-l">${label}</span><span class="mv-chips">${
+          arr.map(s => `<button type="button" class="mv-chip${s === _mvSym ? " active" : ""}" data-mv-sym="${s}">${s}</button>`).join("")}</span></div>`
       : "";
 
     let body;
@@ -12875,7 +12880,7 @@ function rsAdjustGrade(grade, rsResult) {
                autocapitalize="characters" spellcheck="false" maxlength="12" />
         <button type="submit" class="mv-go${_mvLoading ? " loading" : ""}"${_mvLoading ? " disabled" : ""}>${_mvLoading ? "查询中" : "查看"}</button>
       </form>
-      ${chipRow("持仓", owned)}${chipRow("自选", watch)}${chipRow("最近", recent)}
+      ${chipRow("现持仓", owned)}${chipRow("最近", recent)}
       ${body}
     </div>`;
   }

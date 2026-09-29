@@ -3350,8 +3350,11 @@
   .mv-go { flex-shrink:0; background:var(--accent); color:var(--bg-0); border:none; border-radius:8px;
     padding:0 16px; font-size:12px; font-weight:700; cursor:pointer; }
   .mv-go:hover { filter:brightness(1.08); }
-  .mv-chiprow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-  .mv-chiprow-l { font-size:9.5px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.06em; margin-right:2px; min-width:24px; }
+  .mv-chiprow { display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; }
+  /* 固定宽度：两排标签字数不同（现持仓 3 字 / 最近 2 字），不定宽的话两排 chip 起点会差几像素 */
+  .mv-chiprow-l { flex:0 0 40px; font-size:9.5px; color:var(--fg-3); text-transform:uppercase;
+    letter-spacing:.06em; line-height:22px; }
+  .mv-chips { display:flex; flex-wrap:wrap; gap:6px; min-width:0; }
   .mv-chip { background:var(--bg-2); border:1px solid var(--line); border-radius:999px; padding:3px 10px;
     font-size:10.5px; font-family:var(--f-mono); color:var(--fg-2); cursor:pointer; }
   .mv-chip:hover { border-color:var(--accent); color:var(--fg-1); }
@@ -6662,8 +6665,8 @@
   </div>
 </div>
 
-<script src="data.js?v=818"></script>
-<script src="desk.js?v=818"></script>
+<script src="data.js?v=820"></script>
+<script src="desk.js?v=820"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
