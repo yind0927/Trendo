@@ -32,6 +32,65 @@
   const price = v => v >= 1000 ? v.toLocaleString("en-US", { maximumFractionDigits: 2 }) : v.toFixed(2);
 
 
+  // ============ 轻提示 TOAST ============
+  // 取代全站的原生 alert()：它会阻塞主线程、样式不受控，手机 PWA 里还会把来源域名
+  // 顶在弹窗标题上。这些调用点绝大多数是表单校验（"请填写入场价"），本来就不该用一个
+  // 需要点确定的模态去打断填表的人。
+  const TOAST_MS = { error: 4200, warn: 3600, ok: 2600, info: 3000 };
+  let _toastHost = null;
+  function toast(msg, kind = "info") {
+    if (!msg) return;
+    // 连点提交会把同一句话叠成一摞。去重按「屏幕上是否已经有这句话」判定，不按时间窗——
+    // 时间窗要挑一个阈值，而点击间隔本来就不确定；按状态判定既确定，也正好是本意：
+    // 同一句提示不该同时出现两遍。命中就让已有那条重新计时。
+    const top = _toastHost && _toastHost.firstElementChild;
+    if (top && !top._gone && top.querySelector(".toast-msg").textContent === msg) {
+      clearTimeout(top._t);
+      top._t = setTimeout(() => _toastGo(top), TOAST_MS[kind] || 3000);
+      return;
+    }
+    if (!_toastHost) {
+      _toastHost = document.createElement("div");
+      _toastHost.id = "toast-host";
+      document.body.appendChild(_toastHost);
+    }
+    const el = document.createElement("div");
+    el.className = "toast toast-" + kind;
+    el.setAttribute("role", kind === "error" ? "alert" : "status");
+    el.innerHTML = `<i class="toast-dot"></i><span class="toast-msg"></span>`;
+    el.querySelector(".toast-msg").textContent = msg;   // 文案可能来自用户输入的代号
+    el.addEventListener("click", () => _toastGo(el));
+    _toastHost.prepend(el);
+    // 最多同时留 4 条，再多就把最旧的挤掉
+    while (_toastHost.children.length > 4) _toastGo(_toastHost.lastElementChild, true);
+    requestAnimationFrame(() => el.classList.add("in"));
+    el._t = setTimeout(() => _toastGo(el), TOAST_MS[kind] || 3000);
+  }
+  function _toastGo(el, now) {
+    if (!el || el._gone) return;
+    el._gone = true; clearTimeout(el._t);
+    if (now) { el.remove(); return; }
+    el.classList.remove("in");
+    setTimeout(() => el.remove(), 220);
+  }
+
+  // 表单校验：提示 + 把出错的那个输入框标红并聚焦。只给 toast 的话，人还得自己找是哪一格。
+  // 逐个补字段时会连着触发好几条（先缺代号、再缺数量、再缺止损…），**新的校验提示
+  // 替换掉旧的、不叠加**——旧的那条描述的是已经改好的字段，留在屏幕上只会误导。
+  // 一般性通知（toast）不受影响，仍然可以叠。
+  function formErr(msg, sel) {
+    if (_toastHost) [..._toastHost.children].forEach(t => _toastGo(t, true));
+    toast(msg, "error");
+    const el = typeof sel === "string" ? $(sel) : sel;
+    if (!el) return;
+    el.classList.remove("field-err");
+    void el.offsetWidth;                 // 重启动画：连续两次同一个字段也要再抖一下
+    el.classList.add("field-err");
+    setTimeout(() => el.classList.remove("field-err"), 1400);
+    try { el.focus({ preventScroll: false }); } catch (_) { el.focus(); }
+  }
+
+
   // ============ OVERVIEW CARDS ============
   function renderOverview() {
     const totalPnlDollar = HOLDINGS.reduce((sum, h) => sum + (h.pnlDollar || 0), 0);
@@ -2759,7 +2818,7 @@ function rsAdjustGrade(grade, rsResult) {
       const addPrice = parseFloat($("#add-price").value);
       const addQty   = parseInt($("#add-qty").value);
       const addDate  = $("#add-date").value || new Date().toISOString().slice(0, 10);
-      if (!addPrice || !addQty) { alert("请填写加仓价格和数量"); return; }
+      if (!addPrice || !addQty) { formErr("请填写加仓价格和数量", addPrice ? "#add-qty" : "#add-price"); return; }
 
       // Seed the ledger for a position opened before it existed. The opening leg is the
       // ORIGINAL size, so any shares already sold off have to be added back — h.qty is
@@ -2796,7 +2855,7 @@ function rsAdjustGrade(grade, rsResult) {
         e.preventDefault();
         const total = parseFloat($("#cc-total").value);
         const date  = $("#cc-date").value || new Date().toISOString().slice(0, 10);
-        if (!total || total <= 0) { alert("请填写权利金总额"); return; }
+        if (!total || total <= 0) { formErr("请填写权利金总额", "#cc-total"); return; }
         if (!Array.isArray(h.cc)) h.cc = [];
         h.cc.push({ id: Date.now().toString(36), date, total });
         recomputeHolding(h, isSim ? simNotional : totalNotional);
@@ -2834,7 +2893,7 @@ function rsAdjustGrade(grade, rsResult) {
           // a position with no entry legs has no size and no basis. Closing or deleting
           // the position is the way to get rid of the last one.
           if (h.entries.length === 1) {
-            alert("这是唯一的一条建仓记录，删除后持仓将没有成本和数量。请改用平仓或删除持仓。");
+            toast("这是唯一的一条建仓记录，删除后持仓将没有成本和数量。请改用平仓或删除持仓。", "error");
             return;
           }
           const removed = h.entries[idx];
@@ -2845,7 +2904,7 @@ function rsAdjustGrade(grade, rsResult) {
           // the result would be a negative position clamped to zero, silently discarding
           // the exits rather than telling anyone.
           if (remaining < sold) {
-            alert(`删除后建仓总数 ${remaining} 股将少于已减仓的 ${sold} 股，请先删除对应的减仓记录。`);
+            toast(`删除后建仓总数 ${remaining} 股将少于已减仓的 ${sold} 股，请先删除对应的减仓记录。`, "error");
             return;
           }
           h.entries.splice(idx, 1);
@@ -3896,7 +3955,7 @@ function rsAdjustGrade(grade, rsResult) {
     if (fetchEarnBtn) {
       fetchEarnBtn.addEventListener("click", async () => {
         const sym = $("#form-ticker").value.toUpperCase().trim();
-        if (!sym) { alert("请先填写 Ticker Symbol"); return; }
+        if (!sym) { formErr("请先填写 Ticker Symbol", "#form-ticker"); return; }
         fetchEarnBtn.disabled = true;
         fetchEarnBtn.textContent = "获取中…";
         try {
@@ -4170,12 +4229,12 @@ function rsAdjustGrade(grade, rsResult) {
       const entryDateStr = ($("#form-date") && $("#form-date").value) || todayStr();
       const earningsStr  = ($("#form-earnings") && $("#form-earnings").value) || null;
 
-      if (!sym || !qty) { alert("请填写 Ticker 和数量"); return; }
-      if (orderType === "manual" && !entry) { alert("请填写入场价"); return; }
-      if (orderType === "limit"  && !limitPrice) { alert("请填写限价"); return; }
-      if (!isSim && (!stop || !target)) { alert("真实仓位必须填写止损和止盈"); return; }
+      if (!sym || !qty) { formErr("请填写 Ticker 和数量", sym ? "#form-qty" : "#form-ticker"); return; }
+      if (orderType === "manual" && !entry) { formErr("请填写入场价", "#form-entry"); return; }
+      if (orderType === "limit"  && !limitPrice) { formErr("请填写限价", "#form-limit-price"); return; }
+      if (!isSim && (!stop || !target)) { formErr("真实仓位必须填写止损和止盈", stop ? "#form-target" : "#form-stop"); return; }
       if (!isSim && entry && (stop >= entry || entry >= target)) {
-        alert("Invalid price levels: stop < entry < target");
+        formErr("价格关系不成立，需满足 止损 < 入场 < 止盈", stop >= entry ? "#form-stop" : "#form-target");
         return;
       }
 
@@ -4184,8 +4243,8 @@ function rsAdjustGrade(grade, rsResult) {
 
       // Market / limit order → add to pending queue (sim only)
       if (isSim && (orderType === "market" || orderType === "limit")) {
-        if (SIM_PENDING.find(p => p.sym === sym)) { alert("该 Ticker 已有挂单"); return; }
-        if (SIM_HOLDINGS.find(h => h.sym === sym)) { alert("Position already exists"); return; }
+        if (SIM_PENDING.find(p => p.sym === sym)) { formErr("该 Ticker 已有挂单", "#form-ticker"); return; }
+        if (SIM_HOLDINGS.find(h => h.sym === sym)) { formErr("模拟仓已持有该股票", "#form-ticker"); return; }
         SIM_PENDING.push({
           id: Date.now().toString(36),
           sym, name, kind, qty, stop, target,
@@ -4223,7 +4282,7 @@ function rsAdjustGrade(grade, rsResult) {
       }
 
       const targetHoldings = isSim ? SIM_HOLDINGS : HOLDINGS;
-      if (targetHoldings.find(h => h.sym === sym)) { alert("Position already exists"); return; }
+      if (targetHoldings.find(h => h.sym === sym)) { formErr("已持有该股票", "#form-ticker"); return; }
 
       const entryDate = new Date(entryDateStr + "T00:00:00");
       const today     = new Date(); today.setHours(0, 0, 0, 0);
@@ -4419,7 +4478,7 @@ function rsAdjustGrade(grade, rsResult) {
       if (pendingCloseCtx === "sim" && (orderType === "market" || orderType === "limit")) {
         const lp = orderType === "limit" ? parseFloat(limitInput.value) : null;
         if (orderType === "limit" && (!lp || lp <= 0)) { limitInput.focus(); return; }
-        if (SIM_CLOSE_PENDING.find(p => p.sym === pendingCloseSym)) { alert("该持仓已有平仓挂单"); return; }
+        if (SIM_CLOSE_PENDING.find(p => p.sym === pendingCloseSym)) { toast("该持仓已有平仓挂单", "error"); return; }
         SIM_CLOSE_PENDING.push({
           id: Date.now().toString(36), sym: pendingCloseSym,
           qty: closeQty, orderType, limitPrice: lp,
@@ -4605,7 +4664,7 @@ function rsAdjustGrade(grade, rsResult) {
     const matches = h => h.sym === sym && (!scoped || (h.entry === entry && Math.abs(h.cost - cost) < 0.001));
     const records = CLOSED_POSITIONS.filter(matches);
     if (!records.length) return;
-    if (HOLDINGS.find(x => x.sym === sym)) { alert("持仓中已有该股票"); return; }
+    if (HOLDINGS.find(x => x.sym === sym)) { toast("持仓中已有该股票", "error"); return; }
     const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
     const base = records[0];
     const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = base;
@@ -4629,7 +4688,7 @@ function rsAdjustGrade(grade, rsResult) {
     const matches = h => h.sym === sym && (!scoped || (h.entry === entry && Math.abs(h.cost - cost) < 0.001));
     const records = SIM_CLOSED.filter(matches);
     if (!records.length) return;
-    if (SIM_HOLDINGS.find(x => x.sym === sym)) { alert("模拟仓中已有该持仓"); return; }
+    if (SIM_HOLDINGS.find(x => x.sym === sym)) { toast("模拟仓中已有该持仓", "error"); return; }
     const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
     const base = records[0];
     const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = base;
@@ -9017,8 +9076,8 @@ function rsAdjustGrade(grade, rsResult) {
       const expiry = expIn.value;
       const qty = Math.max(1, parseInt(qtyEl.value) || 1);
       const prem = parseFloat(premEl.value);
-      if (!sym || !(strike > 0) || !expiry) { alert("请填写标的、行权价和到期日"); return; }
-      if (!isPending && !(prem > 0)) { alert("请填写权利金"); return; }
+      if (!sym || !(strike > 0) || !expiry) { formErr("请填写标的、行权价和到期日", !sym ? null : !(strike > 0) ? "#opts-strike" : "#opts-expiry-date"); return; }
+      if (!isPending && !(prem > 0)) { formErr("请填写权利金", "#opts-premium"); return; }
       const isCSP = optSellStrat === "csp";
       const entryDelta = deltaEl ? (parseFloat(deltaEl.value) || null) : null;
       const optArr = _activeOpts();
@@ -9096,7 +9155,7 @@ function rsAdjustGrade(grade, rsResult) {
     modal.style.display = "flex";
     modal.querySelector("#opts-confirm-btn").onclick = () => {
       const buyBack = parseFloat(premEl.value);
-      if (isNaN(buyBack) || buyBack < 0) { alert("请填写买回价格"); return; }
+      if (isNaN(buyBack) || buyBack < 0) { formErr("请填写买回价格", "#opts-premium"); return; }
       pos.status = "closed";
       pos.closePremium = buyBack;
       pos.realized = (pos.premium - buyBack) * 100 * pos.qty;
@@ -9207,7 +9266,7 @@ function rsAdjustGrade(grade, rsResult) {
       const date = dateEl.value || new Date().toISOString().slice(0, 10);
       if (canReclass) {
         if (wantClosed) {
-          if (isNaN(px) || px < 0) { alert("请填写买回价格"); return; }
+          if (isNaN(px) || px < 0) { formErr("请填写买回价格", "#opts-premium"); return; }
           pos.status = "closed"; pos.closePremium = px; pos.closedAt = date;
         } else {
           pos.status = "expired";
@@ -9219,7 +9278,7 @@ function rsAdjustGrade(grade, rsResult) {
           ? (pos.premium - pos.closePremium) * 100 * pos.qty
           : pos.premium * 100 * pos.qty;
       } else if (slot) {
-        if (isNaN(px) || px < 0) { alert("请填写价格"); return; }
+        if (isNaN(px) || px < 0) { formErr("请填写价格", "#opts-premium"); return; }
         pos[slot.px] = px;
         pos[slot.dt] = date;
       }
@@ -9274,7 +9333,7 @@ function rsAdjustGrade(grade, rsResult) {
     modal.style.display = "flex";
     modal.querySelector("#opts-confirm-btn").onclick = () => {
       const fillPrice = parseFloat(premEl.value);
-      if (isNaN(fillPrice) || fillPrice <= 0) { alert("请填写实际成交价格"); return; }
+      if (isNaN(fillPrice) || fillPrice <= 0) { formErr("请填写实际成交价格", "#opts-premium"); return; }
       pos.premium = fillPrice;
       pos.status = "open";
       pos.openedAt = (closeDateEl && closeDateEl.value) || new Date().toISOString().slice(0, 10);
@@ -9321,7 +9380,7 @@ function rsAdjustGrade(grade, rsResult) {
     modal.style.display = "flex";
     modal.querySelector("#opts-confirm-btn").onclick = () => {
       const prem = parseFloat(premEl.value);
-      if (isNaN(prem) || prem < 0) { alert("请填写当前期权价格 (Mark)"); return; }
+      if (isNaN(prem) || prem < 0) { formErr("请填写当前期权价格 (Mark)", "#opts-premium"); return; }
       pos.manualMark = prem;
       pos.manualMarkAt = new Date().toISOString().slice(0, 10);
       saveToStorage();
@@ -9362,7 +9421,7 @@ function rsAdjustGrade(grade, rsResult) {
     modal.style.display = "flex";
     modal.querySelector("#opts-confirm-btn").onclick = () => {
       const exitPrice = parseFloat(exitEl.value);
-      if (isNaN(exitPrice) || exitPrice <= 0) { alert("请填写出仓价"); return; }
+      if (isNaN(exitPrice) || exitPrice <= 0) { formErr("请填写出仓价", "#opts-premium"); return; }
       pos.assignedStockSold = true;
       pos.assignedExitPrice = exitPrice;
       pos.assignedExitDate = new Date().toISOString().slice(0, 10);
@@ -12824,7 +12883,7 @@ function rsAdjustGrade(grade, rsResult) {
       e.preventDefault();
       const sym = ($("#wl-sym").value || "").toUpperCase().trim();
       if (!sym) return;
-      if (WATCHLIST.find(w => w.sym === sym)) { alert("已在观察列表中"); return; }
+      if (WATCHLIST.find(w => w.sym === sym)) { toast("已在观察列表中", "warn"); return; }
       WATCHLIST.push({
         sym, name: $("#wl-name").value.trim() || sym,
         color: "oklch(0.35 0.01 250)",
@@ -14001,7 +14060,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     // Add to watchlist
     $("#sa-btn-add", panel)?.addEventListener("click", () => {
-      if (WATCHLIST.find(w => w.sym === data.sym)) { alert(`${data.sym} 已在自选列表`); return; }
+      if (WATCHLIST.find(w => w.sym === data.sym)) { toast(`${data.sym} 已在自选列表`, "warn"); return; }
       WATCHLIST.push({
         sym: data.sym, name: data.name,
         sector: data.industry ?? "—",
@@ -17232,7 +17291,7 @@ function rsAdjustGrade(grade, rsResult) {
     document.getElementById("sp-copy-btn")?.addEventListener("click", function() {
       navigator.clipboard.writeText(syncKey).then(() => {
         this.textContent = "✓"; setTimeout(() => this.textContent = "复制", 1500);
-      });
+      }).catch(() => toast("复制失败，请手动选中密钥复制", "error"));
     });
 
     // Toggle to edit mode
@@ -17252,7 +17311,7 @@ function rsAdjustGrade(grade, rsResult) {
     // Save custom key
     const saveKey = async () => {
       const newKey = (document.getElementById("sp-key-edit-input")?.value || "").trim();
-      if (newKey.length < 8) { alert("密钥至少需要 8 位字符"); return; }
+      if (newKey.length < 8) { formErr("密钥至少需要 8 位字符", "#sp-key-edit-input"); return; }
       const btn = document.getElementById("sp-save-key");
       btn.textContent = "保存中…"; btn.disabled = true;
       syncKey = newKey;

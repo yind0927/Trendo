@@ -3221,6 +3221,49 @@
     width: 100%; box-sizing: border-box; min-width: 0;
   }
   .form-input:focus { border-color: var(--accent-line); }
+  /* 校验失败的那一格：红描边 + 一次短促横向抖动。只给提示不标位置的话，
+     填了十几格的人还得自己回头找是哪一个出的错。 */
+  .field-err { border-color: var(--down) !important; animation: fieldShake .34s ease; }
+  @keyframes fieldShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    45% { transform: translateX(4px); }
+    70% { transform: translateX(-2px); }
+  }
+  @media (prefers-reduced-motion: reduce) { .field-err { animation: none; } }
+
+  /* ---- Toast（取代原生 alert）---- */
+  /* 必须压过模态（100–120）：校验提示本来就是从弹窗里发出来的 */
+  #toast-host {
+    position: fixed; z-index: 10000; right: 20px; bottom: 20px;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none; max-width: min(380px, calc(100vw - 32px));
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 9px;
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-left: 3px solid var(--fg-3); border-radius: 10px;
+    padding: 10px 13px; box-shadow: 0 10px 32px oklch(0 0 0 / .45);
+    font-size: 12.5px; line-height: 1.45; color: var(--fg-1);
+    pointer-events: auto; cursor: pointer;
+    opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s;
+  }
+  .toast.in { opacity: 1; transform: translateY(0); }
+  .toast-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; background: var(--fg-3); }
+  .toast-msg { flex: 1; min-width: 0; }
+  .toast-error { border-left-color: var(--down); }  .toast-error  .toast-dot { background: var(--down); }
+  .toast-warn  { border-left-color: var(--warn); }  .toast-warn   .toast-dot { background: var(--warn); }
+  .toast-ok    { border-left-color: var(--up); }    .toast-ok     .toast-dot { background: var(--up); }
+  .toast-info  { border-left-color: var(--accent); }.toast-info   .toast-dot { background: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: opacity .2s; transform: none; } }
+  /* 手机端：横向铺满、贴在悬浮 tab bar 上方（navbar 自己在 bottom:28px+safe，约 54px 高） */
+  @media (max-width: 768px) {
+    #toast-host {
+      left: 12px; right: 12px; max-width: none;
+      bottom: calc(100px + env(safe-area-inset-bottom));
+    }
+    .toast { font-size: 13px; padding: 11px 14px; }
+  }
   input[type="date"].form-input { color-scheme: dark; cursor: pointer; }
   body[data-theme="light"] input[type="date"].form-input { color-scheme: light; }
   .wl-card {
@@ -5203,6 +5246,20 @@
     from { opacity: 1; }
     to   { opacity: 0; }
   }
+  /* ---- 键盘焦点环（放在样式表最后）---- */
+  /* 此前全站只有一个选择器写了 focus-visible，而 .form-input / .form-row input:focus
+     等 18 处显式 outline:none，用 Tab 走一遍整个 app 看不出焦点停在哪。那 18 处的
+     选择器特异性各不相同（最高到 .form-row input:focus），逐个改成
+     :focus:not(:focus-visible) 是个大得多、也更容易改漏的 diff；这里用一条放在末尾的
+     全局规则 + !important 统一覆盖——这是 !important 站得住的少数场景之一：
+     可达性兜底，且只在键盘导航时生效，鼠标点击不会出现，既有观感不受影响。 */
+  /* 刻意排除表单控件：它们本来就有 accent 描边 + 辉光的焦点态，再套一圈是重复强调；
+     而且按规范 :focus-visible 对文本输入框**鼠标点击也会命中**，加上去等于改掉既有
+     的点击观感，而缺口本来只在按钮/页签/chip 这类 Tab 过去毫无反馈的元素上。 */
+  :focus-visible:not(input):not(textarea):not(select) {
+    outline: 2px solid var(--accent) !important;
+    outline-offset: 2px;
+  }
 </style>
 <script>try{if(localStorage.getItem("trendo_auth_v1")==="1")document.documentElement.classList.add("authed")}catch(e){}</script>
 </head>
@@ -5972,7 +6029,7 @@
       <button class="modal-close" id="new-pos-close">✕</button>
     </div>
     <div class="modal-header-sub">NEW POSITION</div>
-    <form id="new-position-form" autocomplete="off">
+    <form id="new-position-form" autocomplete="off" novalidate>
       <div class="form-group-label">基本信息 · BASIC</div>
       <div class="form-row">
         <label>类型</label>
@@ -6268,7 +6325,7 @@
       <h2 id="add-to-title">加仓</h2>
       <button class="modal-close" id="add-to-close">✕</button>
     </div>
-    <form id="add-to-form">
+    <form id="add-to-form" novalidate>
       <div class="form-row">
         <label>加仓价格</label>
         <input type="number" id="add-price" step="0.01" required placeholder="0.00" class="form-input"/>
@@ -6366,7 +6423,7 @@
       <h2 id="cc-title">记录权利金</h2>
       <button class="modal-close" id="cc-close">✕</button>
     </div>
-    <form id="cc-form">
+    <form id="cc-form" novalidate>
       <div class="form-row">
         <label>权利金总额 ($)</label>
         <input type="number" id="cc-total" step="0.01" min="0.01" required placeholder="如 250.00" class="form-input"/>
@@ -6459,8 +6516,8 @@
   </div>
 </div>
 
-<script src="data.js?v=813"></script>
-<script src="desk.js?v=813"></script>
+<script src="data.js?v=814"></script>
+<script src="desk.js?v=814"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
