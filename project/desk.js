@@ -1530,6 +1530,20 @@ function rsAdjustGrade(grade, rsResult) {
           pendingMerged = true;
         }
       }
+      // 打捞是**不对称**的：上面把云端的持仓捞了回来，却没人回头看本地那些挂单还该不该在。
+      // 真实路径——手机上开盘成交了 S00（建仓、挂单移除、推云端），电脑上本地那份还停在
+      // 「S00 挂单中、无持仓」但 savedAt 更新，于是走「本地较新」分支：云端的 simPending
+      // 里已经没有 S00（手机删了）所以捞不回什么，可云端的持仓 S00 被捞了回来——结果这台
+      // 电脑同时有「S00 持仓」和「S00 本地挂单」，队列里那张卡从此再也不会消失。
+      // 所以打捞完持仓之后，按同一套规则回头收一遍本地队列。
+      const openNow = new Set(SIM_HOLDINGS.map(h => h.sym));
+      for (let i = SIM_PENDING.length - 1; i >= 0; i--) {
+        if (openNow.has(SIM_PENDING[i].sym)) { SIM_PENDING.splice(i, 1); pendingMerged = true; }
+      }
+      // 平仓单反过来：对应持仓已经不在了（在另一台设备上平掉了），这张单就是孤儿。
+      for (let i = SIM_CLOSE_PENDING.length - 1; i >= 0; i--) {
+        if (!openNow.has(SIM_CLOSE_PENDING[i].sym)) { SIM_CLOSE_PENDING.splice(i, 1); pendingMerged = true; }
+      }
       if (pendingMerged) {
         saveLocalOnly();
         renderSim();
@@ -3523,9 +3537,20 @@ function rsAdjustGrade(grade, rsResult) {
     _peakFetchInFlight = true;
     let data;
     try {
-      const r = await fetch(`/api/history?symbols=${encodeURIComponent(syms.join(","))}&from=${earliest}`);
-      if (!r.ok) return;
-      data = await r.json();
+      // 跟补回放同一个坑：`/api/history` 服务端对单次请求 `.slice(0, 50)`，而这里把所有
+      // 待更新持仓的 symbol 拼成一次请求。持仓超过 50 时，排在后面的那些拿不到日线收盘
+      // 峰值 → `h.peakPrice` 永远是空 → 盈利保护永远不激活，而且一点提示都没有。
+      // 25 一批并行发出；部分批次失败只是那几个这轮不更新，下次再试。
+      const PEAK_CHUNK = 25;
+      const batches = [];
+      for (let i = 0; i < syms.length; i += PEAK_CHUNK) batches.push(syms.slice(i, i + PEAK_CHUNK));
+      const parts = await Promise.all(batches.map(bs =>
+        fetch(`/api/history?symbols=${encodeURIComponent(bs.join(","))}&from=${earliest}`)
+          .then(res => res.ok ? res.json() : null)
+          .catch(() => null)));
+      if (!parts.some(Boolean)) return;
+      data = { results: {} };
+      parts.forEach(part => { if (part) Object.assign(data.results, part.results || {}); });
     } catch (_) {
       return;
     } finally {
@@ -4507,7 +4532,10 @@ function rsAdjustGrade(grade, rsResult) {
         if (orderType === "limit" && (!lp || lp <= 0)) { limitInput.focus(); return; }
         if (SIM_CLOSE_PENDING.find(p => p.sym === pendingCloseSym)) { toast("该持仓已有平仓挂单", "error"); return; }
         SIM_CLOSE_PENDING.push({
-          id: Date.now().toString(36), sym: pendingCloseSym,
+          // kind 必须存下来：补回放要用 `_histYahooSym` 拼 Yahoo 代码，crypto 得加 `-USD`
+          // 后缀。早先这里没存，crypto 的平仓单一律按裸 symbol 查，永远拿不到日线、
+          // 于是永远不成交也永远不清理，就那么挂在队列里。
+          id: Date.now().toString(36), sym: pendingCloseSym, kind: pos.kind,
           qty: closeQty, orderType, limitPrice: lp,
           createdAt: new Date().toISOString()
         });
@@ -6533,12 +6561,35 @@ function rsAdjustGrade(grade, rsResult) {
     if (!stale.length) return;
     _catchUpRunning = true;
     try {
-      const syms = [...new Set(stale.map(o => _histYahooSym({ sym: o.sym, kind: o.kind })))];
+      // 平仓挂单早先不存 kind；从它对应的持仓上补，否则 crypto 会按裸 symbol 去查。
+      const kindOf = o => o.kind
+        ?? SIM_HOLDINGS.find(h => h.sym === o.sym)?.kind
+        ?? "equity";
+      const yahooOf = o => _histYahooSym({ sym: o.sym, kind: kindOf(o) });
+      const syms = [...new Set(stale.map(yahooOf))];
       const from = stale.map(dateOf).sort()[0];
-      const r = await fetch(
-        `/api/history?symbols=${encodeURIComponent(syms.join(","))}&from=${from}`);
-      if (!r.ok) return;
-      const j = await r.json();
+
+      // **必须分批**：`/api/history` 服务端对单次请求做 `.slice(0, 50)` 截断，而这里是
+      // 把所有待回放挂单的 symbol 拼成一次请求。挂单一多（>50），排在后面的那些就被
+      // 静默截掉——拿不到日线 → `hit` 永远是 undefined → 既不成交也不清理，永远挂在
+      // 队列里。这与月度回测里 VOO 被排到第 35 位截没是同一个坑（v592）。
+      // 25 一批，并行发出，跟 fetchPrices 的分块同一套思路。
+      const HIST_CHUNK = 25;
+      const batches = [];
+      for (let i = 0; i < syms.length; i += HIST_CHUNK) batches.push(syms.slice(i, i + HIST_CHUNK));
+      const parts = await Promise.all(batches.map(bs =>
+        fetch(`/api/history?symbols=${encodeURIComponent(bs.join(","))}&from=${from}`)
+          .then(res => res.ok ? res.json() : null)
+          .catch(() => null)));
+      // 全部失败才放弃；部分失败只是那几批这轮不回放，下次加载/切回前台会重试。
+      if (!parts.some(Boolean)) return;
+      const j = { results: {}, openResults: {}, rangeResults: {} };
+      parts.forEach(part => {
+        if (!part) return;
+        Object.assign(j.results,      part.results      || {});
+        Object.assign(j.openResults,  part.openResults  || {});
+        Object.assign(j.rangeResults, part.rangeResults || {});
+      });
       let filled = 0;
 
       // Sessions on or after `from`, oldest first, each with open/low/high/close.
@@ -6556,8 +6607,16 @@ function rsAdjustGrade(grade, rsResult) {
       for (const order of [...SIM_PENDING]) {
         const od = dateOf(order);
         if (!od || od >= today) continue;
-        if (SIM_HOLDINGS.find(h => h.sym === order.sym)) continue;   // already open
-        const key = _histYahooSym({ sym: order.sym, kind: order.kind });
+        // 这个 symbol 已经有持仓了 = 这笔单其实早就成交过（或是同步把旧单捞了回来）。
+        // 早先这里只是 `continue`，于是它永远留在队列里：盘中的实时成交路径会顺手清掉
+        // 这种孤儿单，但休市时那条路径根本不跑——「已经买入了，队列还在显示，第二天
+        // 换台电脑打开还在」就是这么来的。这里补上同样的清理，让它能自愈。
+        if (SIM_HOLDINGS.find(h => h.sym === order.sym)) {
+          const i = SIM_PENDING.findIndex(p => p.id === order.id);
+          if (i !== -1) { SIM_PENDING.splice(i, 1); filled++; }
+          continue;
+        }
+        const key = yahooOf(order);
         const hit = sessionsFor(key).filter(s => eligible(order, s.d)).find(s => {
           if (order.orderType === "market") return s.open != null;
           return s.lo != null && s.lo <= order.limitPrice;
@@ -6596,11 +6655,14 @@ function rsAdjustGrade(grade, rsResult) {
         if (!od || od >= today) continue;
         const pos = SIM_HOLDINGS.find(h => h.sym === order.sym);
         if (!pos) {                                     // nothing left to sell
+          // 这里早先只从内存里 splice 掉，既不计入 `filled` 也就**不会重渲染、不会落盘**——
+          // 队列区还画着那张卡，下次打开又从 localStorage 里读回来，看起来就是「平仓挂单
+          // 一直没执行」。清理也是一次状态变更，得跟成交走同一条收尾路径。
           const i = SIM_CLOSE_PENDING.findIndex(p => p.id === order.id);
-          if (i !== -1) SIM_CLOSE_PENDING.splice(i, 1);
+          if (i !== -1) { SIM_CLOSE_PENDING.splice(i, 1); filled++; }
           continue;
         }
-        const key = _histYahooSym({ sym: order.sym, kind: order.kind });
+        const key = yahooOf(order);
         const hit = sessionsFor(key).filter(s => eligible(order, s.d)).find(s => {
           if (order.orderType === "market") return s.open != null;
           return s.hi != null && s.hi >= order.limitPrice;
