@@ -1884,6 +1884,15 @@
     color: var(--warn); border: 1px solid color-mix(in oklch, var(--warn) 45%, transparent);
     border-radius: 3px; padding: 0 3px; margin-right: 5px; vertical-align: 1px;
   }
+  /* 抽屉「入场成本」：可编辑的原始成本之后跟一段「→ cc$调整后」。调整后那个数是派生值、
+     不可编辑，所以字重和颜色都压过原始数一档，读者一眼分得清哪个才是能改的。 */
+  .cc-adj { margin-left: 6px; white-space: nowrap; color: var(--fg-3); font-weight: 400; }
+  .cc-arrow { margin-right: 5px; color: var(--fg-3); }
+  /* 盈利保护口径说明：只在记过权利金时出现 */
+  .pp-cc-note { margin-top: 9px; padding: 7px 9px; border-radius: 7px;
+    background: color-mix(in oklch, var(--warn) 9%, transparent);
+    font-size: 10.5px; line-height: 1.6; color: var(--fg-2); }
+  .pp-cc-note b { color: var(--fg-1); font-family: var(--f-mono); }
   .cc-net { font-size: 10px; color: var(--up); font-weight: 500; }
   .cc-add-btn {
     all: unset; cursor: pointer; margin-left: auto; font-size: 10.5px; font-weight: 600;
@@ -6665,8 +6674,8 @@
   </div>
 </div>
 
-<script src="data.js?v=820"></script>
-<script src="desk.js?v=820"></script>
+<script src="data.js?v=821"></script>
+<script src="desk.js?v=821"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

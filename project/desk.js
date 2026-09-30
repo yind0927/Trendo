@@ -983,6 +983,12 @@ function rsAdjustGrade(grade, rsResult) {
         // Update R in kv-grid (last cell)
         const rCell = $(".kv-grid .v.big", dr);
         if (rCell) { rCell.textContent = fmt.rMult(h.rMult); rCell.className = `v big ${fmt.sign(h.rMult)}`; }
+        // CC 调整后成本是 h.cost 的派生值，改了成本就得跟着走，否则会显示上一个成本
+        // 算出来的调整价（可编辑的那个数已经变了，旁边这个没变，读起来就是自相矛盾）。
+        const ccAdjEl = $(".cc-adj", dr);
+        if (ccAdjEl) ccAdjEl.innerHTML =
+          `<span class="cc-arrow">→</span><span class="cc-tag">cc</span>$${price(ccAdjCost(h))}`;
+        refreshDrawerPP(h, currentPage === "sim");
       });
       el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } });
     });
@@ -2715,15 +2721,21 @@ function rsAdjustGrade(grade, rsResult) {
     const rCell = $(".kv-grid .v.big", dr);
     if (rCell) { rCell.textContent = fmt.rMult(h.rMult); rCell.className = `v big ${fmt.sign(h.rMult)}`; }
 
-    // 盈利保护整块重渲染（跌破提示/状态徽章/轴/效率 chip 都跟价格走）。
-    // 用户正在输入 ATR 时跳过——否则光标和还没填完的数字会被冲掉。
-    const ppWrap = $("#pp-block-wrap", dr);
-    if (ppWrap && document.activeElement?.id !== "drawer-pp-atr") {
-      const tmp = document.createElement("div");
-      tmp.innerHTML = ppBlockHTML(h);
-      ppWrap.replaceWith(tmp.firstElementChild);
-      wirePPBlock(h, _drawerLive.sim ? simNotional : totalNotional);
-    }
+    refreshDrawerPP(h, _drawerLive.sim);
+  }
+
+  // 盈利保护整块就地重渲染（跌破提示/状态徽章/轴/效率 chip 都跟价格与成本走）。
+  // 价格轮询（syncDrawerLive）和手改入场价/止损（wireDrawerEdits 的 blur）都要用：
+  // 改成本会让 ppBasis 变、峰值从零重算、保护价跟着变，卡片上却还挂着旧的保护价——
+  // 那是个止损信号，显示错数字是有代价的。
+  // 用户正在输入 ATR 时跳过——否则光标和还没填完的数字会被冲掉。
+  function refreshDrawerPP(h, isSim) {
+    const ppWrap = $("#pp-block-wrap", $("#drawer"));
+    if (!ppWrap || document.activeElement?.id === "drawer-pp-atr") return;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = ppBlockHTML(h);
+    ppWrap.replaceWith(tmp.firstElementChild);
+    wirePPBlock(h, isSim ? simNotional : totalNotional);
   }
 
   function openDrawer(h) {
@@ -2946,6 +2958,10 @@ function rsAdjustGrade(grade, rsResult) {
     renderTable();
   }
 
+  // 抽屉「入场成本」那一格既是显示也是输入框：可编辑的那个数必须是原始 h.cost，否则一回车
+  // 就把权利金调整后的价格写回成本、把基准搞坏。所以调整后成本另起一段跟在箭头后面
+  // （原始 → cc调整后），而不是给原始数挂一个「CC调整后」标签——那样标签、数值、title 三者
+  // 互相矛盾，看起来就像记完权利金入场价根本没更新。
   function drawerHTML(h, isSim = false) {
     const isClosed = activeTab === "closed";
     const closedArr = isSim ? SIM_CLOSED : CLOSED_POSITIONS;
@@ -3053,7 +3069,7 @@ function rsAdjustGrade(grade, rsResult) {
             <div><div class="k">持有天数</div><div class="v">${dispDays}<span class="sub">交易日</span></div></div>
           </div>` : `
           <div class="kv-grid">
-            <div><div class="k">入场成本<span class="edit-hint">点击编辑</span>${ccNet(h) > 0 ? `<span class="edit-hint" style="margin-left:4px">CC调整后</span>` : ""}</div><div class="v mono" ${ccNet(h) > 0 ? `title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)}"` : ""}>${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>` : ""}<span class="pos-edit mono" data-pos-field="cost" contenteditable="true" spellcheck="false">$${price(h.cost)}</span></div></div>
+            <div><div class="k">入场成本<span class="edit-hint">点击编辑</span></div><div class="v mono" ${ccNet(h) > 0 ? `title="原始成本 $${price(h.cost)} · 累计权利金 +$${ccNet(h).toFixed(0)} · 调整后 $${price(ccAdjCost(h))}"` : ""}><span class="pos-edit mono" data-pos-field="cost" contenteditable="true" spellcheck="false">$${price(h.cost)}</span>${ccNet(h) > 0 ? `<span class="cc-adj"><span class="cc-arrow">→</span><span class="cc-tag">cc</span>$${price(ccAdjCost(h))}</span>` : ""}</div></div>
             <div><div class="k">持股数量<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit mono" data-pos-field="qty" contenteditable="true" spellcheck="false">${h.qty}</span><span class="sub">股</span></div></div>
             <div><div class="k">现价<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit mono" data-pos-field="last" contenteditable="true" spellcheck="false">$${price(h.last)}</span></div></div>
             <div><div class="k">止损<span class="edit-hint">点击编辑</span></div><div class="v"><span class="pos-edit" data-pos-field="stop" contenteditable="true" spellcheck="false">$${price(h.stop)}</span></div></div>
@@ -3239,6 +3255,16 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         ${pendingBar}`;
 
+    // 权利金不进盈利保护的口径：`ppBasis` 只含 h.cost 与 entryATR，记一笔权利金既不会重置
+    // 峰值也不会移动保护价。这是有意的——保护价量的是「价格涨上去之后回吐了多少」，而权利金
+    // 是另一笔独立收入、不在这条价格路径上。若改用调整后成本，峰值涨幅会凭空变大、保护价反而
+    // 下移、出场效率也会被抬高，等于记一笔权利金就把「我拿住了峰值的百分之几」这个数改掉了。
+    // 但抽屉上方的「入场成本」这时显示的是调整后价，同一个词在一屏里指两个数，所以在有权利金
+    // 时明说这条轴用的是哪一个。
+    const ccNote = ccNet(h) > 0
+      ? `<div class="pp-cc-note">本模块按<b>原始入场价 $${price(h.cost)}</b>计算，不含权利金——它量的是价格涨上去之后回吐了多少，与 R 倍数、止损同一口径。</div>`
+      : "";
+
     return `<div id="pp-block-wrap">
       <div class="plan-subhead pp-subhead">
         盈利保护 · Profit Protection
@@ -3252,6 +3278,7 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         <div class="pp-card-body">
           ${hasATR ? metricsHTML : `<div class="pp-hint">填写 ATR 后自动计算激活阈值与保护价</div>`}
+          ${hasATR ? ccNote : ""}
         </div>
       </div>
     </div>`;
