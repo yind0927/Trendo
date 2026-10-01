@@ -15458,7 +15458,32 @@ function rsAdjustGrade(grade, rsResult) {
     return s > 0 ? s : null;
   }
 
-  function buildNextStates(axes, { vixTrend = "flat", vix60Max = null, sig = {} } = {}) {
+  // 排序键是**历史基准概率**，不是上面那个 σ 距离——σ 距离方向盲：一条逆着指标近期
+  // 漂移、只差 0.5σ 的线会排在顺着漂移、差 1.5σ 的线前面，而后者明显更可能先到。
+  // 做法：把该序列切成全部重叠的 H 日变动样本，P = 其中「变动幅度在所需方向上不小于
+  // 这段距离」的占比。趋势因此天然进了排序（VIX 一路走低，历史上负向的 20 日窗口就多，
+  // 「跌破 15」的占比自然高于同等距离的「涨破 20」），而且不用假设任何分布。
+  //
+  // 刻意**不用**「正态 + 60 日漂移」的首次穿越公式：VIX 右偏严重、FGI/RSI 封顶在 0–100
+  // 且都是均值回复的，把 60 日漂移线性外推 20 天比现在这个 σ 距离更糟。经验分布同时
+  // 带着真实漂移和真实厚尾（VIX 的 8σ 不是不可能，它有自己的基准发生率）。
+  //
+  // 两条如实写在卡片上的局限：①这是**不看当前水位**的无条件基准率，均值回复的指标停在
+  // 极端位置时，回来的真实概率比基准率高；②窗口重叠，独立样本数远少于样本个数。
+  const NEXT_HORIZON  = 20;   // 交易日，≈ 一个月
+  const NEXT_MIN_WIN  = 30;   // 窗口少于这么多就不报概率，退回 σ 排序
+  function nextWindows(arr, rel) {
+    const v = (arr || []).filter(x => x != null && isFinite(x));
+    const out = [];
+    for (let i = NEXT_HORIZON; i < v.length; i++) {
+      const a = v[i - NEXT_HORIZON], b = v[i];
+      if (rel) { if (a > 0) out.push((b - a) / a * 100); }
+      else out.push(b - a);
+    }
+    return out;
+  }
+
+  function buildNextStates(axes, { vixTrend = "flat", vix60Max = null, ser = {} } = {}) {
     if (!axes) return null;
     const { price, ma50, ma200, vix, fg, rsi } = axes;
     const base = { price, ma50, ma200, vix, fg, rsi };
@@ -15471,17 +15496,34 @@ function rsAdjustGrade(grade, rsResult) {
         getSentimentAxis(x.fg, x.rsi, vixTrend, x.vix, v60));
     };
     const now = run({});
+    // rel=true 的序列按相对变动（%）统计——VIX 与价格都是乘性尺度，VIX 从 15 涨 5 点和
+    // 从 40 涨 5 点完全是两件事；FGI/RSI 封顶在 0–100、均线差就是美元差额，都用绝对点数。
     const vars = [
-      { key: "price", name: "VOO", cur: price, sig: sig.price,
+      { key: "price", name: "VOO", cur: price, ser: ser.price, rel: true,
         cuts: [[ma50, "EMA50"], [ma200, "EMA200"]] },
-      { key: "ma50", name: "EMA50", cur: ma50, sig: sig.gap, cuts: [[ma200, "EMA200"]] },
-      { key: "vix", name: "VIX", cur: vix, sig: sig.vix, cuts: [15, 20, 30, 50].map(t => [t, String(t)]) },
-      { key: "fg",  name: "FGI", cur: fg,  sig: sig.fg,  cuts: [25, 40, 60, 75].map(t => [t, String(t)]) },
-      { key: "rsi", name: "RSI", cur: rsi, sig: sig.rsi, cuts: [38, 45, 65, 72].map(t => [t, String(t)]) },
+      { key: "ma50", name: "EMA50", cur: ma50, ser: ser.gap, rel: false, cuts: [[ma200, "EMA200"]] },
+      { key: "vix", name: "VIX", cur: vix, ser: ser.vix, rel: true, cuts: [15, 20, 30, 50].map(t => [t, String(t)]) },
+      { key: "fg",  name: "FGI", cur: fg,  ser: ser.fg,  rel: false, cuts: [25, 40, 60, 75].map(t => [t, String(t)]) },
+      { key: "rsi", name: "RSI", cur: rsi, ser: ser.rsi, rel: false, cuts: [38, 45, 65, 72].map(t => [t, String(t)]) },
     ];
     const out = [];
     for (const v of vars) {
       if (v.cur == null) continue;
+      v.sig = nextSigma(v.ser);
+      v.win = nextWindows(v.ser, v.rel);
+      // 近期漂移：最后 H 个交易日的净变动，用来在卡片上说明这一行为什么排在这个位置
+      const sv = (v.ser || []).filter(x => x != null && isFinite(x));
+      v.drift = sv.length > NEXT_HORIZON
+        ? (v.rel ? (sv[sv.length - 1] - sv[sv.length - 1 - NEXT_HORIZON]) / sv[sv.length - 1 - NEXT_HORIZON] * 100
+                 : sv[sv.length - 1] - sv[sv.length - 1 - NEXT_HORIZON])
+        : null;
+      // 只有净变动超过 H 日变动自身波动的一半才标顺/逆势。FGI 在 ±9 点之间振荡时，
+      // 一个 −2 点的净变动是噪声，拿它说「同等距离下更可能先到」就是个假信号——
+      // 排序本身不受影响（概率用的是整条经验分布，不是这个漂移）。
+      const wm = v.win.length ? v.win.reduce((a, b) => a + b, 0) / v.win.length : 0;
+      const wsd = v.win.length > 2
+        ? Math.sqrt(v.win.reduce((a, b) => a + (b - wm) ** 2, 0) / (v.win.length - 1)) : null;
+      v.driftOk = v.drift != null && v.drift !== 0 && wsd > 0 && Math.abs(v.drift) >= 0.5 * wsd;
       for (const dir of [1, -1]) {
         const ahead = v.cuts.filter(([t]) => t != null && (dir > 0 ? t > v.cur : t < v.cur))
           .sort((a, b) => Math.abs(a[0] - v.cur) - Math.abs(b[0] - v.cur));
@@ -15491,15 +15533,26 @@ function rsAdjustGrade(grade, rsResult) {
           const to = run({ [v.key]: t + dir * eps });
           if (to.id === now.id) continue;
           const gap = t - v.cur;
-          out.push({ key: v.key, name: v.name, cur: v.cur, t, tl, dir, gap, to,
+          // 把所需距离换成跟窗口样本同一个单位，再数有多少个历史窗口达到过
+          const need = v.rel ? gap / v.cur * 100 : gap;
+          const p = v.win.length >= NEXT_MIN_WIN
+            ? v.win.filter(c => dir > 0 ? c >= need : c <= need).length / v.win.length
+            : null;
+          out.push({ key: v.key, name: v.name, cur: v.cur, t, tl, dir, gap, to, p,
+            n: v.win.length, drift: v.drift,
+            // 顺 = 近期漂移方向与这条线同向（所以同等距离下它更可能先到）；
+            // 漂移在噪声量级内时不标，宁可不说也不给一个假方向
+            with: v.driftOk ? (v.drift > 0) === (dir > 0) : null,
             z: v.sig ? Math.abs(gap) / v.sig : null,
             pct: v.key === "price" || v.key === "ma50" ? gap / v.cur * 100 : null });
           break;
         }
       }
     }
-    out.sort((a, b) => (a.z ?? Infinity) - (b.z ?? Infinity) || Math.abs(a.gap) - Math.abs(b.gap));
-    return { now, list: out };
+    // 概率降序（没算出概率的沉到最后，组内退回 σ 距离升序）
+    out.sort((a, b) => (b.p ?? -1) - (a.p ?? -1)
+      || (a.z ?? Infinity) - (b.z ?? Infinity) || Math.abs(a.gap) - Math.abs(b.gap));
+    return { now, list: out, horizon: NEXT_HORIZON };
   }
 
   function mkNextStateHTML(next, advice) {
@@ -15523,14 +15576,24 @@ function rsAdjustGrade(grade, rsResult) {
       ? `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.pct).toFixed(1)}%`
       : `${r.gap >= 0 ? "+" : "−"}${Math.abs(r.gap).toFixed(r.key === "fg" ? 0 : 1)}`;
     // 全部列出。早先只列最近两条、其余折成一句「另有 N 条未列出」——但被折掉的恰恰是
-    // 「要变多少才会翻到那一档」的答案，而这张卡存在的理由就是回答这个；行本身按日波动
-     // 倍数升序，远的自然沉到下面，不列出来并不会让它更好读。
+    // 「要变多少才会翻到那一档」的答案，而这张卡存在的理由就是回答这个；行本身按概率
+    // 降序，不可能的自然沉到下面，不列出来并不会让它更好读。
+    const H = next.horizon;
+    const pTxt = r => r.p == null ? "—"
+      : r.p >= 0.095 ? `${(r.p * 100).toFixed(0)}%`
+      : r.p > 0 ? `${(r.p * 100).toFixed(1)}%` : "<0.1%";
+    const driftTxt = r => r.with == null ? ""
+      : `<i class="nx-dir ${r.with ? "with" : "against"}" title="${
+          r.name} 近 ${H} 个交易日净${r.drift > 0 ? "升" : "降"} ${
+          Math.abs(r.drift).toFixed(r.key === "fg" ? 0 : 1)}${r.key === "price" || r.key === "vix" ? "%" : ""}，${
+          r.with ? "与这条线同向——同等距离下更可能先到" : "与这条线反向"}">${r.with ? "顺势" : "逆势"}</i>`;
     const rows = list.map(r => `
       <div class="nx-row">
         <span class="nx-to" style="color:${r.to.color}"><span class="nx-arrow">→</span>${advDot(r.to.color)} ${r.to.headline}</span>
-        <span class="nx-cond">${condTxt(r)}</span>
+        <span class="nx-cond">${condTxt(r)}${driftTxt(r)}</span>
         <span class="nx-gap num">${fmtV(r.key, r.cur)} → ${fmtV(r.key, r.t)} <b>${gapTxt(r)}</b></span>
-        <span class="nx-z num${r.z != null && r.z < 1 ? " near" : ""}">${r.z != null ? `${r.z < 10 ? r.z.toFixed(1) : r.z.toFixed(0)}×<i class="nx-z-u">日波动</i>` : "—"}</span>
+        <span class="nx-p num${r.p != null && r.p >= 0.3 ? " near" : ""}">${pTxt(r)}<i class="nx-p-u">${H}日内</i></span>
+        <span class="nx-z num">${r.z != null ? `${r.z < 10 ? r.z.toFixed(1) : r.z.toFixed(0)}×<i class="nx-z-u">日波动</i>` : "—"}</span>
       </div>`).join("");
     return `
       <div class="mkt-card mkt-next">
@@ -15540,13 +15603,17 @@ function rsAdjustGrade(grade, rsResult) {
           ${held}
         </div>
         ${list.length ? `<div class="nx-rows">
-          <div class="nx-row nx-row-hd"><span>会切到</span><span>条件</span><span>现值 → 阈值</span><span title="距离 ÷ 过去 60 个交易日的日变动标准差">日波动倍数</span></div>
+          <div class="nx-row nx-row-hd"><span>会切到</span><span>条件</span><span>现值 → 阈值</span><span title="历史上有多少个 ${H} 交易日窗口，该指标的变动达到过这段距离">${H}日内概率</span><span title="距离 ÷ 过去 60 个交易日的日变动标准差">日波动倍数</span></div>
           ${rows}
         </div>
 `
         : `<div class="nx-empty">单项指标变动都不会改变当前建议。</div>`}
         <div class="nx-note">只列<b>会改变综合建议</b>的阈值：把越线后的值代回三轴规则判定，被更高优先级条件挡住的线不列（例如方向逆风时情绪指标怎么变都仍是防守）。
-          日波动倍数 = 距离 ÷ 该指标过去 60 个交易日的日变动标准差，越小越容易被一两天的正常波动越过；它不是天数预测。每一行都假设只有这一项在变、其余不动。</div>
+          <b>按 ${H} 日内概率降序排列</b>——它是历史基准率：把该指标的历史切成全部重叠的 ${H} 交易日窗口，数其中有多少个的变动在所需方向上达到过这段距离。
+          指标近期往哪漂因此进了排序，不需要假设任何分布，VIX 的厚尾与 FGI/RSI 的 0–100 封顶都按真实发生率算。
+          <b>顺势</b>/<b>逆势</b>只在该指标近 ${H} 日净变动超出自身噪声量级时才标出——标了顺势的，同等距离下更可能先到；没标的是近期没有方向，不是漏了。
+          它是<b>基准率、不是预测</b>，也不是天数估计。两条局限：它<b>不看当前水位</b>，均值回复的指标停在极端位置时真实概率比基准率更高；窗口互相重叠，独立样本远少于样本个数。
+          日波动倍数是另一把尺（距离 ÷ 过去 60 个交易日的日变动标准差），方向盲，只说「多容易被一两天的正常波动越过」。每一行都假设只有这一项在变、其余不动。</div>
       </div>`;
   }
 
@@ -16913,16 +16980,16 @@ function rsAdjustGrade(grade, rsResult) {
       const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS);
       // 综合建议逐日回放。用的全是上面那两次请求已经拿回来的数据，无额外调用。
       const advice = buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, ADVICE_SESSIONS);
-      // 距下一状态：日波动标准差全部取自上面已经拿到的序列，无额外请求
-      const next = buildNextStates(axes, { vixTrend, vix60Max, sig: vooCloses ? (() => {
+      // 距下一状态：概率与日波动标准差全部由上面已经拿到的序列现算，无额外请求
+      const next = buildNextStates(axes, { vixTrend, vix60Max, ser: vooCloses ? (() => {
         const e50 = calcEMASeries(vooCloses, 50), e200 = calcEMASeries(vooCloses, 200);
         const vixSer = histResults?.["^VIX"];
         return {
-          price: nextSigma(vooCloses),
-          gap:   nextSigma(e50.map((v, i) => v != null && e200[i] != null ? v - e200[i] : null)),
-          vix:   vixSer ? nextSigma(Object.keys(vixSer).sort().map(d => vixSer[d])) : null,
-          fg:    fgByDate ? nextSigma(Object.keys(fgByDate).sort().map(d => fgByDate[d])) : null,
-          rsi:   nextSigma(calcRSISeries(vooCloses)),
+          price: vooCloses,
+          gap:   e50.map((v, i) => v != null && e200[i] != null ? v - e200[i] : null),
+          vix:   vixSer ? Object.keys(vixSer).sort().map(d => vixSer[d]) : null,
+          fg:    fgByDate ? Object.keys(fgByDate).sort().map(d => fgByDate[d]) : null,
+          rsi:   calcRSISeries(vooCloses),
         };
       })() : {} });
       // The ribbon is built from settled daily bars. If the live price already implies a
