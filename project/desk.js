@@ -12959,7 +12959,7 @@ function rsAdjustGrade(grade, rsResult) {
         <button type="button" class="mv-retry" data-mv-retry>重试</button>
       </div>`;
     } else if (!_mvData) {
-      body = `<div class="mv-empty">输入一个代码，看它自己平时一天能动多少。档位不是写死的百分比，而是按这只票的典型波动长出来的。</div>`;
+      body = `<div class="mv-empty">输入一个代码，分析波动信息。</div>`;
     } else {
       const d = _mvData;
       const p = _mvWin === "qtr" ? (d.qtr || d.all) : d.all;
