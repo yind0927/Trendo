@@ -3441,6 +3441,11 @@
   .mv-mid-mult { font-size:9.5px; color:var(--fg-3); margin-top:2px; font-family:var(--f-mono); }
   .mv-now-tag { display:inline-block; margin-top:5px; padding:1px 7px; border-radius:999px;
     border:1px solid var(--accent); color:var(--accent); font-size:9px; font-weight:700; letter-spacing:.04em; }
+  .mv-now-tag.up { border-color:var(--up); color:var(--up); background:var(--up-dim); }
+  .mv-now-tag.down { border-color:var(--down); color:var(--down); background:var(--down-dim); }
+  .mv-now-tag.flat { border-color:var(--fg-3); color:var(--fg-3); background:var(--bg-3); }
+  .mv-inc { margin:8px 0 2px; padding:7px 10px; border-radius:8px; background:var(--bg-2);
+    border-left:2px solid var(--warn); font-size:10px; color:var(--fg-3); line-height:1.6; }
   .mv-flat-note { padding:8px 12px; border-top:1px solid var(--line); background:var(--bg-2);
     font-size:10px; color:var(--fg-3); line-height:1.6; }
 
@@ -6684,8 +6689,8 @@
   </div>
 </div>
 
-<script src="data.js?v=828"></script>
-<script src="desk.js?v=828"></script>
+<script src="data.js?v=829"></script>
+<script src="desk.js?v=829"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

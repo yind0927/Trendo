@@ -1778,6 +1778,8 @@ function rsAdjustGrade(grade, rsResult) {
   // 模拟期权已整体删除。这行把本地残留的那份也清掉——云端那份会在下一次推送时随
   // `simOptions` 字段从载荷里消失而被整体替换掉（POST 是整块覆盖，不是字段合并）。
   try { localStorage.removeItem("trendo_v4_sim_options"); } catch (_) {}
+  // 波动画像统计缓存换到 v2（成立日起算），v1 不再有人读，顺手清掉不让它永久占着。
+  try { localStorage.removeItem("trendo_mv_stats_v1"); } catch (_) {}
 
   function saveLocalOnly(updateTimestamp = true) {
     try {
@@ -12622,6 +12624,31 @@ function rsAdjustGrade(grade, rsResult) {
     { zh: "极端", en: "Extreme",  lo: 5, hi: Infinity },
   ];
 
+  // 这个代码的价格历史比它**现在这只基金**更早时，从基金成立日起算。SMH 是实例：Yahoo 按
+  // 代码给一条连续序列，但 2011-12-20 之前那一段是 Semiconductor HOLDRS 信托（Merrill Lynch
+  // 发的另一只产品，VanEck 当天完成换股接管了这个代码）。混进来有两处后果——①「典型波动」
+  // 这把尺子会被 2000–2002 年那段半导体行情定下来，而这张卡的用处（止损距离、安全垫、行权价）
+  // 问的是这只基金现在能动多少；②最大单日与极端档占比全部来自另一只产品。
+  // **没有自动判定的办法**：Yahoo 的 `meta.firstTradeDate` 给的是「这个代码」的首个交易日
+  // （SMH 就是 2000 年那个 HOLDRS 的日子），换壳当天又是连续交易、没有停牌缺口可以认。所以
+  // 只能像 api/holdings.js 的成分股那样手工维护一张小表，**但必须写在卡片上**，不能静默砍数据。
+  // 新增一条的标准：这个代码当前这只基金的成立日，晚于 Yahoo 给出的最早一根日线。
+  const MV_INCEPTION = {
+    SMH: { date: "2011-12-20", why: "VanEck 当天换股接管这个代码，此前是 Semiconductor HOLDRS 信托（另一只产品）" },
+  };
+
+  function mvTrimToInception(sym, moves) {
+    const inc = MV_INCEPTION[sym];
+    if (!inc) return { moves, inception: null };
+    // 用 `>` 不用 `>=`：日涨跌幅的日期是**后**一天，成立日那一笔算的是「前一天收盘 → 成立日
+    // 收盘」，前一天还是旧产品的价格，正是换壳的接缝，必须跟着一起丢掉。
+    const kept = moves.filter(m => m.d > inc.date);
+    const dropped = moves.length - kept.length;
+    // 砍完样本不够就不砍、也不声称砍了——宁可照旧用全历史，也不给一张统计不住的卡。
+    if (!dropped || kept.length < 30) return { moves, inception: null };
+    return { moves: kept, inception: { ...inc, dropped } };
+  }
+
   let _mvSym = null;       // 当前展示的标的
   let _mvData = null;      // { sym, unit, all, qtr, meta }
   let _mvWin = "qtr";      // "qtr" | "all"
@@ -12726,7 +12753,9 @@ function rsAdjustGrade(grade, rsResult) {
 
   // 缓存算好的统计值、不缓存原始日线：几十年的 bar 序列放进 localStorage 会很快撑爆，
   // 而统计结果只有几百字节。日线一天只变一次，按本地自然日失效。
-  function mvCacheKey() { return "trendo_mv_stats_v1"; }
+  // v2：加入成立日起算（MV_INCEPTION）之后，v1 里存的是未裁剪的旧统计值，当天打开会直接
+  // 命中缓存、看不到修正结果，所以换 key 作废它。
+  function mvCacheKey() { return "trendo_mv_stats_v2"; }
   function mvCacheRead(sym) {
     try {
       const all = JSON.parse(localStorage.getItem(mvCacheKey()) || "{}");
@@ -12772,11 +12801,11 @@ function rsAdjustGrade(grade, rsResult) {
     if (!cached) {
       try {
         const { s, series, adj } = await mvFetch(sym);
-        const moves = mvDailyMoves(series);
+        const { moves, inception } = mvTrimToInception(sym, mvDailyMoves(series));
         const unit = mvMedianAbs(moves);
         if (!(unit > 0)) throw new Error("no-data");
         const data = {
-          sym, resolved: s, adj, unit,
+          sym, resolved: s, adj, unit, inception,
           all: mvProfile(moves, unit),
           qtr: mvProfile(moves.slice(-MV_QTR_SESSIONS), unit),
         };
@@ -12812,6 +12841,19 @@ function rsAdjustGrade(grade, rsResult) {
     return b.hi === Infinity ? `>${b.lo}×` : b.lo === 0 ? `<${b.hi}×` : `${b.lo}–${b.hi}×`;
   }
 
+  // 今日落在哪一档，此前只靠整行底色标出来——那只说了「是这一档」，没说今天是涨还是跌，
+  // 而方向是读这张表时第一个要知道的（跌 2× 和涨 2× 对持仓的意思完全相反）。行底色继续表示
+  // 「今天在这一档」，方向交给这个带颜色的标签，两者各管一件事、不重复编码。
+  function mvNowTag() {
+    const t = _mvToday;
+    if (!t) return "";
+    const dir = t.pct > 0 ? "up" : t.pct < 0 ? "down" : "flat";
+    const word = dir === "up" ? "上涨" : dir === "down" ? "下跌" : "平盘";
+    // 平盘那档用不带正负号的写法：`mvPct1(0)` 会印成 `+0.00%`，跟「平盘」自相矛盾。
+    const v = dir === "flat" ? mvAbs1(t.pct) : mvPct1(t.pct);
+    return `<span class="mv-now-tag ${dir}">${t.live ? "今日" : "最近收盘"}${word} ${v}</span>`;
+  }
+
   function mvFreqHTML(p, unit, todayIdx) {
     const rows = p.bands.map((b, i) => {
       const dnPct = b.dn / p.n * 100, upPct = b.up / p.n * 100;
@@ -12824,7 +12866,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mv-mid">
           <div class="mv-mid-name">${b.zh} · ${b.en}</div>
           <div class="mv-mid-mult">${mvMultLabel(b)} 典型波动 · ${mvBandRange(b)}</div>
-          ${hit ? `<span class="mv-now-tag">${_mvToday?.live ? "今日 · TODAY" : "最近收盘"}</span>` : ""}
+          ${hit ? mvNowTag() : ""}
         </div>
         <div class="mv-side mv-side-up">
           <div class="mv-side-v num${b.up ? " up" : " mv-zero"}">${upPct.toFixed(1)}%</div>
@@ -12955,6 +12997,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mv-winmeta">N = ${p.n.toLocaleString("en-US")} 个交易日 · ${p.from} → ${p.to}${
             d.adj ? "" : " · 无分红调整数据，用裸收盘价"}</span>
         </div>
+        ${d.inception ? `<div class="mv-inc">已按成立日 <b>${d.inception.date}</b> 起算，更早的 ${d.inception.dropped.toLocaleString("en-US")} 个交易日不计入：${d.inception.why}。</div>` : ""}
         ${shortQtr ? `<div class="mv-warn">这个标的上市不久，一个季度只有 ${d.qtr.n} 个交易日，尾部档位的占比基本读不出信息。</div>` : ""}
         ${mvStatsHTML(d, p)}
         ${mvFreqHTML(p, d.unit, todayIdx)}
