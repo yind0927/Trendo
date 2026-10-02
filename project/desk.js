@@ -1780,6 +1780,8 @@ function rsAdjustGrade(grade, rsResult) {
   try { localStorage.removeItem("trendo_v4_sim_options"); } catch (_) {}
   // 波动画像统计缓存换到 v2（成立日起算），v1 不再有人读，顺手清掉不让它永久占着。
   try { localStorage.removeItem("trendo_mv_stats_v1"); } catch (_) {}
+  // 「最近分析过的代码」那排已删除，不再保存分析过的代码，本地残留一并清掉。
+  try { localStorage.removeItem("trendo_mv_recent"); } catch (_) {}
 
   function saveLocalOnly(updateTimestamp = true) {
     try {
@@ -12614,7 +12616,6 @@ function rsAdjustGrade(grade, rsResult) {
   // 的 SMH 只有 30%，并排读会被当成「SMH 常规日更少」，其实只是尺子不对）。改为由该标的
   // 自己的典型波动长出来：边界固定在 1×/2×/3×/5×，绝对百分比随标的变。
   const MV_QTR_SESSIONS = 63;          // 「一个季度」窗口
-  const MV_RECENT_MAX   = 8;           // 最近查过的代码
   const MV_CACHE_MAX    = 12;          // 统计结果缓存的标的数
   const MV_BANDS = [
     { zh: "常规", en: "Normal",   lo: 0, hi: 1 },
@@ -12774,15 +12775,6 @@ function rsAdjustGrade(grade, rsResult) {
     } catch (_) {}
   }
 
-  function mvRecent() {
-    try { return JSON.parse(localStorage.getItem("trendo_mv_recent") || "[]").filter(Boolean); }
-    catch (_) { return []; }
-  }
-  function mvPushRecent(sym) {
-    const list = [sym, ...mvRecent().filter(s => s !== sym)].slice(0, MV_RECENT_MAX);
-    try { localStorage.setItem("trendo_mv_recent", JSON.stringify(list)); } catch (_) {}
-  }
-
   async function mvLoad(raw) {
     const sym = String(raw || "").toUpperCase().trim();
     if (!sym) return;
@@ -12796,7 +12788,6 @@ function rsAdjustGrade(grade, rsResult) {
       _mvData = null; _mvLoading = true;
     }
     renderMoveProfile();
-    mvPushRecent(sym);
 
     if (!cached) {
       try {
@@ -12940,17 +12931,12 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function moveProfileHTML() {
-    // 一个代码只出现一次，落在最具体的那一行（现持仓 > 最近）——同一个 chip 在两行里各出现
-    // 一次只是噪音，点哪个的效果完全一样。
-    // 「现持仓」= `HOLDINGS`（真实仓），不含模拟仓；**不设上限**，持有几只就列几只。
-    const seen = new Set();
-    const take = (arr, cap) => {
-      const out = arr.filter(s => s && !seen.has(s) && (seen.add(s), true));
-      return cap ? out.slice(0, cap) : out;
-    };
-    const owned  = take([...new Set(HOLDINGS.map(h => h.sym))]);
-    const recent = take(mvRecent(), MV_RECENT_MAX);
-    // chips 套一层 `.mv-chips`：现持仓不再设上限，十几只在手机端会折成三四行，不加这层
+    // 只有「现持仓」一排 = `HOLDINGS`（真实仓），不含模拟仓；**不设上限**，持有几只就列几只。
+    // **分析过的代码不落盘**：此前还有一排「最近」（`trendo_mv_recent`，上限 8），但这个模块
+    // 查一次就看完了，没有「回到上一次查的那个」这种需求，留一份历史记录只是多一个要同步、
+    // 要清理的存储键。输入框自己会回填当前正在看的代码，足够说明现在展示的是哪一个。
+    const owned = [...new Set(HOLDINGS.map(h => h.sym))].filter(Boolean);
+    // chips 套一层 `.mv-chips`：现持仓不设上限，十几只在手机端会折成三四行，不加这层
     // 包裹的话换行后的 chip 会顶到标签正下方、跟第一行对不齐。
     const chipRow = (label, arr) => arr.length
       ? `<div class="mv-chiprow"><span class="mv-chiprow-l">${label}</span><span class="mv-chips">${
@@ -13010,9 +12996,9 @@ function rsAdjustGrade(grade, rsResult) {
       <form class="mv-form" id="mv-form" autocomplete="off" novalidate>
         <input id="mv-input" class="mv-input" data-upper placeholder="输入代码看它的日波动分布… e.g. SMH"
                autocapitalize="characters" spellcheck="false" maxlength="12" />
-        <button type="submit" class="mv-go${_mvLoading ? " loading" : ""}"${_mvLoading ? " disabled" : ""}>${_mvLoading ? "查询中" : "查看"}</button>
+        <button type="submit" class="mv-go${_mvLoading ? " loading" : ""}"${_mvLoading ? " disabled" : ""}>${_mvLoading ? "分析中" : "分析"}</button>
       </form>
-      ${chipRow("现持仓", owned)}${chipRow("最近", recent)}
+      ${chipRow("现持仓", owned)}
       ${body}
     </div>`;
   }
@@ -13021,7 +13007,7 @@ function rsAdjustGrade(grade, rsResult) {
     const el = $("#move-profile");
     if (!el) return;
     // 整块重建前先记下输入框状态：正在打字时保留光标，否则回填当前查的代码——点 chip 或
-    // 点「查看」之后焦点不在输入框上，不回填的话框会空掉，看不出现在展示的是哪一个。
+    // 点「分析」之后焦点不在输入框上，不回填的话框会空掉，看不出现在展示的是哪一个。
     const prev = $("#mv-input");
     const typing = document.activeElement === prev;
     const keep = typing ? prev.value : null;
