@@ -12994,7 +12994,7 @@ function rsAdjustGrade(grade, rsResult) {
     return `<div class="analytics-card mv-card">
       ${atitle("波动画像", "Move Profile")}
       <form class="mv-form" id="mv-form" autocomplete="off" novalidate>
-        <input id="mv-input" class="mv-input" data-upper placeholder="输入代码看它的日波动分布… e.g. SMH"
+        <input id="mv-input" class="mv-input" data-upper placeholder="输入代码给出波动分布"
                autocapitalize="characters" spellcheck="false" maxlength="12" />
         <button type="submit" class="mv-go${_mvLoading ? " loading" : ""}"${_mvLoading ? " disabled" : ""}>${_mvLoading ? "分析中" : "分析"}</button>
       </form>
