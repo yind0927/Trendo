@@ -4376,12 +4376,12 @@
   .nx-cond { color:var(--fg-1); }
   .nx-gap { font-family:var(--f-mono); color:var(--fg-2); white-space:nowrap; }
   .nx-gap b { color:var(--fg-1); margin-left:4px; }
-  /* 四档可能性：读量级不读数值，所以用词 + 明度梯度，不再是 mono 数字 */
+  /* 三档可能性：读量级不读数值，所以用词 + 明度梯度，不再是 mono 数字 */
   .nx-p { text-align:right; font-weight:700; white-space:nowrap; cursor:help; }
   .nx-p.hi  { color:var(--warn); }
   .nx-p.mid { color:var(--fg-1); }
-  .nx-p.lo  { color:var(--fg-2); font-weight:600; }
-  .nx-p.no, .nx-p.none { color:var(--fg-3); font-weight:500; }
+  .nx-p.lo  { color:var(--fg-3); font-weight:500; }
+  .nx-p.none { color:var(--fg-3); font-weight:500; }
   .nx-p-u { display:none; font-style:normal; font-size:10px; font-weight:400; color:var(--fg-3); margin-left:3px; }
   /* 「两项同时」那一行：加号与分隔点都压一档，不跟条件本身抢 */
   .nx-plus { color:var(--fg-3); font-weight:400; margin:0 1px; }
@@ -6684,8 +6684,8 @@
   </div>
 </div>
 
-<script src="data.js?v=827"></script>
-<script src="desk.js?v=827"></script>
+<script src="data.js?v=828"></script>
+<script src="desk.js?v=828"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
