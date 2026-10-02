@@ -15684,7 +15684,7 @@ function rsAdjustGrade(grade, rsResult) {
           ${held}
         </div>
         ${list.length ? `<div class="nx-rows">
-          <div class="nx-row nx-row-hd"><span>会切到</span><span>条件</span><span>现值 → 阈值</span><span title="历史上每 ${H} 个交易日的重叠窗口中，窗口内任意一天达到过这段距离的占比。它是不看当前水位的无条件基准率——均值回复的指标停在极端位置时，真实概率比它更高；窗口互相重叠，独立样本远少于样本个数">${H}日内概率</span></div>
+          <div class="nx-row nx-row-hd"><span>会切到</span><span>条件</span><span>现值 → 阈值</span><span title="历史上每 ${H} 个交易日的重叠窗口中，窗口内任意一天达到过这段距离的占比。它是不看当前水位的无条件基准率：FGI/RSI/VIX 都是均值回复的，指标停在极端位置时，继续往极端走会比这个数难、往均值方向回来会比这个数容易——两个方向的偏差是反的。窗口互相重叠，独立样本远少于样本个数，这个数本身的误差也很大">${H}日内概率</span></div>
           ${rows}
         </div>
 `
