@@ -4374,17 +4374,14 @@
   .nx-to { font-weight:700; white-space:nowrap; }
   .nx-arrow { color:var(--fg-3); margin-right:5px; font-weight:400; }
   .nx-cond { color:var(--fg-1); }
-  /* 顺势/逆势：让「为什么这一行排在这个位置」读得出来，光看概率数字看不出方向 */
-  .nx-dir { font-style:normal; font-size:9.5px; font-weight:600; margin-left:7px; padding:1px 5px;
-    border-radius:8px; cursor:help; white-space:nowrap; }
-  /* 两档只靠字重/明度分，不借警示色——它是排序的说明，不是信号。用 --warn 的话，
-     一条 <0.1% 的线会因为「顺势」两个字成为整行最扎眼的东西，正好把注意力引反。 */
-  .nx-dir.with { color:var(--fg-1); background:color-mix(in oklch, var(--fg-1) 10%, transparent); }
-  .nx-dir.against { color:var(--fg-3); font-weight:500; background:color-mix(in oklch, var(--fg-1) 5%, transparent); }
   .nx-gap { font-family:var(--f-mono); color:var(--fg-2); white-space:nowrap; }
   .nx-gap b { color:var(--fg-1); margin-left:4px; }
-  .nx-p { font-family:var(--f-mono); text-align:right; color:var(--fg-1); font-weight:700; white-space:nowrap; }
-  .nx-p.near { color:var(--warn); }
+  /* 四档可能性：读量级不读数值，所以用词 + 明度梯度，不再是 mono 数字 */
+  .nx-p { text-align:right; font-weight:700; white-space:nowrap; cursor:help; }
+  .nx-p.hi  { color:var(--warn); }
+  .nx-p.mid { color:var(--fg-1); }
+  .nx-p.lo  { color:var(--fg-2); font-weight:600; }
+  .nx-p.no, .nx-p.none { color:var(--fg-3); font-weight:500; }
   .nx-p-u { display:none; font-style:normal; font-size:10px; font-weight:400; color:var(--fg-3); margin-left:3px; }
   /* 「两项同时」那一行：加号与分隔点都压一档，不跟条件本身抢 */
   .nx-plus { color:var(--fg-3); font-weight:400; margin:0 1px; }
@@ -6687,8 +6684,8 @@
   </div>
 </div>
 
-<script src="data.js?v=826"></script>
-<script src="desk.js?v=826"></script>
+<script src="data.js?v=827"></script>
+<script src="desk.js?v=827"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
