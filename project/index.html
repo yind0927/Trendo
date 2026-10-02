@@ -4366,7 +4366,7 @@
   .nx-held { font-size:11px; color:var(--fg-3); }
   .nx-held b { color:var(--fg-1); font-family:var(--f-mono); }
   .nx-rows { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
-  .nx-row { display:grid; grid-template-columns:150px 1fr 190px 76px 72px; gap:10px; align-items:center;
+  .nx-row { display:grid; grid-template-columns:150px 1fr 230px 76px; gap:10px; align-items:center;
     padding:9px 12px; font-size:11.5px; }
   .nx-row + .nx-row { border-top:1px solid var(--line); }
   .nx-row-hd { font-size:10px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.05em;
@@ -4386,8 +4386,12 @@
   .nx-p { font-family:var(--f-mono); text-align:right; color:var(--fg-1); font-weight:700; white-space:nowrap; }
   .nx-p.near { color:var(--warn); }
   .nx-p-u { display:none; font-style:normal; font-size:10px; font-weight:400; color:var(--fg-3); margin-left:3px; }
-  .nx-z { font-family:var(--f-mono); text-align:right; color:var(--fg-3); }
-  .nx-z-u { display:none; font-style:normal; font-size:10px; font-weight:400; color:var(--fg-3); margin-left:3px; }
+  /* 「两项同时」那一行：加号与分隔点都压一档，不跟条件本身抢 */
+  .nx-plus { color:var(--fg-3); font-weight:400; margin:0 1px; }
+  .nx-sep { color:var(--fg-3); font-style:normal; margin:0 2px; }
+  .nx-both { font-style:normal; font-size:9.5px; font-weight:600; margin-left:7px; padding:1px 5px;
+    border-radius:8px; cursor:help; white-space:nowrap; color:var(--fg-1);
+    background:color-mix(in oklch, var(--fg-1) 10%, transparent); }
   .nx-empty { font-size:11px; color:var(--fg-3); margin-top:8px; }
   .nx-note { font-size:10px; color:var(--fg-3); line-height:1.6; margin-top:12px; padding-top:10px;
     border-top:1px solid var(--line); }
@@ -4556,13 +4560,11 @@
     /* 手机：第一行「会切到 + 倍数」，第二行条件，第三行距离 */
     .nx-row { grid-template-columns:1fr auto; row-gap:3px; padding:9px 11px; }
     .nx-row-hd { display:none; }
-    .nx-z-u, .nx-p-u { display:inline; }
+    .nx-p-u { display:inline; }
     .nx-to { grid-column:1; grid-row:1; }
     .nx-p { grid-column:2; grid-row:1; }
     .nx-cond { grid-column:1 / -1; }
-    /* 现值→阈值 与 日波动倍数 共用一行，概率已经升到第一行右侧 */
-    .nx-gap { grid-column:1; font-size:11px; }
-    .nx-z { grid-column:2; font-size:11px; }
+    .nx-gap { grid-column:1 / -1; font-size:11px; }
     .mkp-tr-why { grid-column:1 / -1; }
     /* 可收起小节的标题行：手机上标题 + 摘要挤一行会把「建议切换」折成两行、摘要也断成两截。
        标题不许断行；摘要整条换到下一行，与标题文字左对齐（让出箭头宽度）。 */
@@ -6685,8 +6687,8 @@
   </div>
 </div>
 
-<script src="data.js?v=823"></script>
-<script src="desk.js?v=823"></script>
+<script src="data.js?v=824"></script>
+<script src="desk.js?v=824"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
