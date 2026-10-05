@@ -596,6 +596,11 @@
      its exact position on the track, only the label moves. */
   .levelbar .marker.stop   .tag{ left: 50%; right: auto; }
   .levelbar .marker.target .tag{ right: 50%; left: auto; }
+  /* 现价这个标记是浮动的，贴到任一端时居中的标签同样会被抽屉内边距切掉（仓位贴着止损
+     时实测左侧切掉 25px，只剩「价 $1,104.55」——偏偏那是最该看清现价的时候）。
+     `levelBar()` 按位置给它挂 edge-l / edge-r，套用与止损/止盈同一条「只向内长」的规则。 */
+  .levelbar .marker.now.edge-l .tag{ left: 50%; right: auto; }
+  .levelbar .marker.now.edge-r .tag{ right: 50%; left: auto; }
   /* Stop, cost and target all label downward, and stop sits close to cost whenever the
      stop is tight — at any width those two labels then overlap, whichever way they are
      anchored. Give cost its own tier so no two labels on this side can ever collide
@@ -4218,14 +4223,19 @@
 
     /* ---- Drawer ---- */
     .drawer { width: 100vw; border-left: none; }
-    .drawer-head { padding: 14px 14px 12px; padding-top: calc(14px + env(safe-area-inset-top)); }
+    /* 头部此前占到 390px 机型的 41%、360px 机型的 48%（实测 349 / 375px），可滑动的
+       正文只剩 495 / 405px。下面这几条只动**间距与字号**，不挪任何元素、不碰 levelbar
+       内部那套绝对定位的标签分层——那里的 top:18 / top:37 两级是专门用来防止止损、
+       成本、止盈三个标签互相压住的，动它就会把重叠问题放回来。 */
+    .drawer-head { padding: 12px 14px 10px; padding-top: calc(12px + env(safe-area-inset-top));
+      gap: 9px; }
     .drawer-body { padding: 10px; gap: 8px; }
 
     /* Header on a phone: identity + buttons on row one, status badge and the position
        counter on row two. As a single nowrap row the six items left the name block about
        70px, so a normal company name broke into three lines and dragged the whole header
        taller than the price below it. */
-    .drawer-top{ flex-wrap: wrap; gap: 10px; }
+    .drawer-top{ flex-wrap: wrap; gap: 8px 10px; }
     .drawer-idname{ flex: 1; min-width: 0; }          /* min-width:0 or flex won't shrink text */
     .drawer-idname .muted{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .drawer-btns{
@@ -4243,9 +4253,21 @@
 
     /* Price gets its own line — at 28px it is most of the row's width anyway, and the
        four figures beside it were wrapping unevenly across three lines. */
-    .hero-price{ gap: 10px 12px; }
-    .hero-price .p{ flex-basis: 100%; }
+    /* 列间距 8px 不是随手调的：360px 机型上 pct+pnl+R+date 四项实测 302px、容器
+       332px，10px 间距时总宽正好 332 卡在边界上，日期被挤到第三行；8px 时合计 326，
+       四项回到同一行。更长的日期仍会折行——那是正常回退，不会压字。 */
+    .hero-price{ gap: 7px 8px; }
+    /* `!important` 不是偷懒：上面那条「big numerals glow」把 .hero-price .p 设成了
+       34px !important，不带 important 这里根本盖不过去（实测字号纹丝不动）。 */
+    .hero-price .p{ flex-basis: 100%; font-size: 26px !important; }
     .hero-price .hero-date{ flex-basis: auto; margin-left: auto; }
+    /* 360px 机型上「持仓 40d · since Aug 03」原本会被挤到第三行（整块 80→106px）。
+       缩一档字号 + 收窄列间距后四项回到同一行，省下的是一整行。 */
+    .hero-price .hero-r{ font-size: 12px; }
+    .hero-price .hero-date{ font-size: 10.5px; }
+    /* levelbar 自带 12px/4px 外边距，与头部的 flex gap 叠加后上下各多出一截空白；
+       间距交给 gap 一处管，这里归零。盒子高度 56px 不动——那是标签分层需要的。 */
+    .levelbar{ margin: 2px 0 0; }
     .drawer-section { padding: 13px; }
     .plan-prices { grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .plan-price-item { padding: 7px 8px; }
@@ -6703,8 +6725,8 @@
   </div>
 </div>
 
-<script src="data.js?v=835"></script>
-<script src="desk.js?v=835"></script>
+<script src="data.js?v=836"></script>
+<script src="desk.js?v=836"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

@@ -3339,6 +3339,12 @@ function rsAdjustGrade(grade, rsResult) {
     const vals = [h.stop, dispCost, h.last, h.target].sort((a, b) => a - b);
     const lo = vals[0] * 0.98, hi = vals[3] * 1.02;
     const px = v => ((v - lo) / (hi - lo)) * 100;
+    // 止损与止盈按构造一定是两端，CSS 里已经让它们的标签只向内长。**现价这一个是浮动的**
+    // ——仓位贴着止损（正是最该看清现价的时候）或贴着止盈时，居中的标签会越过轨道端点被
+    // 抽屉的内边距切掉：360px 机型上实测「现价 $1,104.55」左侧被切掉 25px，只剩「价 …」。
+    // 靠近哪一端就改为从该端的节点向内长，节点本身的位置一点不动。
+    const nowPct = px(h.last);
+    const nowEdge = nowPct < 18 ? " edge-l" : nowPct > 82 ? " edge-r" : "";
     return `
       <div class="levelbar">
         <div class="track"></div>
@@ -3350,7 +3356,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="tag below">成本${ccNet(h) > 0 ? `<span class="cc-tag">cc</span>` : ""} $${price(dispCost)}</span>
           <div class="node"></div>
         </div>
-        <div class="marker now" style="left:${px(h.last)}%">
+        <div class="marker now${nowEdge}" style="left:${px(h.last)}%">
           <span class="tag above" style="color:var(--accent)">现价 $${price(h.last)}</span>
           <div class="node"></div>
         </div>
