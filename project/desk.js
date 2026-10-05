@@ -15135,6 +15135,22 @@ function rsAdjustGrade(grade, rsResult) {
   // 展示，同窗口才能直接对照同一段时间；改一个记得改另一个。
   const PHASE_SESSIONS = 200;
 
+  // 这一根日线是不是「今天、还没走完」的那一根。
+  //
+  // Yahoo 的 `interval=1d` 在**盘中就会给出今天这一根**，close 填的是当时的实时价。
+  // 把它当成一个走完的交易日有两处后果：①「已持续 N 个交易日」在状态今天才刚切换时
+  // 也至少报 1，而那一天还没走完——用户报的「周一盘中才变成正常配置，却显示已持续
+  // 3 个交易日」里，有一天就是今天这根未收盘的；②两张回放卡的 `.mkp-pending` 写着
+  // 「下方色带只画已收盘的交易日」，而色带其实画了今天——那句话是假的。
+  //
+  // 美东 16:00 之前（含盘前，Yahoo 有时已经给出当天的占位 bar）今天这一根不可能是
+  // 终值，一律丢掉；16:00 之后它已定格，照常计入。周末/假日的最后一根是上一个交易日、
+  // 日期对不上今天，不受影响。`etNow()` 拿不到（Intl 不可用）时保守地不丢。
+  function isLiveSession(dateStr) {
+    const et = etNow();
+    return !!et && dateStr === et.date && et.mins < 16 * 60;
+  }
+
   function buildPhaseHistory(vooCloses, vooDates, vixByDate, maxSessions) {
     if (!vooCloses?.length) return null;
     const e50 = calcEMASeries(vooCloses, 50);
@@ -15151,6 +15167,8 @@ function rsAdjustGrade(grade, rsResult) {
         risk: vix != null ? getRiskAxis(vix).id : null, vix,
       });
     }
+    // 只回放已收盘的交易日——盘中那根未走完的今天不算一个交易日（见 isLiveSession）。
+    if (days.length && isLiveSession(days[days.length - 1].date)) days.pop();
     if (!days.length) return null;
     // Keep only the trailing window. The earlier sessions were fetched purely to seed
     // EMA200 and are not part of what the card claims to show.
@@ -15424,6 +15442,8 @@ function rsAdjustGrade(grade, rsResult) {
         px: vooCloses[i], vix: vixAl[i], fg: fgAl[i], rsi: rsiS[i],
       });
     }
+    // 只回放已收盘的交易日（见 isLiveSession）。放在窗口裁剪之前，窗口长度才是对的。
+    if (days.length && isLiveSession(days[days.length - 1].date)) days.pop();
     if (!days.length) return { unavailable: true };
     if (maxSessions && days.length > maxSessions) days.splice(0, days.length - maxSessions);
 
@@ -15681,19 +15701,22 @@ function rsAdjustGrade(grade, rsResult) {
   function mkNextStateHTML(next, advice) {
     if (!next) return "";
     const { now, list } = next;
-    // 持续多久：只有回放的最后一段就是现在这一档时才说得出来（收盘前两者可能不同步）
+    // 持续多久：天数与 `title` 全部走 `heldOf()`，跟两张回放卡同一个口径、同一份措辞
+    // ——此前这里手写了一份 title，改 `heldOf` 的文案时两处就会脱节（回归测出来过）。
+    // 回放末段还是上一档时（live 与它不同档）不报数字、改说「今日切换 · 待收盘确认」：
+    // 此前整块不显示，读者看不出是「刚切换」还是「这张卡少了一块」。
     let held = "";
     const cur = advice && !advice.unavailable ? advice.current : null;
-    if (cur && cur.id === now.id) {
-      const past = advice.segs.slice(0, -1).filter(s => s.id === now.id).map(s => s.days.length).sort((a, b) => a - b);
-      const med = past.length ? past[Math.floor((past.length - 1) / 2)] : null;
-      held = `<span class="nx-held">已持续 <b>${cur.days.length}</b> 个交易日${
-        med != null ? ` · 本窗口内此前 ${past.length} 段中位 ${med} 天` : " · 本窗口内此前未出现过"}</span>`;
-    } else if (cur) {
-      // 回放末段还是上一档（FGI 历史按前值补齐、可能滞后数日）。此前这里整块不显示，
-      // 读者看不出是「刚切换」还是「这张卡少了一块」；报上一档的天数更糟——那是另一个
-      // 状态的寿命（同 heldOf 的注释）。
-      held = `<span class="nx-held" title="上一档「${cur.headline ?? cur.label}」持续了 ${cur.days.length} 个交易日（至 ${cur.end}）。新的一档要等收盘计入回放后才开始累计天数。">今日切换 · 待收盘确认</span>`;
+    if (cur) {
+      const h = heldOf(advice, now);
+      if (h.pending) {
+        held = `<span class="nx-held" title="${h.title}">今日切换 · 待收盘确认</span>`;
+      } else {
+        const past = advice.segs.slice(0, -1).filter(s => s.id === now.id).map(s => s.days.length).sort((a, b) => a - b);
+        const med = past.length ? past[Math.floor((past.length - 1) / 2)] : null;
+        held = `<span class="nx-held" title="${h.title}">已收盘连续 <b>${h.days}</b> 日${
+          med != null ? ` · 本窗口内此前 ${past.length} 段中位 ${med} 天` : " · 本窗口内此前未出现过"}</span>`;
+      }
     }
     const fmtV = (key, v) => key === "price" || key === "ma50" ? `$${v.toFixed(2)}`
       : key === "fg" ? v.toFixed(0) : v.toFixed(1);
@@ -15816,18 +15839,25 @@ function rsAdjustGrade(grade, rsResult) {
   // 上一档的天数退到 `title` 里（信息不丢，但不会被读成新状态的寿命）。
   // VOO 和 VIX周期卡的头部显示的是回放末段本身（它的 live 差异由单独一条 `.mkp-pending`
   // 提示承担），名字与天数同源，所以传 `live = null`、照旧报数字。
+  // 口径（`title` 里对用户也这么写）：天数一律按**已收盘的交易日**数，今天那根未走完的
+  // 日线不计入（`isLiveSession`）；而回放是用**收盘价与当天的 FGI 历史**重算的，盘中
+  // 横幅用的是实时价与今天的 FGI 读数——所以某一天「当时屏幕上显示的那一档」可能跟
+  // 回放给这一天的判定不同（例如 RSI 盘中 44.6 落在情绪偏冷、收盘回到 46 就不是了）。
+  // 这不是算错，是两个口径；不写明的话这个天数会被当成「我看到这个状态几天了」。
   function heldOf(hist, live) {
     const cur = hist.current, name = cur.headline ?? cur.label;
+    const basis = "按已收盘交易日计，今天这根未走完的日线不计入；回放用收盘价重算，盘中屏幕上显示的是实时价口径，某一天两者可能不同档。";
     if (live && live.id !== cur.id)
       return { pending: true, days: null,
-               title: `上一档「${name}」持续了 ${cur.days.length} 个交易日（至 ${cur.end}）。新的一档要等收盘计入回放后才开始累计天数。` };
-    return { pending: false, days: cur.days.length, title: `${name} · ${cur.from} → ${cur.end}` };
+               title: `上一档「${name}」连续 ${cur.days.length} 个已收盘交易日（至 ${cur.end}）。新的一档要等今天收盘计入回放后才开始累计天数。${basis}` };
+    return { pending: false, days: cur.days.length,
+             title: `${name} · ${cur.from} → ${cur.end}（最后一个已收盘交易日）。${basis}` };
   }
 
   function heldHTML(h) {
     return h.pending
       ? `<span class="mkp-held"><em title="${h.title}">今日切换 · 待收盘确认</em></span>`
-      : `<span class="mkp-held" title="${h.title}"><b>${h.days}</b> 个交易日</span>`;
+      : `<span class="mkp-held" title="${h.title}">已收盘连续 <b>${h.days}</b> 日</span>`;
   }
 
   // 旧签名里的 `scope` 参数（`fetchMarketData` 算出的「近一年」/「近 N 个交易日」文案）
@@ -15835,7 +15865,10 @@ function rsAdjustGrade(grade, rsResult) {
   // `ph.span.from → ph.span.to` 直接给出真实起止日期，跟周期分析卡 `.mkp-scope` 的
   // 格式统一（那张卡从建卡起就这么写），一并把 `fetchMarketData` 里的 `phaseScope`
   // 死代码删掉。
-  function mkPhaseHTML(ph, axes, pending = null, settledDate = null) {
+  // `settledDate` 曾是第四个参数，跟 v803 删掉的 `scope` 一样从定义起就没被模板引用过
+  // ——死参数。已收盘的最后一天由 `ph.span.to` 给出（回放现在只含已收盘交易日），不需要
+  // 调用方再算一遍传进来。
+  function mkPhaseHTML(ph, axes, pending = null) {
     if (!ph) {
       return `<div class="mkt-card mkt-phase">
         ${atitle("VOO 和 VIX周期", "VOO & VIX Cycle")}
@@ -16960,7 +16993,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice, next } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, advice, next } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -16997,7 +17030,7 @@ function rsAdjustGrade(grade, rsResult) {
         </details>
       </div>
       ${mkAdviceHTML(advice, axes?.combined)}
-      ${mkPhaseHTML(phase, axes || {}, pending, benchDate)}
+      ${mkPhaseHTML(phase, axes || {}, pending)}
       <div class="brief-card dd-card" id="drawdown-card"></div>
       <div class="mkt-module-sep"></div>
       <div id="cycle-card"></div>
@@ -17057,7 +17090,7 @@ function rsAdjustGrade(grade, rsResult) {
       // RSI from VOO history (today + yesterday)
       let rsi = 0, rsiPrev = null;
       // VOO price + moving averages for the direction axis (轴A)
-      let benchPrice = null, benchMA50 = null, benchMA200 = null, benchSettled = null, benchDate = null;
+      let benchPrice = null, benchMA50 = null, benchMA200 = null, benchSettled = null;
       let vooDates = null, vooCloses = null, vixByDate = null;
       if (histRes.status === "fulfilled" && histRes.value?.results?.["VOO"]) {
         const raw = histRes.value.results["VOO"];
@@ -17069,7 +17102,6 @@ function rsAdjustGrade(grade, rsResult) {
           if (rp != null) rsiPrev = rp;
         }
         benchSettled = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
-        benchDate    = Object.keys(raw).sort().slice(-1)[0] || null;
         benchMA50  = calcEMA(closes, 50);
         benchMA200 = calcEMA(closes, 200);
         vooDates   = Object.keys(raw).sort();
@@ -17172,13 +17204,13 @@ function rsAdjustGrade(grade, rsResult) {
         ? (() => {
             const live = getDirectionAxis(benchPrice, benchMA50, benchMA200);
             return live.id !== phase.current.id
-              ? { label: live.label, color: live.color, price: benchPrice, settled: benchDate }
+              ? { label: live.label, color: live.color, price: benchPrice }
               : null;
           })()
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, benchDate, advice, next });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, advice, next });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,
