@@ -15689,6 +15689,11 @@ function rsAdjustGrade(grade, rsResult) {
       const med = past.length ? past[Math.floor((past.length - 1) / 2)] : null;
       held = `<span class="nx-held">已持续 <b>${cur.days.length}</b> 个交易日${
         med != null ? ` · 本窗口内此前 ${past.length} 段中位 ${med} 天` : " · 本窗口内此前未出现过"}</span>`;
+    } else if (cur) {
+      // 回放末段还是上一档（FGI 历史按前值补齐、可能滞后数日）。此前这里整块不显示，
+      // 读者看不出是「刚切换」还是「这张卡少了一块」；报上一档的天数更糟——那是另一个
+      // 状态的寿命（同 heldOf 的注释）。
+      held = `<span class="nx-held" title="上一档「${cur.headline ?? cur.label}」持续了 ${cur.days.length} 个交易日（至 ${cur.end}）。新的一档要等收盘计入回放后才开始累计天数。">今日切换 · 待收盘确认</span>`;
     }
     const fmtV = (key, v) => key === "price" || key === "ma50" ? `$${v.toFixed(2)}`
       : key === "fg" ? v.toFixed(0) : v.toFixed(1);
@@ -15798,6 +15803,33 @@ function rsAdjustGrade(grade, rsResult) {
     return rows.join("");
   }
 
+  // 「已持续 N 个交易日」必须描述**头部正在显示的那个状态**——这是一条跨三张卡的不变量，
+  // 加新卡片时照这条来。
+  //
+  // 周期分析卡踩过的那个 bug：头部显示的是 `live`（盘中实时价 + 今天的 FGI 读数，跟顶部
+  // 综合建议横幅同一个对象），而 `segs` 来自**已收盘回放**，且 FGI 历史是按前值补齐的、
+  // 可能滞后数日。两者不同步时直接拿 `hist.current.days.length`，就会把**上一个状态**的
+  // 天数挂在新状态的名字旁边，读成「今天才切换却已经持续了好几个交易日」。FGI 滞后几天，
+  // 这个数就虚高几天——它量的压根不是屏幕上那个状态。
+  //
+  // 所以 live 与回放末段不是同一档时，这里**不报数字**，只说「今日切换 · 待收盘确认」，
+  // 上一档的天数退到 `title` 里（信息不丢，但不会被读成新状态的寿命）。
+  // VOO 和 VIX周期卡的头部显示的是回放末段本身（它的 live 差异由单独一条 `.mkp-pending`
+  // 提示承担），名字与天数同源，所以传 `live = null`、照旧报数字。
+  function heldOf(hist, live) {
+    const cur = hist.current, name = cur.headline ?? cur.label;
+    if (live && live.id !== cur.id)
+      return { pending: true, days: null,
+               title: `上一档「${name}」持续了 ${cur.days.length} 个交易日（至 ${cur.end}）。新的一档要等收盘计入回放后才开始累计天数。` };
+    return { pending: false, days: cur.days.length, title: `${name} · ${cur.from} → ${cur.end}` };
+  }
+
+  function heldHTML(h) {
+    return h.pending
+      ? `<span class="mkp-held"><em title="${h.title}">今日切换 · 待收盘确认</em></span>`
+      : `<span class="mkp-held" title="${h.title}"><b>${h.days}</b> 个交易日</span>`;
+  }
+
   // 旧签名里的 `scope` 参数（`fetchMarketData` 算出的「近一年」/「近 N 个交易日」文案）
   // 从来没在下面的模板里被用过——死参数，调用方算了但卡片上从来没显示过。改用
   // `ph.span.from → ph.span.to` 直接给出真实起止日期，跟周期分析卡 `.mkp-scope` 的
@@ -15810,7 +15842,8 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkp-empty">历史数据不足以回放阶段（EMA200 需要 200 个交易日才有第一个值）。</div>
       </div>`;
     }
-    const cur = ph.current, held = cur.days.length, total = ph.days.length;
+    // 头部名字与天数同源（都来自回放末段），所以 live 传 null——见 heldOf 的注释。
+    const cur = ph.current, held = heldOf(ph, null), total = ph.days.length;
 
     // Both bands are laid out from the SAME flex basis — one unit per trading day — so
     // they line up column for column. The ribbon groups days into phase segments and the
@@ -15880,7 +15913,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkp-head">
           <span class="mkp-dot" style="background:${cur.color}"></span>
           <span class="mkp-now" style="color:${cur.color}">${cur.label}区</span>
-          <span class="mkp-held"><b>${held}</b> 个交易日</span>
+          ${heldHTML(held)}
           <span class="mkp-scope">${ph.span.from} → ${ph.span.to} · ${total} 个交易日</span>
           <span class="mkp-axis-now" style="color:${cur.color}">现在 · ${cur.label}</span>
         </div>
@@ -15937,11 +15970,13 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkp-empty">暂时无法回放：逐日重算综合建议需要 FGI 日频历史（/api/feargreed 的 <code>history</code> 字段）与至少 200 个交易日的 VOO 数据，当前至少缺其中之一。</div>
       </div>`;
     }
-    const cur = ah.current, held = cur.days.length, total = ah.days.length;
+    const cur = ah.current, total = ah.days.length;
     // 头部永远展示 live（跟顶部横幅同一个对象、同一份文案）；没有 live 时退回已收盘
     // 的最后一段，不影响任何调用点缺 axes 时仍能正常渲染。
     const now = live || cur;
     const pendingMismatch = live && live.id !== cur.id;
+    // 天数跟着 `now` 走，不跟着回放末段走——见 heldOf 的注释。
+    const held = heldOf(ah, live);
 
     const ribbon = ah.segs.map((sg, i) => `
       <span class="mkp-seg${i === ah.segs.length - 1 ? " now" : ""}"
@@ -16015,7 +16050,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="mkp-head">
           <span class="mkp-dot" style="background:${now.color}"></span>
           <span class="mkp-now" style="color:${now.color}">${now.headline}</span>
-          <span class="mkp-held"><b>${held}</b> 个交易日</span>
+          ${heldHTML(held)}
           <span class="mkp-scope">${ah.span.from} → ${ah.span.to} · ${total} 个交易日</span>
           <span class="mkp-axis-now" style="color:${now.color}">现在 · ${now.state}</span>
         </div>
