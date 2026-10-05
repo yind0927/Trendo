@@ -4974,6 +4974,10 @@
     color: var(--fg-3); margin-left: 2px; }
   .cyc-next-list u { text-decoration: none; font-size: 9px; color: var(--accent); margin-left: 3px;
     padding: 0 4px; border-radius: 3px; border: 1px solid currentColor; }
+  /* 一条判据 = 一个不可拆的单元（名称 + →状态 + 可选「自动项」），行只在条与条之间断。
+     分隔符画在后一条的 ::before 上，跟着下一条走，不会被单独留在行尾。 */
+  .cyc-next-it { display: inline-flex; align-items: baseline; }
+  .cyc-next-it + .cyc-next-it::before { content: "·"; margin: 0 7px; color: var(--fg-3); }
   .cyc-next-none { color: var(--fg-3); }
   .cyc-next-hard { margin-top: 10px; padding: 9px 11px; border-radius: 8px; font-size: 10.5px;
     line-height: 1.8; color: var(--warn);
@@ -4984,6 +4988,14 @@
   .cyc-next-note b { color: var(--fg-2); }
   @media (max-width: 768px) {
     .cyc-next-hd em { margin-left: 0; }
+  }
+  /* 名称不被折断由上面的 inline-flex 在任何宽度下保证；真正窄的屏（内容宽只剩约
+     310px）再进一步改成一条一行——六条并排时即使每条完整，挤在三四行里也要靠 `·`
+     去找边界。560px 以上照常连排，不白占纵向空间。 */
+  @media (max-width: 560px) {
+    .cyc-next-it { display: flex; margin-top: 3px; }
+    .cyc-next-it + .cyc-next-it::before { content: none; }
+    .cyc-next-list { line-height: 1.65; }
   }
 
   details.cyc-hist { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px;
@@ -6691,8 +6703,8 @@
   </div>
 </div>
 
-<script src="data.js?v=834"></script>
-<script src="desk.js?v=834"></script>
+<script src="data.js?v=835"></script>
+<script src="desk.js?v=835"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

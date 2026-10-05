@@ -16879,8 +16879,15 @@ function rsAdjustGrade(grade, rsResult) {
       : r.lo10 === 0   ? `< ${r.hi10.toFixed(1)} 分`
       : `${r.lo10.toFixed(1)}–${r.hi10.toFixed(1)} 分`;
     const row = r => {
+      // 每条判据包成一个不可拆的 `.cyc-next-it`：此前是 `join(" · ")` 的连排文字，
+      // 手机端（内容宽约 310px）会在判据名中间断行——实测「半导体 / 订单 / backlog
+      // 掉头」「AI capex 债 / 务融资占比」「美联储政策 / 利率（加息/降息）」都被折断，
+      // 六条挤成四行后 `·` 分隔也看不出边界，分不清哪个名字配哪个状态。
+      // 分隔符改由 CSS `::before` 画在**后一条**上，所以它永远跟着下一条走、不会
+      // 被孤零零留在行尾；手机端把 item 变成 flex 块、一条一行，分隔符一并关掉。
       const names = r.list && r.list.map(c =>
-        `<b>${c.it.zh}</b><i>→${c.to}</i>${c.it.auto ? `<u>自动项</u>` : ""}`).join(" · ");
+        `<span class="cyc-next-it"><b>${c.it.zh}</b><i>→${c.to}</i>${
+          c.it.auto ? `<u>自动项</u>` : ""}</span>`).join("");
       const arrow = r.cur ? "●" : r.termOnly ? "⚑" : r.atScore ? "◆" : r.dir === "up" ? "↑" : "↓";
       const body = r.termOnly
         ? `<div class="cyc-next-list">${r.hard}</div>`
