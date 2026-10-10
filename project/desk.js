@@ -7633,12 +7633,13 @@ function rsAdjustGrade(grade, rsResult) {
 
   // DTE: expiry day itself = 0. Compare calendar dates (UTC midnight) to avoid the
   // ceil-of-a-fraction problem where "today at 2pm" → ceil(0.38) = 1 instead of 0.
-  const _optDTE = expiryDate => {
+  // `fromStr` 只有补录历史记录时才传：那种情形下「入场时还剩多少天」要从**开仓那天**算到
+  // 到期日，拿今天当起点会算出一个负数或 0，把 entryDTE 这个用来分桶看年化的字段废掉。
+  const _optDTE = (expiryDate, fromStr) => {
     if (!expiryDate) return 0;
-    const todayStr = new Date().toISOString().slice(0, 10);
-    if (expiryDate <= todayStr) return 0;
-    const today = new Date(); today.setUTCHours(0, 0, 0, 0);
-    return Math.round((new Date(expiryDate + "T00:00:00Z") - today) / 86400000);
+    const baseStr = fromStr || new Date().toISOString().slice(0, 10);
+    if (expiryDate <= baseStr) return 0;
+    return Math.round((new Date(expiryDate + "T00:00:00Z") - new Date(baseStr + "T00:00:00Z")) / 86400000);
   };
 
   // Symbols that genuinely need a live spot: open positions (expiry settlement,
@@ -9131,6 +9132,13 @@ function rsAdjustGrade(grade, rsResult) {
     const isSell = mode === "sell";
     sellOnlyIds.forEach(sel => { const el = modal.querySelector(sel); if (el) el.style.display = isSell ? "" : "none"; });
     if (wrapStrikeExpiry) wrapStrikeExpiry.style.display = isSell ? "" : "none";
+    // 开仓日期/开仓时标的价：只有卖出（含补录）这一步需要，其余模式的入场信息不可改。
+    const wrapOpen = modal.querySelector("#opts-row-open-underlying");
+    if (wrapOpen) wrapOpen.style.display = isSell ? "flex" : "none";
+    // 结算结果三件套由卖出模式自己按到期日是否已过来开合，其余模式一律收起。
+    ["#opts-row-settle", "#opts-row-settle-fields"].forEach(sel => {
+      const el = modal.querySelector(sel); if (el) el.style.display = "none";
+    });
     // In close/mark modes: show wrapper but hide just the qty column so premium shows full-width
     if (wrapQtyPremium) {
       wrapQtyPremium.style.display = mode === "exit" ? "none" : "flex";
@@ -9141,6 +9149,12 @@ function rsAdjustGrade(grade, rsResult) {
     if (exitRow) exitRow.style.display = mode === "exit" ? "" : "none";
     const closeDateRow = modal.querySelector("#opts-row-close-date");
     if (closeDateRow) closeDateRow.style.display = mode === "close" ? "" : "none";
+    // 平仓/成交/编辑日期：允许往前选（补录历史记录），但不允许选将来。
+    const closeDateEl = modal.querySelector("#opts-close-date");
+    if (closeDateEl) {
+      closeDateEl.removeAttribute("min");
+      closeDateEl.max = new Date().toISOString().slice(0, 10);
+    }
     const deltaRow = modal.querySelector("#opts-row-delta");
     if (deltaRow) deltaRow.style.display = isSell ? "" : "none";
     // Belongs to the edit modal alone; it re-shows itself there. Hiding it here means every
@@ -9197,6 +9211,16 @@ function rsAdjustGrade(grade, rsResult) {
     const symIn  = modal.querySelector("#opts-sym-input");
     const strkIn = modal.querySelector("#opts-strike");
     const expIn  = modal.querySelector("#opts-expiry-date");
+    const openIn = modal.querySelector("#opts-open-date");
+    const undIn  = modal.querySelector("#opts-underlying");
+    const settleRow    = modal.querySelector("#opts-row-settle");
+    const settleFields = modal.querySelector("#opts-row-settle-fields");
+    const settlePxRow  = modal.querySelector("#opts-row-settle-px");
+    const settlePxEl   = modal.querySelector("#opts-settle-px");
+    const settleDateEl = modal.querySelector("#opts-settle-date");
+    const backfillNote = modal.querySelector("#opts-backfill-note");
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let settleKind = "expired";   // 补录已到期记录时的结算结果
     const qtyEl   = modal.querySelector("#opts-qty");
     const premEl  = modal.querySelector("#opts-premium");
     const deltaEl = modal.querySelector("#opts-delta");
@@ -9204,20 +9228,63 @@ function rsAdjustGrade(grade, rsResult) {
     symIn.value = optSellSym;
     strkIn.value = prefill.strike || "";
     expIn.value = prefill.expiry || "";
-    expIn.min = new Date().toISOString().slice(0, 10);
+    // 预设单是盘前计划，到期日必须在将来；手动记录则允许填过去的到期日——补录一笔
+    // 几个月前就已经结束的交易时，到期日本来就在过去，卡着 min 等于压根录不进来。
+    if (isPending) expIn.min = todayStr; else expIn.removeAttribute("min");
+    // 开仓日期默认今天、可往前选，但不能选将来（未来开的仓还没发生）。
+    openIn.value = prefill.entryDate || todayStr;
+    openIn.max = todayStr;
+    openIn.removeAttribute("min");
+    undIn.value = "";
+    // 开仓日期是今天时，标的价由实时报价自动带入，不必手填；补录过去的仓位则必须手填，
+    // 因为这个字段是「开仓当天的标的价」——拿今天的价去充当它会让独立 CC 的正股盈亏
+    // 与年化收益的资金基数整个错掉。
+    const syncUndPlaceholder = () => {
+      const isToday = openIn.value === todayStr;
+      const spot = optSpot((symIn.value || "").toUpperCase().trim());
+      undIn.placeholder = isToday
+        ? (spot ? `自动取现价 $${spot.toFixed(2)}` : "自动取现价")
+        : `${openIn.value || "开仓日"} 当天的标的价`;
+    };
     qtyEl.value = String(prefill.qty || 1);
     qtyEl.disabled = false;
     premEl.value = "";
     if (deltaEl) deltaEl.value = "";
     const calcEl = modal.querySelector("#opts-calc");
 
+    // 到期日已过 = 这是一笔已经结束的交易，结果必须由用户给出。
+    // 绝不能让它以 open 状态存下去——settleExpiredOptions 会拿**今天的价**去判当时是 OTM
+    // 还是被指派，几个月前到期的仓位这么判出来的结果基本是编的。
+    const isBackfill = () => !isPending && !!expIn.value && expIn.value < todayStr;
+    const syncSettleRows = () => {
+      const on = isBackfill();
+      settleRow.style.display = on ? "" : "none";
+      settleFields.style.display = on ? "flex" : "none";
+      if (!on) return;
+      settlePxRow.style.display = settleKind === "closed" ? "" : "none";
+      if (!settleDateEl.value) settleDateEl.value = expIn.value;
+      settleDateEl.max = todayStr;
+      $$(".opts-settle-btn", modal).forEach(b =>
+        b.classList.toggle("active", b.dataset.optsettle === settleKind));
+      backfillNote.textContent = settleKind === "expired"
+        ? `到期日 ${expIn.value} 已过。到期作废 = 价外到期、权利金全额保留。`
+        : settleKind === "closed"
+        ? `到期日 ${expIn.value} 已过。买回平仓 = 到期前买回，盈亏 = 卖出价 − 买回价。`
+        : optSellStrat === "csp"
+        ? `到期日 ${expIn.value} 已过。被指派 = 按行权价接到正股；正股那一笔的出仓价之后在「正股」卡里补填。`
+        : `到期日 ${expIn.value} 已过。被指派 = 正股按行权价被行权卖出，权利金全额保留。`;
+    };
+
     const recalc = () => {
+      syncUndPlaceholder();
+      syncSettleRows();
       const sym = (symIn.value || "").toUpperCase().trim();
       const isCSP = optSellStrat === "csp";
       const strike = parseFloat(strkIn.value) || 0;
       const qty = Math.max(1, parseInt(qtyEl.value) || 1);
       const prem = parseFloat(premEl.value) || 0;
-      const dte = expIn.value ? _optDTE(expIn.value) : 0;
+      // 补录时「还剩多少天」要从开仓那天算起，否则年化那一行恒为空。
+      const dte = expIn.value ? _optDTE(expIn.value, openIn.value || todayStr) : 0;
       const spot = optSpot(sym);
       const lines = [];
       if (spot) lines.push(`<div><span>${sym} 现价</span><b>$${spot.toFixed(2)}</b></div>`);
@@ -9239,7 +9306,13 @@ function rsAdjustGrade(grade, rsResult) {
       calcEl.innerHTML = lines.join("") || `<div><span class="muted">${isPending ? "填写后预览收益指标（盘前参考）" : "填写后自动计算收益指标"}</span></div>`;
     };
     modal._recalc = recalc;
-    [symIn, strkIn, expIn, qtyEl, premEl, deltaEl].filter(Boolean).forEach(el => el.oninput = recalc);
+    [symIn, strkIn, expIn, qtyEl, premEl, deltaEl, openIn, undIn, settlePxEl]
+      .filter(Boolean).forEach(el => el.oninput = recalc);
+    // date 输入在部分浏览器上只发 change、不发 input，两个都挂上。
+    [expIn, openIn, settleDateEl].forEach(el => el.onchange = recalc);
+    $$(".opts-settle-btn", modal).forEach(btn => {
+      btn.onclick = () => { settleKind = btn.dataset.optsettle; recalc(); };
+    });
     _optWireModalChips(modal);
     recalc();
     modal.style.display = "flex";
@@ -9252,6 +9325,21 @@ function rsAdjustGrade(grade, rsResult) {
       const prem = parseFloat(premEl.value);
       if (!sym || !(strike > 0) || !expiry) { formErr("请填写标的、行权价和到期日", !sym ? null : !(strike > 0) ? "#opts-strike" : "#opts-expiry-date"); return; }
       if (!isPending && !(prem > 0)) { formErr("请填写权利金", "#opts-premium"); return; }
+      const entryDate = openIn.value || todayStr;
+      if (!isPending) {
+        if (entryDate > todayStr) { formErr("开仓日期不能晚于今天", "#opts-open-date"); return; }
+        if (expiry < entryDate) { formErr("到期日不能早于开仓日期", "#opts-expiry-date"); return; }
+      }
+      const backfill = isBackfill();
+      const settlePx = parseFloat(settlePxEl.value);
+      if (backfill && settleKind === "closed" && !(settlePx >= 0)) {
+        formErr("请填写买回价格", "#opts-settle-px"); return;
+      }
+      // 开仓时的标的价：手填优先；没填且开仓日就是今天才拿实时价充当，补录过去的仓位
+      // 不填就留空（宁可少一个数，也不拿今天的价冒充几个月前的）。
+      const undManual = parseFloat(undIn.value);
+      const underlyingAtEntry = undManual > 0 ? undManual
+        : (entryDate === todayStr ? (optSpot(sym) || null) : null);
       const isCSP = optSellStrat === "csp";
       const entryDelta = deltaEl ? (parseFloat(deltaEl.value) || null) : null;
       const optArr = _activeOpts();
@@ -9277,17 +9365,44 @@ function rsAdjustGrade(grade, rsResult) {
           );
           if (parentCsp) linkedCspId = parentCsp.id;
         }
-        const entryDTE = _optDTE(expiry);
-        optArr.push({
+        const entryDTE = _optDTE(expiry, entryDate);
+        const rec = {
           id: Date.now().toString(36),
           sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
           strike, expiry, qty, premium: prem,
           entryDTE,
           ...(entryDelta > 0 ? { entryDelta } : {}),
           ...(linkedCspId ? { linkedCspId } : {}),
-          underlyingAtEntry: optSpot(sym) || null,
-          entryDate: new Date().toISOString().slice(0, 10), status: "open",
-        });
+          underlyingAtEntry,
+          entryDate, openedAt: entryDate, status: "open",
+        };
+        // 补录已结束的交易：这里就把结果定下来，不留给 settleExpiredOptions 去猜。
+        // `realized` 的三种写法与 settleExpiredOptions / _optMigrate 的自愈规则完全一致
+        // （到期作废与两种指派都保留 100% 权利金，买回平仓扣买回价），所以下次渲染时
+        // 自愈逻辑是空跑，不会把这里写的数改掉。
+        if (backfill) {
+          if (settleKind === "closed") {
+            rec.status = "closed";
+            rec.closePremium = settlePx;
+            rec.realized = (prem - settlePx) * 100 * qty;
+            rec.closedAt = settleDateEl.value || expiry;
+          } else if (settleKind === "assigned") {
+            rec.status = "assigned";
+            rec.realized = prem * 100 * qty;
+            rec.closedAt = settleDateEl.value || expiry;
+            if (isCSP) {
+              // 正股还在手上（或之后再补出仓价）——与 settleExpiredOptions 的 CSP 分支同形。
+              rec.assignedStockSold = false;
+              rec.assignedExitPrice = null;
+              rec.assignedExitDate = null;
+            }
+          } else {
+            rec.status = "expired";
+            rec.realized = prem * 100 * qty;
+            rec.closedAt = settleDateEl.value || expiry;
+          }
+        }
+        optArr.push(rec);
       }
       saveToStorage();
       modal.style.display = "none";

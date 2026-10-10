@@ -2012,7 +2012,14 @@
   /* Controls row */
   .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 0; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
   .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
-  .opts-sym-chip.active, .opts-type-btn.active { background: var(--accent) !important; color: oklch(0.14 0.012 250) !important; box-shadow: none !important; }
+  .opts-sym-chip.active, .opts-type-btn.active, .opts-settle-btn.active { background: var(--accent) !important; color: oklch(0.14 0.012 250) !important; box-shadow: none !important; }
+  /* 补录历史记录时的提示条：到期日已过说明这是一笔已经结束的交易，必须由用户给出结果，
+     不能让 settleExpiredOptions 用「今天的价」去猜几个月前到期时是 OTM 还是被指派。 */
+  .opts-backfill-note {
+    font-size: 10.5px; color: var(--warn); line-height: 1.5;
+    background: color-mix(in oklch, var(--warn) 10%, transparent);
+    border-radius: 8px; padding: 7px 9px; margin-top: 2px;
+  }
   .opts-spots { display: flex; gap: 8px; flex-wrap: wrap; }
   .opts-spot-pill { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); border: 1px solid var(--line); border-radius: 14px; padding: 3px 11px; background: var(--bg-2); }
   .opts-spot-pill b { color: var(--fg-0); margin-right: 4px; }
@@ -6687,6 +6694,17 @@
         <button type="button" class="opts-type-btn" data-optstrat="cc">卖 Call · 备兑 CC</button>
       </div>
     </div>
+    <!-- 开仓日期 + 开仓时标的价 并排（补录历史记录用：日期可选过去，标的价为当时的现价） -->
+    <div id="opts-row-open-underlying" style="display:flex;gap:12px">
+      <div class="form-row" id="opts-row-open-date" style="flex:1">
+        <label>开仓日期</label>
+        <input type="date" id="opts-open-date" class="form-input"/>
+      </div>
+      <div class="form-row" id="opts-row-underlying" style="flex:1">
+        <label>开仓时标的价 <span style="font-size:10px;color:var(--fg-3)">(可选)</span></label>
+        <input type="number" id="opts-underlying" class="form-input" step="0.01" min="0" placeholder="当天的标的现价"/>
+      </div>
+    </div>
     <!-- 行权价 + 到期日 并排 -->
     <div id="opts-row-strike-expiry" style="display:flex;gap:12px">
       <div class="form-row" id="opts-row-strike" style="flex:1">
@@ -6714,6 +6732,26 @@
         <input type="number" id="opts-premium" class="form-input" step="0.01" min="0" placeholder="券商成交价"/>
       </div>
     </div>
+    <!-- 结算结果：仅当到期日已过（补录一笔已经结束的交易）时出现 -->
+    <div class="form-row" id="opts-row-settle" style="display:none">
+      <label>结算结果</label>
+      <div class="seg" style="width:100%">
+        <button type="button" class="opts-settle-btn" data-optsettle="expired">到期作废</button>
+        <button type="button" class="opts-settle-btn" data-optsettle="closed">买回平仓</button>
+        <button type="button" class="opts-settle-btn" data-optsettle="assigned">被指派</button>
+      </div>
+      <div class="opts-backfill-note" id="opts-backfill-note"></div>
+    </div>
+    <div id="opts-row-settle-fields" style="display:none;gap:12px">
+      <div class="form-row" id="opts-row-settle-px" style="flex:1">
+        <label>买回价格 ($/share)</label>
+        <input type="number" id="opts-settle-px" class="form-input" step="0.01" min="0" placeholder="买回成交价"/>
+      </div>
+      <div class="form-row" id="opts-row-settle-date" style="flex:1">
+        <label>结算日期</label>
+        <input type="date" id="opts-settle-date" class="form-input"/>
+      </div>
+    </div>
     <div class="form-row" id="opts-row-exit" style="display:none">
       <label>出仓价 ($/share)</label>
       <input type="number" id="opts-exit-price" class="form-input" step="0.01" min="0" placeholder="实际卖出价"/>
@@ -6734,8 +6772,8 @@
   </div>
 </div>
 
-<script src="data.js?v=837"></script>
-<script src="desk.js?v=837"></script>
+<script src="data.js?v=838"></script>
+<script src="desk.js?v=838"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
