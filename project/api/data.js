@@ -2,10 +2,16 @@
 // GET  /api/data?key=xxxx          → { data: { holdings, closed, ... } | null }
 // GET  /api/data?key=xxxx&snaps=1  → { snaps: [{ i, savedAt, counts }] }  每日快照目录
 // GET  /api/data?key=xxxx&snap=N   → { data: <第 N 个快照> }
-// POST /api/data?key=xxxx          → { ok: true }  (body = data payload)
-//      若 body.savedAt 比云端现有快照更旧 → 409 { stale:true, cloudSavedAt }，**不写入**。
-//      这是防数据丢失的最后一道闸：客户端任何一条路径上的「旧快照整块覆盖」都会在这里
-//      被拦下，而不是等到用户发现手机端这几天的记录没了。
+// POST /api/data?key=xxxx          → { ok: true, rev }  (body = data payload)
+//
+// **冲突判定用的是服务端维护的 `rev`（单调整数），不是墙上时钟。**
+// 客户端在载荷里带 `_baseRev` = 它这份内容所基于的云端版本号：
+//   · `_baseRev === 云端 rev` → 接受，`rev++`（它确实是在当前云端版本上改的）
+//   · 不相等                  → 409 { stale, rev, cloudSavedAt }，**一个字都不写**
+// 为什么不能用 savedAt：那是各设备自己的墙上时钟，而且**纯拉取也会刷新它**——于是一台
+// 只是打开过 app、内容还是旧的平板（时钟还偏快）会显得"更新"，它的旧快照就能合法盖掉
+// 另一台刚写进来的记录。实测复现：电脑新增的期权记录在平板打开后从云端消失。
+// 老客户端（缓存里还是旧 JS、不带 `_baseRev`）退回按 savedAt 判：比云端更旧就拒收。
 
 // Demo key: read-only, returns hardcoded example data, writes are silently dropped.
 const DEMO_KEY = "trendo-demo-2026";
@@ -205,14 +211,28 @@ export default async function handler(req, res) {
       const [{ result: prevRaw }] = await redis([["GET", redisKey]]);
       let prev = null;
       try { prev = prevRaw ? JSON.parse(prevRaw) : null; } catch (_) {}
-      const prevAt = prev?.savedAt ? new Date(prev.savedAt).getTime() : 0;
-      const bodyAt = body?.savedAt ? new Date(body.savedAt).getTime() : 0;
-      if (prevAt && bodyAt && bodyAt < prevAt) {
-        return res.status(409).json({ stale: true, cloudSavedAt: prev.savedAt });
+      const storedRev = Number.isFinite(prev?.rev) ? prev.rev : 0;
+      const baseRev   = body?._baseRev;
+      if (baseRev != null) {
+        // 乐观并发：只接受「基于当前云端版本」的写入，与各设备的时钟完全无关。
+        if (Number(baseRev) !== storedRev) {
+          return res.status(409).json({ stale: true, rev: storedRev, cloudSavedAt: prev?.savedAt || null });
+        }
+      } else {
+        // 老客户端兜底（没有 _baseRev）：仍按 savedAt 拦住「旧盖新」。
+        const prevAt = prev?.savedAt ? new Date(prev.savedAt).getTime() : 0;
+        const bodyAt = body?.savedAt ? new Date(body.savedAt).getTime() : 0;
+        if (prevAt && bodyAt && bodyAt < prevAt) {
+          return res.status(409).json({ stale: true, rev: storedRev, cloudSavedAt: prev.savedAt });
+        }
       }
+      // `_baseRev` 只是请求参数，不入库；入库的是服务端自己递增的 `rev`。
+      const toStore = { ...body };
+      delete toStore._baseRev;
+      toStore.rev = storedRev + 1;
 
       const cmds = [];
-      if (prevRaw && (prev?.savedAt || "").slice(0, 10) !== (body?.savedAt || "").slice(0, 10)) {
+      if (prevRaw && (prev?.savedAt || "").slice(0, 10) !== (toStore?.savedAt || "").slice(0, 10)) {
         // 快照里剥掉 analysisHistory 的 _fullData（整份分析正文，占 blob 绝大部分体积，
         // 且服务端另有 30 天缓存可重建），只留回滚真正需要的持仓/交易记录。
         const lean = { ...prev };
@@ -222,12 +242,12 @@ export default async function handler(req, res) {
                   ["LTRIM", snapKey, 0, SNAP_KEEP - 1],
                   ["EXPIRE", snapKey, SNAP_TTL]);
       }
-      cmds.push(["SET", redisKey, JSON.stringify(body)],
+      cmds.push(["SET", redisKey, JSON.stringify(toStore)],
                 ["EXPIRE", redisKey, 31536000],   // 1 year TTL
                 [hasPending ? "SADD" : "SREM", "trendo:order_keys", syncKey]);
       const results = await redis(cmds);
       const ok = results[results.length - 3]?.result === "OK";
-      return res.status(ok ? 200 : 500).json({ ok });
+      return res.status(ok ? 200 : 500).json({ ok, rev: toStore.rev });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }

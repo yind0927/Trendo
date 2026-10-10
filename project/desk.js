@@ -1377,11 +1377,20 @@ function rsAdjustGrade(grade, rsResult) {
   // 启动同步是否已经落定；以及落定之后有没有发生过「真改动」（用户编辑、成交、结算…）。
   // 只有这种改动才有资格在被服务端 409 拒收后强推——派生写入（saveDerived）不算。
   let _syncSettled = false, _dirtySinceSync = false, _forcingPush = false;
+  let _demoMode = false;   // 进过演示模式之后，这个会话一律不再向云端写入
 
   // savedAt 是跨设备比较的唯一依据，可它取自各设备自己的墙上时钟。只要有一台设备时钟
   // 偏慢，它的改动就永远「看起来更旧」、永远推不上去（服务端按旧快照 409 拒收）。这里
   // 维护一个只增不减的偏移：每看到比本机「现在」更新的云端时间戳，就把差额记下来，此后
   // 本机生成的时间戳一律加上它——等价于一个会追平的逻辑时钟。
+  // 云端版本号（服务端维护的单调整数）。**它才是冲突判定的依据**，不是 savedAt——
+  // savedAt 取自各设备自己的墙上时钟，而且纯拉取也会刷新它，于是一台只是打开过 app、
+  // 内容还是旧的平板（时钟偏快）会显得「更新」，旧快照就能合法盖掉另一台刚写进来的
+  // 记录。实测复现过：电脑上新增的期权记录，平板打开后从云端消失。
+  const REV_KEY = "trendo_v4_rev";
+  const localRev  = () => +(localStorage.getItem(REV_KEY) || 0) || 0;
+  const setRev    = r => { if (Number.isFinite(+r)) { try { localStorage.setItem(REV_KEY, String(+r)); } catch (_) {} } };
+
   const CLOCK_SKEW_KEY = "trendo_v4_clock_skew";
   const _skew = () => +(localStorage.getItem(CLOCK_SKEW_KEY) || 0) || 0;
   function nowStamp() { return new Date(Date.now() + _skew()).toISOString(); }
@@ -1399,7 +1408,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   async function syncPush() {
-    if (!syncKey) return;
+    if (!syncKey || _demoMode) return;
     // Reuse the exact savedAt written by saveLocalOnly — generating a fresh timestamp
     // here made the cloud copy permanently ~2s "newer" than local, so every
     // visibilitychange pull-if-newer re-applied identical cloud data and blanked the
@@ -1413,7 +1422,10 @@ function rsAdjustGrade(grade, rsResult) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      if (r.ok) { lastSyncAt = new Date(); _dirtySinceSync = false; renderSyncStatus(); return; }
+      if (r.ok) {
+        try { setRev((await r.json())?.rev); } catch (_) {}
+        lastSyncAt = new Date(); _dirtySinceSync = false; renderSyncStatus(); return;
+      }
       // 409 = 服务端挡下了一次「旧快照覆盖新快照」。两种情形要分开处理，判据是
       // `_dirtySinceSync`——本次启动同步**完成之后**有没有真改动（派生写入走 saveDerived，
       // 不置这个标志）：
@@ -1426,18 +1438,29 @@ function rsAdjustGrade(grade, rsResult) {
         let cloudAt = null;
         try { cloudAt = (await r.json())?.cloudSavedAt || null; } catch (_) {}
         noteCloudStamp(cloudAt);   // 本机时钟偏慢时，让之后的推送不再被一直拒
+        const cloud = await syncPull(syncKey);
+        if (!cloud) { renderSyncStatus("error"); return; }
         if (_dirtySinceSync && !_forcingPush) {
-          saveLocalOnly();         // 用追平后的时钟重盖 savedAt，必然高于云端
+          // 有真改动：**不能只是接受云端**（那就把用户刚敲进去的东西丢了），也不能强推
+          // 覆盖（那就把另一台的改动丢了）。先把本地独有的记录快照下来，套用云端版本，
+          // 再把这些记录并回去——两边都保住，然后基于新的 rev 重推一次。
+          const mine = _localOnlySnapshot();
+          applyCloudData(cloud);
+          const merged = _mergeLocalOnly(mine);
+          // 重画失败不能影响合并与重推——这条路径可能在任意页面上触发，容器未必在
+          if (merged) {
+            saveLocalOnly();
+            try { renderOptions(); } catch (_) {}
+            try { renderTable(); renderOverview(); } catch (_) {}
+          }
           _forcingPush = true;
           try { await syncPush(); } finally { _forcingPush = false; }
+          if (merged) toast("已与另一台设备的改动合并", "ok");
           return;
         }
-        const cloud = await syncPull(syncKey);
-        if (cloud) {
-          applyCloudData(cloud);
-          lastSyncAt = new Date();
-          toast("云端有更新的记录（来自另一台设备），已载入云端版本", "warn");
-        }
+        applyCloudData(cloud);
+        lastSyncAt = new Date();
+        toast("云端有更新的记录（来自另一台设备），已载入云端版本", "warn");
         renderSyncStatus();
         return;
       }
@@ -1472,8 +1495,43 @@ function rsAdjustGrade(grade, rsResult) {
       modelPicks: MODEL_PICKS,
       cycleCheck: CYCLE_CHECK,
       analysisHistory: histForSync,
-      savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString()
+      savedAt: localStorage.getItem("trendo_v4_savedAt") || new Date().toISOString(),
+      _baseRev: localRev()      // 服务端据此判断「这份内容是不是基于当前云端版本改的」
     };
+  }
+
+  // ── 409 冲突时的「两边都保住」合并 ──────────────────────────────────────────
+  // 只合并**按 id/复合键可判重、且语义上是追加**的集合：期权、真实持仓、已平仓、自选、
+  // 模型选股。这些集合里一条记录要么存在要么不存在，取并集不会算错数；而 notional、
+  // 周期清单这类**单值字段**没有「合并」的正确答案，仍由云端那份说了算（谁后改谁赢）。
+  // 删除靠墓碑表达终态，所以并集不会把刚删掉的记录救回来。
+  function _localOnlySnapshot() {
+    return {
+      realOptions: REAL_OPTIONS.map(o => ({ ...o })),
+      holdings:    HOLDINGS.map(h => ({ ...h })),
+      closed:      CLOSED_POSITIONS.map(h => ({ ...h })),
+      watchlist:   WATCHLIST.map(w => ({ ...w })),
+      modelPicks:  MODEL_PICKS.map(m => ({ ...m })),
+    };
+  }
+  function _mergeLocalOnly(snap) {
+    if (!snap) return false;
+    let merged = false;
+    const add = (arr, mineArr, keyOf, tombType) => {
+      const have = new Set(arr.map(keyOf));
+      mineArr.forEach(x => {
+        const k = keyOf(x);
+        if (!k || have.has(k)) return;
+        if (tombType && tombHas(tombType, k)) return;   // 本地删除是终态
+        arr.push(x); have.add(k); merged = true;
+      });
+    };
+    add(REAL_OPTIONS,      snap.realOptions, o => o.id, "p");
+    add(HOLDINGS,          snap.holdings,    h => tradeIdOf(h));
+    add(CLOSED_POSITIONS,  snap.closed,      h => `${tradeIdOf(h)}|${h.closedAt || ""}`);
+    add(WATCHLIST,         snap.watchlist,   w => w.sym);
+    add(MODEL_PICKS,       snap.modelPicks,  m => m.id);
+    return merged;
   }
 
   async function syncPull(key) {
@@ -1483,6 +1541,15 @@ function rsAdjustGrade(grade, rsResult) {
       const { data } = await r.json();
       return data;
     } catch (_) { return null; }
+  }
+
+  // 拉下来的那份内容对应的云端版本与时间戳，一并落盘：
+  // **纯拉取绝不能把 savedAt 推到「现在」**——那会让一台只是打开过 app 的设备显得比
+  // 真正做了修改的那台更新。落盘的是「我这份内容基于云端的哪个版本」。
+  function adoptCloudVersion(data) {
+    if (!data) return;
+    setRev(data.rev);
+    if (data.savedAt) { try { localStorage.setItem("trendo_v4_savedAt", data.savedAt); } catch (_) {} }
   }
 
   async function syncOnStartup() {
@@ -1516,14 +1583,23 @@ function rsAdjustGrade(grade, rsResult) {
     const localTime    = localSavedAt      ? new Date(localSavedAt).getTime()      : 0;
     noteCloudStamp(cloudData.savedAt);   // 本机时钟偏慢时，让之后的改动还能推得上去
 
-    // Pull if cloud is strictly newer, OR if local has nothing at all
-    if (cloudTime > localTime || (localTotal === 0 && cloudTime > 0)) {
+    // 判定优先用 **rev**（服务端单调版本号），与设备时钟无关：
+    //   云端 rev > 本地 rev → 云端有我这份内容里没有的改动 → 拉
+    //   两者相等            → 同一个基版本，本地若有未推送的改动才需要推
+    //   云端没有 rev（老 blob）→ 退回按 savedAt 比较
+    const cRev = Number.isFinite(+cloudData.rev) ? +cloudData.rev : null;
+    const lRev = localRev();
+    const cloudAhead = cRev != null ? cRev > lRev : cloudTime > localTime;
+    const sameBase   = cRev != null ? cRev === lRev : (cloudTime === localTime && cloudTime > 0);
+
+    // Pull if cloud is ahead of our base, OR if local has nothing at all
+    if (cloudAhead || (localTotal === 0 && cloudTime > 0)) {
       applyCloudData(cloudData);
       lastSyncAt = new Date();
       renderSyncStatus();
-    } else if (cloudTime === localTime && cloudTime > 0) {
-      // Same snapshot on both sides (savedAt travels with the data) — nothing to do.
-      // This runs on every visibilitychange, so avoid a pointless POST per tab switch.
+    } else if (sameBase && !_dirtySinceSync) {
+      // 同一个基版本、本地也没有未推送的真改动 —— 什么都不用做。
+      // 这条路每次 visibilitychange 都会走到，不该为它发一次无意义的 POST。
       lastSyncAt = new Date();
       renderSyncStatus();
     } else {
@@ -1612,6 +1688,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function _showDemoBanner() {
+    _demoMode = true;   // 演示数据绝不能被推上用户真实的云端 blob
     if (document.getElementById("demo-banner")) return;
     const el = document.createElement("div");
     el.id = "demo-banner";
@@ -1711,7 +1788,8 @@ function rsAdjustGrade(grade, rsResult) {
       SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending.filter(p => !tombHas("o", p.id)));
     if (Array.isArray(data.simClosePending))
       SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending.filter(p => !tombHas("o", p.id)));
-    if (Array.isArray(data.realOptions))     REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions);
+    if (Array.isArray(data.realOptions))
+      REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions.filter(o => !tombHas("p", o.id)));
     if (Array.isArray(data.modelPicks))      MODEL_PICKS.splice(0, MODEL_PICKS.length, ...data.modelPicks);
     if (data.cycleCheck && typeof data.cycleCheck === "object") {
       CYCLE_CHECK.items = data.cycleCheck.items || {};
@@ -1769,6 +1847,7 @@ function rsAdjustGrade(grade, rsResult) {
     migrateTradeIds();
     // Persist locally then re-render
     saveLocalOnly();
+    adoptCloudVersion(data);   // 纯拉取不推高 savedAt；记下这份内容基于的云端 rev
     renderOverview(); renderTable(); renderTape();
     // Cloud sync replaces HOLDINGS/SIM_HOLDINGS wholesale, so the calendar must re-render
     // (it previously only ever rendered once at init, from whatever localStorage held at
@@ -9097,7 +9176,8 @@ function rsAdjustGrade(grade, rsResult) {
     }));
     $$("[data-opt-del]", root).forEach(btn => btn.addEventListener("click", () => {
       const idx = arr.findIndex(p => p.id === btn.dataset.optDel);
-      if (idx !== -1) { arr.splice(idx, 1); saveToStorage(); renderOptions(); }
+      // 立墓碑：否则 409 合并或整块覆盖会把刚删的这笔从云端副本里救回来
+      if (idx !== -1) { tombAdd("p", arr[idx].id); arr.splice(idx, 1); saveToStorage(); renderOptions(); }
     }));
     $$("[data-opt-fill]", root).forEach(btn => btn.addEventListener("click", () => {
       const pos = arr.find(p => p.id === btn.dataset.optFill);
@@ -9112,7 +9192,7 @@ function rsAdjustGrade(grade, rsResult) {
       if (!pos) return;
       if (!confirm(`确认取消预设单 ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"}？`)) return;
       const idx = arr.findIndex(p => p.id === pos.id);
-      if (idx >= 0) { arr.splice(idx, 1); saveToStorage(); renderOptions(); }
+      if (idx >= 0) { tombAdd("p", pos.id); arr.splice(idx, 1); saveToStorage(); renderOptions(); }
     }));
   }
   // Legacy alias

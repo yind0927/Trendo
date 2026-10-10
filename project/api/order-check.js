@@ -166,14 +166,24 @@ async function processKey(syncKey, redis, fhKey, pgKey) {
 
   if (!fills) return 0;
 
-  data.simHoldings      = simHoldings;
-  data.simClosed        = simClosed;
-  data.simPending       = pendingOpen;
-  data.simClosePending  = pendingClose;
-  data.savedAt          = new Date().toISOString();
+  // **只写模拟仓那四个字段，而且要写在「重新读一次」拿到的最新 blob 上。**
+  // 此前是把函数开头读到的那份 `data` 整块写回去——期间若有设备推了新内容（例如在电脑
+  // 上新增了一笔期权记录），这次写回就会用几十秒前的旧副本把它整块盖掉，而且这条路径
+  // 绕过了 `api/data.js` 的 POST 闸门、还把 savedAt 刷成「现在」，于是所有设备接着都会
+  // 拉到这份被削掉的 blob。实测复现过：期权记录在别的设备上凭空消失。
+  const [{ result: freshRaw }] = await redis([["GET", redisKey]]);
+  let out = data;
+  try { const fresh = freshRaw ? JSON.parse(freshRaw) : null; if (fresh) out = fresh; } catch (_) {}
+  out.simHoldings      = simHoldings;
+  out.simClosed        = simClosed;
+  out.simPending       = pendingOpen;
+  out.simClosePending  = pendingClose;
+  out.savedAt          = new Date().toISOString();
+  // rev 必须递增：客户端靠它判断「云端有我没有的改动」，不动它的话成交结果拉不下去。
+  out.rev              = (Number.isFinite(out.rev) ? out.rev : 0) + 1;
 
   const cmds = [
-    ["SET", redisKey, JSON.stringify(data)],
+    ["SET", redisKey, JSON.stringify(out)],
     ["EXPIRE", redisKey, 31536000],
   ];
   if (!pendingOpen.length && !pendingClose.length)
