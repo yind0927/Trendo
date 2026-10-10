@@ -1368,6 +1368,29 @@ function rsAdjustGrade(grade, rsResult) {
   let syncKey    = localStorage.getItem("trendo_sync_key") || "";
   let syncTimer  = null;
   let lastSyncAt = null;
+  // 本次打开时、在任何本地写入之前冻结下来的 savedAt。启动过程里有一堆**派生写入**
+  // （财报日期回填、历史最高价、_tid 补号、期权到期自愈…）会把 trendo_v4_savedAt 推到
+  // 「现在」，而 syncOnStartup 原来是在 await 之后才去读这个值的——于是几天没开的电脑
+  // 一上来就被判成「本地较新」，把几天前的旧快照整块推上云端，手机端这几天的记录全被
+  // 覆盖。判定一律用这个基准值，它早于所有写入。
+  let _syncBaseAt = null;
+  // 启动同步是否已经落定；以及落定之后有没有发生过「真改动」（用户编辑、成交、结算…）。
+  // 只有这种改动才有资格在被服务端 409 拒收后强推——派生写入（saveDerived）不算。
+  let _syncSettled = false, _dirtySinceSync = false, _forcingPush = false;
+
+  // savedAt 是跨设备比较的唯一依据，可它取自各设备自己的墙上时钟。只要有一台设备时钟
+  // 偏慢，它的改动就永远「看起来更旧」、永远推不上去（服务端按旧快照 409 拒收）。这里
+  // 维护一个只增不减的偏移：每看到比本机「现在」更新的云端时间戳，就把差额记下来，此后
+  // 本机生成的时间戳一律加上它——等价于一个会追平的逻辑时钟。
+  const CLOCK_SKEW_KEY = "trendo_v4_clock_skew";
+  const _skew = () => +(localStorage.getItem(CLOCK_SKEW_KEY) || 0) || 0;
+  function nowStamp() { return new Date(Date.now() + _skew()).toISOString(); }
+  function noteCloudStamp(iso) {
+    const t = iso ? new Date(iso).getTime() : 0;
+    if (!t) return;
+    const need = t + 1000 - Date.now();   // 比云端再快 1 秒，保证下一次真改动能赢
+    if (need > _skew()) { try { localStorage.setItem(CLOCK_SKEW_KEY, String(need)); } catch (_) {} }
+  }
 
   function generateSyncKey() {
     const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -1390,8 +1413,35 @@ function rsAdjustGrade(grade, rsResult) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      if (r.ok) { lastSyncAt = new Date(); renderSyncStatus(); }
-      else       { renderSyncStatus("error"); }
+      if (r.ok) { lastSyncAt = new Date(); _dirtySinceSync = false; renderSyncStatus(); return; }
+      // 409 = 服务端挡下了一次「旧快照覆盖新快照」。两种情形要分开处理，判据是
+      // `_dirtySinceSync`——本次启动同步**完成之后**有没有真改动（派生写入走 saveDerived，
+      // 不置这个标志）：
+      //   · 没有真改动 → 这台设备手里就是一份过期副本（典型：几天没开的电脑），正确的
+      //     反应是把云端拉下来，而不是重试、更不是强推。
+      //   · 有真改动 → 本地内容 = 启动时对齐过的云端内容 + 用户刚做的改动，这时被拒多半
+      //     是时钟偏慢或撞上后台成交 worker 刚写过一笔。强推之前先把时间戳抬到云端之上，
+      //     不然用户刚敲进去的东西会被静默丢掉。
+      if (r.status === 409) {
+        let cloudAt = null;
+        try { cloudAt = (await r.json())?.cloudSavedAt || null; } catch (_) {}
+        noteCloudStamp(cloudAt);   // 本机时钟偏慢时，让之后的推送不再被一直拒
+        if (_dirtySinceSync && !_forcingPush) {
+          saveLocalOnly();         // 用追平后的时钟重盖 savedAt，必然高于云端
+          _forcingPush = true;
+          try { await syncPush(); } finally { _forcingPush = false; }
+          return;
+        }
+        const cloud = await syncPull(syncKey);
+        if (cloud) {
+          applyCloudData(cloud);
+          lastSyncAt = new Date();
+          toast("云端有更新的记录（来自另一台设备），已载入云端版本", "warn");
+        }
+        renderSyncStatus();
+        return;
+      }
+      renderSyncStatus("error");
     } catch (_) { renderSyncStatus("error"); }
   }
 
@@ -1438,6 +1488,13 @@ function rsAdjustGrade(grade, rsResult) {
   async function syncOnStartup() {
     if (!syncKey) return;
     renderSyncStatus(); // show "connecting"
+    // 基准必须在网络往返**之前**取定。这一趟往返期间，启动时的派生写入随时可能把
+    // trendo_v4_savedAt 推到「现在」；原来在 await 之后才读，于是一台几天没开的电脑
+    // 一打开就被判成「本地较新」，把旧快照整块推上云端。首次启动用 loadFromStorage
+    // 冻结的那个值（连 loadFromStorage 自己的 _tid 补号都发生在它之后），之后的
+    // visibilitychange 复查才读实时值。
+    const baseAt = _syncBaseAt ?? localStorage.getItem("trendo_v4_savedAt");
+    _syncBaseAt  = null;
     const cloudData = await syncPull(syncKey);
 
     if (!cloudData) {
@@ -1446,7 +1503,7 @@ function rsAdjustGrade(grade, rsResult) {
       return;
     }
 
-    const localSavedAt = localStorage.getItem("trendo_v4_savedAt");
+    const localSavedAt = baseAt;
     // 「这台设备本地是不是真的什么都没有」。**凡是会被 applyCloudData 整块替换的集合，
     // 都必须数进来**——此前这里只数股票相关的五个数组，于是「只记了期权、没有任何股票
     // 持仓」的用户永远满足 localTotal === 0，于是下面那条 `localTotal === 0` 的兜底分支
@@ -1457,6 +1514,7 @@ function rsAdjustGrade(grade, rsResult) {
                        + WATCHLIST.length + REAL_OPTIONS.length;
     const cloudTime    = cloudData.savedAt ? new Date(cloudData.savedAt).getTime() : 0;
     const localTime    = localSavedAt      ? new Date(localSavedAt).getTime()      : 0;
+    noteCloudStamp(cloudData.savedAt);   // 本机时钟偏慢时，让之后的改动还能推得上去
 
     // Pull if cloud is strictly newer, OR if local has nothing at all
     if (cloudTime > localTime || (localTotal === 0 && cloudTime > 0)) {
@@ -1802,19 +1860,36 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_analysis_hist", JSON.stringify(analysisHistory));
       // Skip timestamp update for price-only ticks so they don't make local appear "newer"
       // than cloud (which would cause syncPush to overwrite cloud SIM_HOLDINGS from another device)
-      if (updateTimestamp) localStorage.setItem("trendo_v4_savedAt", new Date().toISOString());
+      if (updateTimestamp) localStorage.setItem("trendo_v4_savedAt", nowStamp());
     } catch (e) { /* storage unavailable */ }
   }
 
   function saveToStorage() {
     saveLocalOnly();
+    if (_syncSettled) _dirtySinceSync = true;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncPush, 2000);
     // Clear hist cache so new/closed positions get fresh history on next analytics visit
     histCache = {}; histPnlLog = {};
   }
 
+  // 派生写入专用：落盘但**不动 savedAt**。财报日期、历史最高价、_tid 补号这类东西都是
+  // 从已有数据和公开行情推出来的，每台设备自己都会算一遍，不该被当作「这台设备有更新的
+  // 记录」。它们原来走 saveToStorage，于是每次冷启动都把 savedAt 推到「现在」——这正是
+  // 「电脑端打开后手机端这几天的更新被覆盖」的根因：时间戳一被推高，启动同步就判成本地
+  // 较新，转而去覆盖云端。推送照样安排（别的设备也用得上），但载荷带的是原来那个时间戳，
+  // 服务端按「相等」接收，不会把谁的版本挤掉。
+  function saveDerived() {
+    saveLocalOnly(false);
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncPush, 2000);
+    histCache = {}; histPnlLog = {};
+  }
+
   function loadFromStorage() {
+    // 在这之后的任何写入（下面的 _tid 补号、启动时的财报/最高价回填…）都可能推高
+    // savedAt，所以先把本次打开的对照基准冻结下来，交给 syncOnStartup 判定用。
+    _syncBaseAt = localStorage.getItem("trendo_v4_savedAt") || "1970-01-01T00:00:00.000Z";
     try {
       const h  = localStorage.getItem("trendo_v4_holdings");
       const c  = localStorage.getItem("trendo_v4_closed");
@@ -1893,7 +1968,7 @@ function rsAdjustGrade(grade, rsResult) {
     // Freeze identity before anything groups these arrays, and persist it right away
     // (same pattern as _optMigrate) so the id travels with cloud sync immediately rather
     // than waiting for some unrelated save. Idempotent: it only writes the first time.
-    if (migrateTradeIds()) saveLocalOnly();
+    if (migrateTradeIds()) saveLocalOnly(false);   // 纯派生身份，别推高 savedAt
   }
 
   // ============ TRADING DAYS CALCULATOR ============
@@ -3516,7 +3591,7 @@ function rsAdjustGrade(grade, rsResult) {
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (_) {}
 
     if (changed) {
-      saveToStorage();
+      saveDerived();   // 财报日期是回填来的派生字段，不能当作「这台设备更新」
       renderTable();
       renderSimTable();
       renderEvents();
@@ -3590,7 +3665,7 @@ function rsAdjustGrade(grade, rsResult) {
     });
 
     if (changed) {
-      saveToStorage();
+      saveDerived();   // 历史最高价是按日线重算出来的派生字段，不动 savedAt
       renderTable();
       renderSimTable();
     }
@@ -7637,7 +7712,7 @@ function rsAdjustGrade(grade, rsResult) {
         repaired = true;
       }
     });
-    if (repaired) saveToStorage();
+    if (repaired) saveDerived();   // 按当前规则重算出来的派生值，不动 savedAt
   }
 
   function _optIntrinsic(pos, spot) {
@@ -18094,6 +18169,13 @@ function rsAdjustGrade(grade, rsResult) {
           <button class="sp-action" id="sp-apply">载入</button>
         </div>
       </div>
+      ${syncKey ? `<div class="sp-sep"></div>
+      <div class="sp-section">
+        <div class="sp-label">云端历史快照</div>
+        <div class="sp-hint" style="margin-bottom:8px">每天第一次写入前自动留档，保留最近 10 份。若某台设备曾用旧记录覆盖云端，可从这里回滚。</div>
+        <button class="sp-action" id="sp-snaps">查看历史快照</button>
+        <div id="sp-snap-list"></div>
+      </div>` : ""}
       <div class="sp-sep"></div>
       <div class="sp-section">
         <div class="sp-label">平台演示</div>
@@ -18170,6 +18252,45 @@ function rsAdjustGrade(grade, rsResult) {
         btn.textContent = "未找到数据"; btn.disabled = false;
         setTimeout(() => { btn.textContent = "载入"; btn.disabled = false; }, 2000);
       }
+    });
+
+    // 历史快照：列目录 → 选一份 → 回滚。回滚走 saveToStorage，savedAt 推到现在，
+    // 所以这份被恢复的内容会成为云端最新版本，其他设备下次打开就会拉到它。
+    document.getElementById("sp-snaps")?.addEventListener("click", async () => {
+      const btn  = document.getElementById("sp-snaps");
+      const list = document.getElementById("sp-snap-list");
+      if (!btn || !list) return;
+      btn.textContent = "读取中…"; btn.disabled = true;
+      let snaps = null;
+      try {
+        const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}&snaps=1`);
+        if (r.ok) snaps = (await r.json())?.snaps || [];
+      } catch (_) {}
+      btn.disabled = false;
+      if (!snaps) { btn.textContent = "读取失败，请重试"; return; }
+      btn.textContent = "刷新列表";
+      if (!snaps.length) { list.innerHTML = `<div class="sp-hint">暂无历史快照（每天第一次写入后才会产生）</div>`; return; }
+      list.innerHTML = snaps.map(s => {
+        const t = s.savedAt ? s.savedAt.slice(0, 16).replace("T", " ") + " UTC" : "时间未知";
+        const c = s.counts;
+        const meta = c ? `持仓 ${c.holdings} · 已平仓 ${c.closed} · 模拟 ${c.simHoldings} · 期权 ${c.realOptions}` : "内容无法解析";
+        return `<div class="sp-snap-row"><div class="sp-snap-meta"><b>${t}</b><span>${meta}</span></div>
+                <button class="sp-action sp-snap-use" data-i="${s.i}">恢复</button></div>`;
+      }).join("");
+      list.querySelectorAll(".sp-snap-use").forEach(b => b.addEventListener("click", async () => {
+        if (!confirm("用这份快照替换当前所有记录？当前内容会被覆盖（它自己也已留档在列表里）。")) return;
+        b.textContent = "恢复中…"; b.disabled = true;
+        let data = null;
+        try {
+          const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}&snap=${b.dataset.i}`);
+          if (r.ok) data = (await r.json())?.data || null;
+        } catch (_) {}
+        if (!data) { b.textContent = "失败"; b.disabled = false; return; }
+        applyCloudData(data);
+        saveToStorage();          // 推高 savedAt，让这份恢复的内容成为云端最新版本
+        document.getElementById("sync-panel")?.classList.remove("open");
+        toast("已恢复该快照，并同步到云端", "ok");
+      }));
     });
 
     document.getElementById("sp-demo")?.addEventListener("click", async () => {
@@ -18384,15 +18505,17 @@ function rsAdjustGrade(grade, rsResult) {
     _restoreHistCache(analysisHistory);
     const upgraded = upgradeAnalysisHistory();
     if (changed || upgraded) {
-      saveToStorage(); // bumps savedAt + schedules syncPush → other devices pull the full content
+      // 派生写入：从本地缓存回填的分析正文、按当前规则重算的评分。照样推给其他设备，
+      // 但不推高 savedAt、也不算「这台设备有真改动」。
+      saveDerived();
       if (currentPage === "inspirations" && inspSubTab === "watchlist") renderAnalysisHistory();
     }
   }
   // Sync strategy: last-write-wins based on savedAt timestamp.
   // On startup: fetch cloud, compare timestamps, pull if cloud is newer else push.
   // This ensures cross-device changes (e.g. desktop → mobile) propagate automatically.
-  if (syncKey) syncOnStartup().finally(backfillAnalysisFullData);
-  else backfillAnalysisFullData();
+  if (syncKey) syncOnStartup().finally(() => { _syncSettled = true; backfillAnalysisFullData(); });
+  else { _syncSettled = true; backfillAnalysisFullData(); }
   // Re-pull when the tab regains focus: the background order worker
   // (api/order-check.js) may have filled sim pending orders while this tab was
   // throttled/asleep. Pull-if-newer prevents a stale local push from

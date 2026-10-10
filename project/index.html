@@ -1165,6 +1165,15 @@
   .sp-key-edit-input { flex: 1; min-width: 0; }
   .sp-hint { font-size: 10.5px; color: var(--fg-3); margin-top: 6px; }
   .sp-sep { height: 1px; background: var(--line); margin: 12px 0; }
+  #sp-snap-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .sp-snap-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-2); border-radius: 8px; padding: 7px 9px;
+  }
+  .sp-snap-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .sp-snap-meta b { font-family: var(--f-mono); font-size: 11px; color: var(--fg-1); }
+  .sp-snap-meta span { font-size: 10px; color: var(--fg-3); }
+  .sp-snap-use { flex: none; }
   .sp-input-row { display: flex; gap: 6px; }
   .sp-input {
     flex: 1; background: var(--bg-2); border: 1px solid var(--line);
@@ -6725,8 +6734,8 @@
   </div>
 </div>
 
-<script src="data.js?v=836"></script>
-<script src="desk.js?v=836"></script>
+<script src="data.js?v=837"></script>
+<script src="desk.js?v=837"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

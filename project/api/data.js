@@ -1,6 +1,11 @@
 // Vercel serverless function — cross-device sync via Upstash Redis
-// GET  /api/data?key=xxxx  → { data: { holdings, closed, ... } | null }
-// POST /api/data?key=xxxx  → { ok: true }  (body = data payload)
+// GET  /api/data?key=xxxx          → { data: { holdings, closed, ... } | null }
+// GET  /api/data?key=xxxx&snaps=1  → { snaps: [{ i, savedAt, counts }] }  每日快照目录
+// GET  /api/data?key=xxxx&snap=N   → { data: <第 N 个快照> }
+// POST /api/data?key=xxxx          → { ok: true }  (body = data payload)
+//      若 body.savedAt 比云端现有快照更旧 → 409 { stale:true, cloudSavedAt }，**不写入**。
+//      这是防数据丢失的最后一道闸：客户端任何一条路径上的「旧快照整块覆盖」都会在这里
+//      被拦下，而不是等到用户发现手机端这几天的记录没了。
 
 // Demo key: read-only, returns hardcoded example data, writes are silently dropped.
 const DEMO_KEY = "trendo-demo-2026";
@@ -147,15 +152,38 @@ export default async function handler(req, res) {
   }
 
   const redisKey = `trendo:${syncKey}`;
+  const snapKey  = `trendo:snap:${syncKey}`;
   const headers  = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const redis    = async cmds => {
+    const r = await fetch(`${url}/pipeline`, { method: "POST", headers, body: JSON.stringify(cmds) });
+    return r.json();
+  };
+  const SNAP_KEEP = 10;          // 保留最近 10 个（按天去重，≈最近 10 天）
+  const SNAP_TTL  = 90 * 86400;  // 90 天后整串过期
 
   if (req.method === "GET") {
     try {
-      const r = await fetch(`${url}/pipeline`, {
-        method: "POST", headers,
-        body: JSON.stringify([["GET", redisKey]])
-      });
-      const [{ result }] = await r.json();
+      // 快照目录：只回元信息（时间戳 + 各数组条数），避免把 10 份完整 blob 一次吐出来。
+      if (req.query.snaps) {
+        const [{ result }] = await redis([["LRANGE", snapKey, 0, SNAP_KEEP - 1]]);
+        const snaps = (result || []).map((s, i) => {
+          try {
+            const d = JSON.parse(s);
+            const n = a => (Array.isArray(d[a]) ? d[a].length : 0);
+            return { i, savedAt: d.savedAt || null, counts: {
+              holdings: n("holdings"), closed: n("closed"), simHoldings: n("simHoldings"),
+              simClosed: n("simClosed"), watchlist: n("watchlist"), realOptions: n("realOptions") } };
+          } catch (_) { return { i, savedAt: null, counts: null }; }
+        });
+        return res.status(200).json({ snaps });
+      }
+      if (req.query.snap != null) {
+        const idx = parseInt(req.query.snap, 10);
+        if (!(idx >= 0 && idx < SNAP_KEEP)) return res.status(400).json({ error: "Bad snapshot index" });
+        const [{ result }] = await redis([["LINDEX", snapKey, idx]]);
+        return res.status(200).json({ data: result ? JSON.parse(result) : null });
+      }
+      const [{ result }] = await redis([["GET", redisKey]]);
       return res.status(200).json({ data: result ? JSON.parse(result) : null });
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -171,16 +199,34 @@ export default async function handler(req, res) {
       const hasPending =
         (Array.isArray(body.simPending)      && body.simPending.length      > 0) ||
         (Array.isArray(body.simClosePending) && body.simClosePending.length > 0);
-      const r = await fetch(`${url}/pipeline`, {
-        method: "POST", headers,
-        body: JSON.stringify([
-          ["SET", redisKey, JSON.stringify(body)],
-          ["EXPIRE", redisKey, 31536000],   // 1 year TTL
-          [hasPending ? "SADD" : "SREM", "trendo:order_keys", syncKey]
-        ])
-      });
-      const results = await r.json();
-      const ok = results[0]?.result === "OK";
+
+      // 先读现有快照：①比它更旧的推送一律拒收（整块覆盖 = 不可逆的数据丢失，宁可让这
+      // 台设备先把云端拉下来）；②跨天的第一次写入前，把旧快照留一份进历史，供用户回滚。
+      const [{ result: prevRaw }] = await redis([["GET", redisKey]]);
+      let prev = null;
+      try { prev = prevRaw ? JSON.parse(prevRaw) : null; } catch (_) {}
+      const prevAt = prev?.savedAt ? new Date(prev.savedAt).getTime() : 0;
+      const bodyAt = body?.savedAt ? new Date(body.savedAt).getTime() : 0;
+      if (prevAt && bodyAt && bodyAt < prevAt) {
+        return res.status(409).json({ stale: true, cloudSavedAt: prev.savedAt });
+      }
+
+      const cmds = [];
+      if (prevRaw && (prev?.savedAt || "").slice(0, 10) !== (body?.savedAt || "").slice(0, 10)) {
+        // 快照里剥掉 analysisHistory 的 _fullData（整份分析正文，占 blob 绝大部分体积，
+        // 且服务端另有 30 天缓存可重建），只留回滚真正需要的持仓/交易记录。
+        const lean = { ...prev };
+        if (Array.isArray(lean.analysisHistory))
+          lean.analysisHistory = lean.analysisHistory.map(e => { const c = { ...e }; delete c._fullData; return c; });
+        cmds.push(["LPUSH", snapKey, JSON.stringify(lean)],
+                  ["LTRIM", snapKey, 0, SNAP_KEEP - 1],
+                  ["EXPIRE", snapKey, SNAP_TTL]);
+      }
+      cmds.push(["SET", redisKey, JSON.stringify(body)],
+                ["EXPIRE", redisKey, 31536000],   // 1 year TTL
+                [hasPending ? "SADD" : "SREM", "trendo:order_keys", syncKey]);
+      const results = await redis(cmds);
+      const ok = results[results.length - 3]?.result === "OK";
       return res.status(ok ? 200 : 500).json({ ok });
     } catch (e) {
       return res.status(500).json({ error: e.message });
