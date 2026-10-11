@@ -1399,6 +1399,18 @@ function rsAdjustGrade(grade, rsResult) {
   const localRev  = () => +(localStorage.getItem(REV_KEY) || 0) || 0;
   const setRev    = r => { if (Number.isFinite(+r)) { try { localStorage.setItem(REV_KEY, String(+r)); } catch (_) {} } };
 
+  // 「本机有改动还没被云端确认过」——落盘的持久标志，与时钟、与 rev 都无关。
+  // `_dirtySinceSync` 只活在本次会话里，而数据丢失恰好发生在跨会话：改动推送失败
+  // （离线、或 pagehide 的 sendBeacon 读不到 409），期间另一台设备写了云端把 rev 推高，
+  // 下次打开就走「云端更新 → 整块覆盖」那条路，这笔只在本地的记录被直接抹掉（实测复现）。
+  // 置位：`saveToStorage()`（用户/成交产生的真改动；派生写入的 `saveDerived()` 不置）。
+  // 清除：**只在 fetch 推送拿到 200 时**——sendBeacon 读不到响应，乐观清除等于把这个
+  // 保险丝拔了；留着最多下次打开多发一次 POST（并集按 id 判重，幂等）。
+  const DIRTY_KEY = "trendo_v4_dirty";
+  const isDirty    = () => localStorage.getItem(DIRTY_KEY) === "1";
+  const markDirty  = () => { try { localStorage.setItem(DIRTY_KEY, "1"); } catch (_) {} };
+  const clearDirty = () => { try { localStorage.removeItem(DIRTY_KEY); } catch (_) {} };
+
   const CLOCK_SKEW_KEY = "trendo_v4_clock_skew";
   const _skew = () => +(localStorage.getItem(CLOCK_SKEW_KEY) || 0) || 0;
   function nowStamp() { return new Date(Date.now() + _skew()).toISOString(); }
@@ -1432,6 +1444,7 @@ function rsAdjustGrade(grade, rsResult) {
       });
       if (r.ok) {
         try { setRev((await r.json())?.rev); } catch (_) {}
+        clearDirty();            // 云端已确认收到，保险丝可以摘了
         lastSyncAt = new Date(); _dirtySinceSync = false; renderSyncStatus(); return;
       }
       // 409 = 服务端挡下了一次「旧快照覆盖新快照」。两种情形要分开处理，判据是
@@ -1602,7 +1615,22 @@ function rsAdjustGrade(grade, rsResult) {
 
     // Pull if cloud is ahead of our base, OR if local has nothing at all
     if (cloudAhead || (localTotal === 0 && cloudTime > 0)) {
+      // 云端更新 → 以云端为准。但**本机可能有从未推上去的改动**（离线记的、或 pagehide
+      // 的 beacon 被 409 拒收而读不到响应），整块覆盖会把它们直接抹掉——实测复现过：
+      // 本地独有的那笔期权在启动后从 localStorage 与内存里一起消失。
+      // 有未推送改动时走 409 那条已验证的路：快照本地独有的记录 → 套用云端 → 并回去 →
+      // 基于新 rev 重推。**顺序不能换**：`applyCloudData` 会先吸收云端的墓碑，所以在另一台
+      // 设备上删掉的记录不会被这台的旧副本救回来。
+      const mine = isDirty() ? _localOnlySnapshot() : null;
       applyCloudData(cloudData);
+      if (mine && _mergeLocalOnly(mine)) {
+        saveLocalOnly();
+        try { renderOptions(); } catch (_) {}
+        try { renderTable(); renderOverview(); } catch (_) {}
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(syncPush, 300);   // 把并回来的记录推上去
+        toast("本机有未同步的记录，已与云端版本合并", "ok");
+      }
       lastSyncAt = new Date();
       renderSyncStatus();
     } else if (sameBase && !_dirtySinceSync) {
@@ -1954,6 +1982,7 @@ function rsAdjustGrade(grade, rsResult) {
   function saveToStorage() {
     saveLocalOnly();
     if (_syncSettled) _dirtySinceSync = true;
+    markDirty();                 // 跨会话的「有未推送改动」标志，见 DIRTY_KEY
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncPush, 2000);
     // Clear hist cache so new/closed positions get fresh history on next analytics visit
