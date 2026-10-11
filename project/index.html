@@ -1489,13 +1489,29 @@
     -webkit-appearance: none; appearance: none;
     display: block; width: 100%; max-width: 100%; min-width: 0;
     box-sizing: border-box;
+    /* 空值的那一格不许比有值的矮：`appearance:none` 之后这个控件的高度来自内部
+       shadow DOM 的内容，而 iOS Safari 的空日期框里那层是空的（没有值、也没有
+       原生占位），于是内容盒塌成 0、整格比旁边填了日期的矮一截——「到期日」默认
+       为空、「开仓日期」默认今天，两格并排时一眼就能看出来。
+       这里用 em 而不是写死像素：行高与内部那层的最小高度都跟着字号走，手机端
+       16px 与桌面 14px 各自算出自己的高度，`.form-row input` 的上下内边距再加在
+       外面，所以空与满恒等高、改字号或内边距也不会错位。
+       1.375em 不是随手取的：这是日期控件在 normal 行高下内容盒的实测高度（16px 字号下
+       22px），所以这条只是个**地板**——有值时它本来就有这么高、什么都不改，空值塌下去时
+       才接住。刻意不设 `line-height`：那会连有值的那一格一起改矮。 */
   }
+  /* 第二道（内部那层真的不存在时也兜得住）：只给 `.form-row` 里的那些——它们的内边距
+     由 `.form-row input` 固定为 10px、边框 1px，所以这 22px 是算出来的、不是猜的；
+     `box-sizing:border-box` 下 min-height 量的是边框盒，必须把这两项加进来。
+     作用域刻意不放到全局：分享卡的分批录入（`.poster-leg`）用的是 `.form-input` 自己
+     的 7px 内边距，套上这个值会把那一排拔高 6px。 */
+  .form-row > input[type="date"].form-input { min-height: calc(1.375em + 22px); }
   input[type="date"].form-input::-webkit-date-and-time-value {
-    width: 100%; min-width: 0; margin: 0; text-align: left;
+    width: 100%; min-width: 0; min-height: 1.375em; margin: 0; text-align: left;
   }
   input[type="date"].form-input::-webkit-datetime-edit,
   input[type="date"].form-input::-webkit-datetime-edit-fields-wrapper {
-    padding: 0; min-width: 0;
+    padding: 0; min-width: 0; min-height: 1.375em;
   }
   body[data-theme="light"] input[type="date"] { color-scheme: light; }
 
@@ -6837,8 +6853,8 @@
   </div>
 </div>
 
-<script src="data.js?v=842"></script>
-<script src="desk.js?v=842"></script>
+<script src="data.js?v=843"></script>
+<script src="desk.js?v=843"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
