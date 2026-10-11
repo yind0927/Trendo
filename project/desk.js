@@ -1250,6 +1250,13 @@ function rsAdjustGrade(grade, rsResult) {
     SIM_TOMBSTONES.push({ t, k: String(k), at: new Date().toISOString() });
     tombPrune();
   }
+  // 重新建了一笔 key 相同的记录 → 把那条墓碑撤掉。否则「删掉再按同样的入场价重开」
+  // 会在下一次 409 合并时被墓碑当成"已删除"再抹一遍。
+  function tombDrop(t, k) {
+    if (!k) return;
+    for (let i = SIM_TOMBSTONES.length - 1; i >= 0; i--)
+      if (SIM_TOMBSTONES[i].t === t && SIM_TOMBSTONES[i].k === String(k)) SIM_TOMBSTONES.splice(i, 1);
+  }
   function tombPrune() {
     const cutoff = Date.now() - TOMB_DAYS * 86400000;
     for (let i = SIM_TOMBSTONES.length - 1; i >= 0; i--) {
@@ -1527,8 +1534,8 @@ function rsAdjustGrade(grade, rsResult) {
       });
     };
     add(REAL_OPTIONS,      snap.realOptions, o => o.id, "p");
-    add(HOLDINGS,          snap.holdings,    h => tradeIdOf(h));
-    add(CLOSED_POSITIONS,  snap.closed,      h => `${tradeIdOf(h)}|${h.closedAt || ""}`);
+    add(HOLDINGS,          snap.holdings,    h => tradeIdOf(h), "rh");
+    add(CLOSED_POSITIONS,  snap.closed,      h => `${tradeIdOf(h)}|${h.closedAt || ""}`, "rc");
     add(WATCHLIST,         snap.watchlist,   w => w.sym);
     add(MODEL_PICKS,       snap.modelPicks,  m => m.id);
     return merged;
@@ -4538,6 +4545,7 @@ function rsAdjustGrade(grade, rsResult) {
       };
 
       newPos._tid = newTradeId();
+      if (!isSim) tombDrop("rh", tradeIdOf(newPos));   // 重开同一笔 → 撤掉之前的删除墓碑
       targetHoldings.push(newPos);
       saveToStorage();
       form.reset();
@@ -4840,6 +4848,9 @@ function rsAdjustGrade(grade, rsResult) {
   function deletePosition(sym) {
     const idx = HOLDINGS.findIndex(h => h.sym === sym);
     if (idx === -1) return;
+    // 真实持仓的删除也立墓碑（"rh"）：否则 409 合并时，这台设备的旧副本会把另一台刚
+    // 删掉的那笔从云端版本里救回来——墓碑此前只覆盖模拟仓与期权。
+    tombAdd("rh", tradeIdOf(HOLDINGS[idx]));
     HOLDINGS.splice(idx, 1);
     saveToStorage();
     if (selectedSym === sym) closeDrawer();
@@ -4856,17 +4867,24 @@ function rsAdjustGrade(grade, rsResult) {
       if (merged) {
         for (let i = CLOSED_POSITIONS.length - 1; i >= 0; i--) {
           const c = CLOSED_POSITIONS[i];
-          if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) CLOSED_POSITIONS.splice(i, 1);
+          if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) {
+            tombAdd("rc", `${tradeIdOf(c)}|${c.closedAt || ""}`);
+            CLOSED_POSITIONS.splice(i, 1);
+          }
         }
       } else {
         const idx = CLOSED_POSITIONS.findIndex(c =>
           c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001 &&
           (!closedAt || c.closedAt === closedAt));
-        if (idx !== -1) CLOSED_POSITIONS.splice(idx, 1);
+        if (idx !== -1) {
+          tombAdd("rc", `${tradeIdOf(CLOSED_POSITIONS[idx])}|${CLOSED_POSITIONS[idx].closedAt || ""}`);
+          CLOSED_POSITIONS.splice(idx, 1);
+        }
       }
     } else {
       const idx = CLOSED_POSITIONS.findIndex(h => h.sym === sym);
       if (idx === -1) return;
+      tombAdd("rc", `${tradeIdOf(CLOSED_POSITIONS[idx])}|${CLOSED_POSITIONS[idx].closedAt || ""}`);
       CLOSED_POSITIONS.splice(idx, 1);
     }
     saveToStorage();
@@ -4890,6 +4908,7 @@ function rsAdjustGrade(grade, rsResult) {
     restored.qty = totalQty;
     restored.last = restored.cost;
     recomputeHolding(restored, totalNotional);
+    tombDrop("rh", tradeIdOf(restored));
     HOLDINGS.push(restored);
     for (let i = CLOSED_POSITIONS.length - 1; i >= 0; i--) {
       if (matches(CLOSED_POSITIONS[i])) CLOSED_POSITIONS.splice(i, 1);
@@ -18366,9 +18385,9 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       ${syncKey ? `<div class="sp-sep"></div>
       <div class="sp-section">
-        <div class="sp-label">云端历史快照</div>
-        <div class="sp-hint" style="margin-bottom:8px">每天第一次写入前自动留档，保留最近 10 份。若某台设备曾用旧记录覆盖云端，可从这里回滚。</div>
-        <button class="sp-action" id="sp-snaps">查看历史快照</button>
+        <div class="sp-label">云端历史</div>
+        <div class="sp-hint" style="margin-bottom:8px">每天（北京时间）第一次写入<b>之前</b>自动留一份被覆盖的旧内容，保留最近 5 份。若某台设备曾用旧记录覆盖云端，可从这里回滚。</div>
+        <button class="sp-action" id="sp-snaps">历史云端记录</button>
         <div id="sp-snap-list"></div>
       </div>` : ""}
       <div class="sp-sep"></div>
@@ -18449,7 +18468,7 @@ function rsAdjustGrade(grade, rsResult) {
       }
     });
 
-    // 历史快照：列目录 → 选一份 → 回滚。回滚走 saveToStorage，savedAt 推到现在，
+    // 云端历史：列目录 → 选一份 → 回滚。回滚走 saveToStorage，savedAt 推到现在，
     // 所以这份被恢复的内容会成为云端最新版本，其他设备下次打开就会拉到它。
     document.getElementById("sp-snaps")?.addEventListener("click", async () => {
       const btn  = document.getElementById("sp-snaps");
@@ -18464,16 +18483,27 @@ function rsAdjustGrade(grade, rsResult) {
       btn.disabled = false;
       if (!snaps) { btn.textContent = "读取失败，请重试"; return; }
       btn.textContent = "刷新列表";
-      if (!snaps.length) { list.innerHTML = `<div class="sp-hint">暂无历史快照（每天第一次写入后才会产生）</div>`; return; }
+      if (!snaps.length) { list.innerHTML = `<div class="sp-hint">暂无历史记录（跨天第一次写入时才会产生）</div>`; return; }
+      // 时间一律按北京时间显示——这份列表是给用户自己对照"我哪天改过什么"用的，UTC
+      // 会让北京的晚上落到前一天下午，对不上记忆。
+      const bj = iso => {
+        const d = iso ? new Date(iso) : null;
+        if (!d || isNaN(d)) return null;
+        return d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false,
+          year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+          .replace(/\//g, "-");
+      };
       list.innerHTML = snaps.map(s => {
-        const t = s.savedAt ? s.savedAt.slice(0, 16).replace("T", " ") + " UTC" : "时间未知";
+        const t = bj(s.savedAt) ? `${bj(s.savedAt)} 北京` : "时间未知";
         const c = s.counts;
-        const meta = c ? `持仓 ${c.holdings} · 已平仓 ${c.closed} · 模拟 ${c.simHoldings} · 期权 ${c.realOptions}` : "内容无法解析";
+        const arch = bj(s.snapAt);
+        const meta = (c ? `持仓 ${c.holdings} · 已平仓 ${c.closed} · 模拟 ${c.simHoldings} · 期权 ${c.realOptions}` : "内容无法解析")
+                   + (arch ? ` · ${arch} 被覆盖` : "");
         return `<div class="sp-snap-row"><div class="sp-snap-meta"><b>${t}</b><span>${meta}</span></div>
                 <button class="sp-action sp-snap-use" data-i="${s.i}">恢复</button></div>`;
       }).join("");
       list.querySelectorAll(".sp-snap-use").forEach(b => b.addEventListener("click", async () => {
-        if (!confirm("用这份快照替换当前所有记录？当前内容会被覆盖（它自己也已留档在列表里）。")) return;
+        if (!confirm("用这份历史记录替换当前所有记录？当前内容会被覆盖（它自己也会留档进这个列表）。")) return;
         b.textContent = "恢复中…"; b.disabled = true;
         let data = null;
         try {
@@ -18484,7 +18514,7 @@ function rsAdjustGrade(grade, rsResult) {
         applyCloudData(data);
         saveToStorage();          // 推高 savedAt，让这份恢复的内容成为云端最新版本
         document.getElementById("sync-panel")?.classList.remove("open");
-        toast("已恢复该快照，并同步到云端", "ok");
+        toast("已恢复该历史记录，并同步到云端", "ok");
       }));
     });
 

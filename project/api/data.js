@@ -11,7 +11,12 @@
 // 为什么不能用 savedAt：那是各设备自己的墙上时钟，而且**纯拉取也会刷新它**——于是一台
 // 只是打开过 app、内容还是旧的平板（时钟还偏快）会显得"更新"，它的旧快照就能合法盖掉
 // 另一台刚写进来的记录。实测复现：电脑新增的期权记录在平板打开后从云端消失。
-// 老客户端（缓存里还是旧 JS、不带 `_baseRev`）退回按 savedAt 判：比云端更旧就拒收。
+// 不带 `_baseRev` 的推送（缓存里还是旧 JS 的设备）**一律不许盖掉一个已经有 rev 的
+// blob**：savedAt 那套判定已经被证明挡不住「几天没开的设备一打开就顶上去」——它的时钟
+// 可能偏快、它的旧代码还会在纯拉取时刷新 savedAt。宁可让那台设备这一次存不上（刷新后
+// 拿到新 JS 就正常了），也不能让它把另外两台刚写进来的记录抹掉。
+// 云端还没有 rev（v839 之前的老 blob）时才退回 savedAt 判，并额外加一道「记录数不许
+// 变少」的闸门，使这个过渡窗口里同样不可能发生整块抹除。
 
 // Demo key: read-only, returns hardcoded example data, writes are silently dropped.
 const DEMO_KEY = "trendo-demo-2026";
@@ -164,19 +169,26 @@ export default async function handler(req, res) {
     const r = await fetch(`${url}/pipeline`, { method: "POST", headers, body: JSON.stringify(cmds) });
     return r.json();
   };
-  const SNAP_KEEP = 10;          // 保留最近 10 个（按天去重，≈最近 10 天）
+  const SNAP_KEEP = 5;           // 保留最近 5 份（按北京自然日去重，≈最近 5 个有改动的日子）
   const SNAP_TTL  = 90 * 86400;  // 90 天后整串过期
+  // 留档按**北京自然日**去重（用户在北京时区看这份列表；按 UTC 去重会把北京的晚上
+  // 切成第二天，同一个晚上的两次写入各留一份、而白天的改动反而被合并掉）。
+  const bjDay = ts => {
+    const t = ts ? new Date(ts) : null;
+    return t && !isNaN(t) ? t.toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" }) : "";
+  };
 
   if (req.method === "GET") {
     try {
-      // 快照目录：只回元信息（时间戳 + 各数组条数），避免把 10 份完整 blob 一次吐出来。
+      // 快照目录：只回元信息（时间戳 + 各数组条数），避免把 5 份完整 blob 一次吐出来。
       if (req.query.snaps) {
         const [{ result }] = await redis([["LRANGE", snapKey, 0, SNAP_KEEP - 1]]);
         const snaps = (result || []).map((s, i) => {
           try {
             const d = JSON.parse(s);
             const n = a => (Array.isArray(d[a]) ? d[a].length : 0);
-            return { i, savedAt: d.savedAt || null, counts: {
+            // savedAt = 这份内容自己最后被改动的时刻；snapAt = 它被覆盖、因此留档的时刻。
+            return { i, savedAt: d.savedAt || null, snapAt: d._snapAt || null, counts: {
               holdings: n("holdings"), closed: n("closed"), simHoldings: n("simHoldings"),
               simClosed: n("simClosed"), watchlist: n("watchlist"), realOptions: n("realOptions") } };
           } catch (_) { return { i, savedAt: null, counts: null }; }
@@ -218,12 +230,31 @@ export default async function handler(req, res) {
         if (Number(baseRev) !== storedRev) {
           return res.status(409).json({ stale: true, rev: storedRev, cloudSavedAt: prev?.savedAt || null });
         }
+      } else if (storedRev > 0) {
+        // 云端已经由新版客户端写过（有 rev），而这次推送不带 `_baseRev` = 发起方还在跑
+        // 缓存里的旧 JS。**直接拒收**：它没法证明自己是基于当前云端版本改的，而这正是
+        // 「A/B 已更新，C 几天没开、一打开就把两边顶掉」的唯一剩余路径。
+        return res.status(409).json({
+          stale: true, needsRefresh: true, rev: storedRev, cloudSavedAt: prev?.savedAt || null });
       } else {
-        // 老客户端兜底（没有 _baseRev）：仍按 savedAt 拦住「旧盖新」。
+        // 云端还没有 rev（v839 之前的老 blob）：退回 savedAt 判，并加一道记录数闸门——
+        // 任何会让某个集合**变少**的 rev-less 推送都拒收，整块抹除在这个过渡窗口里同样
+        // 不可能发生（真要删记录，刷新一次拿到新 JS 就能正常删）。
         const prevAt = prev?.savedAt ? new Date(prev.savedAt).getTime() : 0;
         const bodyAt = body?.savedAt ? new Date(body.savedAt).getTime() : 0;
         if (prevAt && bodyAt && bodyAt < prevAt) {
           return res.status(409).json({ stale: true, rev: storedRev, cloudSavedAt: prev.savedAt });
+        }
+        if (prev) {
+          const KEYED = ["holdings", "closed", "simHoldings", "simClosed",
+                         "watchlist", "realOptions", "modelPicks"];
+          const shrunk = KEYED.find(k =>
+            Array.isArray(prev[k]) && Array.isArray(body[k]) && body[k].length < prev[k].length);
+          if (shrunk) {
+            return res.status(409).json({
+              stale: true, needsRefresh: true, shrink: shrunk,
+              rev: storedRev, cloudSavedAt: prev.savedAt || null });
+          }
         }
       }
       // `_baseRev` 只是请求参数，不入库；入库的是服务端自己递增的 `rev`。
@@ -232,10 +263,12 @@ export default async function handler(req, res) {
       toStore.rev = storedRev + 1;
 
       const cmds = [];
-      if (prevRaw && (prev?.savedAt || "").slice(0, 10) !== (toStore?.savedAt || "").slice(0, 10)) {
+      // 留档的是**被覆盖的那一份**（更新前的内容），不是这次写进去的新内容——它存在的
+      // 意义就是「万一这次写入是错的，能回到上一版」。跨北京自然日的第一次写入才留。
+      if (prevRaw && bjDay(prev?.savedAt) !== bjDay(toStore?.savedAt)) {
         // 快照里剥掉 analysisHistory 的 _fullData（整份分析正文，占 blob 绝大部分体积，
         // 且服务端另有 30 天缓存可重建），只留回滚真正需要的持仓/交易记录。
-        const lean = { ...prev };
+        const lean = { ...prev, _snapAt: new Date().toISOString() };
         if (Array.isArray(lean.analysisHistory))
           lean.analysisHistory = lean.analysisHistory.map(e => { const c = { ...e }; delete c._fullData; return c; });
         cmds.push(["LPUSH", snapKey, JSON.stringify(lean)],

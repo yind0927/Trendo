@@ -2020,6 +2020,11 @@
     background: color-mix(in oklch, var(--warn) 10%, transparent);
     border-radius: 8px; padding: 7px 9px; margin-top: 2px;
   }
+  /* 手机端不显示「开仓时标的价」：窄屏上它和开仓日期挤在两列里、而它本身是选填的，
+     不填时开仓日就是今天的会自动取实时价、补录过去的留空（与填了空值完全等价）。 */
+  @media (max-width: 768px) {
+    #opts-row-underlying { display: none !important; }
+  }
   .opts-spots { display: flex; gap: 8px; flex-wrap: wrap; }
   .opts-spot-pill { font-size: 11px; font-family: var(--f-mono); color: var(--fg-2); border: 1px solid var(--line); border-radius: 14px; padding: 3px 11px; background: var(--bg-2); }
   .opts-spot-pill b { color: var(--fg-0); margin-right: 4px; }
@@ -6772,8 +6777,8 @@
   </div>
 </div>
 
-<script src="data.js?v=839"></script>
-<script src="desk.js?v=839"></script>
+<script src="data.js?v=840"></script>
+<script src="desk.js?v=840"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
