@@ -2066,8 +2066,10 @@
      backdrop instead of the page's darker background, and the separation
      reads as a thin border line rather than genuine open space. */
   #opts-real-panel { margin-top: 12px; }
-  /* Controls row */
-  .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 0; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  /* Controls row —— 左右不留内边距：页面的左右边距由 `#options-view` 一处给（手机 12px /
+     桌面 32px），这一排再加 14px 就会让现价 pill 与两个按钮比下方每一个模块各往里缩 14px，
+     同一页上出现两条不同的对齐线。只保留顶部那 12px（与标题行的间隔）。 */
+  .opts-controls { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 0; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
   .opts-sym-chip { font-family: var(--f-mono); font-weight: 700; }
   .opts-sym-chip.active, .opts-type-btn.active, .opts-settle-btn.active { background: var(--accent) !important; color: oklch(0.14 0.012 250) !important; box-shadow: none !important; }
   /* 补录历史记录时的提示条：到期日已过说明这是一笔已经结束的交易，必须由用户给出结果，
@@ -6853,8 +6855,8 @@
   </div>
 </div>
 
-<script src="data.js?v=843"></script>
-<script src="desk.js?v=843"></script>
+<script src="data.js?v=844"></script>
+<script src="desk.js?v=844"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
