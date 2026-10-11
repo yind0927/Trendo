@@ -1485,6 +1485,15 @@ function rsAdjustGrade(grade, rsResult) {
         renderSyncStatus();
         return;
       }
+      // 503 = 服务端那把短锁被另一次写入（另一台设备、或每分钟的成交 worker）占着，
+      // 内容本身没问题。隔一会儿自己重试一次，不用等用户下一次保存；未同步标志一直留着，
+      // 所以即使这次也没成，下次打开仍会合并上去。
+      if (r.status === 503 && !_forcingPush) {
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(syncPush, 1500);
+        renderSyncStatus();
+        return;
+      }
       renderSyncStatus("error");
     } catch (_) { renderSyncStatus("error"); }
   }
@@ -1533,6 +1542,22 @@ function rsAdjustGrade(grade, rsResult) {
       closed:      CLOSED_POSITIONS.map(h => ({ ...h })),
       watchlist:   WATCHLIST.map(w => ({ ...w })),
       modelPicks:  MODEL_PICKS.map(m => ({ ...m })),
+      // 模拟仓的四个集合同样会被 applyCloudData 整块替换，**所以也必须进这份快照**——
+      // 漏了它们，「本地记了一笔模拟仓、没推上去，期间另一台写了云端」这条路上那笔会
+      // 被直接抹掉（与真实仓期权记录踩的是同一个坑，实测复现过）。
+      simHoldings:     SIM_HOLDINGS.map(h => ({ ...h })),
+      simClosed:       SIM_CLOSED.map(h => ({ ...h })),
+      simPending:      SIM_PENDING.map(p => ({ ...p })),
+      simClosePending: SIM_CLOSE_PENDING.map(p => ({ ...p })),
+      // 周期清单是单值字段，没有「并集」这种正确答案——但它内部的 items 是**按判据 id
+      // 的映射**、log/history 是**只追加**的序列，这三样各自是可以并的（清空一条判据存的
+      // 是 state:"unset"、不是删掉这个 key，所以并集不会把谁救回来）。同一条判据两边各
+      // 改一次时仍是云端那份胜，与其他集合同一条取舍。
+      cycleCheck: {
+        items:   { ...(CYCLE_CHECK.items || {}) },
+        log:     [...(CYCLE_CHECK.log || [])],
+        history: [...(CYCLE_CHECK.history || [])],
+      },
     };
   }
   function _mergeLocalOnly(snap) {
@@ -1549,9 +1574,47 @@ function rsAdjustGrade(grade, rsResult) {
     };
     add(REAL_OPTIONS,      snap.realOptions, o => o.id, "p");
     add(HOLDINGS,          snap.holdings,    h => tradeIdOf(h), "rh");
-    add(CLOSED_POSITIONS,  snap.closed,      h => `${tradeIdOf(h)}|${h.closedAt || ""}`, "rc");
     add(WATCHLIST,         snap.watchlist,   w => w.sym);
     add(MODEL_PICKS,       snap.modelPicks,  m => m.id);
+    add(SIM_HOLDINGS,      snap.simHoldings, h => tradeIdOf(h), "h");
+
+    // 已平仓记录：除了墓碑，还要挡掉「这笔交易现在是持仓中」的情形——另一台设备把它
+    // **撤回平仓**了（restoreClosedPosition 把记录从已平仓里删掉、放回持仓中），而本机
+    // 手里还有那条旧的已平仓记录，并回去就会让同一笔交易同时出现在两张表里。墓碑能覆盖
+    // 新发生的撤回，这道闸额外兜住更早的版本删掉、还没立墓碑的那些记录。
+    const openReal = new Set(HOLDINGS.map(tradeIdOf));
+    const openSim  = new Set(SIM_HOLDINGS.map(tradeIdOf));
+    add(CLOSED_POSITIONS, (snap.closed || []).filter(h => !openReal.has(tradeIdOf(h))),
+        h => `${tradeIdOf(h)}|${h.closedAt || ""}`, "rc");
+    add(SIM_CLOSED, (snap.simClosed || []).filter(h => !openSim.has(tradeIdOf(h))),
+        h => `${tradeIdOf(h)}|${h.closedAt || ""}`, "sc");
+
+    // 挂单：symbol 已经有持仓了 = 这笔单早就成交过，并回去就是个永久孤儿（v822）。
+    // 平仓挂单反过来——对应的持仓已经不在了就不该再挂着。
+    const pendSyms = new Set(SIM_PENDING.map(p => p.sym));
+    add(SIM_PENDING, (snap.simPending || []).filter(p =>
+        !SIM_HOLDINGS.some(h => h.sym === p.sym) && !pendSyms.has(p.sym)), p => p.id, "o");
+    add(SIM_CLOSE_PENDING, (snap.simClosePending || []).filter(p =>
+        SIM_HOLDINGS.some(h => h.sym === p.sym)), p => p.id, "o");
+
+    // 周期清单：items 按判据 id 并，log / history 只追加（各自按唯一键判重）
+    const sc = snap.cycleCheck;
+    if (sc) {
+      Object.entries(sc.items || {}).forEach(([k, v]) => {
+        if (CYCLE_CHECK.items && CYCLE_CHECK.items[k] == null) { CYCLE_CHECK.items[k] = v; merged = true; }
+      });
+      const haveLog = new Set((CYCLE_CHECK.log || []).map(x => `${x.ts}|${x.id}`));
+      (sc.log || []).forEach(x => {
+        if (x && !haveLog.has(`${x.ts}|${x.id}`)) { CYCLE_CHECK.log.push(x); haveLog.add(`${x.ts}|${x.id}`); merged = true; }
+      });
+      if (CYCLE_CHECK.log.length > 200) CYCLE_CHECK.log.splice(0, CYCLE_CHECK.log.length - 200);
+      const haveDay = new Set((CYCLE_CHECK.history || []).map(x => x.d));
+      (sc.history || []).forEach(x => {
+        if (x && !haveDay.has(x.d)) { CYCLE_CHECK.history.push(x); haveDay.add(x.d); merged = true; }
+      });
+      CYCLE_CHECK.history.sort((a, b) => String(a.d).localeCompare(String(b.d)));
+      if (CYCLE_CHECK.history.length > 60) CYCLE_CHECK.history.splice(0, CYCLE_CHECK.history.length - 60);
+    }
     return merged;
   }
 
@@ -1599,7 +1662,13 @@ function rsAdjustGrade(grade, rsResult) {
     // 记录、刚改的自选、刚填的周期清单，都会在切一次后台之后悄悄回滚。
     const localTotal   = HOLDINGS.length + SIM_HOLDINGS.length + CLOSED_POSITIONS.length
                        + SIM_PENDING.length + SIM_CLOSE_PENDING.length + SIM_CLOSED.length
-                       + WATCHLIST.length + REAL_OPTIONS.length;
+                       + WATCHLIST.length + REAL_OPTIONS.length
+                       // 模型选股与周期清单同样被 applyCloudData 整块替换，所以同样算
+                       // 「这台设备有数据」。漏掉它们的话，只用这两个模块、没有任何持仓的
+                       //  用户永远满足 localTotal === 0，于是**每一次**拉取都会无视 rev
+                       //  用云端快照盖掉本地（期权记录踩过一模一样的坑）。
+                       + MODEL_PICKS.length
+                       + Object.keys(CYCLE_CHECK.items || {}).length;
     const cloudTime    = cloudData.savedAt ? new Date(cloudData.savedAt).getTime() : 0;
     const localTime    = localSavedAt      ? new Date(localSavedAt).getTime()      : 0;
     noteCloudStamp(cloudData.savedAt);   // 本机时钟偏慢时，让之后的改动还能推得上去
@@ -4941,7 +5010,13 @@ function rsAdjustGrade(grade, rsResult) {
     tombDrop("rh", tradeIdOf(restored));
     HOLDINGS.push(restored);
     for (let i = CLOSED_POSITIONS.length - 1; i >= 0; i--) {
-      if (matches(CLOSED_POSITIONS[i])) CLOSED_POSITIONS.splice(i, 1);
+      // 撤回平仓 = 把已平仓记录删掉，所以同样要立墓碑。否则另一台设备（手里还有那条旧的
+      // 已平仓记录、且有未推送改动）一打开，409/拉取合并就会把它救回来，同一笔交易同时
+      // 出现在「持仓中」和「已平仓」两张表里，还会被推回云端。实测复现过。
+      if (matches(CLOSED_POSITIONS[i])) {
+        tombAdd("rc", `${tradeIdOf(CLOSED_POSITIONS[i])}|${CLOSED_POSITIONS[i].closedAt || ""}`);
+        CLOSED_POSITIONS.splice(i, 1);
+      }
     }
     saveToStorage();
     const restoreSelMatches = scoped
@@ -4963,9 +5038,13 @@ function rsAdjustGrade(grade, rsResult) {
     restored.qty = totalQty;
     restored.last = restored.cost;
     recomputeHolding(restored, simNotional);
+    tombDrop("h", tradeIdOf(restored));
     SIM_HOLDINGS.push(restored);
     for (let i = SIM_CLOSED.length - 1; i >= 0; i--) {
-      if (matches(SIM_CLOSED[i])) SIM_CLOSED.splice(i, 1);
+      if (matches(SIM_CLOSED[i])) {       // 与真实仓同理，撤回平仓要立 "sc" 墓碑
+        tombAdd("sc", `${tradeIdOf(SIM_CLOSED[i])}|${SIM_CLOSED[i].closedAt || ""}`);
+        SIM_CLOSED.splice(i, 1);
+      }
     }
     saveToStorage();
     const simRestoreSelMatches = scoped
@@ -11572,17 +11651,24 @@ function rsAdjustGrade(grade, rsResult) {
       if (merged) {
         for (let i = SIM_CLOSED.length - 1; i >= 0; i--) {
           const c = SIM_CLOSED[i];
-          if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) SIM_CLOSED.splice(i, 1);
+          if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) {
+            tombAdd("sc", `${tradeIdOf(c)}|${c.closedAt || ""}`);
+            SIM_CLOSED.splice(i, 1);
+          }
         }
       } else {
         const idx = SIM_CLOSED.findIndex(c =>
           c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001 &&
           (!closedAt || c.closedAt === closedAt));
-        if (idx !== -1) SIM_CLOSED.splice(idx, 1);
+        if (idx !== -1) {
+          tombAdd("sc", `${tradeIdOf(SIM_CLOSED[idx])}|${SIM_CLOSED[idx].closedAt || ""}`);
+          SIM_CLOSED.splice(idx, 1);
+        }
       }
     } else {
       const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
       if (idx === -1) return;
+      tombAdd("sc", `${tradeIdOf(SIM_CLOSED[idx])}|${SIM_CLOSED[idx].closedAt || ""}`);
       SIM_CLOSED.splice(idx, 1);
     }
     saveToStorage();

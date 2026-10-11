@@ -171,6 +171,25 @@ async function processKey(syncKey, redis, fhKey, pgKey) {
   // 上新增了一笔期权记录），这次写回就会用几十秒前的旧副本把它整块盖掉，而且这条路径
   // 绕过了 `api/data.js` 的 POST 闸门、还把 savedAt 刷成「现在」，于是所有设备接着都会
   // 拉到这份被削掉的 blob。实测复现过：期权记录在别的设备上凭空消失。
+  // 「重新读一次 → 改四个字段 → 写回」这三步之间也要上锁，用的是 api/data.js 里同一把
+  // （`trendo:lock:<key>`）。不然这个每分钟都在跑的 worker 会与设备的推送交错：两边各自
+  // 读到同一个 rev、各自写入，后写的把先写的整块盖掉，而设备那边收到的是 200、会清掉
+  // 自己的未同步标志。拿锁失败就**这一轮不写**——挂单下一分钟还会再扫一次，不急。
+  // 与那边同理：拿锁机制本身出错（上游不支持带 NX 的 SET）时照旧往下走，不堵死成交回写。
+  const lockKey = `trendo:lock:${syncKey}`;
+  let locked = false, lockTried = false;
+  for (let i = 0; i < 3 && !locked; i++) {
+    let r;
+    try {
+      [{ result: r }] = await redis([["SET", lockKey, String(Date.now()), "NX", "EX", 8]]);
+      lockTried = true;
+    } catch (_) { lockTried = false; break; }
+    if (r === "OK") { locked = true; break; }
+    if (r !== null) { lockTried = false; break; }
+    await new Promise(done => setTimeout(done, 150));
+  }
+  if (lockTried && !locked) return 0;   // 有设备正在写，这一轮让开
+
   const [{ result: freshRaw }] = await redis([["GET", redisKey]]);
   let out = data;
   try { const fresh = freshRaw ? JSON.parse(freshRaw) : null; if (fresh) out = fresh; } catch (_) {}
@@ -188,6 +207,7 @@ async function processKey(syncKey, redis, fhKey, pgKey) {
   ];
   if (!pendingOpen.length && !pendingClose.length)
     cmds.push(["SREM", "trendo:order_keys", syncKey]);
+  if (locked) cmds.push(["DEL", lockKey]);   // 释放锁与写入同一个 pipeline
   await redis(cmds);
   return fills;
 }

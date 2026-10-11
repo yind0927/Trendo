@@ -210,6 +210,32 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "POST") {
+    // `rev` 的比对与写入之间隔着一次网络往返，**这两步不是原子的**：两个请求几乎同时
+    // 到达时（典型来源是每分钟跑一次的 api/order-check worker 撞上一台设备的推送），
+    // 它们会各自读到同一个 rev、各自判定通过、各自写入，后写的那一份把先写的内容整块
+    // 盖掉——而**先写的那一方收到的是 200**，于是它清掉了自己的未同步标志，那笔记录就
+    // 真的没了。交错时序已复现：`A:GET → B:GET → B:SET → A:SET` 之后 B 那笔消失。
+    // 这里用一把短锁把「读—判—写」串起来。**拿不到锁与拿锁本身出错是两件事**：
+    //   · 明确被别人占着（SET NX 回 null）→ 503，让客户端稍后重试（未同步标志仍留着）
+    //   · 这条命令报错/返回看不懂的东西 → **照旧往下走**，退回加锁之前的行为
+    // 后者是刻意的：万一上游不支持带 NX/EX 的 SET，也只是回到今天的样子，不会把整个
+    // 同步写入链路堵死。
+    const lockKey = `trendo:lock:${syncKey}`;
+    let locked = false, lockTried = false;
+    for (let i = 0; i < 4 && !locked; i++) {
+      let r;
+      try {
+        [{ result: r }] = await redis([["SET", lockKey, String(Date.now()), "NX", "EX", 8]]);
+        lockTried = true;
+      } catch (_) { r = undefined; lockTried = false; break; }   // 拿锁机制本身不可用 → 不拦
+      if (r === "OK") { locked = true; break; }
+      if (r !== null) { lockTried = false; break; }              // 回了别的东西 → 同上
+      await new Promise(done => setTimeout(done, 150));
+    }
+    if (lockTried && !locked) {
+      return res.status(503).json({ busy: true, error: "another write is in flight, retry" });
+    }
+    const unlock = async () => { if (locked) { try { await redis([["DEL", lockKey]]); } catch (_) {} } };
     try {
       // Registry for the background order worker (api/order-check.js): keep this
       // sync key in `trendo:order_keys` iff the pushed blob has pending sim orders,
@@ -229,12 +255,14 @@ export default async function handler(req, res) {
       if (baseRev != null) {
         // 乐观并发：只接受「基于当前云端版本」的写入，与各设备的时钟完全无关。
         if (Number(baseRev) !== storedRev) {
+          await unlock();
           return res.status(409).json({ stale: true, rev: storedRev, cloudSavedAt: prev?.savedAt || null });
         }
       } else if (storedRev > 0) {
         // 云端已经由新版客户端写过（有 rev），而这次推送不带 `_baseRev` = 发起方还在跑
         // 缓存里的旧 JS。**直接拒收**：它没法证明自己是基于当前云端版本改的，而这正是
         // 「A/B 已更新，C 几天没开、一打开就把两边顶掉」的唯一剩余路径。
+        await unlock();
         return res.status(409).json({
           stale: true, needsRefresh: true, rev: storedRev, cloudSavedAt: prev?.savedAt || null });
       } else {
@@ -244,6 +272,7 @@ export default async function handler(req, res) {
         const prevAt = prev?.savedAt ? new Date(prev.savedAt).getTime() : 0;
         const bodyAt = body?.savedAt ? new Date(body.savedAt).getTime() : 0;
         if (prevAt && bodyAt && bodyAt < prevAt) {
+          await unlock();
           return res.status(409).json({ stale: true, rev: storedRev, cloudSavedAt: prev.savedAt });
         }
         if (prev) {
@@ -252,6 +281,7 @@ export default async function handler(req, res) {
           const shrunk = KEYED.find(k =>
             Array.isArray(prev[k]) && Array.isArray(body[k]) && body[k].length < prev[k].length);
           if (shrunk) {
+            await unlock();
             return res.status(409).json({
               stale: true, needsRefresh: true, shrink: shrunk,
               rev: storedRev, cloudSavedAt: prev.savedAt || null });
@@ -276,13 +306,17 @@ export default async function handler(req, res) {
                   ["LTRIM", snapKey, 0, SNAP_KEEP - 1],
                   ["EXPIRE", snapKey, SNAP_TTL]);
       }
+      const setIdx = cmds.length;             // SET 在这个 pipeline 里的位置
       cmds.push(["SET", redisKey, JSON.stringify(toStore)],
                 ["EXPIRE", redisKey, 31536000],   // 1 year TTL
                 [hasPending ? "SADD" : "SREM", "trendo:order_keys", syncKey]);
+      // 释放锁与写入放在同一个 pipeline 里：写进去的那一刻锁就解开，不多一次往返
+      if (locked) { cmds.push(["DEL", lockKey]); locked = false; }
       const results = await redis(cmds);
-      const ok = results[results.length - 3]?.result === "OK";
+      const ok = results[setIdx]?.result === "OK";
       return res.status(ok ? 200 : 500).json({ ok, rev: toStore.rev });
     } catch (e) {
+      await unlock();
       return res.status(500).json({ error: e.message });
     }
   }
