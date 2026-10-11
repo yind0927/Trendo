@@ -1395,6 +1395,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 内容还是旧的平板（时钟偏快）会显得「更新」，旧快照就能合法盖掉另一台刚写进来的
   // 记录。实测复现过：电脑上新增的期权记录，平板打开后从云端消失。
   const REV_KEY = "trendo_v4_rev";
+  const SNAP_DEL_W = 76;        // 云端历史左滑露出的删除按钮宽度（与 CSS 里的 --sp-del-w 一致）
   const localRev  = () => +(localStorage.getItem(REV_KEY) || 0) || 0;
   const setRev    = r => { if (Number.isFinite(+r)) { try { localStorage.setItem(REV_KEY, String(+r)); } catch (_) {} } };
 
@@ -18468,12 +18469,19 @@ function rsAdjustGrade(grade, rsResult) {
       }
     });
 
-    // 云端历史：列目录 → 选一份 → 回滚。回滚走 saveToStorage，savedAt 推到现在，
+    // 云端历史：列目录 → 选一份 → 回滚 / 删除。回滚走 saveToStorage，savedAt 推到现在，
     // 所以这份被恢复的内容会成为云端最新版本，其他设备下次打开就会拉到它。
-    document.getElementById("sp-snaps")?.addEventListener("click", async () => {
-      const btn  = document.getElementById("sp-snaps");
-      const list = document.getElementById("sp-snap-list");
-      if (!btn || !list) return;
+    // 时间一律按北京时间显示——这份列表是给用户自己对照「我哪天改过什么」用的，UTC
+    // 会让北京的晚上落到前一天下午，对不上记忆。
+    const _snapBJ = iso => {
+      const d = iso ? new Date(iso) : null;
+      if (!d || isNaN(d)) return null;
+      return d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false,
+        year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+        .replace(/\//g, "-");
+    };
+
+    async function loadSnapList(btn, list) {
       btn.textContent = "读取中…"; btn.disabled = true;
       let snaps = null;
       try {
@@ -18484,24 +18492,27 @@ function rsAdjustGrade(grade, rsResult) {
       if (!snaps) { btn.textContent = "读取失败，请重试"; return; }
       btn.textContent = "刷新列表";
       if (!snaps.length) { list.innerHTML = `<div class="sp-hint">暂无历史记录（跨天第一次写入时才会产生）</div>`; return; }
-      // 时间一律按北京时间显示——这份列表是给用户自己对照"我哪天改过什么"用的，UTC
-      // 会让北京的晚上落到前一天下午，对不上记忆。
-      const bj = iso => {
-        const d = iso ? new Date(iso) : null;
-        if (!d || isNaN(d)) return null;
-        return d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false,
-          year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
-          .replace(/\//g, "-");
-      };
       list.innerHTML = snaps.map(s => {
-        const t = bj(s.savedAt) ? `${bj(s.savedAt)} 北京` : "时间未知";
+        const t = _snapBJ(s.savedAt) ? `${_snapBJ(s.savedAt)} 北京` : "时间未知";
         const c = s.counts;
-        const arch = bj(s.snapAt);
+        const arch = _snapBJ(s.snapAt);
         const meta = (c ? `持仓 ${c.holdings} · 已平仓 ${c.closed} · 模拟 ${c.simHoldings} · 期权 ${c.realOptions}` : "内容无法解析")
                    + (arch ? ` · ${arch} 被覆盖` : "");
-        return `<div class="sp-snap-row"><div class="sp-snap-meta"><b>${t}</b><span>${meta}</span></div>
-                <button class="sp-action sp-snap-use" data-i="${s.i}">恢复</button></div>`;
+        // 左滑露出删除：行本身是可平移的那一层，删除按钮垫在它底下。
+        return `<div class="sp-snap-item" data-i="${s.i}" data-at="${s.savedAt || ""}">
+          <button class="sp-snap-del" type="button" title="删除这份历史记录">删除</button>
+          <div class="sp-snap-row">
+            <div class="sp-snap-meta"><b>${t}</b><span>${meta}</span></div>
+            <button class="sp-action sp-snap-use" data-i="${s.i}">恢复</button>
+          </div></div>`;
       }).join("");
+      wireSnapList(btn, list);
+    }
+
+    function wireSnapList(btn, list) {
+      const closeAll = except => list.querySelectorAll(".sp-snap-item.open")
+        .forEach(it => { if (it !== except) it.classList.remove("open"); });
+
       list.querySelectorAll(".sp-snap-use").forEach(b => b.addEventListener("click", async () => {
         if (!confirm("用这份历史记录替换当前所有记录？当前内容会被覆盖（它自己也会留档进这个列表）。")) return;
         b.textContent = "恢复中…"; b.disabled = true;
@@ -18516,6 +18527,74 @@ function rsAdjustGrade(grade, rsResult) {
         document.getElementById("sync-panel")?.classList.remove("open");
         toast("已恢复该历史记录，并同步到云端", "ok");
       }));
+
+      list.querySelectorAll(".sp-snap-item").forEach(item => {
+        const row = item.querySelector(".sp-snap-row");
+        const del = item.querySelector(".sp-snap-del");
+
+        del.addEventListener("click", async () => {
+          if (!confirm("删除这份云端历史记录？删掉之后就不能再从它回滚了。")) return;
+          del.textContent = "删除中…"; del.disabled = true;
+          let code = 0, body = null;
+          try {
+            const r = await fetch(`/api/data?key=${encodeURIComponent(syncKey)}` +
+              `&snap=${item.dataset.i}&at=${encodeURIComponent(item.dataset.at || "")}`,
+              { method: "DELETE" });
+            code = r.status;
+            try { body = await r.json(); } catch (_) {}
+          } catch (_) {}
+          if (code === 200) {
+            toast("已删除该历史记录", "ok");
+          } else if (code === 409) {
+            // 期间云端又留了一档，位置整体后移了——服务端据此拒绝了删除，没有误删隔壁那份。
+            toast("列表已变化（云端期间又留了一档），已重新载入，请再确认一次", "warn");
+          } else {
+            toast(`删除失败（${code || "网络错误"}）`, "error");
+          }
+          // 删一份之后所有位置索引都会前移，**必须重新拉目录**，不能只把这行从 DOM 里摘掉。
+          await loadSnapList(btn, list);
+        });
+
+        // 左滑：横向位移必须大于纵向，否则把面板的纵向滚动吃掉了。
+        let x0 = 0, y0 = 0, dx = 0, horiz = null;
+        row.addEventListener("touchstart", e => {
+          const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; horiz = null;
+          row.style.transition = "none";
+        }, { passive: true });
+        row.addEventListener("touchmove", e => {
+          const t = e.touches[0];
+          const ddx = t.clientX - x0, ddy = t.clientY - y0;
+          if (horiz === null) {
+            if (Math.abs(ddx) < 8 && Math.abs(ddy) < 8) return;
+            horiz = Math.abs(ddx) > Math.abs(ddy);
+          }
+          if (!horiz) return;
+          e.preventDefault();
+          const base = item.classList.contains("open") ? -SNAP_DEL_W : 0;
+          dx = Math.max(-SNAP_DEL_W, Math.min(0, base + ddx));
+          row.style.transform = `translateX(${dx}px)`;
+        }, { passive: false });
+        const settle = () => {
+          row.style.transition = "";
+          row.style.transform = "";
+          if (horiz === null) return;
+          const open = dx <= -SNAP_DEL_W / 2;
+          if (open) closeAll(item);
+          item.classList.toggle("open", open);
+        };
+        row.addEventListener("touchend", settle);
+        row.addEventListener("touchcancel", settle);
+        // 点行上任何别的地方就收起来（已经滑开时，第一次点击只用来收起、不触发恢复）
+        row.addEventListener("click", e => {
+          if (item.classList.contains("open")) { e.preventDefault(); e.stopPropagation(); item.classList.remove("open"); }
+        }, true);
+      });
+    }
+
+    document.getElementById("sp-snaps")?.addEventListener("click", () => {
+      const btn  = document.getElementById("sp-snaps");
+      const list = document.getElementById("sp-snap-list");
+      if (btn && list) loadSnapList(btn, list);
     });
 
     document.getElementById("sp-demo")?.addEventListener("click", async () => {

@@ -1166,10 +1166,33 @@
   .sp-hint { font-size: 10.5px; color: var(--fg-3); margin-top: 6px; }
   .sp-sep { height: 1px; background: var(--line); margin: 12px 0; }
   #sp-snap-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  /* 云端历史的一行：删除按钮垫在底下，.sp-snap-row 是可左滑平移的那一层。
+     行必须自带不透明底色，否则滑开时能透出下面的删除按钮。 */
+  .sp-snap-item {
+    --sp-del-w: 76px;
+    position: relative; overflow: hidden; border-radius: 8px;
+  }
+  .sp-snap-del {
+    position: absolute; inset: 0 0 0 auto; width: var(--sp-del-w);
+    display: flex; align-items: center; justify-content: center;
+    background: var(--down); color: var(--bg-0);
+    border: none; font-family: inherit; font-size: 11.5px; font-weight: 600;
+    cursor: pointer; padding: 0;
+  }
+  .sp-snap-del:disabled { opacity: .6; cursor: default; }
   .sp-snap-row {
     display: flex; align-items: center; gap: 8px;
     background: var(--bg-2); border-radius: 8px; padding: 7px 9px;
+    position: relative; transition: transform .18s cubic-bezier(.22,1,.36,1);
+    touch-action: pan-y;   /* 纵向滚动交给面板，横向留给左滑手势 */
   }
+  .sp-snap-item.open .sp-snap-row { transform: translateX(calc(-1 * var(--sp-del-w))); }
+  /* 鼠标设备没有左滑这回事——悬停时把行推开，删除按钮才有办法点到 */
+  @media (hover: hover) and (pointer: fine) {
+    .sp-snap-item:hover .sp-snap-row,
+    .sp-snap-item:focus-within .sp-snap-row { transform: translateX(calc(-1 * var(--sp-del-w))); }
+  }
+  @media (prefers-reduced-motion: reduce) { .sp-snap-row { transition: none; } }
   .sp-snap-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
   .sp-snap-meta b { font-family: var(--f-mono); font-size: 11px; color: var(--fg-1); }
   .sp-snap-meta span { font-size: 10px; color: var(--fg-3); }
@@ -4306,6 +4329,24 @@
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: contain;
     }
+    /* iOS Safari 聚焦 font-size < 16px 的输入框时会**自动放大整页**，放大之后页面就比屏幕宽、
+       要手动捏回去——表现正是「弹窗撑出了屏幕」，点日期那一格最明显（点它必然聚焦，而且
+       日期控件自己还要弹出选择器）。16px 是 iOS 不触发缩放的下限；另一条路是给 viewport 加
+       maximum-scale，那会连带禁掉用户自己的双指缩放，不可取。 */
+    .modal input, .modal select, .modal textarea, .modal .form-input { font-size: 16px; }
+    /* 日期输入内部的 shadow DOM 自带一个按内容算出来的最小宽度，外层的 `width:100%` 管不住
+       它；而装它的 .form-row 是 flex 项、默认 `min-width:auto`，于是整行被从里面顶出容器。 */
+    .modal .form-row, .modal .form-row > * { min-width: 0; }
+    .modal input[type="date"] { min-width: 0; max-width: 100%; }
+    .modal input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+    .modal input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
+    .modal input[type="date"]::-webkit-calendar-picker-indicator { flex: none; }
+    /* 两列并排的那几行在窄屏改为纵向堆叠：16px 字号下一个日期控件（含日历图标）在
+       半栏宽里放不下，而「行权价 + 到期日」「数量 + 权利金」都是两个输入框并排。 */
+    @media (max-width: 480px) {
+      #opts-row-strike-expiry, #opts-row-qty-premium,
+      #opts-row-open-underlying, #opts-row-settle-fields { flex-direction: column; gap: 0 !important; }
+    }
     .form-2col { grid-template-columns: 1fr; gap: 0; }
 
     /* ---- Sim view ---- */
@@ -6777,8 +6818,8 @@
   </div>
 </div>
 
-<script src="data.js?v=840"></script>
-<script src="desk.js?v=840"></script>
+<script src="data.js?v=841"></script>
+<script src="desk.js?v=841"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

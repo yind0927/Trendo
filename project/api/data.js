@@ -2,6 +2,7 @@
 // GET  /api/data?key=xxxx          → { data: { holdings, closed, ... } | null }
 // GET  /api/data?key=xxxx&snaps=1  → { snaps: [{ i, savedAt, counts }] }  每日快照目录
 // GET  /api/data?key=xxxx&snap=N   → { data: <第 N 个快照> }
+// DELETE /api/data?key=xxxx&snap=N&at=<savedAt> → 删掉那一份历史（at 用于防止索引后移误删）
 // POST /api/data?key=xxxx          → { ok: true, rev }  (body = data payload)
 //
 // **冲突判定用的是服务端维护的 `rev`（单调整数），不是墙上时钟。**
@@ -281,6 +282,30 @@ export default async function handler(req, res) {
       const results = await redis(cmds);
       const ok = results[results.length - 3]?.result === "OK";
       return res.status(ok ? 200 : 500).json({ ok, rev: toStore.rev });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  // DELETE /api/data?key=xxxx&snap=N&at=<savedAt> → 删掉一份云端历史
+  if (req.method === "DELETE") {
+    try {
+      const idx = parseInt(req.query.snap, 10);
+      if (!(idx >= 0 && idx < SNAP_KEEP)) return res.status(400).json({ error: "Bad snapshot index" });
+      // **位置索引会整体后移**：期间只要有一次新留档 LPUSH，第 1 份就变成第 2 份。所以必须
+      // 带上这一份自己的 savedAt 作为护栏——不核对就会删掉隔壁那份（列表是几秒前拉的）。
+      const want = (req.query.at || "").trim();
+      const [{ result: raw }] = await redis([["LINDEX", snapKey, idx]]);
+      if (!raw) return res.status(404).json({ error: "No such snapshot" });
+      let got = null;
+      try { got = JSON.parse(raw)?.savedAt || null; } catch (_) {}
+      if (want && got && want !== got)
+        return res.status(409).json({ stale: true, savedAt: got });
+      // Redis 没有「按下标删除」：先把那一项写成哨兵、再 LREM 掉它，是标准做法。
+      const SENT = "__trendo_snap_deleted__";
+      await redis([["LSET", snapKey, idx, SENT], ["LREM", snapKey, 1, SENT]]);
+      const [{ result: n }] = await redis([["LLEN", snapKey]]);
+      return res.status(200).json({ ok: true, remaining: Number(n) || 0 });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
