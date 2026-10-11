@@ -1479,6 +1479,24 @@
     color-scheme: dark;
     cursor: pointer;
   }
+  /* **iOS Safari 的日期输入自己算宽度**：它的宽度来自内部 shadow DOM 的内容，`appearance`
+     还是 auto 时 `width:100%` 压不住它——于是这一格被从里面撑到容器之外，表现为「开仓日期 /
+     到期日期的框跑到屏幕外面」。下面这组是 iOS 上唯一可靠的修法：`appearance:none` 把它从
+     原生控件变成普通盒子，再把内部那几层的固有宽度与内边距一并放开。
+     **Chromium 实测这组规则不改变任何渲染**（宽 326 / 高 45 / 日历图标都原样），所以桌面与
+     安卓不受影响；不要因为「本地看不出区别」就把它删掉，它是给 iOS 用的。 */
+  input[type="date"].form-input {
+    -webkit-appearance: none; appearance: none;
+    display: block; width: 100%; max-width: 100%; min-width: 0;
+    box-sizing: border-box;
+  }
+  input[type="date"].form-input::-webkit-date-and-time-value {
+    width: 100%; min-width: 0; margin: 0; text-align: left;
+  }
+  input[type="date"].form-input::-webkit-datetime-edit,
+  input[type="date"].form-input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0; min-width: 0;
+  }
   body[data-theme="light"] input[type="date"] { color-scheme: light; }
 
   input[type="date"]::-webkit-calendar-picker-indicator {
@@ -4334,13 +4352,14 @@
        日期控件自己还要弹出选择器）。16px 是 iOS 不触发缩放的下限；另一条路是给 viewport 加
        maximum-scale，那会连带禁掉用户自己的双指缩放，不可取。 */
     .modal input, .modal select, .modal textarea, .modal .form-input { font-size: 16px; }
-    /* 日期输入内部的 shadow DOM 自带一个按内容算出来的最小宽度，外层的 `width:100%` 管不住
-       它；而装它的 .form-row 是 flex 项、默认 `min-width:auto`，于是整行被从里面顶出容器。 */
+    /* 装日期那一格的 .form-row 是 flex 项、默认 `min-width:auto`，容器会被里面的固有宽度
+       顶开；日期输入本身的那组修法已提到全局（见 input[type="date"].form-input）。 */
     .modal .form-row, .modal .form-row > * { min-width: 0; }
-    .modal input[type="date"] { min-width: 0; max-width: 100%; }
-    .modal input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
-    .modal input[type="date"]::-webkit-datetime-edit { padding: 0; min-width: 0; }
     .modal input[type="date"]::-webkit-calendar-picker-indicator { flex: none; }
+    /* 最后一道兜底：弹窗本来就因为 overflow-y:auto 成了滚动容器，这里把横向明确关掉——
+       表单里没有任何内容需要横向滚动，所以就算还有哪个控件算出了超宽，也不会跑出屏幕。
+       这是兜底、不是修法：真正的修法是上面那组让控件自己缩回容器的规则。 */
+    .modal { overflow-x: hidden; }
     /* 两列并排的那几行在窄屏改为纵向堆叠：16px 字号下一个日期控件（含日历图标）在
        半栏宽里放不下，而「行权价 + 到期日」「数量 + 权利金」都是两个输入框并排。 */
     @media (max-width: 480px) {
@@ -6818,8 +6837,8 @@
   </div>
 </div>
 
-<script src="data.js?v=841"></script>
-<script src="desk.js?v=841"></script>
+<script src="data.js?v=842"></script>
+<script src="desk.js?v=842"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
