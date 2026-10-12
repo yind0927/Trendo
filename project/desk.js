@@ -15354,24 +15354,31 @@ function rsAdjustGrade(grade, rsResult) {
   // 数据全部来自 fetchMarketData 已经发出的那次 history 请求，零新增调用。
   const BREADTH_EDGE = 0.3;          // 距均线 <0.3% 视为贴近分界（状态容易翻面）
 
-  // 只比较 RSP 与 VOO：比值 RSP ÷ VOO 走分红调整后收盘（等权与市值加权 ETF 股息率不同，
-  // 裸价会让比值每年凭空漂约 0.3 个点），缺失才退回裸价。状态只由比值自己对 50 日均线判定，
-  // 不掺入价格趋势或其它 ETF 对。
+  // 只比较 RSP 与 VOO。**取最近一个已收盘交易日**（与周期分析/VOO 和 VIX周期两张回放卡同一
+  // 口径，盘中那根未走完的今天不计）。VOO、RSP 各自的「距 50 日 EMA」用裸收盘价——与方向轴
+  // 同一份 VOO 序列和 calcEMA；比值走分红调整后收盘（等权与市值加权 ETF 股息率不同，裸价会让
+  // 比值每年凭空漂约 0.3 个点），缺失才退回裸价。六个阶段由 VOO 上/下 × RSP 上/下 × 比值
+  // 对 EMA50 的偏离（±BREADTH_EDGE 死区）无状态地判出，互斥且覆盖全部组合。
   function breadthLeg(hist, num, den) {
     const adj = hist?.adjResults || {}, raw = hist?.results || {};
-    const src = (adj[num] && adj[den]) ? adj : raw;
-    const A = src[num], B = src[den];
-    if (!A || !B) return null;
-    const ds = Object.keys(A).filter(d => A[d] > 0 && B[d] > 0).sort();
+    const rs = (raw[num] && raw[den]) ? raw : adj;
+    const rt = (adj[num] && adj[den]) ? adj : raw;
+    if (!rs[num] || !rs[den] || !rt[num] || !rt[den]) return null;
+    let ds = Object.keys(rs[num]).filter(d => rs[num][d] > 0 && rs[den][d] > 0 && rt[num][d] > 0 && rt[den][d] > 0).sort();
+    if (ds.length && isLiveSession(ds[ds.length - 1])) ds = ds.slice(0, -1);
     if (ds.length < 80) return null;                  // EMA50 预热
-    const a = ds.map(d => A[d]), bb = ds.map(d => B[d]);
-    const r = ds.map((d, i) => a[i] / bb[i]);
-    const n = r.length - 1;
-    // 全部口径统一：各自对自己的 50 日 EMA 的偏离
+    const n = ds.length - 1;
     const gapOf = s => { const e = calcEMASeries(s, 50)[n]; return e != null ? (s[n] / e - 1) * 100 : null; };
-    const gap = gapOf(r), gapA = gapOf(a), gapB = gapOf(bb);
-    return { num, den, to: ds[n], gap, gapA, gapB,
-      breadthUp: gap != null ? gap >= 0 : null };
+    const gapA = gapOf(ds.map(d => rs[num][d]));      // RSP 距自己的 EMA50
+    const gapB = gapOf(ds.map(d => rs[den][d]));      // VOO 距自己的 EMA50
+    const gap = gapOf(ds.map(d => rt[num][d] / rt[den][d]));   // 比值距自己的 EMA50
+    let stage = null;
+    if (gapA != null && gapB != null && gap != null) {
+      const vUp = gapB >= 0, rUp = gapA >= 0;
+      stage = vUp && rUp ? (gap > BREADTH_EDGE ? "E+" : gap < -BREADTH_EDGE ? "E-" : "E0")
+            : vUp ? "D" : !rUp ? "C" : "R";
+    }
+    return { num, den, to: ds[n], gap, gapA, gapB, stage };
   }
 
   function buildBreadth(hist) {
@@ -15380,17 +15387,33 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   const BREADTH_STATES = {
-    "1": { zh: "等权领先", color: "var(--up)",
-           desc: "RSP 相对 VOO 在其 50 日均线上——平均个股不输权重股",
-           cond: "RSP ÷ VOO 在它的 50 日均线上",
-           mean: "平均一只股票的表现不比权重股差，涨跌不只靠少数龙头。" },
-    "0": { zh: "大票领先", color: "var(--warn)",
-           desc: "RSP 相对 VOO 在其 50 日均线下——权重股跑赢平均个股",
-           cond: "RSP ÷ VOO 在它的 50 日均线下",
-           mean: "权重股比平均一只股票强，行情集中在少数龙头。科技领涨时常见，不一定是坏信号。" },
+    "E+": { zh: "全面扩张", color: "var(--up)",
+            desc: "VOO、RSP 都在 50 日 EMA 上，比值也在上升——大盘和平均个股同步走强",
+            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 上方 0.3% 以外",
+            mean: "平均一只股票涨得比权重股还好，上涨有广泛参与。" },
+    "E0": { zh: "温和扩张", color: "var(--accent)",
+            desc: "VOO、RSP 都在 50 日 EMA 上，比值基本持平——普涨仍在，没有明显风格优势",
+            cond: "VOO 上、RSP 上，RSP÷VOO 距 EMA 在 ±0.3% 以内",
+            mean: "平均个股与权重股步调一致。比值贴着均线，离翻到上下两侧都很近。" },
+    "E-": { zh: "大票领涨", color: "var(--warn)",
+            desc: "VOO、RSP 仍在 50 日 EMA 上，但比值在下降——涨幅集中在权重股",
+            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 下方 0.3% 以外",
+            mean: "指数强，但平均个股跟得没那么紧。科技领涨时常见，不一定是坏信号。" },
+    "D": { zh: "宽度恶化", color: "var(--orange)",
+           desc: "VOO 还在 50 日 EMA 上，RSP 已跌到下方——指数表面稳，内部已走弱",
+           cond: "VOO 上、RSP 下",
+           mean: "权重股撑着指数，平均一只股票已经转弱。" },
+    "C": { zh: "全面收缩", color: "var(--down)",
+           desc: "VOO、RSP 都在 50 日 EMA 下——大盘和平均个股同时转弱",
+           cond: "VOO 下、RSP 下",
+           mean: "下跌波及面广，不是少数龙头拖累。" },
+    "R": { zh: "宽度修复", color: "var(--blue)",
+           desc: "RSP 已站上 50 日 EMA，VOO 还在下方——平均个股先走出来",
+           cond: "VOO 下、RSP 上",
+           mean: "等权先于大盘企稳，行情有可能重新扩散；还没被指数确认。" },
   };
-  const BREADTH_ORDER = ["1", "0"];
-  const brState = leg => leg && leg.breadthUp != null ? BREADTH_STATES[leg.breadthUp ? "1" : "0"] : null;
+  const BREADTH_ORDER = ["E+", "E0", "E-", "D", "C", "R"];
+  const brState = leg => leg && leg.stage ? BREADTH_STATES[leg.stage] : null;
 
   // 各种状态解析。**默认折叠**，展开后记住（`"1"` 才算展开）。
   function breadthRulesHTML(cur) {
@@ -15410,7 +15433,7 @@ function rsAdjustGrade(grade, rsResult) {
     }).join("");
     return `
       <details class="mkp-fold mkb-fold" data-mkp-fold="breadth-rules"${saved === "1" ? " open" : ""}>
-        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>各种状态解析<i> · States</i></span><span class="mkp-filtered">2 种状态</span></summary>
+        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>各种状态解析<i> · States</i></span><span class="mkp-filtered">6 种状态</span></summary>
         <div class="mkb-rules">${rows}</div>
       </details>`;
   }
@@ -15425,7 +15448,8 @@ function rsAdjustGrade(grade, rsResult) {
     const z = v => v != null && Math.abs(v) < 0.005;
     const sgn = v => v == null ? "—" : z(v) ? "0.00%" : (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "%";
     const cls = v => v == null || z(v) ? "" : v >= 0 ? "up" : "down";
-    const edge = sp.gap != null && Math.abs(sp.gap) < BREADTH_EDGE;
+    // 任一条线距自己的均线 <0.3% 都算贴近分界：阶段随时可能翻面
+    const nearEdge = [["RSP", sp.gapA], ["VOO", sp.gapB], ["RSP÷VOO", sp.gap]].filter(([, v]) => v != null && Math.abs(v) < BREADTH_EDGE).map(([k]) => k);
     const cell = (l, v, c, t) => `<div class="mkb-m" title="${t}"><div class="mkb-m-l">${l}</div><div class="mkb-m-v ${c}">${v}</div></div>`;
     return card(`
       ${head}
@@ -15433,14 +15457,14 @@ function rsAdjustGrade(grade, rsResult) {
         ${st ? `<span class="mkt-badge" style="color:${st.color};border-color:${mkAlpha(st.color, 25)};background:${mkAlpha(st.color, 7)}"><span class="mkt-badge-dot" style="background:${st.color}"></span>${st.zh}</span>
         <span class="mkb-desc">${st.desc}</span>` : `<span class="mkb-desc">均线数据不足，暂不判定。</span>`}
       </div>
-      ${edge ? `<div class="mkb-edge">比值距 50 日均线只有 ${sgn(sp.gap)}，状态很容易翻面——不要把它读成稳定结论。</div>` : ""}
+      ${nearEdge.length ? `<div class="mkb-edge">${nearEdge.join("、")} 距 50 日 EMA 不到 ${BREADTH_EDGE}%，阶段很容易翻面——不要把它读成稳定结论。</div>` : ""}
       <div class="mkb-metrics">
-        ${cell("RSP 距50日EMA", sgn(sp.gapA), cls(sp.gapA), "RSP 相对自己的 50 日 EMA（分红调整后收盘）")}
-        ${cell("VOO 距50日EMA", sgn(sp.gapB), cls(sp.gapB), "VOO 相对自己的 50 日 EMA（分红调整后收盘）")}
-        ${cell("RSP÷VOO 距50日EMA", sgn(sp.gap), cls(sp.gap), "比值相对它自己的 50 日 EMA，决定上面的状态；约等于前两格之差")}
+        ${cell("RSP 距50日EMA", sgn(sp.gapA), cls(sp.gapA), "RSP 相对自己的 50 日 EMA（裸收盘价，与方向轴同口径）")}
+        ${cell("VOO 距50日EMA", sgn(sp.gapB), cls(sp.gapB), "VOO 相对自己的 50 日 EMA（裸收盘价，与方向轴、VOO 和 VIX周期卡同一份序列）")}
+        ${cell("RSP÷VOO 距50日EMA", sgn(sp.gap), cls(sp.gap), "比值（分红调整后）相对它自己的 50 日 EMA，只用来在「VOO、RSP 都在上方」时细分三档；约等于前两格之差")}
       </div>
       ${breadthRulesHTML(st)}
-      <div class="mkb-note">数据至 ${sp.to}，均为分红调整后收盘、50 日 EMA 口径。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
+      <div class="mkb-note">最近已收盘交易日 ${sp.to}，50 日 EMA 口径（盘中不计今天）。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
   }
 
   function mkVxnVixRatioHTML(vxn, vix) {
