@@ -17564,7 +17564,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="brief-card" id="market-brief">
         <div class="brief-loading">正在生成今日市场简报…</div>
       </div>
-      ${sec("当前状态", "Right Now", "实时价")}
+      ${sec("当前状态", "Now", "实时价")}
       ${mkAxesHTML(axes)}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
