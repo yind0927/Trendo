@@ -15400,17 +15400,17 @@ function rsAdjustGrade(grade, rsResult) {
   const BREADTH_STATES = {
     "E+": { zh: "全面扩张", color: "var(--up)",
             desc: "VOO、RSP 都在 50 日 EMA 上，比值也在上升——等权与市值加权同步走强",
-            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 上方 0.5% 以外",
+            cond: "VOO 上、RSP 上，且 RSP÷VOO 高于自己的 EMA 超过 0.5%（RSP 比 VOO 强）",
             mean: "等权的 RSP 比市值加权的 VOO 涨得更好，说明上涨不只靠少数权重股，参与面更广。" },
     "E0": { zh: "温和扩张", color: "var(--accent)",
             desc: "VOO、RSP 都在 50 日 EMA 上，比值基本持平——普涨仍在，没有明显风格优势",
-            cond: "VOO 上、RSP 上，RSP÷VOO 距 EMA 在 ±0.5% 以内",
+            cond: "VOO 上、RSP 上，且 RSP÷VOO 距自己的 EMA 不超过 ±0.5%（两者差不多强）",
             mean: "RSP 与 VOO 步调一致，没有明显的风格偏向。比值贴着均线，离翻到上下两侧都很近。" },
     "E-": { zh: "大票领涨", color: "var(--warn)",
             desc: "VOO、RSP 仍在 50 日 EMA 上，但比值在下降——涨幅集中在权重股",
-            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 下方 0.5% 以外",
+            cond: "VOO 上、RSP 上，且 RSP÷VOO 低于自己的 EMA 超过 0.5%（RSP 明显比 VOO 弱）",
             mean: "VOO 强，但等权的 RSP 跟得没那么紧，涨幅更集中在大市值股票。科技领涨时常见，不一定是坏信号。" },
-    "D": { zh: "宽度恶化", color: "var(--orange)",
+    "D": { zh: "宽度变差", color: "var(--orange)",
            desc: "VOO 还在 50 日 EMA 上，RSP 已跌到下方——指数表面稳，内部已走弱",
            cond: "VOO 上、RSP 下",
            mean: "VOO 靠大市值股票撑着，等权的 RSP 已经转弱，上涨的参与面在变窄。" },
@@ -15445,7 +15445,7 @@ function rsAdjustGrade(grade, rsResult) {
     return `
       <details class="mkp-fold mkb-fold" data-mkp-fold="breadth-rules"${saved === "1" ? " open" : ""}>
         <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>各种状态解析<i> · States</i></span><span class="mkp-filtered">6 种状态</span></summary>
-        <div class="mkb-rules">${rows}</div>
+        <div class="mkb-rules"><div class="mkb-rules-intro">判定顺序：① VOO 在不在自己的 50 日 EMA 上方；② RSP 在不在；③ 只有两者都在上方时，才再看 RSP÷VOO 相对自己 EMA 的偏离，按 ±${BREADTH_EDGE}% 分成三档（高于 → 全面扩张，±${BREADTH_EDGE}% 以内 → 温和扩张，低于 → 大票领涨）。其余三种由①②直接决定，不看比值。</div>${rows}</div>
       </details>`;
   }
 
