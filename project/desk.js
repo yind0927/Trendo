@@ -15345,6 +15345,121 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
 
+  // ── 市场宽度 · 等权 ÷ 市值加权 ─────────────────────────────────────────────
+  // 真正的宽度（标普 500 里多少只站在 50 日线上、涨跌家数）要拉 500 只，做不了——
+  // `/api/history` 单次上限 50 个 symbol，逐只拉会推高 serverless CPU 也会被 Yahoo 限流。
+  // 这里用 RSP（标普 500 等权）÷ VOO（市值加权）作替代：等权的每一只都算进去，没有
+  // 抽样偏差，历史也比任何自选成分股名单长得多。**它衡量的是集中度，不等于上涨家数**：
+  // 科技领涨时比值会自然下降（等权多配能源、公用事业），所以必须和价格趋势一起读。
+  // 数据全部来自 fetchMarketData 已经发出的那次 history 请求，零新增调用。
+  const BREADTH_SESSIONS = 200;      // 迷你图窗口，与周期分析卡同一个值
+  const BREADTH_EDGE = 0.3;          // 距均线 <0.3% 视为贴近分界（状态容易翻面）
+
+  // 一条腿：num ÷ den。比值走**分红调整后**收盘（等权 ETF 与市值加权 ETF 的股息率不同，
+  // 用裸价会让比值每年凭空漂约 0.3 个点），缺失才退回裸价。
+  function breadthLeg(hist, num, den, priceNow, priceMA50) {
+    const adj = hist?.adjResults || {}, raw = hist?.results || {};
+    const src = (adj[num] && adj[den]) ? adj : raw;
+    const A = src[num], B = src[den];
+    if (!A || !B) return null;
+    const ds = Object.keys(A).filter(d => A[d] > 0 && B[d] > 0).sort();
+    if (ds.length < 120) return null;                 // EMA50 预热 + 60 日变化 + 分位需要足够长
+    const r = ds.map(d => A[d] / B[d]);
+    const e50 = calcEMASeries(r, 50);
+    const n = r.length - 1;
+    const chg = k => (n - k >= 0 && r[n - k] > 0) ? (r[n] / r[n - k] - 1) * 100 : null;
+    // 近 60 日变化在自身历史里的分位（窗口互相重叠，只作参照，不作阈值）
+    const roll = [];
+    for (let i = 60; i <= n; i++) roll.push(r[i] / r[i - 60] - 1);
+    const cur = roll[roll.length - 1];
+    const pctile = roll.length >= 60 ? Math.round(roll.filter(v => v <= cur).length / roll.length * 100) : null;
+    // 价格趋势：市值加权那一腿的价格 vs 它的 EMA50。VOO 用调用方传入的实时价/均线，
+    // 与顶部方向轴同一口径；没传（QQQ 那一腿）就用这条序列自己的最后一根。
+    const closes = ds.map(d => (raw[den]?.[d] ?? B[d]));
+    const ma50 = priceMA50 ?? calcEMA(closes, 50);
+    const px = priceNow ?? closes[closes.length - 1];
+    const hi252 = Math.max(...closes.slice(-252));
+    const gap = e50[n] != null ? (r[n] / e50[n] - 1) * 100 : null;
+    return {
+      num, den, to: ds[n], r, e50, gap, pctile,
+      chg20: chg(20), chg60: chg(60),
+      priceUp: ma50 != null ? px >= ma50 : null,
+      breadthUp: gap != null ? gap >= 0 : null,
+      offHigh: hi252 > 0 ? (px / hi252 - 1) * 100 : null,
+    };
+  }
+
+  function buildBreadth(hist, { price, ma50 } = {}) {
+    const sp = breadthLeg(hist, "RSP", "VOO", price, ma50);
+    const nq = breadthLeg(hist, "QQQE", "QQQ", null, null);
+    return (sp || nq) ? { sp, nq } : null;
+  }
+
+  // 价格趋势 × 宽度趋势 的 2×2。刻意只用 EMA50 这一条线（与方向轴同一约定），
+  // 不另造阈值；文案只描述现状，不下操作指令。
+  const BREADTH_STATES = {
+    "11": { zh: "宽幅上涨", color: "var(--up)",     desc: "价格在 50 日线上，等权也跑赢大票——上涨有广泛参与" },
+    "10": { zh: "窄幅上涨", color: "var(--warn)",   desc: "价格在 50 日线上，但等权落后大票——上涨集中在少数权重股" },
+    "01": { zh: "大票领跌", color: "var(--accent)", desc: "价格在 50 日线下，但等权更抗跌——跌幅主要来自权重股" },
+    "00": { zh: "全面走弱", color: "var(--down)",   desc: "价格在 50 日线下，等权也落后——下跌波及面广" },
+  };
+  const brState = leg => leg && leg.priceUp != null && leg.breadthUp != null
+    ? BREADTH_STATES[(leg.priceUp ? "1" : "0") + (leg.breadthUp ? "1" : "0")] : null;
+
+  function breadthSparkSVG(leg) {
+    const W = 600, H = 60, P = 4;
+    const n = leg.r.length, from = Math.max(0, n - BREADTH_SESSIONS);
+    const r = leg.r.slice(from), e = leg.e50.slice(from);
+    const all = r.concat(e.filter(v => v != null));
+    const lo = Math.min(...all), hi = Math.max(...all), span = (hi - lo) || 1;
+    const x = i => P + (i / Math.max(1, r.length - 1)) * (W - 2 * P);
+    const y = v => H - P - ((v - lo) / span) * (H - 2 * P);
+    const path = arr => arr.map((v, i) => v == null ? "" : `${arr.slice(0, i).some(u => u != null) ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
+    return `<svg class="mkb-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${leg.num}/${leg.den} 比值走势">
+      <path d="${path(e)}" fill="none" stroke="var(--fg-3)" stroke-width="1.2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+      <path d="${path(r)}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+    </svg>`;
+  }
+
+  function mkBreadthHTML(b) {
+    const card = inner => `<div class="mkb-card">${inner}</div>`;
+    const head = `<div class="mkb-hd"><div class="mkt-card-label">市场宽度 · BREADTH</div><span class="mkb-sub">等权 ÷ 市值加权</span></div>`;
+    const sp = b?.sp;
+    if (!sp) return card(`${head}<div class="mkb-empty">RSP / VOO 历史数据暂不可用，宽度无法计算。</div>`);
+    const st = brState(sp);
+    // 四舍五入到 0.00 的值不带符号也不着色——「−0.00%」读起来像在说方向，其实没有
+    const z = v => v != null && Math.abs(v) < 0.005;
+    const sgn = v => v == null ? "—" : z(v) ? "0.00%" : (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2) + "%";
+    const cls = v => v == null || z(v) ? "" : v >= 0 ? "up" : "down";
+    const edge = sp.gap != null && Math.abs(sp.gap) < BREADTH_EDGE;
+    const cell = (l, v, c, t) => `<div class="mkb-m" title="${t}"><div class="mkb-m-l">${l}</div><div class="mkb-m-v ${c}">${v}</div></div>`;
+    const nq = b.nq, nqSt = brState(nq);
+    const nqRow = nq ? `<div class="mkb-leg2">
+        <span class="mkb-leg2-k">QQQE ÷ QQQ</span>
+        <span class="mkb-leg2-v ${cls(nq.chg20)}">20日 ${sgn(nq.chg20)}</span>
+        <span class="mkb-leg2-v ${cls(nq.chg60)}">60日 ${sgn(nq.chg60)}</span>
+        ${nqSt ? `<span class="mkb-chip" style="color:${nqSt.color};border-color:${mkAlpha(nqSt.color, 30)};background:${mkAlpha(nqSt.color, 8)}">${nqSt.zh}</span>` : ""}
+        <span class="mkb-leg2-d">纳指 100 的等权 vs 市值加权</span>
+      </div>` : "";
+    return card(`
+      ${head}
+      <div class="mkb-state">
+        ${st ? `<span class="mkt-badge" style="color:${st.color};border-color:${mkAlpha(st.color, 25)};background:${mkAlpha(st.color, 7)}"><span class="mkt-badge-dot" style="background:${st.color}"></span>${st.zh}</span>
+        <span class="mkb-desc">${st.desc}</span>` : `<span class="mkb-desc">价格或均线数据不足，暂不判定。</span>`}
+      </div>
+      ${edge ? `<div class="mkb-edge">比值距 50 日均线只有 ${sgn(sp.gap)}，状态很容易翻面——不要把它读成稳定结论。</div>` : ""}
+      <div class="mkb-metrics">
+        ${cell("RSP ÷ VOO 20日", sgn(sp.chg20), cls(sp.chg20), "比值 20 个交易日的变化。上升＝等权跑赢市值加权")}
+        ${cell("60日", sgn(sp.chg60), cls(sp.chg60), "比值 60 个交易日的变化（与周期系统分析里的「宽度背离」同一口径）")}
+        ${cell("距50日均线", sgn(sp.gap), cls(sp.gap), "比值相对它自己的 50 日均线。在线上＝宽度趋势向好")}
+        ${cell("60日变化分位", sp.pctile == null ? "—" : sp.pctile + "%", "", "最近这个 60 日变化，在窗口内全部 60 日变化里的位置。窗口互相重叠且只有约 1.5 年，只作参照")}
+      </div>
+      ${breadthSparkSVG(sp)}
+      <div class="mkb-legend"><span class="mkb-lg-line"></span>RSP÷VOO 比值<span class="mkb-lg-dash"></span>50 日均线<span class="mkb-lg-to">至 ${sp.to}</span></div>
+      ${nqRow}
+      <div class="mkb-note">比值上升＝多数个股跑赢大票。<b>它衡量集中度，不等于上涨家数</b>：科技领涨时会自然下降（等权多配能源、公用事业）。价格趋势按 VOO 对 50 日均线判定，与顶部方向轴同一口径。仅作背景参考，未接入综合建议。</div>`);
+  }
+
   function mkVxnVixRatioHTML(vxn, vix) {
     if (!vix || !vxn) return "";
     const ratio = (vxn / vix).toFixed(2);
@@ -17411,7 +17526,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderMarket(data) {
     const el = $("#market-content");
     if (!el) return;
-    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, advice, next } = data;
+    const { vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, advice, next, breadth } = data;
     const today = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
     const ema10Tag = (ema10, trend) => ema10 == null ? "" : (() => {
       const arr = trend === "up" ? "↑" : trend === "down" ? "↓" : "→";
@@ -17440,6 +17555,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
+      ${mkBreadthHTML(breadth)}
       ${mkNextStateHTML(next, advice)}
       <div class="mkt-playbook-ref">
         <details>
@@ -17628,7 +17744,8 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, advice, next });
+      const breadth = buildBreadth(histRes.status === "fulfilled" ? histRes.value : null, { price: benchPrice, ma50: benchMA50 });
+      renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, advice, next, breadth });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
         vix, fg, rsi, regime: `${axes.combined.headline} · ${axes.combined.state}`, vixTrend, indices,
