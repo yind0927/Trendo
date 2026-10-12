@@ -17584,13 +17584,13 @@ function rsAdjustGrade(grade, rsResult) {
           ${mkPlaybookHTML()}
         </details>
       </div>
-      ${sec("周期回放", "Cycle Replay", "已收盘交易日")}
+      ${sec("周期分析", "Cycle Analysis", "已收盘交易日")}
       ${mkAdviceHTML(advice, axes?.combined)}
       ${mkPhaseHTML(phase, axes || {}, pending)}
-      ${sec("长期参照", "Long-term", "历史回撤 · 季度判据")}
+      ${sec("现阶段分析", "Current Phase", "历史回撤 · 季度判据")}
       <div class="brief-card dd-card" id="drawdown-card"></div>
       <div id="cycle-card"></div>
-      ${sec("资金流向", "Rotation", "板块相对 VOO")}
+      ${sec("板块信息", "Sectors", "板块相对 VOO")}
       <div id="sector-rotation" class="sect-section"></div>`;
     wireMarketFolds(el);
   }
