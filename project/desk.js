@@ -15359,56 +15359,67 @@ function rsAdjustGrade(grade, rsResult) {
   // 同一份 VOO 序列和 calcEMA；比值走分红调整后收盘（等权与市值加权 ETF 股息率不同，裸价会让
   // 比值每年凭空漂约 0.3 个点），缺失才退回裸价。六个阶段由 VOO 上/下 × RSP 上/下 × 比值
   // 对 EMA50 的偏离（±BREADTH_EDGE 死区）无状态地判出，互斥且覆盖全部组合。
-  function breadthLeg(hist, num, den) {
+  function breadthLeg(hist, num, den, live) {
     const adj = hist?.adjResults || {}, raw = hist?.results || {};
     const rs = (raw[num] && raw[den]) ? raw : adj;
     const rt = (adj[num] && adj[den]) ? adj : raw;
     if (!rs[num] || !rs[den] || !rt[num] || !rt[den]) return null;
-    let ds = Object.keys(rs[num]).filter(d => rs[num][d] > 0 && rs[den][d] > 0 && rt[num][d] > 0 && rt[den][d] > 0).sort();
-    if (ds.length && isLiveSession(ds[ds.length - 1])) ds = ds.slice(0, -1);
+    const ds = Object.keys(rs[num]).filter(d => rs[num][d] > 0 && rs[den][d] > 0 && rt[num][d] > 0 && rt[den][d] > 0).sort();
     if (ds.length < 80) return null;                  // EMA50 预热
-    const n = ds.length - 1;
+    // 实时价：两条腿都有报价才启用。最后一根是今天盘中那根 → 用实时价替换它；
+    // 开盘中但历史还没有今天那根 → 追加一点；休市 → 最后一根就是最近收盘，不动。
+    const lv = live && live[num] > 0 && live[den] > 0 ? live : null;
+    const today = etNow().date;
+    const lastD = ds[ds.length - 1];
+    const mode = !lv ? "hist" : isLiveSession(lastD) ? "replace" : (isUSMarketOpen() && lastD < today) ? "append" : "hist";
+    const ser = f => {
+      const s = ds.map(f);
+      if (mode === "replace") s[s.length - 1] = null;
+      return s;
+    };
+    const withLive = (s, v) => { if (mode === "replace") s[s.length - 1] = v; else if (mode === "append") s.push(v); return s; };
+    const n = ds.length - 1 + (mode === "append" ? 1 : 0);
     const gapOf = s => { const e = calcEMASeries(s, 50)[n]; return e != null ? (s[n] / e - 1) * 100 : null; };
-    const gapA = gapOf(ds.map(d => rs[num][d]));      // RSP 距自己的 EMA50
-    const gapB = gapOf(ds.map(d => rs[den][d]));      // VOO 距自己的 EMA50
-    const gap = gapOf(ds.map(d => rt[num][d] / rt[den][d]));   // 比值距自己的 EMA50
+    const gapA = gapOf(withLive(ser(d => rs[num][d]), lv && lv[num]));      // RSP 距自己的 EMA50
+    const gapB = gapOf(withLive(ser(d => rs[den][d]), lv && lv[den]));      // VOO 距自己的 EMA50
+    const gap = gapOf(withLive(ser(d => rt[num][d] / rt[den][d]), lv && lv[num] / lv[den]));   // 比值距自己的 EMA50
     let stage = null;
     if (gapA != null && gapB != null && gap != null) {
       const vUp = gapB >= 0, rUp = gapA >= 0;
       stage = vUp && rUp ? (gap > BREADTH_EDGE ? "E+" : gap < -BREADTH_EDGE ? "E-" : "E0")
             : vUp ? "D" : !rUp ? "C" : "R";
     }
-    return { num, den, to: ds[n], gap, gapA, gapB, stage };
+    return { num, den, to: mode === "append" ? today : ds[ds.length - 1], gap, gapA, gapB, stage, live: mode !== "hist" };
   }
 
-  function buildBreadth(hist) {
-    const sp = breadthLeg(hist, "RSP", "VOO");
+  function buildBreadth(hist, live) {
+    const sp = breadthLeg(hist, "RSP", "VOO", live);
     return sp ? { sp } : null;
   }
 
   const BREADTH_STATES = {
     "E+": { zh: "全面扩张", color: "var(--up)",
-            desc: "VOO、RSP 都在 50 日 EMA 上，比值也在上升——大盘和平均个股同步走强",
+            desc: "VOO、RSP 都在 50 日 EMA 上，比值也在上升——等权与市值加权同步走强",
             cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 上方 0.3% 以外",
-            mean: "平均一只股票涨得比权重股还好，上涨有广泛参与。" },
+            mean: "等权的 RSP 比市值加权的 VOO 涨得更好，说明上涨不只靠少数权重股，参与面更广。" },
     "E0": { zh: "温和扩张", color: "var(--accent)",
             desc: "VOO、RSP 都在 50 日 EMA 上，比值基本持平——普涨仍在，没有明显风格优势",
             cond: "VOO 上、RSP 上，RSP÷VOO 距 EMA 在 ±0.3% 以内",
-            mean: "平均个股与权重股步调一致。比值贴着均线，离翻到上下两侧都很近。" },
+            mean: "RSP 与 VOO 步调一致，没有明显的风格偏向。比值贴着均线，离翻到上下两侧都很近。" },
     "E-": { zh: "大票领涨", color: "var(--warn)",
             desc: "VOO、RSP 仍在 50 日 EMA 上，但比值在下降——涨幅集中在权重股",
             cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 下方 0.3% 以外",
-            mean: "指数强，但平均个股跟得没那么紧。科技领涨时常见，不一定是坏信号。" },
+            mean: "VOO 强，但等权的 RSP 跟得没那么紧，涨幅更集中在大市值股票。科技领涨时常见，不一定是坏信号。" },
     "D": { zh: "宽度恶化", color: "var(--orange)",
            desc: "VOO 还在 50 日 EMA 上，RSP 已跌到下方——指数表面稳，内部已走弱",
            cond: "VOO 上、RSP 下",
-           mean: "权重股撑着指数，平均一只股票已经转弱。" },
+           mean: "VOO 靠大市值股票撑着，等权的 RSP 已经转弱，上涨的参与面在变窄。" },
     "C": { zh: "全面收缩", color: "var(--down)",
-           desc: "VOO、RSP 都在 50 日 EMA 下——大盘和平均个股同时转弱",
+           desc: "VOO、RSP 都在 50 日 EMA 下——市值加权与等权同时转弱",
            cond: "VOO 下、RSP 下",
            mean: "下跌波及面广，不是少数龙头拖累。" },
     "R": { zh: "宽度修复", color: "var(--blue)",
-           desc: "RSP 已站上 50 日 EMA，VOO 还在下方——平均个股先走出来",
+           desc: "RSP 已站上 50 日 EMA，VOO 还在下方——等权先走出来",
            cond: "VOO 下、RSP 上",
            mean: "等权先于大盘企稳，行情有可能重新扩散；还没被指数确认。" },
   };
@@ -15464,7 +15475,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${cell("RSP÷VOO 距50日EMA", sgn(sp.gap), cls(sp.gap), "比值（分红调整后）相对它自己的 50 日 EMA，只用来在「VOO、RSP 都在上方」时细分三档；约等于前两格之差")}
       </div>
       ${breadthRulesHTML(st)}
-      <div class="mkb-note">最近已收盘交易日 ${sp.to}，50 日 EMA 口径（盘中不计今天）。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
+      <div class="mkb-note">${sp.live ? `实时价（盘中随行情变化），50 日 EMA 口径` : `最近收盘 ${sp.to}（休市或实时价暂缺），50 日 EMA 口径`}。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
   }
 
   function mkVxnVixRatioHTML(vxn, vix) {
@@ -17599,14 +17610,14 @@ function rsAdjustGrade(grade, rsResult) {
       // reaches the card.
       const fromDate = (() => { const d = new Date(); d.setDate(d.getDate() - 660); return d.toISOString().slice(0, 10); })();
       const [quoteRes, histRes, fgRes] = await Promise.allSettled([
-        fetch("/api/quote?stocks=%5EVIX,%5EVXN,VOO,SPY,QQQ,DIA,IWM").then(r => r.json()),
+        fetch("/api/quote?stocks=%5EVIX,%5EVXN,VOO,RSP,SPY,QQQ,DIA,IWM").then(r => r.json()),
         fetch("/api/history?symbols=VOO,%5EVIX,%5EVXN,RSP,QQQE,QQQ&from=" + fromDate).then(r => r.json()),
         fetch("/api/feargreed").then(r => r.json()),
       ]);
 
       // VIX / VXN
       let vix = 0, vxn = 0, vixChg = null, vxnChg = null, vixAbs = null, vxnAbs = null;
-      let vooLive = null;
+      let vooLive = null, rspLive = null;
       if (quoteRes.status === "fulfilled" && quoteRes.value?.results) {
         const q = quoteRes.value.results;
         if (q["^VIX"]) {
@@ -17620,6 +17631,7 @@ function rsAdjustGrade(grade, rsResult) {
         // market by up to half an hour — long enough to still read 做多 after VOO had
         // already closed under EMA50. The quote endpoint is cached 45s.
         if (q["VOO"]?.last > 0) vooLive = +q["VOO"].last.toFixed(2);
+        if (q["RSP"]?.last > 0) rspLive = +q["RSP"].last.toFixed(2);
         if (q["^VXN"]) {
           const last = q["^VXN"].last, pc = q["^VXN"].prevClose;
           vxn    = +last.toFixed(2);
@@ -17751,7 +17763,7 @@ function rsAdjustGrade(grade, rsResult) {
         : null;
       // 宽度背离：等权 vs 市值加权，用的是上面那一次 history 请求的结果，无额外调用
       _cycBreadth = cycBreadth(histResults);
-      const breadth = buildBreadth(histRes.status === "fulfilled" ? histRes.value : null, { price: benchPrice, ma50: benchMA50 });
+      const breadth = buildBreadth(histRes.status === "fulfilled" ? histRes.value : null, { VOO: vooLive, RSP: rspLive });
       renderMarket({ vix, vxn, fg, rsi, vixChg, vxnChg, vixAbs, vxnAbs, fgAbs, fgChg, rsiAbs, rsiChg, vixEMA10, vixTrend, vxnEMA10, vxnTrend, axes, phase, pending, advice, next, breadth });
       // AI brief context: pass the three-axis combined recommendation + direction/sentiment/posMax.
       const mktCtx = {
