@@ -4499,12 +4499,36 @@
   .mkb-leg2-v.down { color: var(--down); }
   .mkb-leg2-d { font-size: 11px; color: var(--fg-3); }
   .mkb-chip { display: inline-flex; padding: 2px 8px; border-radius: 10px; border: 1px solid; font-size: 10.5px; font-weight: 700; }
+  /* 全部状态与说明：套用 .mkp-fold/.mkp-sub 的折叠排版，卡内 gap 已经够了，summary 不再带上边距 */
+  .mkb-fold > summary.mkp-sub { margin: 0; }
+  .mkb-fold[open] > summary.mkp-sub { margin-bottom: 10px; }
+  .mkb-fold .mkp-sub i { font-style: normal; font-weight: 400; color: var(--fg-3); }
+  .mkb-rules-intro { font-size: 12px; color: var(--fg-2); line-height: 1.6; margin-bottom: 10px; }
+  .mkb-rules { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .mkb-rule { display: flex; gap: 10px; padding: 10px 12px; align-items: flex-start; }
+  .mkb-rule + .mkb-rule { border-top: 1px solid var(--line); }
+  .mkb-rule-now { background: color-mix(in oklch, var(--accent) 8%, transparent); }
+  .mkb-rule-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .mkb-rule-body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .mkb-rule-hd { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-1); }
+  .mkb-rule-tag { font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 8px; color: var(--accent); border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent); }
+  .mkb-rule-cond { font-size: 11px; color: var(--fg-3); font-family: var(--f-mono); line-height: 1.5; }
+  .mkb-rule-mean { font-size: 12.5px; color: var(--fg-1); line-height: 1.6; }
+  .mkb-rule-watch { font-size: 11.5px; color: var(--fg-3); line-height: 1.6; }
+  .mkb-defs-title { margin: 14px 0 6px; font-size: 11px; font-weight: 600; color: var(--fg-1); }
+  .mkb-defs { display: flex; flex-direction: column; gap: 8px; }
+  .mkb-def { display: flex; gap: 10px; align-items: baseline; }
+  .mkb-def-k { flex: 0 0 96px; font-family: var(--f-mono); font-size: 11px; font-weight: 700; color: var(--fg-2); }
+  .mkb-def-v { font-size: 12px; color: var(--fg-2); line-height: 1.6; min-width: 0; }
+  .mkb-def-v b { color: var(--fg-1); font-weight: 600; }
   .mkb-note { font-size: 11px; color: var(--fg-3); line-height: 1.6; }
   .mkb-note b { color: var(--fg-2); font-weight: 600; }
   @media (max-width: 768px) {
     .mkb-card { padding: 12px 12px 10px; gap: 10px; }
     .mkb-metrics { grid-template-columns: repeat(2, 1fr); }
     .mkb-lg-to { margin-left: 0; width: 100%; }
+    .mkb-def { flex-direction: column; gap: 2px; }
+    .mkb-def-k { flex-basis: auto; }
   }
   .mkt-vix-ratio-strip { display: flex; align-items: center; gap: 10px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; flex-wrap: wrap; }
   .mkt-vxr-key { font-size: 10px; font-weight: 700; letter-spacing: .12em; color: var(--fg-3); text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
@@ -6889,8 +6913,8 @@
   </div>
 </div>
 
-<script src="data.js?v=847"></script>
-<script src="desk.js?v=847"></script>
+<script src="data.js?v=848"></script>
+<script src="desk.js?v=848"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
