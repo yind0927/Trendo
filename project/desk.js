@@ -15398,22 +15398,22 @@ function rsAdjustGrade(grade, rsResult) {
   // 价格趋势 × 宽度趋势 的 2×2。刻意只用 EMA50 这一条线（与方向轴同一约定），
   // 不另造阈值；文案只描述现状，不下操作指令。
   const BREADTH_STATES = {
-    "11": { zh: "宽幅上涨", color: "var(--up)",     desc: "价格在 50 日线上，等权也跑赢大票——上涨有广泛参与",
-            cond: "VOO 在 50 日线上 + RSP÷VOO 在它自己的 50 日线上",
-            mean: "大盘在涨，而且「平均一只股票」涨得比那些最大的权重股还好。上涨不是靠几只龙头撑着，多数个股都在参与。",
-            watch: "这是描述现状，不代表会继续；比值已经很高时，再往上的空间也在变小。" },
-    "10": { zh: "窄幅上涨", color: "var(--warn)",   desc: "价格在 50 日线上，但等权落后大票——上涨集中在少数权重股",
-            cond: "VOO 在 50 日线上 + RSP÷VOO 在它自己的 50 日线下",
-            mean: "大盘在涨，但「平均一只股票」不如那些最大的权重股。指数的涨幅主要来自少数龙头（比如几只科技巨头），其余个股没怎么跟上。",
-            watch: "这类上涨对龙头依赖很重，龙头一回调指数容易跟着跌。但科技领涨本来就会让它出现，不一定是坏信号。" },
-    "01": { zh: "大票领跌", color: "var(--accent)", desc: "价格在 50 日线下，但等权更抗跌——跌幅主要来自权重股",
-            cond: "VOO 在 50 日线下 + RSP÷VOO 在它自己的 50 日线上",
-            mean: "大盘在跌，但「平均一只股票」比权重股跌得少。下跌主要是那几只最大的票拖的，多数个股没有那么惨。",
-            watch: "常见于龙头回调或资金轮动；宽度本身没有恶化，但指数仍在 50 日线下。" },
-    "00": { zh: "全面走弱", color: "var(--down)",   desc: "价格在 50 日线下，等权也落后——下跌波及面广",
-            cond: "VOO 在 50 日线下 + RSP÷VOO 在它自己的 50 日线下",
-            mean: "大盘在跌，而且「平均一只股票」跌得比权重股还多。问题不只在龙头，是普遍性的下跌。",
-            watch: "四种里最弱的组合。本卡只描述现状，不判断买卖。" },
+    "11": { zh: "宽幅上涨", color: "var(--up)",
+            desc: "价格在 50 日线上，等权也跑赢大票——上涨有广泛参与",
+            cond: "VOO 在 50 日线上，比值也在它的 50 日线上",
+            mean: "大盘在涨，平均一只股票涨得比权重股还好，上涨不靠龙头撑着。" },
+    "10": { zh: "窄幅上涨", color: "var(--warn)",
+            desc: "价格在 50 日线上，但等权落后大票——上涨集中在少数权重股",
+            cond: "VOO 在 50 日线上，比值在它的 50 日线下",
+            mean: "大盘在涨，但平均一只股票不如权重股，涨幅主要来自少数龙头。科技领涨时常见，不一定是坏信号。" },
+    "01": { zh: "大票领跌", color: "var(--accent)",
+            desc: "价格在 50 日线下，但等权更抗跌——跌幅主要来自权重股",
+            cond: "VOO 在 50 日线下，比值在它的 50 日线上",
+            mean: "大盘在跌，但平均一只股票比权重股跌得少，下跌主要是龙头拖的。" },
+    "00": { zh: "全面走弱", color: "var(--down)",
+            desc: "价格在 50 日线下，等权也落后——下跌波及面广",
+            cond: "VOO 在 50 日线下，比值也在它的 50 日线下",
+            mean: "大盘在跌，平均一只股票跌得比权重股还多，是普遍性下跌。" },
   };
   const BREADTH_ORDER = ["11", "10", "01", "00"];
   const brState = leg => leg && leg.priceUp != null && leg.breadthUp != null
@@ -15434,36 +15434,33 @@ function rsAdjustGrade(grade, rsResult) {
     </svg>`;
   }
 
-  // 全部状态与指标说明。可收起；**首次默认展开**（没有存过状态时），之后记住用户的选择——
-  // 这张卡的状态名是自造的，不展开就看不懂「窄幅上涨」到底指什么。
+  // 各种状态解析。**默认折叠**，展开后记住（`"1"` 才算展开）；状态名是自造的，需要时点开看。
   function breadthRulesHTML(cur) {
     const KEY = "trendo_mkp_breadth-rules_open";
     let saved = null; try { saved = localStorage.getItem(KEY); } catch (_) {}
-    const open = saved !== "0";
-    // 显式顺序：对象键 "10"/"11" 像整数，Object.values 会把它们排到 "01"/"00" 前面
-    const rows = BREADTH_ORDER.map(k => BREADTH_STATES[k]).map(t => `
-        <div class="mkb-rule${cur && cur.zh === t.zh ? " mkb-rule-now" : ""}">
+    const rows = BREADTH_ORDER.map(k => BREADTH_STATES[k]).map(t => {
+      const now = cur && cur.zh === t.zh;
+      return `
+        <div class="mkb-rule${now ? " mkb-rule-now" : ""}">
           <span class="mkb-rule-dot" style="background:${t.color}"></span>
           <div class="mkb-rule-body">
-            <div class="mkb-rule-hd"><b>${t.zh}</b>${cur && cur.zh === t.zh ? `<span class="mkb-rule-tag">当前</span>` : ""}</div>
-            <div class="mkb-rule-cond">条件：${t.cond}</div>
+            <div class="mkb-rule-hd"><b>${t.zh}</b>${now ? `<span class="mkb-rule-tag">当前</span>` : ""}</div>
+            <div class="mkb-rule-cond">${t.cond}</div>
             <div class="mkb-rule-mean">${t.mean}</div>
-            <div class="mkb-rule-watch">${t.watch}</div>
           </div>
-        </div>`).join("");
+        </div>`;
+    }).join("");
     const defs = [
-      ["RSP ÷ VOO", "RSP 是标普 500 的<b>等权</b>基金（500 只各占约 0.2%），VOO 是<b>市值加权</b>基金（最大的十来只占三分之一以上）。两者相除：比值上升＝平均一只股票跑赢了大票，下降＝大票跑赢了平均个股。"],
-      ["20日 / 60日", "这个比值在 20 / 60 个交易日里涨了或跌了多少。60 日与周期系统分析里的「宽度背离」是同一口径。"],
-      ["距50日均线", "比值相对它自己的 50 日均线。在线上＝宽度趋势向好，在线下＝趋势转弱。它决定上面状态里「比值在线上/线下」那一半。"],
-      ["60日变化分位", "最近这个 60 日变化，在这段历史里的位置（0% 最差、100% 最好）。窗口互相重叠且只有约 1.5 年，只作参照。"],
-      ["QQQE ÷ QQQ", "纳指 100 的等权 ÷ 市值加权，同样的读法。"],
+      ["RSP ÷ VOO", "等权 ÷ 市值加权。上升＝平均个股跑赢大票。"],
+      ["20日 / 60日", "比值在 20 / 60 个交易日里的变化。"],
+      ["距50日均线", "比值相对自己的 50 日均线，决定状态里「比值在线上/线下」。"],
+      ["60日变化分位", "最近 60 日变化在这段历史里的位置，仅作参照。"],
     ].map(([k, v]) => `<div class="mkb-def"><span class="mkb-def-k">${k}</span><span class="mkb-def-v">${v}</span></div>`).join("");
     return `
-      <details class="mkp-fold mkb-fold" data-mkp-fold="breadth-rules"${open ? " open" : ""}>
-        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>全部状态与说明<i> · All States</i></span><span class="mkp-filtered">4 种状态</span></summary>
-        <div class="mkb-rules-intro">判定方式：先看 VOO 在不在 50 日线上，再看 RSP÷VOO 在不在它自己的 50 日线上，两个「是/否」组合出 4 种状态。</div>
+      <details class="mkp-fold mkb-fold" data-mkp-fold="breadth-rules"${saved === "1" ? " open" : ""}>
+        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>各种状态解析<i> · States</i></span><span class="mkp-filtered">4 种状态</span></summary>
+        <div class="mkb-rules-intro">先看 VOO 在不在 50 日线上，再看 RSP÷VOO 在不在它自己的 50 日线上，组合出 4 种状态。</div>
         <div class="mkb-rules">${rows}</div>
-        <div class="mkb-defs-title">指标说明</div>
         <div class="mkb-defs">${defs}</div>
       </details>`;
   }
