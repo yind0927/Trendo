@@ -15352,7 +15352,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 抽样偏差，历史也比任何自选成分股名单长得多。**它衡量的是集中度，不等于上涨家数**：
   // 科技领涨时比值会自然下降（等权多配能源、公用事业），所以必须和价格趋势一起读。
   // 数据全部来自 fetchMarketData 已经发出的那次 history 请求，零新增调用。
-  const BREADTH_EDGE = 0.3;          // 距均线 <0.3% 视为贴近分界（状态容易翻面）
+  const BREADTH_EDGE = 0.5;          // 距均线 <0.5% 视为贴近分界（状态容易翻面）
 
   // 只比较 RSP 与 VOO。**取最近一个已收盘交易日**（与周期分析/VOO 和 VIX周期两张回放卡同一
   // 口径，盘中那根未走完的今天不计）。VOO、RSP 各自的「距 50 日 EMA」用裸收盘价——与方向轴
@@ -15400,15 +15400,15 @@ function rsAdjustGrade(grade, rsResult) {
   const BREADTH_STATES = {
     "E+": { zh: "全面扩张", color: "var(--up)",
             desc: "VOO、RSP 都在 50 日 EMA 上，比值也在上升——等权与市值加权同步走强",
-            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 上方 0.3% 以外",
+            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 上方 0.5% 以外",
             mean: "等权的 RSP 比市值加权的 VOO 涨得更好，说明上涨不只靠少数权重股，参与面更广。" },
     "E0": { zh: "温和扩张", color: "var(--accent)",
             desc: "VOO、RSP 都在 50 日 EMA 上，比值基本持平——普涨仍在，没有明显风格优势",
-            cond: "VOO 上、RSP 上，RSP÷VOO 距 EMA 在 ±0.3% 以内",
+            cond: "VOO 上、RSP 上，RSP÷VOO 距 EMA 在 ±0.5% 以内",
             mean: "RSP 与 VOO 步调一致，没有明显的风格偏向。比值贴着均线，离翻到上下两侧都很近。" },
     "E-": { zh: "大票领涨", color: "var(--warn)",
             desc: "VOO、RSP 仍在 50 日 EMA 上，但比值在下降——涨幅集中在权重股",
-            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 下方 0.3% 以外",
+            cond: "VOO 上、RSP 上，RSP÷VOO 在 EMA 下方 0.5% 以外",
             mean: "VOO 强，但等权的 RSP 跟得没那么紧，涨幅更集中在大市值股票。科技领涨时常见，不一定是坏信号。" },
     "D": { zh: "宽度恶化", color: "var(--orange)",
            desc: "VOO 还在 50 日 EMA 上，RSP 已跌到下方——指数表面稳，内部已走弱",
