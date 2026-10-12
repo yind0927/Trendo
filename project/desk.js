@@ -15355,69 +15355,44 @@ function rsAdjustGrade(grade, rsResult) {
   const BREADTH_SESSIONS = 200;      // 迷你图窗口，与周期分析卡同一个值
   const BREADTH_EDGE = 0.3;          // 距均线 <0.3% 视为贴近分界（状态容易翻面）
 
-  // 一条腿：num ÷ den。比值走**分红调整后**收盘（等权 ETF 与市值加权 ETF 的股息率不同，
-  // 用裸价会让比值每年凭空漂约 0.3 个点），缺失才退回裸价。
-  function breadthLeg(hist, num, den, priceNow, priceMA50) {
+  // 只比较 RSP 与 VOO：比值 RSP ÷ VOO 走分红调整后收盘（等权与市值加权 ETF 股息率不同，
+  // 裸价会让比值每年凭空漂约 0.3 个点），缺失才退回裸价。状态只由比值自己对 50 日均线判定，
+  // 不掺入价格趋势或其它 ETF 对。
+  function breadthLeg(hist, num, den) {
     const adj = hist?.adjResults || {}, raw = hist?.results || {};
     const src = (adj[num] && adj[den]) ? adj : raw;
     const A = src[num], B = src[den];
     if (!A || !B) return null;
     const ds = Object.keys(A).filter(d => A[d] > 0 && B[d] > 0).sort();
-    if (ds.length < 120) return null;                 // EMA50 预热 + 60 日变化 + 分位需要足够长
-    const r = ds.map(d => A[d] / B[d]);
+    if (ds.length < 80) return null;                  // EMA50 预热 + 60 日变化
+    const a = ds.map(d => A[d]), bb = ds.map(d => B[d]);
+    const r = ds.map((d, i) => a[i] / bb[i]);
     const e50 = calcEMASeries(r, 50);
     const n = r.length - 1;
-    const chg = k => (n - k >= 0 && r[n - k] > 0) ? (r[n] / r[n - k] - 1) * 100 : null;
-    // 近 60 日变化在自身历史里的分位（窗口互相重叠，只作参照，不作阈值）
-    const roll = [];
-    for (let i = 60; i <= n; i++) roll.push(r[i] / r[i - 60] - 1);
-    const cur = roll[roll.length - 1];
-    const pctile = roll.length >= 60 ? Math.round(roll.filter(v => v <= cur).length / roll.length * 100) : null;
-    // 价格趋势：市值加权那一腿的价格 vs 它的 EMA50。VOO 用调用方传入的实时价/均线，
-    // 与顶部方向轴同一口径；没传（QQQ 那一腿）就用这条序列自己的最后一根。
-    const closes = ds.map(d => (raw[den]?.[d] ?? B[d]));
-    const ma50 = priceMA50 ?? calcEMA(closes, 50);
-    const px = priceNow ?? closes[closes.length - 1];
-    const hi252 = Math.max(...closes.slice(-252));
+    const chg = (s, k) => (n - k >= 0 && s[n - k] > 0) ? (s[n] / s[n - k] - 1) * 100 : null;
     const gap = e50[n] != null ? (r[n] / e50[n] - 1) * 100 : null;
-    return {
-      num, den, to: ds[n], r, e50, gap, pctile,
-      chg20: chg(20), chg60: chg(60),
-      priceUp: ma50 != null ? px >= ma50 : null,
-      breadthUp: gap != null ? gap >= 0 : null,
-      offHigh: hi252 > 0 ? (px / hi252 - 1) * 100 : null,
-    };
+    return { num, den, to: ds[n], r, e50, gap,
+      a60: chg(a, 60), b60: chg(bb, 60), chg20: chg(r, 20), chg60: chg(r, 60),
+      breadthUp: gap != null ? gap >= 0 : null };
   }
 
-  function buildBreadth(hist, { price, ma50 } = {}) {
-    const sp = breadthLeg(hist, "RSP", "VOO", price, ma50);
-    const nq = breadthLeg(hist, "QQQE", "QQQ", null, null);
-    return (sp || nq) ? { sp, nq } : null;
+  function buildBreadth(hist) {
+    const sp = breadthLeg(hist, "RSP", "VOO");
+    return sp ? { sp } : null;
   }
 
-  // 价格趋势 × 宽度趋势 的 2×2。刻意只用 EMA50 这一条线（与方向轴同一约定），
-  // 不另造阈值；文案只描述现状，不下操作指令。
   const BREADTH_STATES = {
-    "11": { zh: "宽幅上涨", color: "var(--up)",
-            desc: "价格在 50 日线上，等权也跑赢大票——上涨有广泛参与",
-            cond: "VOO 在 50 日线上，比值也在它的 50 日线上",
-            mean: "大盘在涨，平均一只股票涨得比权重股还好，上涨不靠龙头撑着。" },
-    "10": { zh: "窄幅上涨", color: "var(--warn)",
-            desc: "价格在 50 日线上，但等权落后大票——上涨集中在少数权重股",
-            cond: "VOO 在 50 日线上，比值在它的 50 日线下",
-            mean: "大盘在涨，但平均一只股票不如权重股，涨幅主要来自少数龙头。科技领涨时常见，不一定是坏信号。" },
-    "01": { zh: "大票领跌", color: "var(--accent)",
-            desc: "价格在 50 日线下，但等权更抗跌——跌幅主要来自权重股",
-            cond: "VOO 在 50 日线下，比值在它的 50 日线上",
-            mean: "大盘在跌，但平均一只股票比权重股跌得少，下跌主要是龙头拖的。" },
-    "00": { zh: "全面走弱", color: "var(--down)",
-            desc: "价格在 50 日线下，等权也落后——下跌波及面广",
-            cond: "VOO 在 50 日线下，比值也在它的 50 日线下",
-            mean: "大盘在跌，平均一只股票跌得比权重股还多，是普遍性下跌。" },
+    "1": { zh: "等权领先", color: "var(--up)",
+           desc: "RSP 相对 VOO 在其 50 日均线上——平均个股不输权重股",
+           cond: "RSP ÷ VOO 在它的 50 日均线上",
+           mean: "平均一只股票的表现不比权重股差，涨跌不只靠少数龙头。" },
+    "0": { zh: "大票领先", color: "var(--warn)",
+           desc: "RSP 相对 VOO 在其 50 日均线下——权重股跑赢平均个股",
+           cond: "RSP ÷ VOO 在它的 50 日均线下",
+           mean: "权重股比平均一只股票强，行情集中在少数龙头。科技领涨时常见，不一定是坏信号。" },
   };
-  const BREADTH_ORDER = ["11", "10", "01", "00"];
-  const brState = leg => leg && leg.priceUp != null && leg.breadthUp != null
-    ? BREADTH_STATES[(leg.priceUp ? "1" : "0") + (leg.breadthUp ? "1" : "0")] : null;
+  const BREADTH_ORDER = ["1", "0"];
+  const brState = leg => leg && leg.breadthUp != null ? BREADTH_STATES[leg.breadthUp ? "1" : "0"] : null;
 
   function breadthSparkSVG(leg) {
     const W = 600, H = 60, P = 4;
@@ -15434,7 +15409,7 @@ function rsAdjustGrade(grade, rsResult) {
     </svg>`;
   }
 
-  // 各种状态解析。**默认折叠**，展开后记住（`"1"` 才算展开）；状态名是自造的，需要时点开看。
+  // 各种状态解析。**默认折叠**，展开后记住（`"1"` 才算展开）。
   function breadthRulesHTML(cur) {
     const KEY = "trendo_mkp_breadth-rules_open";
     let saved = null; try { saved = localStorage.getItem(KEY); } catch (_) {}
@@ -15450,24 +15425,16 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
         </div>`;
     }).join("");
-    const defs = [
-      ["RSP ÷ VOO", "等权 ÷ 市值加权。上升＝平均个股跑赢大票。"],
-      ["20日 / 60日", "比值在 20 / 60 个交易日里的变化。"],
-      ["距50日均线", "比值相对自己的 50 日均线，决定状态里「比值在线上/线下」。"],
-      ["60日变化分位", "最近 60 日变化在这段历史里的位置，仅作参照。"],
-    ].map(([k, v]) => `<div class="mkb-def"><span class="mkb-def-k">${k}</span><span class="mkb-def-v">${v}</span></div>`).join("");
     return `
       <details class="mkp-fold mkb-fold" data-mkp-fold="breadth-rules"${saved === "1" ? " open" : ""}>
-        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>各种状态解析<i> · States</i></span><span class="mkp-filtered">4 种状态</span></summary>
-        <div class="mkb-rules-intro">先看 VOO 在不在 50 日线上，再看 RSP÷VOO 在不在它自己的 50 日线上，组合出 4 种状态。</div>
+        <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>各种状态解析<i> · States</i></span><span class="mkp-filtered">2 种状态</span></summary>
         <div class="mkb-rules">${rows}</div>
-        <div class="mkb-defs">${defs}</div>
       </details>`;
   }
 
   function mkBreadthHTML(b) {
     const card = inner => `<div class="mkb-card">${inner}</div>`;
-    const head = `<div class="mkb-hd"><div class="mkt-card-label">市场宽度 · BREADTH</div><span class="mkb-sub">等权 ÷ 市值加权</span></div>`;
+    const head = `<div class="mkb-hd"><div class="mkt-card-label">市场宽度 · BREADTH</div><span class="mkb-sub">RSP 等权 vs VOO 市值加权</span></div>`;
     const sp = b?.sp;
     if (!sp) return card(`${head}<div class="mkb-empty">RSP / VOO 历史数据暂不可用，宽度无法计算。</div>`);
     const st = brState(sp);
@@ -15477,32 +15444,23 @@ function rsAdjustGrade(grade, rsResult) {
     const cls = v => v == null || z(v) ? "" : v >= 0 ? "up" : "down";
     const edge = sp.gap != null && Math.abs(sp.gap) < BREADTH_EDGE;
     const cell = (l, v, c, t) => `<div class="mkb-m" title="${t}"><div class="mkb-m-l">${l}</div><div class="mkb-m-v ${c}">${v}</div></div>`;
-    const nq = b.nq, nqSt = brState(nq);
-    const nqRow = nq ? `<div class="mkb-leg2">
-        <span class="mkb-leg2-k">QQQE ÷ QQQ</span>
-        <span class="mkb-leg2-v ${cls(nq.chg20)}">20日 ${sgn(nq.chg20)}</span>
-        <span class="mkb-leg2-v ${cls(nq.chg60)}">60日 ${sgn(nq.chg60)}</span>
-        ${nqSt ? `<span class="mkb-chip" style="color:${nqSt.color};border-color:${mkAlpha(nqSt.color, 30)};background:${mkAlpha(nqSt.color, 8)}">${nqSt.zh}</span>` : ""}
-        <span class="mkb-leg2-d">纳指 100 的等权 vs 市值加权</span>
-      </div>` : "";
     return card(`
       ${head}
       <div class="mkb-state">
         ${st ? `<span class="mkt-badge" style="color:${st.color};border-color:${mkAlpha(st.color, 25)};background:${mkAlpha(st.color, 7)}"><span class="mkt-badge-dot" style="background:${st.color}"></span>${st.zh}</span>
-        <span class="mkb-desc">${st.desc}</span>` : `<span class="mkb-desc">价格或均线数据不足，暂不判定。</span>`}
+        <span class="mkb-desc">${st.desc}</span>` : `<span class="mkb-desc">均线数据不足，暂不判定。</span>`}
       </div>
       ${edge ? `<div class="mkb-edge">比值距 50 日均线只有 ${sgn(sp.gap)}，状态很容易翻面——不要把它读成稳定结论。</div>` : ""}
       <div class="mkb-metrics">
-        ${cell("RSP ÷ VOO 20日", sgn(sp.chg20), cls(sp.chg20), "比值 20 个交易日的变化。上升＝等权跑赢市值加权")}
-        ${cell("60日", sgn(sp.chg60), cls(sp.chg60), "比值 60 个交易日的变化（与周期系统分析里的「宽度背离」同一口径）")}
-        ${cell("距50日均线", sgn(sp.gap), cls(sp.gap), "比值相对它自己的 50 日均线。在线上＝宽度趋势向好")}
-        ${cell("60日变化分位", sp.pctile == null ? "—" : sp.pctile + "%", "", "最近这个 60 日变化，在窗口内全部 60 日变化里的位置。窗口互相重叠且只有约 1.5 年，只作参照")}
+        ${cell("RSP 60日", sgn(sp.a60), cls(sp.a60), "RSP 60 个交易日涨幅（分红调整后）")}
+        ${cell("VOO 60日", sgn(sp.b60), cls(sp.b60), "VOO 60 个交易日涨幅（分红调整后）")}
+        ${cell("RSP÷VOO 60日", sgn(sp.chg60), cls(sp.chg60), "比值 60 个交易日的变化＝RSP 相对 VOO 多赚/少赚（与周期系统分析里的「宽度背离」同一口径）")}
+        ${cell("距50日均线", sgn(sp.gap), cls(sp.gap), "比值相对它自己的 50 日均线，决定上面的状态")}
       </div>
       ${breadthSparkSVG(sp)}
       <div class="mkb-legend"><span class="mkb-lg-line"></span>RSP÷VOO 比值<span class="mkb-lg-dash"></span>50 日均线<span class="mkb-lg-to">至 ${sp.to}</span></div>
-      ${nqRow}
       ${breadthRulesHTML(st)}
-      <div class="mkb-note">比值上升＝多数个股跑赢大票。<b>它衡量集中度，不等于上涨家数</b>：科技领涨时会自然下降（等权多配能源、公用事业）。价格趋势按 VOO 对 50 日均线判定，与顶部方向轴同一口径。仅作背景参考，未接入综合建议。</div>`);
+      <div class="mkb-note">它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
   }
 
   function mkVxnVixRatioHTML(vxn, vix) {
