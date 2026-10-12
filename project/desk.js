@@ -15410,7 +15410,7 @@ function rsAdjustGrade(grade, rsResult) {
             desc: "VOO、RSP 仍在 50 日 EMA 上，但比值在下降——涨幅集中在权重股",
             cond: "VOO 上、RSP 上，且 RSP÷VOO 低于自己的 EMA 超过 0.5%（RSP 明显比 VOO 弱）",
             mean: "VOO 强，但等权的 RSP 跟得没那么紧，涨幅更集中在大市值股票。科技领涨时常见，不一定是坏信号。" },
-    "D": { zh: "宽度变差", color: "var(--orange)",
+    "D": { zh: "宽度较差", color: "var(--orange)",
            desc: "VOO 还在 50 日 EMA 上，RSP 已跌到下方——指数表面稳，内部已走弱",
            cond: "VOO 上、RSP 下",
            mean: "VOO 靠大市值股票撑着，等权的 RSP 已经转弱，上涨的参与面在变窄。" },
