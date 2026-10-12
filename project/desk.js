@@ -15352,7 +15352,6 @@ function rsAdjustGrade(grade, rsResult) {
   // 抽样偏差，历史也比任何自选成分股名单长得多。**它衡量的是集中度，不等于上涨家数**：
   // 科技领涨时比值会自然下降（等权多配能源、公用事业），所以必须和价格趋势一起读。
   // 数据全部来自 fetchMarketData 已经发出的那次 history 请求，零新增调用。
-  const BREADTH_SESSIONS = 200;      // 迷你图窗口，与周期分析卡同一个值
   const BREADTH_EDGE = 0.3;          // 距均线 <0.3% 视为贴近分界（状态容易翻面）
 
   // 只比较 RSP 与 VOO：比值 RSP ÷ VOO 走分红调整后收盘（等权与市值加权 ETF 股息率不同，
@@ -15364,15 +15363,14 @@ function rsAdjustGrade(grade, rsResult) {
     const A = src[num], B = src[den];
     if (!A || !B) return null;
     const ds = Object.keys(A).filter(d => A[d] > 0 && B[d] > 0).sort();
-    if (ds.length < 80) return null;                  // EMA50 预热 + 60 日变化
+    if (ds.length < 80) return null;                  // EMA50 预热
     const a = ds.map(d => A[d]), bb = ds.map(d => B[d]);
     const r = ds.map((d, i) => a[i] / bb[i]);
-    const e50 = calcEMASeries(r, 50);
     const n = r.length - 1;
-    const chg = (s, k) => (n - k >= 0 && s[n - k] > 0) ? (s[n] / s[n - k] - 1) * 100 : null;
-    const gap = e50[n] != null ? (r[n] / e50[n] - 1) * 100 : null;
-    return { num, den, to: ds[n], r, e50, gap,
-      a60: chg(a, 60), b60: chg(bb, 60), chg20: chg(r, 20), chg60: chg(r, 60),
+    // 全部口径统一：各自对自己的 50 日 EMA 的偏离
+    const gapOf = s => { const e = calcEMASeries(s, 50)[n]; return e != null ? (s[n] / e - 1) * 100 : null; };
+    const gap = gapOf(r), gapA = gapOf(a), gapB = gapOf(bb);
+    return { num, den, to: ds[n], gap, gapA, gapB,
       breadthUp: gap != null ? gap >= 0 : null };
   }
 
@@ -15393,21 +15391,6 @@ function rsAdjustGrade(grade, rsResult) {
   };
   const BREADTH_ORDER = ["1", "0"];
   const brState = leg => leg && leg.breadthUp != null ? BREADTH_STATES[leg.breadthUp ? "1" : "0"] : null;
-
-  function breadthSparkSVG(leg) {
-    const W = 600, H = 60, P = 4;
-    const n = leg.r.length, from = Math.max(0, n - BREADTH_SESSIONS);
-    const r = leg.r.slice(from), e = leg.e50.slice(from);
-    const all = r.concat(e.filter(v => v != null));
-    const lo = Math.min(...all), hi = Math.max(...all), span = (hi - lo) || 1;
-    const x = i => P + (i / Math.max(1, r.length - 1)) * (W - 2 * P);
-    const y = v => H - P - ((v - lo) / span) * (H - 2 * P);
-    const path = arr => arr.map((v, i) => v == null ? "" : `${arr.slice(0, i).some(u => u != null) ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
-    return `<svg class="mkb-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${leg.num}/${leg.den} 比值走势">
-      <path d="${path(e)}" fill="none" stroke="var(--fg-3)" stroke-width="1.2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
-      <path d="${path(r)}" fill="none" stroke="var(--accent)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-    </svg>`;
-  }
 
   // 各种状态解析。**默认折叠**，展开后记住（`"1"` 才算展开）。
   function breadthRulesHTML(cur) {
@@ -15452,15 +15435,12 @@ function rsAdjustGrade(grade, rsResult) {
       </div>
       ${edge ? `<div class="mkb-edge">比值距 50 日均线只有 ${sgn(sp.gap)}，状态很容易翻面——不要把它读成稳定结论。</div>` : ""}
       <div class="mkb-metrics">
-        ${cell("RSP 60日", sgn(sp.a60), cls(sp.a60), "RSP 60 个交易日涨幅（分红调整后）")}
-        ${cell("VOO 60日", sgn(sp.b60), cls(sp.b60), "VOO 60 个交易日涨幅（分红调整后）")}
-        ${cell("RSP÷VOO 60日", sgn(sp.chg60), cls(sp.chg60), "比值 60 个交易日的变化＝RSP 相对 VOO 多赚/少赚（与周期系统分析里的「宽度背离」同一口径）")}
-        ${cell("距50日均线", sgn(sp.gap), cls(sp.gap), "比值相对它自己的 50 日均线，决定上面的状态")}
+        ${cell("RSP 距50日EMA", sgn(sp.gapA), cls(sp.gapA), "RSP 相对自己的 50 日 EMA（分红调整后收盘）")}
+        ${cell("VOO 距50日EMA", sgn(sp.gapB), cls(sp.gapB), "VOO 相对自己的 50 日 EMA（分红调整后收盘）")}
+        ${cell("RSP÷VOO 距50日EMA", sgn(sp.gap), cls(sp.gap), "比值相对它自己的 50 日 EMA，决定上面的状态；约等于前两格之差")}
       </div>
-      ${breadthSparkSVG(sp)}
-      <div class="mkb-legend"><span class="mkb-lg-line"></span>RSP÷VOO 比值<span class="mkb-lg-dash"></span>50 日均线<span class="mkb-lg-to">至 ${sp.to}</span></div>
       ${breadthRulesHTML(st)}
-      <div class="mkb-note">它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
+      <div class="mkb-note">数据至 ${sp.to}，均为分红调整后收盘、50 日 EMA 口径。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
   }
 
   function mkVxnVixRatioHTML(vxn, vix) {

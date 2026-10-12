@@ -4480,18 +4480,12 @@
   .mkb-desc { font-size: 12.5px; color: var(--fg-2); line-height: 1.5; }
   .mkb-edge { font-size: 11.5px; color: var(--warn); line-height: 1.5; }
   .mkb-empty { font-size: 12px; color: var(--fg-3); }
-  .mkb-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .mkb-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .mkb-m { background: var(--bg-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
   .mkb-m-l { font-size: 10px; letter-spacing: .06em; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mkb-m-v { font-family: var(--f-mono); font-size: 15px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; color: var(--fg-1); }
   .mkb-m-v.up { color: var(--up); }
   .mkb-m-v.down { color: var(--down); }
-  .mkb-spark { width: 100%; height: 60px; display: block; }
-  .mkb-legend { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--fg-3); flex-wrap: wrap; }
-  .mkb-lg-line, .mkb-lg-dash { display: inline-block; width: 16px; height: 0; }
-  .mkb-lg-line { border-top: 2px solid var(--accent); }
-  .mkb-lg-dash { border-top: 1.5px dashed var(--fg-3); margin-left: 8px; }
-  .mkb-lg-to { margin-left: auto; font-family: var(--f-mono); }
   /* 全部状态与说明：套用 .mkp-fold/.mkp-sub 的折叠排版，卡内 gap 已经够了，summary 不再带上边距 */
   .mkb-fold > summary.mkp-sub { margin: 0; }
   .mkb-fold[open] > summary.mkp-sub { margin-bottom: 10px; }
@@ -4516,9 +4510,8 @@
   .mkb-note b { color: var(--fg-2); font-weight: 600; }
   @media (max-width: 768px) {
     .mkb-card { padding: 12px 12px 10px; gap: 10px; }
-    .mkb-metrics { grid-template-columns: repeat(2, 1fr); }
-    .mkb-lg-to { margin-left: 0; width: 100%; }
-    .mkb-def { flex-direction: column; gap: 2px; }
+    .mkb-metrics { grid-template-columns: 1fr; }
+      .mkb-def { flex-direction: column; gap: 2px; }
     .mkb-def-k { flex-basis: auto; }
   }
   .mkt-vix-ratio-strip { display: flex; align-items: center; gap: 10px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -6904,8 +6897,8 @@
   </div>
 </div>
 
-<script src="data.js?v=850"></script>
-<script src="desk.js?v=850"></script>
+<script src="data.js?v=851"></script>
+<script src="desk.js?v=851"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
