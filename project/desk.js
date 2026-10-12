@@ -17551,6 +17551,7 @@ function rsAdjustGrade(grade, rsResult) {
       const clr = trend === "up" ? "var(--down)" : trend === "down" ? "var(--up)" : "var(--fg-3)";
       return `<span style="font-size:11px;font-family:var(--f-mono);color:var(--fg-3);margin-left:6px">EMA10 <span style="color:${clr};font-weight:700">${ema10} ${arr}</span></span>`;
     })();
+    const sec = (zh, en, meta) => `<div class="sim-section-label mkt-sec"><span class="ssl-zh">${zh}</span><span class="ssl-en">${en}</span><span class="ssl-rule"></span>${meta ? `<span class="ssl-meta">${meta}</span>` : ""}</div>`;
     el.innerHTML = `
       <div class="page-topbar">
         <div class="page-title">
@@ -17559,10 +17560,11 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         <div class="mkt-date">${today}</div>
       </div>
+      ${sec("今日简报", "Briefing", "AI 日报 · 北京 07:30 更新")}
       <div class="brief-card" id="market-brief">
         <div class="brief-loading">正在生成今日市场简报…</div>
       </div>
-      <div class="mkt-module-sep"></div>
+      ${sec("当前状态", "Right Now", "实时价")}
       ${mkAxesHTML(axes)}
       <div class="mkt-row">
         ${mkIndicatorHTML("vix", vix, vixChg, vixAbs, ema10Tag(vixEMA10, vixTrend))}
@@ -17573,6 +17575,7 @@ function rsAdjustGrade(grade, rsResult) {
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
+      ${sec("结构与切换", "Structure", "宽度 · 距下一状态")}
       ${mkBreadthHTML(breadth)}
       ${mkNextStateHTML(next, advice)}
       <div class="mkt-playbook-ref">
@@ -17581,12 +17584,13 @@ function rsAdjustGrade(grade, rsResult) {
           ${mkPlaybookHTML()}
         </details>
       </div>
+      ${sec("周期回放", "Cycle Replay", "已收盘交易日")}
       ${mkAdviceHTML(advice, axes?.combined)}
       ${mkPhaseHTML(phase, axes || {}, pending)}
+      ${sec("长期参照", "Long-term", "历史回撤 · 季度判据")}
       <div class="brief-card dd-card" id="drawdown-card"></div>
-      <div class="mkt-module-sep"></div>
       <div id="cycle-card"></div>
-      <div class="mkt-module-sep"></div>
+      ${sec("资金流向", "Rotation", "板块相对 VOO")}
       <div id="sector-rotation" class="sect-section"></div>`;
     wireMarketFolds(el);
   }

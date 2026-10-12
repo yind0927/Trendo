@@ -5295,7 +5295,12 @@
   }
 
   /* ============ SECTOR ROTATION ============ */
-  .sect-section { margin-top: 24px; }
+  .sect-section { margin-top: 0; }
+  /* Market 页分区：同一套分区标题，区内模块间距统一 20px，区与区之间 36px */
+  .mkt-sec { margin: 36px 0 14px; }
+  .mkt-sec:first-of-type { margin-top: 20px; }
+  #market-content .mkt-card, #market-content .mkb-card, #market-content .brief-card, #market-content .cyc-card { margin-bottom: 20px; }
+  #market-content .mkt-row .mkt-card { margin-bottom: 0; }
   .sect-head { display: flex; flex-direction: column; margin-bottom: 12px; gap: 8px; }
   .sect-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .sect-title { display: flex; align-items: baseline; gap: 8px; }
@@ -6897,8 +6902,8 @@
   </div>
 </div>
 
-<script src="data.js?v=853"></script>
-<script src="desk.js?v=853"></script>
+<script src="data.js?v=854"></script>
+<script src="desk.js?v=854"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
