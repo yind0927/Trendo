@@ -4473,13 +4473,8 @@
   .mkt-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 20px; border: 1px solid; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; width: fit-content; }
   .mkt-badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   /* 市场宽度卡（等权 ÷ 市值加权）。左右边距由页面容器给，这里不加；与上下相邻模块同一个 20px 间距。 */
-  .mkb-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 14px; margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; }
-  .mkb-hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .mkb-sub { font-size: 11px; color: var(--fg-3); }
-  .mkb-replay { margin-top: 16px; }
-  .mkb-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mkb-replay { margin-top: 4px; }
   .mkb-desc { font-size: 12.5px; color: var(--fg-2); line-height: 1.5; }
-  .mkb-edge { font-size: 11.5px; color: var(--warn); line-height: 1.5; }
   .mkb-empty { font-size: 12px; color: var(--fg-3); }
   .mkb-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .mkb-m { background: var(--bg-2); border-radius: 8px; padding: 8px 10px; min-width: 0; }
@@ -4515,10 +4510,7 @@
   .mkb-def-k { flex: 0 0 96px; font-family: var(--f-mono); font-size: 11px; font-weight: 700; color: var(--fg-2); }
   .mkb-def-v { font-size: 12px; color: var(--fg-2); line-height: 1.6; min-width: 0; }
   .mkb-def-v b { color: var(--fg-1); font-weight: 600; }
-  .mkb-note { font-size: 11px; color: var(--fg-3); line-height: 1.6; }
-  .mkb-note b { color: var(--fg-2); font-weight: 600; }
   @media (max-width: 768px) {
-    .mkb-card { padding: 12px 12px 10px; gap: 10px; }
     .mkb-metrics { grid-template-columns: 1fr; }
       .mkb-def { flex-direction: column; gap: 2px; }
     .mkb-def-k { flex-basis: auto; }
@@ -4537,11 +4529,6 @@
      此前直接贴上来、零间距——阶段周期卡靠这条规则才有间隔，这张卡一直漏了它。 */
   .mkt-advice { margin-bottom: 20px; }
   /* 距下一状态：放在「市场模型详情」上方。四列网格让「会切到 / 条件 / 距离 / 倍数」上下对齐。 */
-  .mkt-next { margin-top: 4px; }
-  .nx-head { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; margin:4px 0 12px; }
-  .nx-now { font-size:15px; font-weight:700; }
-  .nx-held { font-size:11px; color:var(--fg-3); }
-  .nx-held b { color:var(--fg-1); font-family:var(--f-mono); }
   .nx-rows { border:1px solid var(--line); border-radius:9px; overflow:hidden; }
   .nx-row { display:grid; grid-template-columns:150px 1fr 230px 76px; gap:10px; align-items:center;
     padding:9px 12px; font-size:11.5px; }
@@ -4566,9 +4553,6 @@
   .nx-both { font-style:normal; font-size:9.5px; font-weight:600; margin-left:7px; padding:1px 5px;
     border-radius:8px; cursor:help; white-space:nowrap; color:var(--fg-1);
     background:color-mix(in oklch, var(--fg-1) 10%, transparent); }
-  .nx-empty { font-size:11px; color:var(--fg-3); margin-top:8px; }
-  .nx-note { font-size:10px; color:var(--fg-3); line-height:1.6; margin-top:12px; padding-top:10px;
-    border-top:1px solid var(--line); }
 
   /* Header reads as one line of hierarchy: state, then how long, then the window it
      covers pushed to the far edge. */
@@ -5310,7 +5294,7 @@
   .mkt-sec:first-of-type { margin-top: 0; }
   #market-content > .page-topbar { margin-bottom: 4px; }
   .mkb-rules-intro { font-size: 11px; line-height: 1.6; color: var(--fg-3); padding: 10px 12px; border-bottom: 1px solid var(--line); }
-  #market-content .mkt-card, #market-content .mkb-card, #market-content .brief-card, #market-content .cyc-card { margin-bottom: 20px; }
+  #market-content .mkt-card, #market-content .brief-card, #market-content .cyc-card { margin-bottom: 20px; }
   #market-content .mkt-row .mkt-card { margin-bottom: 0; }
   .sect-head { display: flex; flex-direction: column; margin-bottom: 12px; gap: 8px; }
   .sect-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -6913,8 +6897,8 @@
   </div>
 </div>
 
-<script src="data.js?v=862"></script>
-<script src="desk.js?v=862"></script>
+<script src="data.js?v=863"></script>
+<script src="desk.js?v=863"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

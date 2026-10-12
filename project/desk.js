@@ -15512,7 +15512,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 阶段色带：头部显示实时阶段（与上方徽章同一个），天数用 heldOf 的口径（描述头部正在
   // 显示的那一档，实时档与回放末段不同时不报数字）。色带只画已收盘交易日。
   function breadthReplayHTML(rp, sp) {
-    if (!rp) return "";
+    if (!rp) return null;
     const cur = rp.current, total = rp.days.length;
     const liveId = sp.stage;
     const now = liveId ? { id: liveId, ...BREADTH_STATES[liveId] } : { id: cur.id, color: cur.color, zh: cur.headline };
@@ -15537,14 +15537,8 @@ function rsAdjustGrade(grade, rsResult) {
       ? `${rp.transitions.length} 次切换${rp.shortCount ? ` · ${rp.shortCount} 次短于 ${BREADTH_MIN_SEG} 日未列出` : ""} · 最近 ${rp.transitions[rp.transitions.length - 1].date}`
       : "本窗口内无切换";
     let saved = null; try { saved = localStorage.getItem("trendo_mkp_breadth-tr_open"); } catch (_) {}
-    return `
+    return { held: heldHTML(held), scope: `<span class="mkp-scope">${rp.span.from} → ${rp.span.to} · ${total} 个交易日</span>`, body: `
       <div class="mkb-replay">
-        <div class="mkp-head">
-          <span class="mkp-dot" style="background:${now.color}"></span>
-          <span class="mkp-now" style="color:${now.color}">${now.zh}</span>
-          ${heldHTML(held)}
-          <span class="mkp-scope">${rp.span.from} → ${rp.span.to} · ${total} 个交易日</span>
-        </div>
         ${held.pending ? `<div class="mkp-pending"><span class="mkp-pending-dot" style="background:${now.color}"></span>实时价已进入<b style="color:${now.color}">${now.zh}</b> —— 下方色带只画已收盘的交易日，这一笔要等收盘才计入。</div>` : ""}
         <div class="mkp-bars">
           <span class="mkp-bar-k">阶段</span>
@@ -15554,15 +15548,15 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         ${legend}
         <details class="mkp-fold" data-mkp-fold="breadth-tr"${saved === "1" ? " open" : ""}>
-          <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>阶段转换<i> · Transitions</i></span><span class="mkp-filtered">${meta}</span></summary>
+          <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>阶段转换</span><em>Transitions</em><span class="mkp-filtered">${meta}</span></summary>
           <div class="mkp-trs">${trans}</div>
         </details>
-      </div>`;
+      </div>` };
   }
 
   function mkBreadthHTML(b) {
-    const card = inner => `<div class="mkb-card">${inner}</div>`;
-    const head = `<div class="mkb-hd"><div class="mkt-card-label">市场宽度 · BREADTH</div><span class="mkb-sub">RSP 等权 vs VOO 市值加权</span></div>`;
+    const card = inner => `<div class="mkt-card mkt-breadth">${inner}</div>`;
+    const head = atitle("市场宽度", "Breadth");
     const sp = b?.sp;
     if (!sp) return card(`${head}<div class="mkb-empty">RSP / VOO 历史数据暂不可用，宽度无法计算。</div>`);
     const st = brState(sp);
@@ -15573,21 +15567,24 @@ function rsAdjustGrade(grade, rsResult) {
     // 任一条线距自己的均线 <0.3% 都算贴近分界：阶段随时可能翻面
     const nearEdge = [["RSP", sp.gapA], ["VOO", sp.gapB], ["RSP÷VOO", sp.gap]].filter(([, v]) => v != null && Math.abs(v) < BREADTH_EDGE).map(([k]) => k);
     const cell = (l, v, c, t) => `<div class="mkb-m" title="${t}"><div class="mkb-m-l">${l}</div><div class="mkb-m-v ${c}">${v}</div></div>`;
+    const rpl = breadthReplayHTML(b.replay, sp);
     return card(`
       ${head}
-      <div class="mkb-state">
-        ${st ? `<span class="mkt-badge" style="color:${st.color};border-color:${mkAlpha(st.color, 25)};background:${mkAlpha(st.color, 7)}"><span class="mkt-badge-dot" style="background:${st.color}"></span>${st.zh}</span>
-        <span class="mkb-desc">${st.desc}</span>` : `<span class="mkb-desc">均线数据不足，暂不判定。</span>`}
+      <div class="mkp-head">
+        ${st ? `<span class="mkp-dot" style="background:${st.color}"></span>
+        <span class="mkp-now" style="color:${st.color}">${st.zh}</span>
+        ${rpl ? rpl.held : ""}${rpl ? rpl.scope : ""}<span class="mkp-axis-now">RSP 等权 vs VOO 市值加权</span>` : `<span class="mkp-now" style="color:var(--fg-3)">暂不判定</span><span class="mkp-axis-now">均线数据不足</span>`}
       </div>
-      ${nearEdge.length ? `<div class="mkb-edge">${nearEdge.join("、")} 距 50 日 EMA 不到 ${BREADTH_EDGE}%，阶段很容易翻面——不要把它读成稳定结论。</div>` : ""}
+      ${st ? `<div class="mkb-desc">${st.desc}</div>` : ""}
+      ${nearEdge.length ? `<div class="mkp-pending mkb-edge"><span class="mkp-pending-dot" style="background:var(--warn)"></span>${nearEdge.join("、")} 距 50 日 EMA 不到 <b>${BREADTH_EDGE}%</b>，阶段很容易翻面——不要把它读成稳定结论。</div>` : ""}
       <div class="mkb-metrics">
         ${cell("RSP 距50日EMA", sgn(sp.gapA), cls(sp.gapA), "RSP 相对自己的 50 日 EMA（裸收盘价，与方向轴同口径）")}
         ${cell("VOO 距50日EMA", sgn(sp.gapB), cls(sp.gapB), "VOO 相对自己的 50 日 EMA（裸收盘价，与方向轴、VOO 和 VIX周期卡同一份序列）")}
         ${cell("RSP÷VOO 距50日EMA", sgn(sp.gap), cls(sp.gap), "比值（分红调整后）相对它自己的 50 日 EMA，只用来在「VOO、RSP 都在上方」时细分三档；约等于前两格之差")}
       </div>
-      ${breadthReplayHTML(b.replay, sp)}
+      ${rpl ? rpl.body : ""}
       ${breadthRulesHTML(st)}
-      <div class="mkb-note">${sp.live ? `实时价（盘中随行情变化），50 日 EMA 口径` : `最近收盘 ${sp.to}（休市或实时价暂缺），50 日 EMA 口径`}。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。色带用今天的规则回放已收盘交易日。仅作背景参考，未接入综合建议。</div>`);
+      <div class="mkp-note">${sp.live ? `实时价（盘中随行情变化），50 日 EMA 口径` : `最近收盘 ${sp.to}（休市或实时价暂缺），50 日 EMA 口径`}。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。色带用今天的规则回放已收盘交易日。仅作背景参考，未接入综合建议。</div>`);
   }
 
   function mkVxnVixRatioHTML(vxn, vix) {
@@ -16366,11 +16363,11 @@ function rsAdjustGrade(grade, rsResult) {
     if (cur) {
       const h = heldOf(advice, now);
       if (h.pending) {
-        held = `<span class="nx-held" title="${h.title}">今日切换 · 待收盘确认</span>`;
+        held = `<span class="mkp-held"><em title="${h.title}">今日切换 · 待收盘确认</em></span>`;
       } else {
         const past = advice.segs.slice(0, -1).filter(s => s.id === now.id).map(s => s.days.length).sort((a, b) => a - b);
         const med = past.length ? past[Math.floor((past.length - 1) / 2)] : null;
-        held = `<span class="nx-held" title="${h.title}">已收盘连续 <b>${h.days}</b> 日${
+        held = `<span class="mkp-held" title="${h.title}">已收盘连续 <b>${h.days}</b> 日${
           med != null ? ` · 本窗口内此前 ${past.length} 段中位 ${med} 天` : " · 本窗口内此前未出现过"}</span>`;
       }
     }
@@ -16419,9 +16416,10 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`).join("");
     return `
       <div class="mkt-card mkt-next">
-        ${atitle("距下一状态", "Next State")}
-        <div class="nx-head">
-          <span class="nx-now" style="color:${now.color}">${advDot(now.color)} ${now.headline}</span>
+        ${atitle("离下一阶段", "Next Stage")}
+        <div class="mkp-head">
+          <span class="mkp-dot" style="background:${now.color}"></span>
+          <span class="mkp-now" style="color:${now.color}">${now.headline}</span>
           ${held}
         </div>
         ${list.length ? `<div class="nx-rows">
@@ -16429,8 +16427,8 @@ function rsAdjustGrade(grade, rsResult) {
           ${rows}
         </div>
 `
-        : `<div class="nx-empty">单项指标变动都不会改变当前建议。</div>`}
-        <div class="nx-note">只列<b>会改变综合建议</b>的阈值：把越线后的值代回三轴规则判定，被更高优先级条件挡住的线不列（例如方向逆风时情绪指标怎么变都仍是防守）。
+        : `<div class="mkp-empty">单项指标变动都不会改变当前建议。</div>`}
+        <div class="mkp-note">只列<b>会改变综合建议</b>的阈值：把越线后的值代回三轴规则判定，被更高优先级条件挡住的线不列（例如方向逆风时情绪指标怎么变都仍是防守）。
           ${H} 日内可能性 = 历史上<b>起点水位跟今天差不多</b>的那些 ${H} 交易日窗口里，达到过这段距离的占比——是基准率不是预测，只分三档（精度就那么多）；标<b>需同时</b>的要两项在同一天一起成立。</div>
       </div>`;
   }
@@ -17687,9 +17685,9 @@ function rsAdjustGrade(grade, rsResult) {
         ${mkIndicatorHTML("fg", fg, fgChg, fgAbs)}
         ${mkIndicatorHTML("rsi", rsi, rsiChg, rsiAbs)}
       </div>
-      ${sec("结构与切换", "Structure", "宽度 · 距下一状态")}
-      ${mkBreadthHTML(breadth)}
+      ${sec("结构与切换", "Structure", "离下一阶段 · 宽度")}
       ${mkNextStateHTML(next, advice)}
+      ${mkBreadthHTML(breadth)}
       <div class="mkt-playbook-ref">
         <details>
           <summary>市场模型详情 · 点击展开</summary>
