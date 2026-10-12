@@ -15392,9 +15392,67 @@ function rsAdjustGrade(grade, rsResult) {
     return { num, den, to: mode === "append" ? today : ds[ds.length - 1], gap, gapA, gapB, stage, live: mode !== "hist" };
   }
 
+  // 六阶段逐日回放（只含已收盘交易日，窗口与另两张回放卡同为 200）。判定与 breadthLeg
+  // 逐字同一套（VOO/RSP 按各自 EMA50 的正负号、比值 ±BREADTH_EDGE 死区），只是每天各算一次。
+  // 前三个阶段（两者都在上方）才看比值；VOO/RSP 的四条边界没有死区，价格贴着均线时色带
+  // 会碎——不平滑，短段只在转换列表里折叠并如实报次数（同周期分析卡）。
+  const BREADTH_SESSIONS = 200;
+  const BREADTH_MIN_SEG = 3;
+  function stageOf(gapA, gapB, gap) {
+    const vUp = gapB >= 0, rUp = gapA >= 0;
+    return vUp && rUp ? (gap > BREADTH_EDGE ? "E+" : gap < -BREADTH_EDGE ? "E-" : "E0")
+         : vUp ? "D" : !rUp ? "C" : "R";
+  }
+  function buildBreadthHistory(hist, num, den) {
+    const adj = hist?.adjResults || {}, raw = hist?.results || {};
+    const rs = (raw[num] && raw[den]) ? raw : adj;
+    const rt = (adj[num] && adj[den]) ? adj : raw;
+    if (!rs[num] || !rs[den] || !rt[num] || !rt[den]) return null;
+    const ds = Object.keys(rs[num]).filter(d => rs[num][d] > 0 && rs[den][d] > 0 && rt[num][d] > 0 && rt[den][d] > 0).sort();
+    if (ds.length < 80) return null;
+    const eA = calcEMASeries(ds.map(d => rs[num][d]), 50);
+    const eB = calcEMASeries(ds.map(d => rs[den][d]), 50);
+    const rat = ds.map(d => rt[num][d] / rt[den][d]);
+    const eR = calcEMASeries(rat, 50);
+    const days = [];
+    for (let i = 0; i < ds.length; i++) {
+      if (eA[i] == null || eB[i] == null || eR[i] == null) continue;
+      const gA = (rs[num][ds[i]] / eA[i] - 1) * 100, gB = (rs[den][ds[i]] / eB[i] - 1) * 100, g = (rat[i] / eR[i] - 1) * 100;
+      const id = stageOf(gA, gB, g), st = BREADTH_STATES[id];
+      days.push({ date: ds[i], id, headline: st.zh, color: st.color, gA, gB, g });
+    }
+    if (days.length && isLiveSession(days[days.length - 1].date)) days.pop();
+    if (!days.length) return null;
+    if (days.length > BREADTH_SESSIONS) days.splice(0, days.length - BREADTH_SESSIONS);
+    const segs = [];
+    days.forEach(d => {
+      const last = segs[segs.length - 1];
+      if (last && last.id === d.id) { last.days.push(d); last.end = d.date; }
+      else segs.push({ id: d.id, headline: d.headline, color: d.color, from: d.date, end: d.date, days: [d] });
+    });
+    const transitions = [];
+    for (let i = 1; i < segs.length; i++) {
+      const seg = segs[i], p = segs[i - 1].days[segs[i - 1].days.length - 1], f = seg.days[0];
+      const bits = [];
+      if ((p.gB >= 0) !== (f.gB >= 0)) bits.push(`VOO ${f.gB >= 0 ? "站上" : "跌破"} EMA50`);
+      if ((p.gA >= 0) !== (f.gA >= 0)) bits.push(`RSP ${f.gA >= 0 ? "站上" : "跌破"} EMA50`);
+      if (!bits.length) bits.push(`比值 ${f.g >= 0 ? "+" : "−"}${Math.abs(f.g).toFixed(2)}%（±${BREADTH_EDGE}% 死区）`);
+      transitions.push({ date: f.date, from: segs[i - 1].headline, to: seg.headline, color: seg.color,
+        why: bits.join(" · "), lasted: seg.days.length, ongoing: i === segs.length - 1 });
+    }
+    const months = [];
+    days.forEach(d => {
+      const m = d.date.slice(0, 7), last = months[months.length - 1];
+      if (last && last.m === m) last.n++; else months.push({ m, n: 1 });
+    });
+    return { days, segs, transitions, current: segs[segs.length - 1], months,
+      span: { from: days[0].date, to: days[days.length - 1].date },
+      shortCount: transitions.filter(t => t.lasted < BREADTH_MIN_SEG).length };
+  }
+
   function buildBreadth(hist, live) {
     const sp = breadthLeg(hist, "RSP", "VOO", live);
-    return sp ? { sp } : null;
+    return sp ? { sp, replay: buildBreadthHistory(hist, "RSP", "VOO") } : null;
   }
 
   const BREADTH_STATES = {
@@ -15451,6 +15509,57 @@ function rsAdjustGrade(grade, rsResult) {
       </details>`;
   }
 
+  // 阶段色带：头部显示实时阶段（与上方徽章同一个），天数用 heldOf 的口径（描述头部正在
+  // 显示的那一档，实时档与回放末段不同时不报数字）。色带只画已收盘交易日。
+  function breadthReplayHTML(rp, sp) {
+    if (!rp) return "";
+    const cur = rp.current, total = rp.days.length;
+    const liveId = sp.stage;
+    const now = liveId ? { id: liveId, ...BREADTH_STATES[liveId] } : { id: cur.id, color: cur.color, zh: cur.headline };
+    const held = heldOf(rp, liveId ? { id: liveId } : null);
+    const ribbon = rp.segs.map((sg, i) => `
+      <span class="mkp-seg${i === rp.segs.length - 1 ? " now" : ""}" style="flex:${sg.days.length};background-color:${sg.color}"
+        title="${sg.headline} · ${sg.from} → ${sg.end} · ${sg.days.length} 个交易日"></span>`).join("");
+    const ticks = `<div class="mkp-ticks">${rp.months.map(m => `<span class="mkp-tick" style="flex:${m.n}"><i>${+m.m.slice(5)}月</i></span>`).join("")}</div>`;
+    const tally = {};
+    rp.days.forEach(d => { (tally[d.id] || (tally[d.id] = { n: 0, zh: d.headline, color: d.color })).n++; });
+    const legend = `<div class="mkp-legend"><span class="mkp-legend-g">${Object.values(tally).sort((a, b) => b.n - a.n).map(t =>
+      `<span class="mkp-key"><i style="background:${t.color}"></i>${t.zh} ${t.n}天 · ${Math.round(t.n / total * 100)}%</span>`).join("")}</span></div>`;
+    const major = rp.transitions.filter(t => t.lasted >= BREADTH_MIN_SEG);
+    const trans = major.length ? major.slice().reverse().map(t => `
+      <div class="mkp-tr">
+        <span class="mkp-tr-date num">${t.date}</span>
+        <span class="mkp-tr-move"><i style="background:${t.color}"></i>${t.from} → ${t.to}</span>
+        <span class="mkp-tr-held">${t.lasted}d${t.ongoing ? " 至今" : ""}</span>
+        <span class="mkp-tr-why">${t.why}</span>
+      </div>`).join("") : `<div class="mkp-tr-none">这段窗口内没有持续 ${BREADTH_MIN_SEG} 个交易日以上的阶段切换。</div>`;
+    const meta = rp.transitions.length
+      ? `${rp.transitions.length} 次切换${rp.shortCount ? ` · ${rp.shortCount} 次短于 ${BREADTH_MIN_SEG} 日未列出` : ""} · 最近 ${rp.transitions[rp.transitions.length - 1].date}`
+      : "本窗口内无切换";
+    let saved = null; try { saved = localStorage.getItem("trendo_mkp_breadth-tr_open"); } catch (_) {}
+    return `
+      <div class="mkb-replay">
+        <div class="mkp-head">
+          <span class="mkp-dot" style="background:${now.color}"></span>
+          <span class="mkp-now" style="color:${now.color}">${now.zh}</span>
+          ${heldHTML(held)}
+          <span class="mkp-scope">${rp.span.from} → ${rp.span.to} · ${total} 个交易日</span>
+        </div>
+        ${held.pending ? `<div class="mkp-pending"><span class="mkp-pending-dot" style="background:${now.color}"></span>实时价已进入<b style="color:${now.color}">${now.zh}</b> —— 下方色带只画已收盘的交易日，这一笔要等收盘才计入。</div>` : ""}
+        <div class="mkp-bars">
+          <span class="mkp-bar-k">阶段</span>
+          <div class="mkp-ribbon">${ribbon}</div>
+          <span></span>
+          ${ticks}
+        </div>
+        ${legend}
+        <details class="mkp-fold" data-mkp-fold="breadth-tr"${saved === "1" ? " open" : ""}>
+          <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>阶段转换<i> · Transitions</i></span><span class="mkp-filtered">${meta}</span></summary>
+          <div class="mkp-trs">${trans}</div>
+        </details>
+      </div>`;
+  }
+
   function mkBreadthHTML(b) {
     const card = inner => `<div class="mkb-card">${inner}</div>`;
     const head = `<div class="mkb-hd"><div class="mkt-card-label">市场宽度 · BREADTH</div><span class="mkb-sub">RSP 等权 vs VOO 市值加权</span></div>`;
@@ -15476,8 +15585,9 @@ function rsAdjustGrade(grade, rsResult) {
         ${cell("VOO 距50日EMA", sgn(sp.gapB), cls(sp.gapB), "VOO 相对自己的 50 日 EMA（裸收盘价，与方向轴、VOO 和 VIX周期卡同一份序列）")}
         ${cell("RSP÷VOO 距50日EMA", sgn(sp.gap), cls(sp.gap), "比值（分红调整后）相对它自己的 50 日 EMA，只用来在「VOO、RSP 都在上方」时细分三档；约等于前两格之差")}
       </div>
+      ${breadthReplayHTML(b.replay, sp)}
       ${breadthRulesHTML(st)}
-      <div class="mkb-note">${sp.live ? `实时价（盘中随行情变化），50 日 EMA 口径` : `最近收盘 ${sp.to}（休市或实时价暂缺），50 日 EMA 口径`}。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。仅作背景参考，未接入综合建议。</div>`);
+      <div class="mkb-note">${sp.live ? `实时价（盘中随行情变化），50 日 EMA 口径` : `最近收盘 ${sp.to}（休市或实时价暂缺），50 日 EMA 口径`}。它衡量集中度，不等于上涨家数：科技领涨时比值会自然下降。色带用今天的规则回放已收盘交易日。仅作背景参考，未接入综合建议。</div>`);
   }
 
   function mkVxnVixRatioHTML(vxn, vix) {
