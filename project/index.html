@@ -4501,6 +4501,14 @@
   .mkb-rule-tag { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 8px; color: var(--accent); border: 1px solid color-mix(in oklch, var(--accent) 40%, transparent); }
   .mkb-rule-cond { font-size: 10px; color: var(--fg-3); font-family: var(--f-mono); line-height: 1.5; }
   .mkb-rule-mean { font-size: 11px; color: var(--fg-2); line-height: 1.6; }
+  .mkb-cap { display: flex; gap: 6px; margin-top: 4px; }
+  .mkb-cap-c { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--fg-3); }
+  .mkb-cap-c i { font-style: normal; }
+  .mkb-cap-c b { font-weight: 700; font-family: var(--f-mono); }
+  .mkb-cap-c.y b { color: var(--up); }
+  .mkb-cap-c.o b { color: var(--fg-3); }
+  .mkb-cap-c.n b { color: var(--down); }
+  .mkb-cap-note { font-size: 10px; line-height: 1.6; color: var(--fg-3); padding: 10px 12px; border-top: 1px solid var(--line); }
   .mkb-defs { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
   .mkb-def { display: flex; gap: 10px; align-items: baseline; }
   .mkb-def-k { flex: 0 0 96px; font-family: var(--f-mono); font-size: 11px; font-weight: 700; color: var(--fg-2); }
@@ -6904,8 +6912,8 @@
   </div>
 </div>
 
-<script src="data.js?v=859"></script>
-<script src="desk.js?v=859"></script>
+<script src="data.js?v=860"></script>
+<script src="desk.js?v=860"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
