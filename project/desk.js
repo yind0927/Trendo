@@ -15423,7 +15423,7 @@ function rsAdjustGrade(grade, rsResult) {
            cond: "VOO 下、RSP 上",
            mean: "等权先于大盘企稳，行情有可能重新扩散；还没被指数确认。" },
   };
-  const BREADTH_CAPS = ["超大", "大型", "中型", "小型", "微型"];   // 市值口径：超大 ≥$200B · 大型 $50–200B · 中型 $10–50B · 小型 $2–10B · 微型 <$2B
+  const BREADTH_CAPS = ["超大", "大型", "中型", "小型", "微型"];
   const BREADTH_ORDER = ["E+", "E0", "E-", "D", "C", "R"];
   const brState = leg => leg && leg.stage ? BREADTH_STATES[leg.stage] : null;
 
@@ -15447,7 +15447,7 @@ function rsAdjustGrade(grade, rsResult) {
     return `
       <details class="mkp-fold mkb-fold" data-mkp-fold="breadth-rules"${saved === "1" ? " open" : ""}>
         <summary class="mkp-sub"><span class="mkp-fold-arrow">▸</span><span>各种状态解析<i> · States</i></span><span class="mkp-filtered">6 种状态</span></summary>
-        <div class="mkb-rules"><div class="mkb-rules-intro">判定顺序：① VOO 在不在自己的 50 日 EMA 上方；② RSP 在不在；③ 只有两者都在上方时，才再看 RSP÷VOO 相对自己 EMA 的偏离，按 ±${BREADTH_EDGE}% 分成三档（高于 → 全面扩张，±${BREADTH_EDGE}% 以内 → 温和扩张，低于 → 大票领涨）。其余三种由①②直接决定，不看比值。</div>${rows}<div class="mkb-cap-note">市值倾向：✓ 适合 · ○ 小仓 · ✗ 回避。按常见约定划分（超大 ≥$200B · 大型 $50–200B · 中型 $10–50B · 小型 $2–10B · 微型 &lt;$2B），不是指数官方标准；经验假设，未回测，仅作选股参考，不是信号。全面收缩以整体降仓为先。</div></div>
+        <div class="mkb-rules"><div class="mkb-rules-intro">先看 VOO、RSP 是否在各自 50 日 EMA 上方；两者都在上方时，再按 RSP÷VOO 偏离 ±${BREADTH_EDGE}% 分三档（高于 全面扩张 · 以内 温和扩张 · 低于 大票领涨）。其余三种由前两步直接决定。</div>${rows}<div class="mkb-cap-note">市值倾向：✓ 适合 · ○ 小仓 · ✗ 回避。经验假设，未回测，非信号。</div></div>
       </details>`;
   }
 
