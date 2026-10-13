@@ -6165,15 +6165,23 @@ function rsAdjustGrade(grade, rsResult) {
           const upPct = up / all.length * 100, dnPct = dn / all.length * 100;
           return `
           <div class="mp-total">
-            <div class="mp-total-main">
-              <div class="mp-total-tag">全部合计 · ${MODEL_PICKS.length} 批 · ${all.length} 个</div>
-              <div class="mp-total-val num ${cls(t)}">${pct(t)}</div>
+            <div class="mp-total-hd"><span class="mp-total-tag">全部合计 · Overall</span>
+              <span class="mp-total-sub">${MODEL_PICKS.length} 批 · ${all.length} 个 · 假设每个都等额买入 · 自入场以来</span></div>
+            <div class="mp-total-body">
+              <div class="mp-total-main">
+                <div class="mp-total-val num ${cls(t)}">${pct(t)}</div>
+                <div class="mp-total-vs">${vv == null ? "vs VOO —" : `VOO <span class="num ${cls(vv)}">${pct(vv)}</span> · 超额 <b class="num ${cls(d)}">${ppf(d)}</b>`}</div>
+              </div>
+              <div class="mp-total-facts">
+                <div><span>中位数</span><b class="num ${cls(med)}">${pct(med)}</b></div>
+                <div><span>最好</span><b><i>${sorted[0].sym}</i> <span class="num ${cls(sorted[0].v)}">${pct(sorted[0].v)}</span></b></div>
+                <div><span>最差</span><b><i>${sorted[sorted.length - 1].sym}</i> <span class="num ${cls(sorted[sorted.length - 1].v)}">${pct(sorted[sorted.length - 1].v)}</span></b></div>
+                <div><span>上涨占比</span><b class="num">${upPct.toFixed(0)}%</b></div>
+              </div>
             </div>
-            <div class="mp-total-side">
-              <div>${vv == null ? "vs VOO —" : `vs VOO <b class="num ${cls(d)}">${ppf(d)}</b>`} <span class="mp-total-dim">· VOO ${vv == null ? "—" : pct(vv)}</span></div>
-              <div class="mp-total-dim">中位 <span class="num ${cls(med)}">${pct(med)}</span> · ${up} 涨 ${dn} 跌</div>
-              <div class="mp-total-bar"><i class="up" style="width:${upPct}%"></i><i class="dn" style="width:${dnPct}%"></i></div>
-            </div>
+            <div class="mp-total-bar" title="${up} 涨 · ${dn} 跌 · ${all.length - up - dn} 平">
+              <i class="up" style="width:${upPct}%"></i><i class="dn" style="width:${dnPct}%"></i></div>
+            <div class="mp-total-bar-lbl"><span>${up} 涨</span><span>${dn} 跌</span></div>
           </div>`;
         })()}
         <div class="mp-sub-lbl">每批表现</div>
