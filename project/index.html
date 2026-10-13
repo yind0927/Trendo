@@ -1474,6 +1474,18 @@
   .form-row-inline input { flex: 1; }
   .form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+  /* 开仓弹窗：宽版两栏。桌面端 基本信息 | 价格计划 / 仓位 | 价格计划 / 评分整行；手机端回到单栏、按 DOM 顺序。 */
+  .modal.modal-wide { max-width: 820px; }
+  .np-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; align-items: start; }
+  .np-sec { background: color-mix(in oklch, var(--bg-2) 55%, transparent); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px 2px; min-width: 0; }
+  .np-basic  { grid-column: 1; grid-row: 1; }
+  .np-sizing { grid-column: 1; grid-row: 2; }
+  .np-price  { grid-column: 2; grid-row: 1 / span 2; }
+  .np-rating { grid-column: 1 / -1; grid-row: 3; padding-bottom: 12px; }
+  .np-rating .form-bx-toggle { border-top: 0; margin-top: 0; padding: 0 0 10px; }
+  .np-sec .form-sizer-hint { margin-top: 0; }
+  .np-form > .form-actions { margin-top: 18px; }
+
   /* ---- Date input — platform-consistent dark styling ---- */
   input[type="date"] {
     color-scheme: dark;
@@ -4408,6 +4420,10 @@
       #opts-row-open-underlying, #opts-row-settle-fields { flex-direction: column; gap: 0 !important; }
     }
     .form-2col { grid-template-columns: 1fr; gap: 0; }
+    .np-grid { grid-template-columns: 1fr; gap: 12px; }
+    .np-basic, .np-price, .np-sizing, .np-rating { grid-column: 1; grid-row: auto; }
+    .np-sec { padding: 12px 12px 0; }
+    .np-rating { padding-bottom: 10px; }
 
     /* ---- Sim view ---- */
     #sim-view { padding: 12px 12px calc(126px + env(safe-area-inset-bottom)); }
@@ -6185,7 +6201,7 @@
           <input id="wl-sym"   class="form-input" placeholder="代码 e.g. TSLA" required data-upper
                  autocapitalize="characters" spellcheck="false" style="width:90px"/>
           <input id="wl-name"  class="form-input" placeholder="名称" style="flex:1"/>
-          <input id="wl-price" class="form-input" type="number" placeholder="参考价" step="0.01" style="width:85px"/>
+          <input id="wl-price" class="form-input" type="number" inputmode="decimal" placeholder="参考价" step="0.01" style="width:85px"/>
           <button type="submit" class="btn primary" style="flex-shrink:0">添加</button>
         </div>
       </form>
@@ -6396,13 +6412,15 @@
 
 <!-- New Position Modal -->
 <div id="new-position-modal" class="modal-backdrop">
-  <div class="modal">
+  <div class="modal modal-wide">
     <div class="modal-header">
       <h2>开仓</h2>
       <button class="modal-close" id="new-pos-close">✕</button>
     </div>
     <div class="modal-header-sub">NEW POSITION</div>
-    <form id="new-position-form" autocomplete="off" novalidate>
+    <form id="new-position-form" class="np-form" autocomplete="off" novalidate>
+      <div class="np-grid">
+      <section class="np-sec np-basic">
       <div class="form-group-label">基本信息 · BASIC</div>
       <div class="form-row">
         <label>类型</label>
@@ -6432,11 +6450,13 @@
         </div>
       </div>
 
+      </section>
+      <section class="np-sec np-price">
       <div class="form-group-label">价格计划 · PRICE PLAN</div>
       <div class="form-2col">
         <div class="form-row" id="form-entry-row">
           <label>入场价</label>
-          <input type="number" id="form-entry" placeholder="0.00" step="0.01"/>
+          <input type="number" inputmode="decimal" id="form-entry" placeholder="0.00" step="0.01"/>
         </div>
         <div class="form-row">
           <label>入场日期</label>
@@ -6445,7 +6465,7 @@
       </div>
       <div class="form-row" id="form-limit-row" style="display:none">
         <label>限价 <span style="font-weight:400;color:var(--fg-3);font-size:11px">价格触达时自动成交</span></label>
-        <input type="number" id="form-limit-price" placeholder="0.00" step="0.01"/>
+        <input type="number" inputmode="decimal" id="form-limit-price" placeholder="0.00" step="0.01"/>
       </div>
       <div class="form-row" id="form-market-hint-row" style="display:none">
         <label></label>
@@ -6453,21 +6473,21 @@
       </div>
       <div class="form-row" id="form-est-entry-row" style="display:none">
         <label>预估价格 <span style="font-weight:400;color:var(--fg-3);font-size:11px;text-transform:none;letter-spacing:0">仅用于仓位计算</span></label>
-        <input type="number" id="form-est-entry" placeholder="0.00" step="0.01"/>
+        <input type="number" inputmode="decimal" id="form-est-entry" placeholder="0.00" step="0.01"/>
       </div>
       <div class="form-2col">
         <div class="form-row">
           <label>止损价</label>
-          <input type="number" id="form-stop" placeholder="0.00" step="0.01" required/>
+          <input type="number" inputmode="decimal" id="form-stop" placeholder="0.00" step="0.01" required/>
         </div>
         <div class="form-row">
           <label>目标价</label>
-          <input type="number" id="form-target" placeholder="0.00" step="0.01" required/>
+          <input type="number" inputmode="decimal" id="form-target" placeholder="0.00" step="0.01" required/>
         </div>
       </div>
       <div class="form-row">
         <label>入场 ATR <span style="font-weight:400;color:var(--fg-3);font-size:11px;text-transform:none;letter-spacing:0">可选 · 自动填止损 + PP 记录</span></label>
-        <input type="number" id="form-entry-atr" placeholder="选填，如 2.50" step="0.01" min="0"/>
+        <input type="number" inputmode="decimal" id="form-entry-atr" placeholder="选填，如 2.50" step="0.01" min="0"/>
       </div>
       <div class="form-row">
         <label>财报日期 <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(可选)</span></label>
@@ -6477,14 +6497,16 @@
         </div>
       </div>
 
+      </section>
+      <section class="np-sec np-sizing">
       <div class="form-group-label">仓位 · SIZING</div>
       <div class="form-row">
         <label>数量（股）</label>
-        <input type="number" id="form-qty" placeholder="100" step="1" required/>
+        <input type="number" inputmode="numeric" id="form-qty" placeholder="100" step="1" required/>
       </div>
       <div class="form-row">
         <label>总资金 <span style="font-size:10px;color:var(--fg-3);text-transform:none;letter-spacing:0">(仓位计算用)</span></label>
-        <input type="number" id="form-sizer-capital" placeholder="默认账户本金" step="1" min="1"/>
+        <input type="number" inputmode="numeric" id="form-sizer-capital" placeholder="默认账户本金" step="1" min="1"/>
       </div>
       <div id="form-sizer-hint" style="display:none" class="form-sizer-hint">
         <div id="sizer-grade-mode" class="sizer-grade-mode" style="display:none">
@@ -6507,7 +6529,7 @@
         </div>
         <div class="sizer-atr-line">
           <span class="sizer-atr-tag">ATR(14)</span>
-          <input type="number" id="form-atr" class="sizer-atr-input" placeholder="选填" step="0.01" min="0"/>
+          <input type="number" inputmode="decimal" id="form-atr" class="sizer-atr-input" placeholder="选填" step="0.01" min="0"/>
           <span class="sizer-atr-hint">× 2.5 → 止损</span>
         </div>
         <div class="sizer-calc-line" id="form-sizer-calc-line" style="display:none">
@@ -6516,6 +6538,8 @@
         </div>
       </div>
 
+      </section>
+      <section class="np-sec np-rating">
       <button type="button" id="form-bx-toggle" class="form-bx-toggle">
         <span>综合评分 · RATING <span class="form-bx-hint">可选</span></span>
         <svg class="form-bx-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -6584,6 +6608,8 @@
         <div id="entry-scorecard" class="esc-wrap" style="display:none"></div>
       </div>
 
+      </section>
+      </div>
       <div class="form-actions">
         <button type="button" id="new-pos-cancel" class="btn">取消</button>
         <button type="submit" class="btn primary">确认开仓</button>
@@ -6612,18 +6638,18 @@
     </div>
     <div class="form-row" id="close-price-row">
       <label>平仓价格</label>
-      <input type="number" id="close-pos-price-input" placeholder="输入平仓价格" step="0.01" min="0"/>
+      <input type="number" inputmode="decimal" id="close-pos-price-input" placeholder="输入平仓价格" step="0.01" min="0"/>
     </div>
     <div class="form-row" id="close-limit-row" style="display:none">
       <label>限价</label>
-      <input type="number" id="close-limit-price-input" placeholder="价格 ≥ 此值时平仓" step="0.01" min="0"/>
+      <input type="number" inputmode="decimal" id="close-limit-price-input" placeholder="价格 ≥ 此值时平仓" step="0.01" min="0"/>
     </div>
     <div class="form-row" id="close-market-hint-row" style="display:none">
       <label style="color:var(--fg-3);font-size:12px">将在下次获取到实时价格时以市价平仓</label>
     </div>
     <div class="form-row">
       <label>平仓数量 <span id="close-pos-qty-hint" style="font-weight:400;color:var(--fg-3);font-size:11px"></span></label>
-      <input type="number" id="close-pos-qty-input" placeholder="股数" step="1" min="1"/>
+      <input type="number" inputmode="numeric" id="close-pos-qty-input" placeholder="股数" step="1" min="1"/>
     </div>
     <div class="form-row" id="close-date-row">
       <label>平仓日期</label>
@@ -6662,7 +6688,7 @@
     <form id="equity-form">
       <div class="form-row">
         <label>基准总额</label>
-        <input type="number" id="equity-nav" placeholder="284620" step="1" required/>
+        <input type="number" inputmode="numeric" id="equity-nav" placeholder="284620" step="1" required/>
       </div>
       <div class="form-actions">
         <button type="submit" class="btn primary">更新</button>
@@ -6682,7 +6708,7 @@
     <form id="sim-notional-form">
       <div class="form-row">
         <label>模拟本金</label>
-        <input type="number" id="sim-notional-input" placeholder="100000" step="1" required/>
+        <input type="number" inputmode="numeric" id="sim-notional-input" placeholder="100000" step="1" required/>
       </div>
       <div class="form-actions">
         <button type="submit" class="btn primary">更新</button>
@@ -6701,11 +6727,11 @@
     <form id="add-to-form" novalidate>
       <div class="form-row">
         <label>加仓价格</label>
-        <input type="number" id="add-price" step="0.01" required placeholder="0.00" class="form-input"/>
+        <input type="number" inputmode="decimal" id="add-price" step="0.01" required placeholder="0.00" class="form-input"/>
       </div>
       <div class="form-row">
         <label>加仓数量 (股)</label>
-        <input type="number" id="add-qty" step="1" min="1" required placeholder="0" class="form-input"/>
+        <input type="number" inputmode="numeric" id="add-qty" step="1" min="1" required placeholder="0" class="form-input"/>
       </div>
       <div class="form-row">
         <label>加仓日期</label>
@@ -6769,11 +6795,11 @@
       <div class="form-2col">
         <div class="form-row">
           <label>止损价</label>
-          <input type="number" id="poster-stop" step="0.0001" placeholder="用于 R 倍数" class="form-input"/>
+          <input type="number" inputmode="decimal" id="poster-stop" step="0.0001" placeholder="用于 R 倍数" class="form-input"/>
         </div>
         <div class="form-row">
           <label>止盈价</label>
-          <input type="number" id="poster-target" step="0.0001" placeholder="用于盈亏比" class="form-input"/>
+          <input type="number" inputmode="decimal" id="poster-target" step="0.0001" placeholder="用于盈亏比" class="form-input"/>
         </div>
         <div class="form-row" style="grid-column:1/-1">
           <label>公司名</label>
@@ -6799,7 +6825,7 @@
     <form id="cc-form" novalidate>
       <div class="form-row">
         <label>权利金总额 ($)</label>
-        <input type="number" id="cc-total" step="0.01" min="0.01" required placeholder="如 250.00" class="form-input"/>
+        <input type="number" inputmode="decimal" id="cc-total" step="0.01" min="0.01" required placeholder="如 250.00" class="form-input"/>
       </div>
       <div class="form-row">
         <label>记录日期</label>
@@ -6850,14 +6876,14 @@
       </div>
       <div class="form-row" id="opts-row-underlying" style="flex:1">
         <label>开仓时标的价 <span style="font-size:10px;color:var(--fg-3)">(可选)</span></label>
-        <input type="number" id="opts-underlying" class="form-input" step="0.01" min="0" placeholder="当天的标的现价"/>
+        <input type="number" inputmode="decimal" id="opts-underlying" class="form-input" step="0.01" min="0" placeholder="当天的标的现价"/>
       </div>
     </div>
     <!-- 行权价 + 到期日 并排 -->
     <div id="opts-row-strike-expiry" style="display:flex;gap:12px">
       <div class="form-row" id="opts-row-strike" style="flex:1">
         <label>行权价 ($)</label>
-        <input type="number" id="opts-strike" class="form-input" step="0.5" min="0" placeholder="如 480"/>
+        <input type="number" inputmode="decimal" id="opts-strike" class="form-input" step="0.5" min="0" placeholder="如 480"/>
       </div>
       <div class="form-row" id="opts-row-expiry" style="flex:1">
         <label>到期日</label>
@@ -6867,17 +6893,17 @@
     <!-- Delta (可选, 卖出模式) -->
     <div class="form-row" id="opts-row-delta" style="display:none">
       <label>入场 Delta <span style="font-size:10px;color:var(--fg-3)">(可选)</span></label>
-      <input type="number" id="opts-delta" class="form-input" step="0.01" min="0.01" max="0.99" placeholder="如 CSP: 0.30 · CC: 0.25"/>
+      <input type="number" inputmode="decimal" id="opts-delta" class="form-input" step="0.01" min="0.01" max="0.99" placeholder="如 CSP: 0.30 · CC: 0.25"/>
     </div>
     <!-- 手数 + 权利金 并排 -->
     <div id="opts-row-qty-premium" style="display:flex;gap:12px">
       <div class="form-row" id="opts-row-qty" style="flex:1">
         <label>手数（合约）</label>
-        <input type="number" id="opts-qty" class="form-input" min="1" step="1" value="1"/>
+        <input type="number" inputmode="numeric" id="opts-qty" class="form-input" min="1" step="1" value="1"/>
       </div>
       <div class="form-row" id="opts-row-premium" style="flex:1">
         <label>权利金 ($/share)</label>
-        <input type="number" id="opts-premium" class="form-input" step="0.01" min="0" placeholder="券商成交价"/>
+        <input type="number" inputmode="decimal" id="opts-premium" class="form-input" step="0.01" min="0" placeholder="券商成交价"/>
       </div>
     </div>
     <!-- 结算结果：仅当到期日已过（补录一笔已经结束的交易）时出现 -->
@@ -6893,7 +6919,7 @@
     <div id="opts-row-settle-fields" style="display:none;gap:12px">
       <div class="form-row" id="opts-row-settle-px" style="flex:1">
         <label>买回价格 ($/share)</label>
-        <input type="number" id="opts-settle-px" class="form-input" step="0.01" min="0" placeholder="买回成交价"/>
+        <input type="number" inputmode="decimal" id="opts-settle-px" class="form-input" step="0.01" min="0" placeholder="买回成交价"/>
       </div>
       <div class="form-row" id="opts-row-settle-date" style="flex:1">
         <label>结算日期</label>
@@ -6902,7 +6928,7 @@
     </div>
     <div class="form-row" id="opts-row-exit" style="display:none">
       <label>出仓价 ($/share)</label>
-      <input type="number" id="opts-exit-price" class="form-input" step="0.01" min="0" placeholder="实际卖出价"/>
+      <input type="number" inputmode="decimal" id="opts-exit-price" class="form-input" step="0.01" min="0" placeholder="实际卖出价"/>
     </div>
     <div class="form-row" id="opts-row-close-date" style="display:none">
       <label>平仓日期</label>
@@ -6920,8 +6946,8 @@
   </div>
 </div>
 
-<script src="data.js?v=868"></script>
-<script src="desk.js?v=868"></script>
+<script src="data.js?v=869"></script>
+<script src="desk.js?v=869"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

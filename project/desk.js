@@ -3563,7 +3563,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="pp-card">
         <div class="pp-card-atr">
           <span class="pp-atr-label">入场 ATR<span class="edit-hint">点击编辑</span></span>
-          <input type="number" id="drawer-pp-atr" class="pp-atr-input" step="0.01" min="0"
+          <input type="number" inputmode="decimal" id="drawer-pp-atr" class="pp-atr-input" step="0.01" min="0"
             value="${hasATR ? h.entryATR : ""}" placeholder="填写 ATR 值，如 2.50"/>
         </div>
         <div class="pp-card-body">
@@ -5636,8 +5636,8 @@ function rsAdjustGrade(grade, rsResult) {
     row.className = "poster-leg";
     row.innerHTML = `
       <input type="date" class="form-input" data-leg="date"/>
-      <input type="number" step="0.0001" class="form-input" data-leg="px" placeholder="价格"/>
-      <input type="number" step="1" min="1" class="form-input" data-leg="qty" placeholder="股数"/>
+      <input type="number" inputmode="decimal" step="0.0001" class="form-input" data-leg="px" placeholder="价格"/>
+      <input type="number" inputmode="numeric" step="1" min="1" class="form-input" data-leg="qty" placeholder="股数"/>
       <button type="button" class="poster-leg-del" title="删除这一笔">✕</button>
       <span class="poster-leg-warn"></span>`;
     return row;
@@ -17234,7 +17234,7 @@ function rsAdjustGrade(grade, rsResult) {
     } else if (it.num) {
       const [nw, nl] = it.cuts || CYC_NUM_DEFAULT;
       control = `<div class="cyc-num">
-        <input type="number" step="${it.step || 1}" min="${it.min ?? 0}" max="${it.max ?? 100}"
+        <input type="number" inputmode="${(it.step||1)<1?"decimal":"numeric"}" step="${it.step || 1}" min="${it.min ?? 0}" max="${it.max ?? 100}"
           class="form-input" data-cyc-num="${it.id}"
           value="${rec.value ?? ""}" placeholder="—"><span class="cyc-num-pct">${it.unit || "%"}</span>
         <span class="cyc-num-scale"><i class="clear">&lt;${nw}</i><i class="watch">${nw}–${nl}</i><i class="lit">&gt;${nl}</i></span>
