@@ -6131,25 +6131,43 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="sim-section-label"><span class="ssl-zh">每批表现</span><span class="ssl-en">Batches</span><span class="ssl-rule"></span>
           <span class="ssl-meta">等权收益 · 每批一张</span></div>
         <div class="mp-stat-grid">
+          ${(() => {
+            // Total: every pick in every batch bought with the same dollar amount, held
+            // since its own entry open. VOO side = the same dollars into each batch's VOO,
+            // so pick counts weight both sides identically.
+            const all = [], vooAll = [];
+            for (const c of MODEL_PICKS) {
+              const bl = mpRet(c.bench?.entryPrice, c.bench?.lastPx);
+              for (const p of c.picks) {
+                const v = mpRet(p.entryPrice, p.lastPx);
+                if (v == null) continue;
+                all.push(v); if (bl != null) vooAll.push(bl);
+              }
+            }
+            if (!all.length) return "";
+            const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+            const t = avg(all), vv = vooAll.length === all.length ? avg(vooAll) : null;
+            const up = all.filter(x => x > 0).length;
+            return `
+            <div class="mp-stat primary">
+              <div class="mp-stat-label">全部合计 · ${MODEL_PICKS.length} 批</div>
+              <div class="mp-stat-val num ${cls(t)}">${pct(t)}</div>
+              <div class="mp-stat-sub">假设每个都等额买入 · 自入场以来 · ${all.length} 个 · ${up} 涨 ${all.length - up} 跌</div>
+              <div class="mp-vs">vs VOO <span class="num ${cls(vv == null ? null : t - vv)}">${vv == null ? "—" : ppf(t - vv)}</span></div>
+            </div>`;
+          })()}
           ${MODEL_PICKS.map(c => {
-            const hk = mpHeadlineKey(c);
-            const r = hk ? mpCohortReturn(c, hk) : { pct: null };
-            const b = hk ? mpBenchReturn(c, hk) : null;
             const live = c.picks.map(p => ({ sym: p.sym, v: mpRet(p.entryPrice, p.lastPx) }))
               .filter(x => x.v != null).sort((x, y) => y.v - x.v);
-            const liveAvg = live.length ? live.reduce((s, x) => s + x.v, 0) / live.length : null;
-            const bl = mpRet(c.bench?.entryPrice, c.bench?.lastPx);
-            const useCp = r.pct != null;
-            const main = useCp ? r.pct : liveAvg;
-            const ref  = useCp ? b : bl;
-            const hz = useCp ? `${Math.round((MP_CHECKPOINTS.find(([k]) => k === hk)?.[1] || 0) / 5)} 周` : "至今";
+            const main = live.length ? live.reduce((s, x) => s + x.v, 0) / live.length : null;
+            const ref = mpRet(c.bench?.entryPrice, c.bench?.lastPx);
             const alpha = (main != null && ref != null) ? main - ref : null;
             const upN = live.filter(x => x.v > 0).length;
             return `
             <div class="mp-stat">
               <div class="mp-stat-label">${c.id} · ${c.weekOf.slice(5).replace("-", "/")}</div>
               <div class="mp-stat-val num ${cls(main)}">${pct(main)}</div>
-              <div class="mp-stat-sub">等权 · ${hz} · ${c.picks.length} 个${live.length ? ` · ${upN} 涨 ${live.length - upN} 跌` : " · 待定价"}</div>
+              <div class="mp-stat-sub">自入场以来 · ${c.picks.length} 个${live.length ? ` · ${upN} 涨 ${live.length - upN} 跌` : " · 待定价"}</div>
               ${live.length > 1 ? `<div class="mp-stat-sub2 mp-stat-own">
                 <div class="mp-own-row"><span>最好</span><span class="num"><b>${live[0].sym}</b> <span class="${cls(live[0].v)}">${pct(live[0].v)}</span></span></div>
                 <div class="mp-own-row"><span>最差</span><span class="num"><b>${live[live.length - 1].sym}</b> <span class="${cls(live[live.length - 1].v)}">${pct(live[live.length - 1].v)}</span></span></div>
@@ -6158,6 +6176,7 @@ function rsAdjustGrade(grade, rsResult) {
             </div>`;
           }).join("")}
         </div>
+        <div class="mp-stats-hint">收益均为<b>自入场开盘价至今</b>。「等权」= 批内每只股票投入同样金额，所以批次收益就是各只收益的简单平均；「全部合计」同理，把所有批次所有股票都当作等额买入。</div>
       </div>` : "";
 
     // Cohort-level breakdown across every horizon. The header can only ever show one
