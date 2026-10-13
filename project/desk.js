@@ -6130,32 +6130,52 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="mp-stats">
         <div class="sim-section-label"><span class="ssl-zh">每批表现</span><span class="ssl-en">Batches</span><span class="ssl-rule"></span>
           <span class="ssl-meta">等权收益 · 每批一张</span></div>
-        <div class="mp-stat-grid">
-          ${(() => {
-            // Total: every pick in every batch bought with the same dollar amount, held
-            // since its own entry open. VOO side = the same dollars into each batch's VOO,
-            // so pick counts weight both sides identically.
-            const all = [], vooAll = [];
-            for (const c of MODEL_PICKS) {
-              const bl = mpRet(c.bench?.entryPrice, c.bench?.lastPx);
-              for (const p of c.picks) {
-                const v = mpRet(p.entryPrice, p.lastPx);
-                if (v == null) continue;
-                all.push(v); if (bl != null) vooAll.push(bl);
-              }
+        ${(() => {
+          // Overall: every pick in every batch bought with the same dollar amount and held
+          // since its own entry open. The VOO side puts the same dollars into each batch's VOO,
+          // so pick counts weight both sides identically.
+          const all = [], vooAll = [];
+          for (const c of MODEL_PICKS) {
+            const bl = mpRet(c.bench?.entryPrice, c.bench?.lastPx);
+            for (const p of c.picks) {
+              const v = mpRet(p.entryPrice, p.lastPx);
+              if (v == null) continue;
+              all.push({ sym: p.sym, v }); if (bl != null) vooAll.push(bl);
             }
-            if (!all.length) return "";
-            const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
-            const t = avg(all), vv = vooAll.length === all.length ? avg(vooAll) : null;
-            const up = all.filter(x => x > 0).length;
-            return `
-            <div class="mp-stat primary">
-              <div class="mp-stat-label">全部合计 · ${MODEL_PICKS.length} 批</div>
-              <div class="mp-stat-val num ${cls(t)}">${pct(t)}</div>
-              <div class="mp-stat-sub">假设每个都等额买入 · 自入场以来 · ${all.length} 个 · ${up} 涨 ${all.length - up} 跌</div>
-              <div class="mp-vs">vs VOO <span class="num ${cls(vv == null ? null : t - vv)}">${vv == null ? "—" : ppf(t - vv)}</span></div>
-            </div>`;
-          })()}
+          }
+          if (!all.length) return "";
+          const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+          const t = avg(all.map(x => x.v));
+          const vv = vooAll.length === all.length ? avg(vooAll) : null;
+          const d = vv == null ? null : t - vv;
+          const sorted = [...all].sort((x, y) => y.v - x.v);
+          const m = sorted.length >> 1;
+          const med = sorted.length % 2 ? sorted[m].v : (sorted[m - 1].v + sorted[m].v) / 2;
+          const up = all.filter(x => x.v > 0).length, dn = all.filter(x => x.v < 0).length;
+          const upPct = up / all.length * 100, dnPct = dn / all.length * 100;
+          return `
+          <div class="mp-total">
+            <div class="mp-total-hd"><span class="mp-total-tag">全部合计 · Overall</span>
+              <span class="mp-total-sub">${MODEL_PICKS.length} 批 · ${all.length} 个 · 假设每个都等额买入 · 自入场以来</span></div>
+            <div class="mp-total-body">
+              <div class="mp-total-main">
+                <div class="mp-total-val num ${cls(t)}">${pct(t)}</div>
+                <div class="mp-total-vs">${vv == null ? "vs VOO —" : `VOO <span class="num ${cls(vv)}">${pct(vv)}</span> · 超额 <b class="num ${cls(d)}">${ppf(d)}</b>`}</div>
+              </div>
+              <div class="mp-total-facts">
+                <div><span>中位数</span><b class="num ${cls(med)}">${pct(med)}</b></div>
+                <div><span>最好</span><b><i>${sorted[0].sym}</i> <span class="num ${cls(sorted[0].v)}">${pct(sorted[0].v)}</span></b></div>
+                <div><span>最差</span><b><i>${sorted[sorted.length - 1].sym}</i> <span class="num ${cls(sorted[sorted.length - 1].v)}">${pct(sorted[sorted.length - 1].v)}</span></b></div>
+                <div><span>上涨占比</span><b class="num">${upPct.toFixed(0)}%</b></div>
+              </div>
+            </div>
+            <div class="mp-total-bar" title="${up} 涨 · ${dn} 跌 · ${all.length - up - dn} 平">
+              <i class="up" style="width:${upPct}%"></i><i class="dn" style="width:${dnPct}%"></i></div>
+            <div class="mp-total-bar-lbl"><span>${up} 涨</span><span>${dn} 跌</span></div>
+          </div>`;
+        })()}
+        <div class="mp-sub-lbl">每批表现</div>
+        <div class="mp-stat-grid">
           ${MODEL_PICKS.map(c => {
             const live = c.picks.map(p => ({ sym: p.sym, v: mpRet(p.entryPrice, p.lastPx) }))
               .filter(x => x.v != null).sort((x, y) => y.v - x.v);

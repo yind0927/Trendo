@@ -2177,13 +2177,13 @@
     display: none !important;
   }
 
-  .mp-stats { margin-bottom:18px; }
+  .mp-stats { margin-bottom:32px; }
   /* Six horizons (1/2/4/6/8/12w). Three columns tiles them 3x2 with no orphan; the old
      five-column grid left the sixth stranded alone on a second row. */
   /* Says outright what the six tiles are, because "1 周 / 2 周 …" otherwise reads as
      第1周/第2周 — i.e. the weekly batches, which live further down the page. */
   .mp-stats-hint { font-size:11px; line-height:1.65; color:var(--fg-3); background:var(--bg-2);
-    border-radius:8px; padding:8px 11px; margin-bottom:10px;
+    border-radius:8px; padding:8px 11px; margin-top:14px; margin-bottom:0;
     border-left:2px solid color-mix(in oklch, var(--accent) 55%, transparent); }
   .mp-stats-hint b { color:var(--fg-1); font-weight:600; }
   .mp-stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
@@ -2191,6 +2191,30 @@
   .mp-stat.primary { box-shadow:inset 2px 0 0 0 var(--accent); }
   .mp-stat-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--fg-2); font-weight:500; }
   .mp-stat-val { font-size:18px; font-weight:700; letter-spacing:-.02em; margin-top:4px; }
+  .mp-total { background:linear-gradient(160deg, color-mix(in oklch, var(--accent) 14%, var(--bg-1)), var(--bg-1) 70%);
+    border:1px solid color-mix(in oklch, var(--accent) 38%, var(--line)); border-radius:var(--radius);
+    padding:16px 18px 14px; margin-bottom:22px; }
+  .mp-total-hd { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; }
+  .mp-total-tag { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
+  .mp-total-sub { font-size:10.5px; color:var(--fg-3); }
+  .mp-total-body { display:flex; flex-wrap:wrap; align-items:flex-end; gap:14px 36px; margin-top:12px; }
+  .mp-total-val { font-size:34px; font-weight:800; letter-spacing:-.03em; line-height:1.05; }
+  .mp-total-vs { font-size:11.5px; color:var(--fg-3); margin-top:6px; }
+  .mp-total-vs b { font-weight:700; }
+  .mp-total-facts { display:grid; grid-template-columns:repeat(4,auto); gap:6px 28px; margin-left:auto; }
+  .mp-total-facts > div { display:flex; flex-direction:column; gap:3px; }
+  .mp-total-facts span:first-child { font-size:10px; color:var(--fg-3); text-transform:uppercase; letter-spacing:.06em; }
+  .mp-total-facts b { font-size:13px; font-weight:700; }
+  .mp-total-facts i { font-style:normal; color:var(--fg-2); font-weight:600; }
+  .mp-total-bar { display:flex; height:6px; border-radius:3px; overflow:hidden; background:var(--bg-3); margin-top:14px; gap:2px; }
+  .mp-total-bar i.up { background:var(--up); } .mp-total-bar i.dn { background:var(--down); }
+  .mp-total-bar-lbl { display:flex; justify-content:space-between; font-size:10px; color:var(--fg-3); margin-top:5px; }
+  .mp-sub-lbl { font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-3); font-weight:600; margin:0 0 8px; }
+  @media (max-width:768px) {
+    .mp-total { padding:14px 14px 12px; }
+    .mp-total-val { font-size:30px; }
+    .mp-total-facts { grid-template-columns:repeat(2,1fr); margin-left:0; width:100%; gap:10px 16px; }
+  }
   .mp-own-row { display:flex; justify-content:space-between; gap:8px; }
   .mp-own-row > span:first-child { color:var(--fg-3); }
   .mp-vs { font-size:10px; color:var(--fg-3); margin-top:8px; padding-top:6px; border-top:1px solid var(--line); }
@@ -6900,8 +6924,8 @@
   </div>
 </div>
 
-<script src="data.js?v=865"></script>
-<script src="desk.js?v=865"></script>
+<script src="data.js?v=866"></script>
+<script src="desk.js?v=866"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
