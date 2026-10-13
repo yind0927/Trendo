@@ -6074,41 +6074,7 @@ function rsAdjustGrade(grade, rsResult) {
   // Reported at cohort level AND at individual-pick level, plus median beside mean.
   // A source can look strong at cohort level purely because one name ran; the pick-level
   // hit rate and the mean/median gap are what expose that.
-  function mpStats() {
-    const med = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y);
-      const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-    const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
-    // Sample standard deviation of the picks' OWN returns (not excess): how widely the
-    // names scatter at this holding period. Needs 2+ points.
-    const sd = a => { if (a.length < 2) return null; const m = mean(a);
-      return Math.sqrt(a.reduce((s, x) => s + (x - m) * (x - m), 0) / (a.length - 1)); };
-    const rows = MP_CHECKPOINTS.map(([key, n]) => {
-      const alphas = [], own = [], cohortOwn = [];
-      for (const c of MODEL_PICKS) {
-        const r = mpCohortReturn(c, key);
-        if (r.pct != null) cohortOwn.push(r.pct);
-        for (const p of c.picks) {
-          const pr = mpRet(p.entryPrice, p.checkpoints?.[key]?.px);
-          if (pr != null) own.push(pr);
-        }
-        const b = mpBenchReturn(c, key);
-        if (b != null && r.pct != null) alphas.push(r.pct - b);
-      }
-      return {
-        key, weeks: Math.round(n / 5),
-        pickN: own.length, cohortN: cohortOwn.length,
-        sd: sd(own), med: med(own), avg: mean(own),
-        min: own.length ? Math.min(...own) : null,
-        max: own.length ? Math.max(...own) : null,
-        up: own.length ? own.filter(x => x > 0).length / own.length * 100 : null,
-        cohortSd: sd(cohortOwn),
-        // VOO comparison — secondary
-        N: alphas.length, alpha: mean(alphas),
-        alphaWin: alphas.length ? alphas.filter(a => a > 0).length / alphas.length * 100 : null,
-      };
-    });
-    return { rows, cohorts: MODEL_PICKS.length };
-  }
+  function mpStats() { return { cohorts: MODEL_PICKS.length }; }
 
   // ── Render ────────────────────────────────────────────────────────────────
   function renderModelPicks() {
@@ -6157,36 +6123,42 @@ function rsAdjustGrade(grade, rsResult) {
       ${perWeek} 个 × ${s.cohorts} 周看起来是 ${totalPicks} 个仓位，但只有 ${s.cohorts} 个独立观测 ——
       同一周的选股一起涨跌，它们不是彼此独立的证据。</div>` : "";
 
-    const stats = `
+    // Top strip: one card per batch, newest first. The question this module answers first
+    // is "how did each week's picks do", so the batch is the unit — not the holding period.
+    // VOO is a single small line at the foot of each card.
+    const stats = MODEL_PICKS.length ? `
       <div class="mp-stats">
-        <div class="sim-section-label"><span class="ssl-zh">选股波动</span><span class="ssl-en">Pick Dispersion</span><span class="ssl-rule"></span>
-          <span class="ssl-meta">按持有期汇总 · 全部批次合并</span></div>
-        <div class="mp-stats-hint">这六张卡是<b>六个持有期</b>，不是六周的批次 ——
-          每张看的是「选出来的股票拿 N 周，<b>自己</b>涨跌得有多分散」：大字是个股收益的标准差，
-          下方是最差～最好、上涨占比、中位与均值。与 VOO 的对比只在每张卡最底下一行。</div>
+        <div class="sim-section-label"><span class="ssl-zh">每批表现</span><span class="ssl-en">Batches</span><span class="ssl-rule"></span>
+          <span class="ssl-meta">等权收益 · 每批一张</span></div>
         <div class="mp-stat-grid">
-          ${s.rows.map(r => `
-            <div class="mp-stat${r.key === MP_PRIMARY ? " primary" : ""}">
-              <div class="mp-stat-label">持有 ${r.weeks} 周${r.key === MP_PRIMARY ? " · 主口径" : ""}</div>
-              <div class="mp-stat-val num">${r.sd == null ? "—" : `±${r.sd.toFixed(2)}%`}</div>
-              <div class="mp-stat-sub">${r.pickN ? `个股收益波动 · ${r.pickN} 个` : "还没有个股走满这个持有期"}</div>
-              ${r.pickN ? `<div class="mp-stat-sub2 mp-stat-own">
-                <div class="mp-own-row"><span>区间</span><span class="num"><span class="${cls(r.min)}">${pct(r.min)}</span> ～ <span class="${cls(r.max)}">${pct(r.max)}</span></span></div>
-                <div class="mp-own-row"><span>上涨占比</span><span class="num">${r.up.toFixed(0)}%</span></div>
-                <div class="mp-own-row"><span>中位 · 均值</span><span class="num"><span class="${cls(r.med)}">${pct(r.med)}</span> · <span class="${cls(r.avg)}">${pct(r.avg)}</span></span></div>
+          ${MODEL_PICKS.map(c => {
+            const hk = mpHeadlineKey(c);
+            const r = hk ? mpCohortReturn(c, hk) : { pct: null };
+            const b = hk ? mpBenchReturn(c, hk) : null;
+            const live = c.picks.map(p => ({ sym: p.sym, v: mpRet(p.entryPrice, p.lastPx) }))
+              .filter(x => x.v != null).sort((x, y) => y.v - x.v);
+            const liveAvg = live.length ? live.reduce((s, x) => s + x.v, 0) / live.length : null;
+            const bl = mpRet(c.bench?.entryPrice, c.bench?.lastPx);
+            const useCp = r.pct != null;
+            const main = useCp ? r.pct : liveAvg;
+            const ref  = useCp ? b : bl;
+            const hz = useCp ? `${Math.round((MP_CHECKPOINTS.find(([k]) => k === hk)?.[1] || 0) / 5)} 周` : "至今";
+            const alpha = (main != null && ref != null) ? main - ref : null;
+            const upN = live.filter(x => x.v > 0).length;
+            return `
+            <div class="mp-stat">
+              <div class="mp-stat-label">${c.id} · ${c.weekOf.slice(5).replace("-", "/")}</div>
+              <div class="mp-stat-val num ${cls(main)}">${pct(main)}</div>
+              <div class="mp-stat-sub">等权 · ${hz} · ${c.picks.length} 个${live.length ? ` · ${upN} 涨 ${live.length - upN} 跌` : " · 待定价"}</div>
+              ${live.length > 1 ? `<div class="mp-stat-sub2 mp-stat-own">
+                <div class="mp-own-row"><span>最好</span><span class="num"><b>${live[0].sym}</b> <span class="${cls(live[0].v)}">${pct(live[0].v)}</span></span></div>
+                <div class="mp-own-row"><span>最差</span><span class="num"><b>${live[live.length - 1].sym}</b> <span class="${cls(live[live.length - 1].v)}">${pct(live[live.length - 1].v)}</span></span></div>
               </div>` : ""}
-              <div class="mp-vs">${r.N ? `vs VOO <span class="num ${cls(r.alpha)}">${ppf(r.alpha)}</span> · 批次胜率 ${r.alphaWin.toFixed(0)}% · ${r.N} 批` : "vs VOO —"}</div>
-            </div>`).join("")}
+              <div class="mp-vs">vs VOO <span class="num ${cls(alpha)}">${ppf(alpha)}</span></div>
+            </div>`;
+          }).join("")}
         </div>
-        ${(() => {
-          const pr = s.rows.find(r => r.key === MP_PRIMARY);
-          if (!pr || pr.pickN < 5 || pr.avg == null || pr.med == null) return "";
-          const gap = pr.avg - pr.med;
-          if (gap < 2) return "";
-          return `<div class="mp-note">${MP_PRIMARY_WEEKS} 周口径下均值 ${pct(pr.avg)} 明显高于中位数 ${pct(pr.med)}，
-            说明收益来自极少数个股，其余并不突出。</div>`;
-        })()}
-      </div>`;
+      </div>` : "";
 
     // Cohort-level breakdown across every horizon. The header can only ever show one
     // number, so without this the six horizons existed solely as a cramped chip row
