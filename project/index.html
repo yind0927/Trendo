@@ -2191,6 +2191,9 @@
   .mp-stat.primary { box-shadow:inset 2px 0 0 0 var(--accent); }
   .mp-stat-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--fg-2); font-weight:500; }
   .mp-stat-val { font-size:18px; font-weight:700; letter-spacing:-.02em; margin-top:4px; }
+  .mp-own-row { display:flex; justify-content:space-between; gap:8px; }
+  .mp-own-row > span:first-child { color:var(--fg-3); }
+  .mp-vs { font-size:10px; color:var(--fg-3); margin-top:8px; padding-top:6px; border-top:1px solid var(--line); }
   .mp-stat-sub { font-size:10px; color:var(--fg-3); margin-top:2px; }
   /* Padding moves off the container and onto summary/body: the summary is the whole
      click target when collapsed, so it has to reach the card's edges. */
@@ -6897,8 +6900,8 @@
   </div>
 </div>
 
-<script src="data.js?v=864"></script>
-<script src="desk.js?v=864"></script>
+<script src="data.js?v=865"></script>
+<script src="desk.js?v=865"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

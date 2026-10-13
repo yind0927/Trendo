@@ -6075,28 +6075,36 @@ function rsAdjustGrade(grade, rsResult) {
   // A source can look strong at cohort level purely because one name ran; the pick-level
   // hit rate and the mean/median gap are what expose that.
   function mpStats() {
+    const med = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y);
+      const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+    const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    // Sample standard deviation of the picks' OWN returns (not excess): how widely the
+    // names scatter at this holding period. Needs 2+ points.
+    const sd = a => { if (a.length < 2) return null; const m = mean(a);
+      return Math.sqrt(a.reduce((s, x) => s + (x - m) * (x - m), 0) / (a.length - 1)); };
     const rows = MP_CHECKPOINTS.map(([key, n]) => {
-      const alphas = [], picks = [];
+      const alphas = [], own = [], cohortOwn = [];
       for (const c of MODEL_PICKS) {
-        const b = mpBenchReturn(c, key);
-        if (b == null) continue;
         const r = mpCohortReturn(c, key);
-        if (r.pct != null) alphas.push(r.pct - b);
+        if (r.pct != null) cohortOwn.push(r.pct);
         for (const p of c.picks) {
           const pr = mpRet(p.entryPrice, p.checkpoints?.[key]?.px);
-          if (pr != null) picks.push(pr - b);
+          if (pr != null) own.push(pr);
         }
+        const b = mpBenchReturn(c, key);
+        if (b != null && r.pct != null) alphas.push(r.pct - b);
       }
-      const med = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y);
-        const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
       return {
-        key, weeks: Math.round(n / 5), N: alphas.length,
-        avg:  alphas.length ? alphas.reduce((a, b) => a + b, 0) / alphas.length : null,
-        win:  alphas.length ? alphas.filter(a => a > 0).length / alphas.length * 100 : null,
-        pickN: picks.length,
-        pickWin: picks.length ? picks.filter(a => a > 0).length / picks.length * 100 : null,
-        pickMed: med(picks),
-        pickAvg: picks.length ? picks.reduce((a, b) => a + b, 0) / picks.length : null,
+        key, weeks: Math.round(n / 5),
+        pickN: own.length, cohortN: cohortOwn.length,
+        sd: sd(own), med: med(own), avg: mean(own),
+        min: own.length ? Math.min(...own) : null,
+        max: own.length ? Math.max(...own) : null,
+        up: own.length ? own.filter(x => x > 0).length / own.length * 100 : null,
+        cohortSd: sd(cohortOwn),
+        // VOO comparison — secondary
+        N: alphas.length, alpha: mean(alphas),
+        alphaWin: alphas.length ? alphas.filter(a => a > 0).length / alphas.length * 100 : null,
       };
     });
     return { rows, cohorts: MODEL_PICKS.length };
@@ -6151,33 +6159,32 @@ function rsAdjustGrade(grade, rsResult) {
 
     const stats = `
       <div class="mp-stats">
-        <div class="sim-section-label"><span class="ssl-zh">超额收益</span><span class="ssl-en">vs VOO</span><span class="ssl-rule"></span>
+        <div class="sim-section-label"><span class="ssl-zh">选股波动</span><span class="ssl-en">Pick Dispersion</span><span class="ssl-rule"></span>
           <span class="ssl-meta">按持有期汇总 · 全部批次合并</span></div>
         <div class="mp-stats-hint">这六张卡是<b>六个持有期</b>，不是六周的批次 ——
-          每一张回答的是「选出来的股票拿 N 周，平均比 VOO 多赚多少」，统计的是<b>全部</b>已录批次。
-          单周批次各自的表现在下方按周列出。</div>
+          每张看的是「选出来的股票拿 N 周，<b>自己</b>涨跌得有多分散」：大字是个股收益的标准差，
+          下方是最差～最好、上涨占比、中位与均值。与 VOO 的对比只在每张卡最底下一行。</div>
         <div class="mp-stat-grid">
           ${s.rows.map(r => `
             <div class="mp-stat${r.key === MP_PRIMARY ? " primary" : ""}">
               <div class="mp-stat-label">持有 ${r.weeks} 周${r.key === MP_PRIMARY ? " · 主口径" : ""}</div>
-              <div class="mp-stat-val num ${cls(r.avg)}">${ppf(r.avg)}</div>
-              <div class="mp-stat-sub">${r.N ? `批次胜率 ${r.win.toFixed(0)}% · 已走满 ${r.N} 批` : "还没有批次走满这个持有期"}</div>
-              ${r.pickN ? `<div class="mp-stat-sub2">
-                个股胜率 ${r.pickWin.toFixed(0)}% (${r.pickN} 个)<br>
-                中位 <span class="num ${cls(r.pickMed)}">${ppf(r.pickMed)}</span> · 均值 <span class="num ${cls(r.pickAvg)}">${ppf(r.pickAvg)}</span>
+              <div class="mp-stat-val num">${r.sd == null ? "—" : `±${r.sd.toFixed(2)}%`}</div>
+              <div class="mp-stat-sub">${r.pickN ? `个股收益波动 · ${r.pickN} 个` : "还没有个股走满这个持有期"}</div>
+              ${r.pickN ? `<div class="mp-stat-sub2 mp-stat-own">
+                <div class="mp-own-row"><span>区间</span><span class="num"><span class="${cls(r.min)}">${pct(r.min)}</span> ～ <span class="${cls(r.max)}">${pct(r.max)}</span></span></div>
+                <div class="mp-own-row"><span>上涨占比</span><span class="num">${r.up.toFixed(0)}%</span></div>
+                <div class="mp-own-row"><span>中位 · 均值</span><span class="num"><span class="${cls(r.med)}">${pct(r.med)}</span> · <span class="${cls(r.avg)}">${pct(r.avg)}</span></span></div>
               </div>` : ""}
+              <div class="mp-vs">${r.N ? `vs VOO <span class="num ${cls(r.alpha)}">${ppf(r.alpha)}</span> · 批次胜率 ${r.alphaWin.toFixed(0)}% · ${r.N} 批` : "vs VOO —"}</div>
             </div>`).join("")}
         </div>
         ${(() => {
-          // Was printed unconditionally — a claim about the data that stayed on screen
-          // even when the data said the opposite. Now it appears only when the primary
-          // horizon actually shows that spread, and it quotes the two numbers.
           const pr = s.rows.find(r => r.key === MP_PRIMARY);
-          if (!pr || pr.pickN < 5 || pr.pickAvg == null || pr.pickMed == null) return "";
-          const gap = pr.pickAvg - pr.pickMed;
+          if (!pr || pr.pickN < 5 || pr.avg == null || pr.med == null) return "";
+          const gap = pr.avg - pr.med;
           if (gap < 2) return "";
-          return `<div class="mp-note">${MP_PRIMARY_WEEKS} 周口径下均值 ${ppf(pr.pickAvg)} 明显高于中位数 ${ppf(pr.pickMed)}，
-            说明超额来自极少数个股，不是稳定的选股能力。</div>`;
+          return `<div class="mp-note">${MP_PRIMARY_WEEKS} 周口径下均值 ${pct(pr.avg)} 明显高于中位数 ${pct(pr.med)}，
+            说明收益来自极少数个股，其余并不突出。</div>`;
         })()}
       </div>`;
 
