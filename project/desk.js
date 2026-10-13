@@ -1384,6 +1384,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 启动同步是否已经落定；以及落定之后有没有发生过「真改动」（用户编辑、成交、结算…）。
   // 只有这种改动才有资格在被服务端 409 拒收后强推——派生写入（saveDerived）不算。
   let _syncSettled = false, _dirtySinceSync = false, _forcingPush = false;
+  let _syncInflight = null;   // 最近一次 syncOnStartup() 的 promise：补回放与实时成交都要等它落地
   let _demoMode = false;   // 进过演示模式之后，这个会话一律不再向云端写入
 
   // savedAt 是跨设备比较的唯一依据，可它取自各设备自己的墙上时钟。只要有一台设备时钟
@@ -1573,10 +1574,21 @@ function rsAdjustGrade(grade, rsResult) {
       });
     };
     add(REAL_OPTIONS,      snap.realOptions, o => o.id, "p");
-    add(HOLDINGS,          snap.holdings,    h => tradeIdOf(h), "rh");
+    // 本地独有的持仓，如果云端已经把它平掉了（同一笔交易在云端已平仓记录里），不许再并回来
+    // ——见下面模拟仓那一行的完整说明。这两个集合必须在云端版本套用之后、并入本地记录之前取。
+    const cloudClosedReal = new Set(CLOSED_POSITIONS.map(tradeIdOf));
+    const cloudClosedSim  = new Set(SIM_CLOSED.map(tradeIdOf));
+    add(HOLDINGS,          (snap.holdings || []).filter(h => !cloudClosedReal.has(tradeIdOf(h))), h => tradeIdOf(h), "rh");
     add(WATCHLIST,         snap.watchlist,   w => w.sym);
     add(MODEL_PICKS,       snap.modelPicks,  m => m.id);
-    add(SIM_HOLDINGS,      snap.simHoldings, h => tradeIdOf(h), "h");
+    // **本地独有的持仓，如果云端已经把它平掉了（同一笔交易在云端的已平仓记录里），就不许再并回来。**
+    // 这台设备手里那份是平仓之前的旧副本：A 在开盘时把它卖了、推上云端，B 带着未推送改动
+    // 打开，下面这一行若不拦，就把「已经卖掉的」持仓当成「B 独有的新记录」救回来——紧接着
+    // 它的平仓挂单也过了「对应持仓还在」那道闸，于是队列里一排「已成交的出场单」，持仓表
+    // 里一排复活的持仓；等价格轮询或补回放再跑一遍，它们会被**第二次卖出**，已平仓记录重复。
+    // 同一笔交易的 `_tid` 在持仓与已平仓里是同一个；部分平仓时剩余仓位仍在云端持仓里，
+    // `have` 会先拦下，不受影响。（真实仓的 HOLDINGS 同理。）
+    add(SIM_HOLDINGS,      (snap.simHoldings || []).filter(h => !cloudClosedSim.has(tradeIdOf(h))),  h => tradeIdOf(h), "h");
 
     // 已平仓记录：除了墓碑，还要挡掉「这笔交易现在是持仓中」的情形——另一台设备把它
     // **撤回平仓**了（restoreClosedPosition 把记录从已平仓里删掉、放回持仓中），而本机
@@ -6819,6 +6831,17 @@ function rsAdjustGrade(grade, rsResult) {
   let _catchUpRunning = false;
   async function catchUpPendingOrders() {
     if (_catchUpRunning) return;
+    // **先等云端同步落地，再拿本地队列去回放。**启动时 syncOnStartup() 与这个函数是同时
+    // 起跑的：云端那边其实早在昨天开盘时就把这些单成交了（另一台设备推上去的），而这台
+    // 设备手里还是旧队列——回放抢先在本地把它们再成交一遍，用的是新生成的 `_tid`，
+    // 等云端的版本回来再合并，同一笔入场就成了两笔、同一笔出场被卖了两次。
+    // 等不到（离线 / 8 秒超时）就照旧回放，离线时本来就只能靠本地日线。
+    if (syncKey && _syncInflight) {
+      _catchUpRunning = true;
+      try {
+        await Promise.race([_syncInflight.catch(() => {}), new Promise(done => setTimeout(done, 8000))]);
+      } finally { _catchUpRunning = false; }
+    }
     if (!SIM_PENDING.length && !SIM_CLOSE_PENDING.length) return;
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     // Orders written before entryDate was recorded fall back to the day they were
@@ -7105,13 +7128,16 @@ function rsAdjustGrade(grade, rsResult) {
         _pendQuotes[o.sym] = { last: q.last, at: Date.now() };
       });
 
+      // 启动同步还没落地时不在实时路径上成交：本地队列可能是旧的，别的设备早已成交过
+      // （同 catchUpPendingOrders 开头那段说明）。同步失败/离线也会走 finally，不会一直卡住。
+      const _fillOk = !syncKey || _syncSettled;
       // Auto-execute pending orders
       const executed = [];
       SIM_PENDING.forEach(order => {
         const q = results[order.sym];
         if (q == null || q.last == null) return;
         const execPrice = q.last;
-        const shouldExecute = isUSMarketOpen() && (
+        const shouldExecute = _fillOk && isUSMarketOpen() && (
           order.orderType === "market" ||
           (order.orderType === "limit" && execPrice <= order.limitPrice));
         if (!shouldExecute) return;
@@ -7160,7 +7186,7 @@ function rsAdjustGrade(grade, rsResult) {
         const q = results[order.sym];
         if (q == null || q.last == null) return;
         const execPrice = q.last;
-        const shouldClose = isUSMarketOpen() && (
+        const shouldClose = _fillOk && isUSMarketOpen() && (
           order.orderType === "market" ||
           (order.orderType === "limit" && execPrice >= order.limitPrice));
         if (!shouldClose) return;
@@ -19183,7 +19209,7 @@ function rsAdjustGrade(grade, rsResult) {
   // Sync strategy: last-write-wins based on savedAt timestamp.
   // On startup: fetch cloud, compare timestamps, pull if cloud is newer else push.
   // This ensures cross-device changes (e.g. desktop → mobile) propagate automatically.
-  if (syncKey) syncOnStartup().finally(() => { _syncSettled = true; backfillAnalysisFullData(); });
+  if (syncKey) { _syncInflight = syncOnStartup(); _syncInflight.finally(() => { _syncSettled = true; backfillAnalysisFullData(); }); }
   else { _syncSettled = true; backfillAnalysisFullData(); }
   // Re-pull when the tab regains focus: the background order worker
   // (api/order-check.js) may have filled sim pending orders while this tab was
@@ -19200,7 +19226,7 @@ function rsAdjustGrade(grade, rsResult) {
       return;
     }
     if (!document.hidden) {
-      if (syncKey) syncOnStartup();
+      if (syncKey) _syncInflight = syncOnStartup();
       // Force immediate price refresh so pending orders execute as soon as the tab is active
       lastPriceFetch = 0;
       // ...and replay any whole session that went by while nothing was polling.
