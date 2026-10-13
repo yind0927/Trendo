@@ -6049,11 +6049,21 @@ function rsAdjustGrade(grade, rsResult) {
           // adjclose shifted every later checkpoint onto the NEXT bar, and checkpoints are
           // frozen once written, so a wrong number would have been permanent.
           const adj = j.adjResults?.[t.sym];
-          const src = (adj && days.every(d => adj[d] != null)) ? adj : j.results?.[t.sym];
+          const raw = j.results?.[t.sym];
+          // Entry is the RAW open of day 0, so every later price has to be expressed in day-0
+          // dollars: adj_n / f0, where f0 = adj_0 / raw_0 is day 0's own adjustment factor.
+          // That keeps dividends between entry and day n in the return AND stops dividends
+          // paid after day n from scaling a frozen checkpoint down (adjclose is rescaled to
+          // the latest bar, so a bare adj_n ÷ raw open mixes two bases).
+          const f0 = (adj && raw && adj[days[0]] != null && raw[days[0]]) ? adj[days[0]] / raw[days[0]] : null;
+          const useAdj = f0 && days.every(d => adj[d] != null);
+          const src = useAdj ? Object.fromEntries(days.map(d => [d, adj[d] / f0])) : raw;
           const series = days.map(d => src?.[d] ?? null);
           for (const [key, n] of MP_CHECKPOINTS) {
             if (t.checkpoints[key]) continue;  // frozen once written
-            if (series.length > n && series[n] != null) {
+            // The daily series carries today's in-progress bar during the session; freezing
+            // it would lock an intraday price in as the "close" for good.
+            if (series.length > n && series[n] != null && !isLiveSession(days[n])) {
               // The date is stored alongside the price so the number can be checked
               // against a chart later — a bare percentage is not verifiable.
               t.checkpoints[key] = { px: series[n], d: days[n] }; changed = true;
@@ -6155,23 +6165,15 @@ function rsAdjustGrade(grade, rsResult) {
           const upPct = up / all.length * 100, dnPct = dn / all.length * 100;
           return `
           <div class="mp-total">
-            <div class="mp-total-hd"><span class="mp-total-tag">全部合计 · Overall</span>
-              <span class="mp-total-sub">${MODEL_PICKS.length} 批 · ${all.length} 个 · 假设每个都等额买入 · 自入场以来</span></div>
-            <div class="mp-total-body">
-              <div class="mp-total-main">
-                <div class="mp-total-val num ${cls(t)}">${pct(t)}</div>
-                <div class="mp-total-vs">${vv == null ? "vs VOO —" : `VOO <span class="num ${cls(vv)}">${pct(vv)}</span> · 超额 <b class="num ${cls(d)}">${ppf(d)}</b>`}</div>
-              </div>
-              <div class="mp-total-facts">
-                <div><span>中位数</span><b class="num ${cls(med)}">${pct(med)}</b></div>
-                <div><span>最好</span><b><i>${sorted[0].sym}</i> <span class="num ${cls(sorted[0].v)}">${pct(sorted[0].v)}</span></b></div>
-                <div><span>最差</span><b><i>${sorted[sorted.length - 1].sym}</i> <span class="num ${cls(sorted[sorted.length - 1].v)}">${pct(sorted[sorted.length - 1].v)}</span></b></div>
-                <div><span>上涨占比</span><b class="num">${upPct.toFixed(0)}%</b></div>
-              </div>
+            <div class="mp-total-main">
+              <div class="mp-total-tag">全部合计 · ${MODEL_PICKS.length} 批 · ${all.length} 个</div>
+              <div class="mp-total-val num ${cls(t)}">${pct(t)}</div>
             </div>
-            <div class="mp-total-bar" title="${up} 涨 · ${dn} 跌 · ${all.length - up - dn} 平">
-              <i class="up" style="width:${upPct}%"></i><i class="dn" style="width:${dnPct}%"></i></div>
-            <div class="mp-total-bar-lbl"><span>${up} 涨</span><span>${dn} 跌</span></div>
+            <div class="mp-total-side">
+              <div>${vv == null ? "vs VOO —" : `vs VOO <b class="num ${cls(d)}">${ppf(d)}</b>`} <span class="mp-total-dim">· VOO ${vv == null ? "—" : pct(vv)}</span></div>
+              <div class="mp-total-dim">中位 <span class="num ${cls(med)}">${pct(med)}</span> · ${up} 涨 ${dn} 跌</div>
+              <div class="mp-total-bar"><i class="up" style="width:${upPct}%"></i><i class="dn" style="width:${dnPct}%"></i></div>
+            </div>
           </div>`;
         })()}
         <div class="mp-sub-lbl">每批表现</div>
@@ -17714,7 +17716,7 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         <div class="mkt-date">${today}</div>
       </div>
-      ${sec("今日简报", "Briefing", "AI 日报 · 北京 07:30 更新")}
+      ${sec("今日简报", "Briefing", "AI 日报")}
       <div class="brief-card" id="market-brief">
         <div class="brief-loading">正在生成今日市场简报…</div>
       </div>
