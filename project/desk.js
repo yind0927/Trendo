@@ -3435,7 +3435,7 @@ function rsAdjustGrade(grade, rsResult) {
             ${!isClosed ? `<button class="cc-add-btn" id="drawer-cc-btn" type="button">+ 记录权利金</button>` : ""}
           </div>
           <div class="exec-list" id="cc-list">
-            ${(h.cc || []).slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.id).localeCompare(String(a.id))).map(c => `
+            ${(h.cc || []).slice().sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.id).localeCompare(String(b.id))).map(c => `
               <div class="exec-item">
                 <span class="exec-type cc">权利金</span>
                 <span class="exec-date">${fmt.date(c.date)}</span>
