@@ -1446,6 +1446,7 @@ function rsAdjustGrade(grade, rsResult) {
       if (r.ok) {
         try { setRev((await r.json())?.rev); } catch (_) {}
         clearDirty();            // 云端已确认收到，保险丝可以摘了
+        saveSyncBase(payload);   // 这份内容现在与云端一致，记作下次三方合并的基线
         lastSyncAt = new Date(); _dirtySinceSync = false; renderSyncStatus(); return;
       }
       // 409 = 服务端挡下了一次「旧快照覆盖新快照」。两种情形要分开处理，判据是
@@ -1510,6 +1511,59 @@ function rsAdjustGrade(grade, rsResult) {
     } catch (_) {}
   }
 
+  // ── 三方合并的「基线」：上一次与云端对齐时（拉取落地 / 推送 200）这几个集合的样子 ──
+  // 只合并「本地独有的记录」解决不了**编辑已有记录**：电脑给已有持仓记一笔权利金、给已有
+  // 期权记了现价，这些记录的 id 云端本来就有，并集里「云端那份胜」，于是编辑被整个丢掉，
+  // 而 toast 还写着「已合并」。真实路径：某台设备/后台成交 worker 先把云端 rev 推高 → 这台的
+  // 下一次推送（或 pagehide 的 beacon）带着旧 _baseRev 被 409 → 合并只救「新增」不救「修改」。
+  // 有了基线就能逐字段判断「这个字段是我改的还是对方改的」：我改了、对方没动 → 取我的；
+  // 两边都改了 → 数组按条目并集、其余云端胜。
+  const SYNCBASE_KEY = "trendo_v4_syncbase";
+  const _SB_KEYS = ["holdings", "closed", "simHoldings", "simClosed", "realOptions"];
+  const _projectBase = o => {
+    const out = {};
+    _SB_KEYS.forEach(k => { out[k] = Array.isArray(o?.[k]) ? o[k] : []; });
+    return out;
+  };
+  function saveSyncBase(o) {
+    try { localStorage.setItem(SYNCBASE_KEY, JSON.stringify(_projectBase(o))); } catch (_) {}
+  }
+  function loadSyncBase() {
+    try { return JSON.parse(localStorage.getItem(SYNCBASE_KEY) || "null"); } catch (_) { return null; }
+  }
+  // 行情/派生字段：每台设备自己会重算，不当作「用户编辑」参与合并
+  const _MERGE_SKIP = new Set(["last", "prevClose", "pnlDollar", "pnlPct", "rMult", "risk1R", "days", "spark",
+    "peakPrice", "peakPriceAt", "ppPeak", "ppPrice", "ppActive", "ppBasis", "mfe", "size"]);
+  const _same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  function _unionArr(theirs, mine) {
+    const key = x => (x && typeof x === "object" && x.id != null) ? "id:" + x.id : JSON.stringify(x);
+    const out = [...theirs], have = new Set(theirs.map(key));
+    mine.forEach(x => { if (!have.has(key(x))) { out.push(x); have.add(key(x)); } });
+    return out;
+  }
+  // 逐记录逐字段三方合并。arr = 套用云端版本之后的数组（就地修改）；返回是否改动过。
+  function _mergeEdits(arr, mineArr, baseArr, keyOf) {
+    if (!Array.isArray(baseArr) || !baseArr.length) return false;
+    const theirsBy = new Map(arr.map(x => [keyOf(x), x]));
+    const baseBy   = new Map(baseArr.map(x => [keyOf(x), x]));
+    let changed = false;
+    mineArr.forEach(m => {
+      const k = keyOf(m), t = theirsBy.get(k), b = baseBy.get(k);
+      if (!k || !t || !b) return;                       // 新增/独有的记录由 _mergeLocalOnly 的并集负责
+      Object.keys(m).forEach(f => {
+        if (_MERGE_SKIP.has(f) || f.startsWith("_")) return;
+        if (_same(m[f], b[f])) return;                  // 我没改这个字段 → 保留云端的
+        if (_same(t[f], b[f])) { t[f] = m[f]; changed = true; return; }   // 只有我改了 → 取我的
+        // 两边都改了：数组按条目并集（权利金、建仓记录这类追加型），其余云端胜
+        if (Array.isArray(m[f]) && Array.isArray(t[f])) {
+          const u = _unionArr(t[f], m[f]);
+          if (u.length !== t[f].length) { t[f] = u; changed = true; }
+        }
+      });
+    });
+    return changed;
+  }
+
   function _buildSyncPayload() {
     const histForSync = [...analysisHistory]
       .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
@@ -1538,6 +1592,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 删除靠墓碑表达终态，所以并集不会把刚删掉的记录救回来。
   function _localOnlySnapshot() {
     return {
+      _base: loadSyncBase(),   // 必须在 applyCloudData 之前取：它会把基线刷成云端版本
       realOptions: REAL_OPTIONS.map(o => ({ ...o })),
       holdings:    HOLDINGS.map(h => ({ ...h })),
       closed:      CLOSED_POSITIONS.map(h => ({ ...h })),
@@ -1564,6 +1619,21 @@ function rsAdjustGrade(grade, rsResult) {
   function _mergeLocalOnly(snap) {
     if (!snap) return false;
     let merged = false;
+    // 先做「已有记录的字段级合并」（编辑权利金、期权现价、止损止盈、备注……），再做下面的并集
+    if (snap._base) {
+      const cid = x => x.id;
+      const ed = [
+        _mergeEdits(HOLDINGS,          snap.holdings || [],    snap._base.holdings,    h => tradeIdOf(h)),
+        _mergeEdits(SIM_HOLDINGS,      snap.simHoldings || [], snap._base.simHoldings, h => tradeIdOf(h)),
+        _mergeEdits(REAL_OPTIONS,      snap.realOptions || [], snap._base.realOptions, cid),
+        _mergeEdits(CLOSED_POSITIONS,  snap.closed || [],      snap._base.closed,    h => `${tradeIdOf(h)}|${h.closedAt || ""}`),
+        _mergeEdits(SIM_CLOSED,        snap.simClosed || [],   snap._base.simClosed,   h => `${tradeIdOf(h)}|${h.closedAt || ""}`),
+      ];
+      if (ed.some(Boolean)) {
+        merged = true;
+        try { HOLDINGS.forEach(h => recomputeHolding(h, totalNotional)); SIM_HOLDINGS.forEach(h => recomputeHolding(h, simNotional)); } catch (_) {}
+      }
+    }
     const add = (arr, mineArr, keyOf, tombType) => {
       const have = new Set(arr.map(keyOf));
       mineArr.forEach(x => {
@@ -1644,6 +1714,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 真正做了修改的那台更新。落盘的是「我这份内容基于云端的哪个版本」。
   function adoptCloudVersion(data) {
     if (!data) return;
+    saveSyncBase(data);   // 拉下来的就是云端版本，也是之后三方合并的基线
     setRev(data.rev);
     if (data.savedAt) { try { localStorage.setItem("trendo_v4_savedAt", data.savedAt); } catch (_) {} }
   }
@@ -1717,6 +1788,7 @@ function rsAdjustGrade(grade, rsResult) {
     } else if (sameBase && !_dirtySinceSync) {
       // 同一个基版本、本地也没有未推送的真改动 —— 什么都不用做。
       // 这条路每次 visibilitychange 都会走到，不该为它发一次无意义的 POST。
+      saveSyncBase(cloudData);   // 此刻本地 = 云端，正是三方合并要的基线
       lastSyncAt = new Date();
       renderSyncStatus();
     } else {
