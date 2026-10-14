@@ -1535,10 +1535,12 @@ function rsAdjustGrade(grade, rsResult) {
   const _MERGE_SKIP = new Set(["last", "prevClose", "pnlDollar", "pnlPct", "rMult", "risk1R", "days", "spark",
     "peakPrice", "peakPriceAt", "ppPeak", "ppPrice", "ppActive", "ppBasis", "mfe", "size"]);
   const _same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-  function _unionArr(theirs, mine) {
+  function _unionArr(theirs, mine, base) {
     const key = x => (x && typeof x === "object" && x.id != null) ? "id:" + x.id : JSON.stringify(x);
     const out = [...theirs], have = new Set(theirs.map(key));
-    mine.forEach(x => { if (!have.has(key(x))) { out.push(x); have.add(key(x)); } });
+    // 上次对齐时就在、现在云端没有了 = 对方删掉的，不能并回来（否则删了重记会变成两笔）
+    const was = new Set((Array.isArray(base) ? base : []).map(key));
+    mine.forEach(x => { if (!have.has(key(x)) && !was.has(key(x))) { out.push(x); have.add(key(x)); } });
     return out;
   }
   // 逐记录逐字段三方合并。arr = 套用云端版本之后的数组（就地修改）；返回是否改动过。
@@ -1556,7 +1558,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (_same(t[f], b[f])) { t[f] = m[f]; changed = true; return; }   // 只有我改了 → 取我的
         // 两边都改了：数组按条目并集（权利金、建仓记录这类追加型），其余云端胜
         if (Array.isArray(m[f]) && Array.isArray(t[f])) {
-          const u = _unionArr(t[f], m[f]);
+          const u = _unionArr(t[f], m[f], b[f]);
           if (u.length !== t[f].length) { t[f] = u; changed = true; }
         }
       });
@@ -1906,7 +1908,12 @@ function rsAdjustGrade(grade, rsResult) {
         const out = { ...cloudH };
         if (localH.cc?.length) {
           const cloudIds = new Set((out.cc || []).map(c => c.id));
-          const localOnly = localH.cc.filter(c => !cloudIds.has(c.id));
+          // 本地有、云端没有的权利金：若上次对齐时它就已经在云端（基线里有），说明是另一台设备
+          // 删掉/改掉了它——不能再并回来，否则电脑上删了重记的那笔会在手机上变成两笔。
+          // 只有基线里没有的（这台设备新记、还没推上去）才算「本地独有」。
+          const bh = (loadSyncBase()?.holdings || []).find(b => tradeIdOf(b) === tradeIdOf(cloudH));
+          const baseCc = bh ? new Set((bh.cc || []).map(c => c.id)) : null;
+          const localOnly = localH.cc.filter(c => !cloudIds.has(c.id) && !(baseCc && baseCc.has(c.id)));
           if (localOnly.length) out.cc = [...(out.cc || []), ...localOnly];
         }
         if (out.journalTags == null && localH.journalTags?.length) out.journalTags = localH.journalTags;
