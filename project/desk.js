@@ -13409,6 +13409,15 @@ function rsAdjustGrade(grade, rsResult) {
     return b.hi === Infinity ? `>${b.lo}×` : b.lo === 0 ? `<${b.hi}×` : `${b.lo}–${b.hi}×`;
   }
 
+  // 最大单日的日期要带年份和星期：fmt.date 只给「Mar 16」，全历史里跨几十年时根本分不清是哪一年。
+  // 逐字段按本地自然日取星期（new Date("YYYY-MM-DD") 按 UTC 解析会差一天）。
+  function mvFullDate(d) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ""));
+    if (!m) return String(d || "—");
+    const wd = "日一二三四五六"[new Date(+m[1], +m[2] - 1, +m[3]).getDay()];
+    return `${m[1]}-${m[2]}-${m[3]} 周${wd}`;
+  }
+
   // 今日落在哪一档，此前只靠整行底色标出来——那只说了「是这一档」，没说今天是涨还是跌，
   // 而方向是读这张表时第一个要知道的（跌 2× 和涨 2× 对持仓的意思完全相反）。行底色继续表示
   // 「今天在这一档」，方向交给这个带颜色的标签，两者各管一件事、不重复编码。
@@ -13482,8 +13491,8 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="mv-stat">
         <div class="mv-stat-l">最大单日 · LARGEST DAY</div>
         <div class="mv-stat-pair">
-          <span><b class="down num">${mvPct1(p.maxDn?.pct)}</b><i>${p.maxDn ? fmt.date(p.maxDn.d) : "—"}</i></span>
-          <span><b class="up num">${mvPct1(p.maxUp?.pct)}</b><i>${p.maxUp ? fmt.date(p.maxUp.d) : "—"}</i></span>
+          <span><b class="down num">${mvPct1(p.maxDn?.pct)}</b><i>${p.maxDn ? mvFullDate(p.maxDn.d) : "—"}</i></span>
+          <span><b class="up num">${mvPct1(p.maxUp?.pct)}</b><i>${p.maxUp ? mvFullDate(p.maxUp.d) : "—"}</i></span>
         </div>
       </div>
     </div>`;
