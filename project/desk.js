@@ -13409,13 +13409,10 @@ function rsAdjustGrade(grade, rsResult) {
     return b.hi === Infinity ? `>${b.lo}×` : b.lo === 0 ? `<${b.hi}×` : `${b.lo}–${b.hi}×`;
   }
 
-  // 最大单日的日期要带年份和星期：fmt.date 只给「Mar 16」，全历史里跨几十年时根本分不清是哪一年。
-  // 逐字段按本地自然日取星期（new Date("YYYY-MM-DD") 按 UTC 解析会差一天）。
+  // 最大单日的日期要带年份：fmt.date 只给「Mar 16」，全历史里跨几十年时根本分不清是哪一年。只给日期、不带星期。
   function mvFullDate(d) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || ""));
-    if (!m) return String(d || "—");
-    const wd = "日一二三四五六"[new Date(+m[1], +m[2] - 1, +m[3]).getDay()];
-    return `${m[1]}-${m[2]}-${m[3]} 周${wd}`;
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : String(d || "—");
   }
 
   // 今日落在哪一档，此前只靠整行底色标出来——那只说了「是这一档」，没说今天是涨还是跌，
