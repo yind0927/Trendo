@@ -1296,7 +1296,7 @@ function rsAdjustGrade(grade, rsResult) {
   let pendingDeleteSym = null, pendingDeleteFrom = null;
   let pendingDeleteEntry = null, pendingDeleteCost = null, pendingDeleteClosedAt = null, pendingDeleteMerged = false;
   let currentPage = "desk";
-  let journalFilter = "all";
+  let journalFilter = (() => { try { const v = localStorage.getItem("trendo_journal_filter"); return v === "open" || v === "closed" ? v : "all"; } catch (_) { return "all"; } })();
   let equityPeriod  = "week";
   let calYear       = new Date().getFullYear();
   let calMonth      = new Date().getMonth();
@@ -1336,7 +1336,8 @@ function rsAdjustGrade(grade, rsResult) {
   // 期权页只有实盘一个面板。模拟期权（SIM_OPTIONS / trendo_v4_sim_options / 云同步字段
   // simOptions）已按要求整体删除：数组、本地存储、云端字段、以及首次加载时的一次性清理
   // 都在下方 _purgeSimOptions() 里处理。
-  let inspSubTab      = "journal"; // "journal" | "watchlist" — Inspirations sub-tab
+  // Inspirations 子页签：准备 Preparation（"watchlist"）在前、复盘 Journal 在后；记住上次停留的那个
+  let inspSubTab      = (() => { try { return localStorage.getItem("trendo_insp_tab") === "journal" ? "journal" : "watchlist"; } catch (_) { return "watchlist"; } })();
   let _optsSettledOpen = false; // collapsed by default
   const _optsWheelExpanded  = new Set();
   const _optsSymGroupsOpen  = new Set(); // which symbol groups are expanded in settled section // group IDs of expanded wheel combo cards
@@ -6468,6 +6469,32 @@ function rsAdjustGrade(grade, rsResult) {
     else renderSim();
   }
 
+  // Inspirations 子页签：状态、ARIA、面板显隐、淡入、记住选择都在这一处
+  function setInspSubTab(tab, opt = {}) {
+    inspSubTab = tab === "journal" ? "journal" : "watchlist";
+    try { localStorage.setItem("trendo_insp_tab", inspSubTab); } catch (_) {}
+    $$("[data-insp-tab]").forEach(b => {
+      const on = b.dataset.inspTab === inspSubTab;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
+    });
+    const jp = document.getElementById("insp-journal-panel");
+    const wp = document.getElementById("insp-watchlist-panel");
+    if (jp) jp.style.display = inspSubTab === "journal" ? "" : "none";
+    if (wp) wp.style.display = inspSubTab === "watchlist" ? "" : "none";
+    if (opt.user) {
+      // 两个面板高度差很大：停在上一个面板的滚动位置会落在新面板中间，回到页签行
+      const bar = document.querySelector("#inspirations-view .page-topbar");
+      if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block: "start" });
+      const shown = inspSubTab === "journal" ? jp : wp;
+      if (shown) { shown.classList.remove("insp-panel-in"); void shown.offsetWidth; shown.classList.add("insp-panel-in"); }
+    }
+    if (opt.render === false) return;
+    if (inspSubTab === "journal") renderJournal();
+    else { renderWatchlist(); renderMoveProfile(); }
+  }
+
   // ============ SEARCH / FILTERS / KEYBOARD ============
   function wireControls() {
     // Nav page switching
@@ -6487,19 +6514,20 @@ function rsAdjustGrade(grade, rsResult) {
       btn.addEventListener("click", () => setSimSubTab(btn.dataset.simTab));
     });
 
-    // Inspirations sub-tabs (Journal / Preparation)
-    $$("[data-insp-tab]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        inspSubTab = btn.dataset.inspTab;
-        $$("[data-insp-tab]").forEach(b => b.classList.toggle("active", b.dataset.inspTab === inspSubTab));
-        const jp = document.getElementById("insp-journal-panel");
-        const wp = document.getElementById("insp-watchlist-panel");
-        if (jp) jp.style.display = inspSubTab === "journal" ? "" : "none";
-        if (wp) wp.style.display = inspSubTab === "watchlist" ? "" : "none";
-        if (inspSubTab === "journal") renderJournal();
-        else { renderWatchlist(); renderMoveProfile(); }
+    // Inspirations sub-tabs (Preparation / Journal)
+    const inspTabs = $$("[data-insp-tab]");
+    inspTabs.forEach((btn, i) => {
+      btn.addEventListener("click", () => setInspSubTab(btn.dataset.inspTab, { user: true }));
+      // ← → Home End 在页签间移动（tablist 的标准键盘行为）
+      btn.addEventListener("keydown", e => {
+        const k = e.key; if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(k)) return;
+        e.preventDefault();
+        const j = k === "Home" ? 0 : k === "End" ? inspTabs.length - 1
+          : (i + (k === "ArrowRight" ? 1 : -1) + inspTabs.length) % inspTabs.length;
+        inspTabs[j].focus(); setInspSubTab(inspTabs[j].dataset.inspTab, { user: true });
       });
     });
+    setInspSubTab(inspSubTab, { render: false });
 
     $("#search-input").addEventListener("input", e => { query = e.target.value; renderTable(); });
     document.addEventListener("click", e => {
@@ -7793,7 +7821,12 @@ function rsAdjustGrade(grade, rsResult) {
 
     $$("[data-journal-filter]").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.journalFilter === journalFilter);
-      btn.addEventListener("click", () => { journalFilter = btn.dataset.journalFilter; renderJournal(); });
+      // onclick 而非 addEventListener：芯片在 feed 之外、不随重渲染重建，用后者每渲染一次就多叠一个监听
+      btn.onclick = () => {
+        journalFilter = btn.dataset.journalFilter;
+        try { localStorage.setItem("trendo_journal_filter", journalFilter); } catch (_) {}
+        renderJournal();
+      };
     });
 
     // Tag chip wiring — toggle without full re-render
