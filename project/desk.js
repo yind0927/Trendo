@@ -953,6 +953,9 @@ function rsAdjustGrade(grade, rsResult) {
         if (isNaN(raw) || raw <= 0) { _dispField(el, f); return; }
         if (f === "qty") {
           h.qty = Math.max(1, Math.round(raw));
+          // 手改股数 = 重新声明「现在手里有多少」：买入股数随之改成 现持 + 已减，账本归一化才不会把它改回去
+          const _arr = currentPage === "sim" ? SIM_CLOSED : CLOSED_POSITIONS;
+          h._in = h.qty + _arr.filter(c => tradeIdOf(c) === tradeIdOf(h)).reduce((a, c) => a + (+c.qty || 0), 0);
         } else {
           h[f] = raw;
         }
@@ -1240,6 +1243,23 @@ function rsAdjustGrade(grade, rsResult) {
   const newTradeId = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
   const tradeIdOf = h => h._tid || tradeKey(h);
 
+  // ── 成交幂等：同一张挂单，无论被哪台设备、哪次回放、还是后台 worker 成交，生成的 id 都完全相同 ──
+  // 早先每次成交都 `newTradeId()` 现抽一个随机 id，于是「同一张市价单被手机、电脑、后台 worker 各成交
+  // 一遍」产生的是**三笔互不相识的持仓**，合并时按 id 判重根本认不出它们是同一笔——这就是挂单
+  // 列表里「重复入场、重复出场」的根源。现在：
+  //   · 入场：持仓的 `_tid` = `o:<订单id>`   · 出场：已平仓记录的 `_xid` = `x:<订单id>`
+  // 任何一端再成交一遍，得到的是**同一个 id**，合并时自然只剩一份，而且成交前先查「这张单的成交
+  // 证据是否已经存在」，存在就只清掉挂单、不再成交第二次。
+  const newOrderId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  const _ordKey = o => o.id != null ? String(o.id) : `${o.sym}@${o.createdAt || o.entryDate || ""}`;
+  const fillTid = o => `o:${_ordKey(o)}`;
+  const fillXid = o => `x:${_ordKey(o)}`;
+  const newExitId = () => `x${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // 一条出场记录的唯一键。旧版用 `tid|closedAt`：同一天的两次不同出场（先卖 4 股、再卖 6 股）撞成
+  // 同一个键，合并时被当成重复而丢掉一条——所以带上出场 id；没有出场 id 的老记录退回旧键。
+  const exitKey       = h => `${tradeIdOf(h)}|${h._xid || h.closedAt || ""}`;
+  const legacyExitKey = h => `${tradeIdOf(h)}|${h.closedAt || ""}`;
+
   // ── 删除墓碑（v774）──
   // 记一条 "这个 key 被我删掉了"，让云端旧快照的合并逻辑知道该跳过它。没有墓碑时，
   // 删除只是本地数组少了一项，而合并只会问 "云端有、本地没有的补进来吗"——答案永远是
@@ -1269,6 +1289,9 @@ function rsAdjustGrade(grade, rsResult) {
   // 恰好复用了同一个 key 的新数据。
   const tombHas = (t, k) => k != null &&
     SIM_TOMBSTONES.some(x => x.t === t && x.k === String(k));
+  // 已平仓记录的墓碑键 = exitKey（有出场 id 的用 id，老记录仍是 tid|closedAt）
+  const tombAddExit = (t, h) => tombAdd(t, exitKey(h));
+  const tombHasExit = (t, h) => tombHas(t, exitKey(h));
   // 只给「用户主动删除/取消」立墓碑，**不给成交立墓碑**。成交本身已经留下了证据——
   // 那个仓位就在 SIM_HOLDINGS 里，打捞逻辑靠 openSyms 就能跳过它。给成交也立墓碑看着
   // 更严密，实际会造成数据丢失：当云端 savedAt 更新、整块覆盖把本地刚成交的仓位抹掉时，
@@ -1588,6 +1611,231 @@ function rsAdjustGrade(grade, rsResult) {
     };
   }
 
+  // ── 账本归一化：无论数据是怎么合并、拉取、回放来的，最后都收敛到同一个「正确形态」──
+  // 同一次出场被两台设备各记一份、同一张挂单被成交两遍、同一笔交易的股数对不上……这些都是
+  // 「合并只会取并集」带来的后遗症。归一化把它们统一收敛，而且是**确定性的**（只取决于数据
+  // 本身，不取决于哪台设备先跑）——所以两台设备各自归一化之后一定得到同一个结果，不会来回打架。
+  //   1. 同一次出场只留一份（出场 id 相同；老记录退化为 同交易+同日+同股数+同价）
+  //   2. 一笔交易的出场股数之和不能超过买入股数：按出场时间先后依次扣减，超出的部分丢掉
+  //      （两台设备各自把同一笔仓位卖了一遍，只有最早的那次算数）
+  //   3. 持仓剩余股数 = 买入股数 − 已出场股数；扣到 0 就不该还在持仓里
+  //   4. 整笔平仓过的交易不能同时还在持仓里
+  //   5. 同一个代码只能有一笔持仓（模拟仓）：多出来的是同一张单被不同设备各成交一遍的产物
+  // 老数据没有 `_in`（买入股数）时只做 1 与 4，且只在去重之后才补记 `_in`，**绝不改动股数**。
+  // 只认明确记下的 `_in`；**不**回退去加总 entries 账本——老持仓可能手改过股数，那样会把用户改的值又改回去
+  const _sharesIn = h => (h && h._in > 0) ? h._in : 0;
+  const _exitAt = c => c._xat || (c.closedAt ? c.closedAt + "T00:00:00.000Z" : "");
+  const _sameExit = (a, b) => {
+    if (tradeIdOf(a) !== tradeIdOf(b)) return false;
+    if (a._xid && b._xid) return a._xid === b._xid;
+    if ((a.closedAt || "") !== (b.closedAt || "")) return false;
+    if ((+a.qty || 0) !== (+b.qty || 0)) return false;
+    if ((a.exitReason === "partial") !== (b.exitReason === "partial")) return false;
+    // 两条都没有出场 id（老记录）：价格也得一样才算同一次，免得把同一天两次不同的减仓误并
+    if (!a._xid && !b._xid) return Math.abs((+a.closePrice || 0) - (+b.closePrice || 0)) < 1e-6;
+    return true;
+  };
+  // 只是给老持仓补记了买入股数（纯派生）——要落盘，但不算「真改动」，不用推送、不置未同步标志
+  let _normPin = false;
+  function normalizeLedger(holdings, closed, notional, isSim) {
+    let changed = false;
+    const byTid = new Map();
+    closed.forEach(c => { const t = tradeIdOf(c); if (!byTid.has(t)) byTid.set(t, []); byTid.get(t).push(c); });
+    const posByTid = new Map();
+    holdings.forEach(h => { const t = tradeIdOf(h); if (!posByTid.has(t)) posByTid.set(t, h); });
+
+    byTid.forEach((exits, tid) => {
+      // 1) 同一次出场只留一份（留最早记的）
+      for (let i = 0; i < exits.length; i++) {
+        for (let j = i + 1; j < exits.length; j++) {
+          if (_sameExit(exits[i], exits[j])) {
+            const k = closed.indexOf(exits[j]); if (k !== -1) closed.splice(k, 1);
+            exits.splice(j, 1); j--; changed = true;
+          }
+        }
+      }
+      const pos = posByTid.get(tid);
+      const hasFull = exits.some(c => c.exitReason !== "partial");
+      // 老数据：没有买入股数 → 去重之后补记，**不改股数**。同键的整笔平仓记录存在时无法判断
+      // 谁先谁后（老的 tid 退化成 sym|入场日|成本，同一天同价重开会撞键），宁可不动。
+      if (pos && !(_sharesIn(pos) > 0)) {
+        if (hasFull) return;
+        pos._in = (+pos.qty || 0) + exits.reduce((a, c) => a + (+c.qty || 0), 0);
+        _normPin = true;
+      }
+      const total = Math.max(_sharesIn(pos), ...exits.map(_sharesIn), 0);
+      if (!(total > 0)) return;
+      // 2) 按出场时间先后依次扣减股数，超出买入股数的部分丢掉
+      const ordered = [...exits].sort((a, b) =>
+        _exitAt(a).localeCompare(_exitAt(b)) || String(a._xid || "").localeCompare(String(b._xid || "")));
+      let left = total;
+      ordered.forEach(e => {
+        const q = +e.qty || 0;
+        if (left <= 1e-9) {                       // 已经卖光了，这条是多余的
+          const k = closed.indexOf(e); if (k !== -1) closed.splice(k, 1); changed = true; return;
+        }
+        if (q > left + 1e-9) {                    // 只剩 left 股可卖，截断
+          e.qty = left;
+          const cp = +e.closePrice || 0, cost = +e.cost || 0;
+          if (e.exitReason === "partial") {
+            e.pnlDollar = Math.round((cp - cost) * left); e.pnlFinal = e.pnlDollar;
+          } else {
+            e.pnlDollar = Math.round((cp - cost) * left + ccNet(e)); e.pnlFinal = e.pnlDollar;
+            e.pnlPct = cost > 0 && left > 0 ? e.pnlDollar / (cost * left) : e.pnlPct;
+          }
+          changed = true;
+        }
+        left -= (+e.qty || 0);
+      });
+      // 3) 剩余股数对账
+      if (pos) {
+        if (left <= 1e-9) { holdings.splice(holdings.indexOf(pos), 1); posByTid.delete(tid); changed = true; }
+        else if (Math.abs((+pos.qty || 0) - left) > 1e-9) {
+          pos.qty = left; recomputeHolding(pos, notional); changed = true;
+        }
+      }
+    });
+
+    // 老数据补记 _in（没有任何出场记录的持仓）
+    holdings.forEach(h => { if (!(_sharesIn(h) > 0) && (+h.qty || 0) > 0 && !byTid.has(tradeIdOf(h))) { h._in = +h.qty; _normPin = true; } });
+
+    // 5) 同一张挂单被成交了多遍（旧版本各端各成交一遍，互不相识的 _tid）：只在**指纹完全一致**
+    //    （代码、入场日、股数、止损、止盈、成交方式、评级快照都相同）且多出来的那笔没有任何出场
+    //    记录时才自动去掉；其余情形（哪怕同代码有两笔持仓）宁可都留着，交给「查看并清理」让用户确认。
+    if (isSim) {
+      const groups = new Map();
+      holdings.forEach(h => {
+        if (!h.setup || !/^(市价单|限价单)/.test(h.setup)) return;
+        const sig = _twinSig({ ...h, _in: _sharesIn(h) || (+h.qty || 0) });
+        if (!groups.has(sig)) groups.set(sig, []);
+        groups.get(sig).push(h);
+      });
+      groups.forEach(arr => {
+        if (arr.length < 2) return;
+        arr.sort((a, b) => ((byTid.get(tradeIdOf(b))?.length || 0) - (byTid.get(tradeIdOf(a))?.length || 0))
+                        || String(a._fat || a.entry || "").localeCompare(String(b._fat || b.entry || ""))
+                        || tradeIdOf(a).localeCompare(tradeIdOf(b)));
+        arr.slice(1).forEach(h => {
+          if ((byTid.get(tradeIdOf(h))?.length || 0) > 0) return;      // 有出场记录的不自动删
+          const k = holdings.indexOf(h); if (k !== -1) { holdings.splice(k, 1); changed = true; }
+        });
+      });
+    }
+    return changed;
+  }
+
+  // 挂单队列归一化：已经成交过的（成交证据在账本里）、没有对应持仓的出场单、同代码的重复单都清掉
+  function normalizeQueues() {
+    let changed = false;
+    const evidence = tid => SIM_HOLDINGS.some(h => tradeIdOf(h) === tid) || SIM_CLOSED.some(h => tradeIdOf(h) === tid);
+    const seenBuy = new Set();
+    for (let i = 0; i < SIM_PENDING.length; i++) {
+      const o = SIM_PENDING[i];
+      const dead = evidence(fillTid(o)) || SIM_HOLDINGS.some(h => h.sym === o.sym) || seenBuy.has(o.sym);
+      if (dead) { SIM_PENDING.splice(i, 1); i--; changed = true; } else seenBuy.add(o.sym);
+    }
+    const seenSell = new Set();
+    for (let i = 0; i < SIM_CLOSE_PENDING.length; i++) {
+      const o = SIM_CLOSE_PENDING[i];
+      const done = SIM_CLOSED.some(c => c._xid === fillXid(o));
+      const dead = done || !SIM_HOLDINGS.some(h => h.sym === o.sym) || seenSell.has(o.sym);
+      if (dead) { SIM_CLOSE_PENDING.splice(i, 1); i--; changed = true; } else seenSell.add(o.sym);
+    }
+    return changed;
+  }
+  // ── 历史遗留的「同一张挂单被成交了多次」──
+  // 修好之前，同一张市价单被手机、电脑、后台 worker 各成交一遍，会产生**互不相识的多笔交易**（各自随机的
+  // _tid）。账本归一化认不出它们，但它们有一个很强的指纹：同一张挂单成交出来的持仓，除了成交价与
+  // 时间之外，**代码、入场日、股数、止损、止盈、成交方式、评级快照全都一模一样**——两张真正不同的单子
+  // 不可能巧合到这个程度。这里只做「检测」，由用户确认后才清理（见 cleanDuplicateFills）。
+  const _twinSig = t => JSON.stringify([t.sym, t.entry, t.stop ?? null, t.target ?? null, t.setup ?? "",
+    t._in || (+t.qty || 0) + 0, JSON.stringify(t.bx ?? null)]);
+  function findDuplicateFills() {
+    // 把「持仓 + 它的出场记录」按交易(tid)聚成一笔笔交易
+    const trades = new Map();
+    const get = tid => { if (!trades.has(tid)) trades.set(tid, { tid, pos: null, exits: [] }); return trades.get(tid); };
+    SIM_HOLDINGS.forEach(h => { get(tradeIdOf(h)).pos = h; });
+    SIM_CLOSED.forEach(c => { get(tradeIdOf(c)).exits.push(c); });
+    const groups = new Map();
+    trades.forEach(t => {
+      const base = t.pos || t.exits.find(e => e.exitReason !== "partial") || t.exits[0];
+      if (!base || !base.setup || !/^(市价单|限价单)/.test(base.setup)) return;   // 只认挂单成交出来的
+      // 买入股数：持仓 _in，或 现持 + 已减
+      const inQ = base._in > 0 ? base._in : (t.pos ? (+t.pos.qty || 0) : 0) + t.exits.reduce((a, c) => a + (+c.qty || 0), 0);
+      const sig = _twinSig({ ...base, _in: inQ });
+      if (!groups.has(sig)) groups.set(sig, []);
+      groups.get(sig).push(t);
+    });
+    const out = [];
+    groups.forEach(arr => {
+      if (arr.length < 2) return;
+      // 留「最完整」的一笔：出场记录最多的；相同则取最早的
+      const rank = t => [t.exits.length, t.pos ? 0 : 1];
+      arr.sort((a, b) => {
+        const ra = rank(a), rb = rank(b);
+        return (rb[0] - ra[0]) || (rb[1] - ra[1])
+          || String((a.pos || a.exits[0])._fat || (a.pos || a.exits[0]).entry || "").localeCompare(String((b.pos || b.exits[0])._fat || (b.pos || b.exits[0]).entry || ""))
+          || a.tid.localeCompare(b.tid);
+      });
+      out.push({ keep: arr[0], drop: arr.slice(1) });
+    });
+    return out;
+  }
+  function cleanDuplicateFills(groups) {
+    let n = 0;
+    const backup = [];
+    groups.forEach(g => g.drop.forEach(t => {
+      backup.push({ pos: t.pos, exits: t.exits });
+      if (t.pos) { const i = SIM_HOLDINGS.indexOf(t.pos); if (i !== -1) { tombAdd("h", tradeIdOf(t.pos)); SIM_HOLDINGS.splice(i, 1); } }
+      t.exits.forEach(c => { const i = SIM_CLOSED.indexOf(c); if (i !== -1) { tombAddExit("sc", c); SIM_CLOSED.splice(i, 1); } });
+      n++;
+    }));
+    // 被清掉的原样留一份备份（最近 3 次），万一清错了还能从这里找回
+    try {
+      const prev = JSON.parse(localStorage.getItem("trendo_v4_heal_backup") || "[]");
+      prev.unshift({ at: new Date().toISOString(), removed: backup });
+      localStorage.setItem("trendo_v4_heal_backup", JSON.stringify(prev.slice(0, 3)));
+    } catch (_) {}
+    normalizeAll();
+    return n;
+  }
+  function renderDupBanner() {
+    const host = document.getElementById("sim-dup-banner");
+    if (!host) return;
+    const groups = findDuplicateFills();
+    if (!groups.length) { host.style.display = "none"; host.innerHTML = ""; return; }
+    const cnt = groups.reduce((a, g) => a + g.drop.length, 0);
+    host.style.display = "";
+    host.innerHTML = `<span>发现 <b>${cnt}</b> 笔疑似重复成交（同一张挂单被成交了多次：${groups.map(g => g.keep.pos?.sym || g.keep.exits[0]?.sym).join("、")}）</span>
+      <button type="button" id="sim-dup-clean">查看并清理</button>`;
+    document.getElementById("sim-dup-clean").onclick = () => {
+      const lines = groups.map(g => {
+        const t0 = g.keep, sym = t0.pos?.sym || t0.exits[0]?.sym;
+        const desc = t => `${t.pos ? "持仓中" : "已平仓"}${t.exits.length ? "，" + t.exits.length + " 条出场记录" : ""}`;
+        return `${sym}：保留 1 笔（${desc(t0)}），清掉 ${g.drop.length} 笔重复（${g.drop.map(desc).join(" / ")}）`;
+      }).join("\n");
+      if (!confirm(`以下交易的代码、入场日、股数、止损、止盈、评级快照完全相同，是同一张挂单被成交了多次：\n\n${lines}\n\n清掉多出来的？（被清掉的内容会在本机留一份备份）`)) return;
+      const n = cleanDuplicateFills(groups);
+      saveToStorage();
+      renderSim();
+      toast(`已清理 ${n} 笔重复成交`, "ok");
+    };
+  }
+
+  // 这张入场单的成交证据是否已经在账本里（别的设备 / 后台 worker / 补回放已经成交过），
+  // 或者用户已经把那笔持仓删了（墓碑）——是的话只清掉挂单，不再成交第二遍。
+  function _orderAlreadyFilled(o) {
+    const tid = fillTid(o);
+    return SIM_HOLDINGS.some(h => tradeIdOf(h) === tid) || SIM_CLOSED.some(h => tradeIdOf(h) === tid)
+        || tombHas("h", tid);
+  }
+  function normalizeAll() {
+    const a = normalizeLedger(SIM_HOLDINGS, SIM_CLOSED, simNotional, true);
+    const b = normalizeLedger(HOLDINGS, CLOSED_POSITIONS, totalNotional, false);
+    const c = normalizeQueues();
+    return a || b || c;
+  }
+
   // ── 409 冲突时的「两边都保住」合并 ──────────────────────────────────────────
   // 只合并**按 id/复合键可判重、且语义上是追加**的集合：期权、真实持仓、已平仓、自选、
   // 模型选股。这些集合里一条记录要么存在要么不存在，取并集不会算错数；而 notional、
@@ -1629,8 +1877,8 @@ function rsAdjustGrade(grade, rsResult) {
         _mergeEdits(HOLDINGS,          snap.holdings || [],    snap._base.holdings,    h => tradeIdOf(h)),
         _mergeEdits(SIM_HOLDINGS,      snap.simHoldings || [], snap._base.simHoldings, h => tradeIdOf(h)),
         _mergeEdits(REAL_OPTIONS,      snap.realOptions || [], snap._base.realOptions, cid),
-        _mergeEdits(CLOSED_POSITIONS,  snap.closed || [],      snap._base.closed,    h => `${tradeIdOf(h)}|${h.closedAt || ""}`),
-        _mergeEdits(SIM_CLOSED,        snap.simClosed || [],   snap._base.simClosed,   h => `${tradeIdOf(h)}|${h.closedAt || ""}`),
+        _mergeEdits(CLOSED_POSITIONS,  snap.closed || [],      snap._base.closed,    exitKey),
+        _mergeEdits(SIM_CLOSED,        snap.simClosed || [],   snap._base.simClosed,   exitKey),
       ];
       if (ed.some(Boolean)) {
         merged = true;
@@ -1669,10 +1917,14 @@ function rsAdjustGrade(grade, rsResult) {
     // 新发生的撤回，这道闸额外兜住更早的版本删掉、还没立墓碑的那些记录。
     const openReal = new Set(HOLDINGS.map(tradeIdOf));
     const openSim  = new Set(SIM_HOLDINGS.map(tradeIdOf));
-    add(CLOSED_POSITIONS, (snap.closed || []).filter(h => !openReal.has(tradeIdOf(h))),
-        h => `${tradeIdOf(h)}|${h.closedAt || ""}`, "rc");
-    add(SIM_CLOSED, (snap.simClosed || []).filter(h => !openSim.has(tradeIdOf(h))),
-        h => `${tradeIdOf(h)}|${h.closedAt || ""}`, "sc");
+    // **只挡整笔平仓记录**，不挡分批减仓记录：一笔交易还在持仓中、同时带着若干条减仓记录是
+    // 完全正常的状态（卖了 4 股、还剩 6 股）。早先这里一律拦——本机独有的那条减仓记录因为
+    // 「这笔交易现在是持仓中」被丢掉，持仓股数却已经减了，于是卖出的 4 股凭空消失。
+    // 撤回平仓留下的旧减仓记录由墓碑（exitKey）挡住。
+    add(CLOSED_POSITIONS, (snap.closed || []).filter(h => h.exitReason === "partial" || !openReal.has(tradeIdOf(h))),
+        exitKey, "rc");
+    add(SIM_CLOSED, (snap.simClosed || []).filter(h => h.exitReason === "partial" || !openSim.has(tradeIdOf(h))),
+        exitKey, "sc");
 
     // 挂单：symbol 已经有持仓了 = 这笔单早就成交过，并回去就是个永久孤儿（v822）。
     // 平仓挂单反过来——对应的持仓已经不在了就不该再挂着。
@@ -1700,6 +1952,8 @@ function rsAdjustGrade(grade, rsResult) {
       CYCLE_CHECK.history.sort((a, b) => String(a.d).localeCompare(String(b.d)));
       if (CYCLE_CHECK.history.length > 60) CYCLE_CHECK.history.splice(0, CYCLE_CHECK.history.length - 60);
     }
+    // 并集之后统一归一化：合并只会取并集，最容易留下的就是重复出场、股数对不上、孤儿挂单
+    if (normalizeAll()) merged = true;
     return merged;
   }
 
@@ -1722,7 +1976,16 @@ function rsAdjustGrade(grade, rsResult) {
     if (data.savedAt) { try { localStorage.setItem("trendo_v4_savedAt", data.savedAt); } catch (_) {} }
   }
 
+  // 同步进行中的计数。**成交必须等同步落地**：每次切回前台都会重新同步一遍，而此前只有
+  // 「第一次启动同步」前不成交（_syncSettled）——之后每次切回前台，行情请求总是比云端响应先
+  // 回来，设备拿着手里那份旧队列抢先把挂单成交一遍，等云端版本到了才发现别的设备/后台
+  // worker 早成交过，于是同一张单成交了两次。
+  let _syncActive = 0;
   async function syncOnStartup() {
+    _syncActive++;
+    try { return await _syncOnStartupImpl(); } finally { _syncActive--; }
+  }
+  async function _syncOnStartupImpl() {
     if (!syncKey) return;
     renderSyncStatus(); // show "connecting"
     // 基准必须在网络往返**之前**取定。这一趟往返期间，启动时的派生写入随时可能把
@@ -1870,6 +2133,8 @@ function rsAdjustGrade(grade, rsResult) {
       for (let i = SIM_CLOSE_PENDING.length - 1; i >= 0; i--) {
         if (!openNow.has(SIM_CLOSE_PENDING[i].sym)) { SIM_CLOSE_PENDING.splice(i, 1); pendingMerged = true; }
       }
+      // 打捞完统一归一化：重复出场、同代码多笔持仓、已成交的挂单一并收敛
+      if (normalizeAll()) pendingMerged = true;
       if (pendingMerged) {
         saveLocalOnly();
         renderSim();
@@ -2045,6 +2310,15 @@ function rsAdjustGrade(grade, rsResult) {
     // Persist locally then re-render
     saveLocalOnly();
     adoptCloudVersion(data);   // 纯拉取不推高 savedAt；记下这份内容基于的云端 rev
+    // 云端那份里可能已经带着重复出场/重复持仓（别的设备或旧版本合并出来的）：拉下来立刻归一化，
+    // 有改动就把修好的版本推回去，这样云端的脏数据也被一并治好。
+    _normPin = false;
+    const _normSub = normalizeAll();
+    if (_normSub || _normPin) saveLocalOnly(false);
+    if (_normSub) {
+      clearTimeout(syncTimer); syncTimer = setTimeout(syncPush, 1200);
+      markDirty();
+    }
     renderOverview(); renderTable(); renderTape();
     // Cloud sync replaces HOLDINGS/SIM_HOLDINGS wholesale, so the calendar must re-render
     // (it previously only ever rendered once at init, from whatever localStorage held at
@@ -2246,6 +2520,11 @@ function rsAdjustGrade(grade, rsResult) {
     // (same pattern as _optMigrate) so the id travels with cloud sync immediately rather
     // than waiting for some unrelated save. Idempotent: it only writes the first time.
     if (migrateTradeIds()) saveLocalOnly(false);   // 纯派生身份，别推高 savedAt
+    // 本地旧数据里可能已经带着重复出场/同代码多笔持仓/已成交的挂单（旧版本合并出来的）：载入即归一化
+    _normPin = false;
+    const _normSub = normalizeAll();
+    if (_normSub || _normPin) saveLocalOnly(false);
+    if (_normSub) markDirty();
   }
 
   // ============ TRADING DAYS CALCULATOR ============
@@ -3179,6 +3458,7 @@ function rsAdjustGrade(grade, rsResult) {
     // Shares already sold out of the position come off the top. Without this, deleting an
     // add-leg would quietly hand the partial exits back and inflate the holding.
     h.qty = Math.max(0, entryQty - sold);
+    h._in = entryQty;                // 买入股数跟着建仓账本走（账本归一化靠它对账）
     recomputeHolding(h, notional);   // size, P&L, risk1R, rMult, days all follow from these
     return true;
   }
@@ -3301,6 +3581,7 @@ function rsAdjustGrade(grade, rsResult) {
           const idx = closedArr.findIndex(c =>
             matchesTrade(c, h) && c.closedAt === closedAt && Math.abs(c.qty - qty) < 0.001);
           if (idx === -1) return;
+          tombAddExit(isSim ? "sc" : "rc", closedArr[idx]);   // 否则下次合并会把这条减仓记录救回来
           closedArr.splice(idx, 1);
           // Those shares come back to the position.
           recalcFromEntries(h, isSim ? simNotional : totalNotional, isSim);
@@ -4660,7 +4941,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (SIM_PENDING.find(p => p.sym === sym)) { formErr("该 Ticker 已有挂单", "#form-ticker"); return; }
         if (SIM_HOLDINGS.find(h => h.sym === sym)) { formErr("模拟仓已持有该股票", "#form-ticker"); return; }
         SIM_PENDING.push({
-          id: Date.now().toString(36),
+          id: newOrderId(),
           sym, name, kind, qty, stop, target,
           orderType, limitPrice,
           entryDate: entryDateStr,
@@ -4736,6 +5017,7 @@ function rsAdjustGrade(grade, rsResult) {
       };
 
       newPos._tid = newTradeId();
+      newPos._in = qty; newPos._fat = nowStamp();
       if (!isSim) tombDrop("rh", tradeIdOf(newPos));   // 重开同一笔 → 撤掉之前的删除墓碑
       targetHoldings.push(newPos);
       saveToStorage();
@@ -4898,7 +5180,7 @@ function rsAdjustGrade(grade, rsResult) {
           // kind 必须存下来：补回放要用 `_histYahooSym` 拼 Yahoo 代码，crypto 得加 `-USD`
           // 后缀。早先这里没存，crypto 的平仓单一律按裸 symbol 查，永远拿不到日线、
           // 于是永远不成交也永远不清理，就那么挂在队列里。
-          id: Date.now().toString(36), sym: pendingCloseSym, kind: pos.kind,
+          id: newOrderId(), sym: pendingCloseSym, kind: pos.kind,
           qty: closeQty, orderType, limitPrice: lp,
           createdAt: new Date().toISOString()
         });
@@ -4930,7 +5212,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // closePosition — full or partial close (real or sim based on ctx)
-  function closePosition(sym, closePrice, closeDate, closeQty) {
+  function closePosition(sym, closePrice, closeDate, closeQty, opts = {}) {
     const isSim = pendingCloseCtx === "sim";
     const holdings = isSim ? SIM_HOLDINGS : HOLDINGS;
     const closed   = isSim ? SIM_CLOSED   : CLOSED_POSITIONS;
@@ -4940,6 +5222,10 @@ function rsAdjustGrade(grade, rsResult) {
     const cp  = (closePrice != null && closePrice > 0) ? closePrice : pos.last;
     const qty = (closeQty != null && closeQty > 0 && closeQty < pos.qty) ? closeQty : pos.qty;
     const cd  = closeDate || new Date().toISOString().slice(0, 10);
+    // 出场 id：由挂单成交的用 `x:<订单id>`（任何设备再成交一遍得到同一个 id，合并时自然只剩一份），
+    // 手动平仓现抽一个。`_xat` 是出场的先后依据——两台设备各卖了一遍同一笔仓位时，只有最早的算数。
+    const xid = opts.xid || newExitId();
+    const xat = nowStamp();
 
     if (qty < pos.qty) {
       // Partial close — create a closed record for the sold portion.
@@ -4953,7 +5239,7 @@ function rsAdjustGrade(grade, rsResult) {
         pnlPct: pos.cost > 0 ? (cp - pos.cost) / pos.cost : 0,
         pnlFinal: Math.round((cp - pos.cost) * qty),
         rMult: pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0,
-        exitReason: "partial" };
+        exitReason: "partial", _xid: xid, _xat: xat };
       closed.push(closedRecord);
       // Update remaining open position
       pos.qty = pos.qty - qty;
@@ -4969,6 +5255,7 @@ function rsAdjustGrade(grade, rsResult) {
       pos.rMult = pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0;
       pos.pnlFinal = pos.pnlDollar;
       pos.exitReason = "manual";
+      pos._xid = xid; pos._xat = xat;
       holdings.splice(holdings.indexOf(pos), 1);
       closed.push(pos);
       // Remove any open pending orders for this sym — prevents stale orders from
@@ -5059,7 +5346,7 @@ function rsAdjustGrade(grade, rsResult) {
         for (let i = CLOSED_POSITIONS.length - 1; i >= 0; i--) {
           const c = CLOSED_POSITIONS[i];
           if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) {
-            tombAdd("rc", `${tradeIdOf(c)}|${c.closedAt || ""}`);
+            tombAddExit("rc", c);
             CLOSED_POSITIONS.splice(i, 1);
           }
         }
@@ -5068,14 +5355,14 @@ function rsAdjustGrade(grade, rsResult) {
           c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001 &&
           (!closedAt || c.closedAt === closedAt));
         if (idx !== -1) {
-          tombAdd("rc", `${tradeIdOf(CLOSED_POSITIONS[idx])}|${CLOSED_POSITIONS[idx].closedAt || ""}`);
+          tombAddExit("rc", CLOSED_POSITIONS[idx]);
           CLOSED_POSITIONS.splice(idx, 1);
         }
       }
     } else {
       const idx = CLOSED_POSITIONS.findIndex(h => h.sym === sym);
       if (idx === -1) return;
-      tombAdd("rc", `${tradeIdOf(CLOSED_POSITIONS[idx])}|${CLOSED_POSITIONS[idx].closedAt || ""}`);
+      tombAddExit("rc", CLOSED_POSITIONS[idx]);
       CLOSED_POSITIONS.splice(idx, 1);
     }
     saveToStorage();
@@ -5095,8 +5382,8 @@ function rsAdjustGrade(grade, rsResult) {
     if (HOLDINGS.find(x => x.sym === sym)) { toast("持仓中已有该股票", "error"); return; }
     const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
     const base = records[0];
-    const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = base;
-    restored.qty = totalQty;
+    const { closedAt, closePrice, pnlFinal, exitReason, _xid, _xat, ...restored } = base;
+    restored.qty = totalQty; restored._in = totalQty;
     restored.last = restored.cost;
     recomputeHolding(restored, totalNotional);
     tombDrop("rh", tradeIdOf(restored));
@@ -5106,7 +5393,7 @@ function rsAdjustGrade(grade, rsResult) {
       // 已平仓记录、且有未推送改动）一打开，409/拉取合并就会把它救回来，同一笔交易同时
       // 出现在「持仓中」和「已平仓」两张表里，还会被推回云端。实测复现过。
       if (matches(CLOSED_POSITIONS[i])) {
-        tombAdd("rc", `${tradeIdOf(CLOSED_POSITIONS[i])}|${CLOSED_POSITIONS[i].closedAt || ""}`);
+        tombAddExit("rc", CLOSED_POSITIONS[i]);
         CLOSED_POSITIONS.splice(i, 1);
       }
     }
@@ -5126,15 +5413,15 @@ function rsAdjustGrade(grade, rsResult) {
     if (SIM_HOLDINGS.find(x => x.sym === sym)) { toast("模拟仓中已有该持仓", "error"); return; }
     const totalQty = records.reduce((s, h) => s + (h.qty || 0), 0);
     const base = records[0];
-    const { closedAt, closePrice, pnlFinal, exitReason, ...restored } = base;
-    restored.qty = totalQty;
+    const { closedAt, closePrice, pnlFinal, exitReason, _xid, _xat, ...restored } = base;
+    restored.qty = totalQty; restored._in = totalQty;
     restored.last = restored.cost;
     recomputeHolding(restored, simNotional);
     tombDrop("h", tradeIdOf(restored));
     SIM_HOLDINGS.push(restored);
     for (let i = SIM_CLOSED.length - 1; i >= 0; i--) {
       if (matches(SIM_CLOSED[i])) {       // 与真实仓同理，撤回平仓要立 "sc" 墓碑
-        tombAdd("sc", `${tradeIdOf(SIM_CLOSED[i])}|${SIM_CLOSED[i].closedAt || ""}`);
+        tombAddExit("sc", SIM_CLOSED[i]);
         SIM_CLOSED.splice(i, 1);
       }
     }
@@ -7066,6 +7353,13 @@ function rsAdjustGrade(grade, rsResult) {
           if (i !== -1) { SIM_PENDING.splice(i, 1); filled++; }
           continue;
         }
+        // 成交证据已经在账本里（别的设备/后台 worker 已经成交过这张单），或者用户把那笔持仓删了：
+        // 只清掉挂单，**不再成交第二遍**。
+        if (_orderAlreadyFilled(order)) {
+          const i = SIM_PENDING.findIndex(p => p.id === order.id);
+          if (i !== -1) { SIM_PENDING.splice(i, 1); filled++; }
+          continue;
+        }
         const key = yahooOf(order);
         const hit = sessionsFor(key).filter(s => eligible(order, s.d)).find(s => {
           if (order.orderType === "market") return s.open != null;
@@ -7092,7 +7386,7 @@ function rsAdjustGrade(grade, rsResult) {
           ...(order.entryATR > 0 && { entryATR: order.entryATR }),
         };
         recomputeHolding(pos, simNotional);
-        pos._tid = newTradeId();
+        pos._tid = fillTid(order); pos._in = order.qty; pos._fat = nowStamp();
         SIM_HOLDINGS.push(pos);
         const i = SIM_PENDING.findIndex(p => p.id === order.id);
         if (i !== -1) SIM_PENDING.splice(i, 1);
@@ -7112,6 +7406,11 @@ function rsAdjustGrade(grade, rsResult) {
           if (i !== -1) { SIM_CLOSE_PENDING.splice(i, 1); filled++; }
           continue;
         }
+        if (SIM_CLOSED.some(c => c._xid === fillXid(order))) {   // 这张出场单早已成交过
+          const i = SIM_CLOSE_PENDING.findIndex(p => p.id === order.id);
+          if (i !== -1) { SIM_CLOSE_PENDING.splice(i, 1); filled++; }
+          continue;
+        }
         const key = yahooOf(order);
         const hit = sessionsFor(key).filter(s => eligible(order, s.d)).find(s => {
           if (order.orderType === "market") return s.open != null;
@@ -7124,7 +7423,7 @@ function rsAdjustGrade(grade, rsResult) {
         if (!(px > 0)) continue;
         const prevCtx = pendingCloseCtx;
         pendingCloseCtx = "sim";
-        closePosition(order.sym, px, hit.d, order.qty);
+        closePosition(order.sym, px, hit.d, order.qty, { xid: fillXid(order) });
         pendingCloseCtx = prevCtx;
         const i = SIM_CLOSE_PENDING.findIndex(p => p.id === order.id);
         if (i !== -1) SIM_CLOSE_PENDING.splice(i, 1);
@@ -7265,6 +7564,13 @@ function rsAdjustGrade(grade, rsResult) {
 
       // 启动同步还没落地时不在实时路径上成交：本地队列可能是旧的，别的设备早已成交过
       // （同 catchUpPendingOrders 开头那段说明）。同步失败/离线也会走 finally，不会一直卡住。
+      // 同步还在进行（启动同步、或刚切回前台触发的那一次）就先等它落地再成交——见 _syncActive 的说明。
+      if (syncKey && _syncActive > 0 && _syncInflight) {
+        await Promise.race([_syncInflight.catch(() => {}), new Promise(done => setTimeout(done, 8000))]);
+      }
+      // 队列里已成交过 / 没有对应持仓 / 同代码重复的单，先清掉再判断成交（限价单没触发时，
+      // 下面的成交循环走不到孤儿清理那一行，它们就会一直挂在队列里）
+      if (normalizeQueues()) { renderSimPending(); saveToStorage(); }   // 清掉的是真改动，要推上云端，否则别的设备会把它再推回来
       const _fillOk = !syncKey || _syncSettled;
       // Auto-execute pending orders
       const executed = [];
@@ -7277,6 +7583,7 @@ function rsAdjustGrade(grade, rsResult) {
           (order.orderType === "limit" && execPrice <= order.limitPrice));
         if (!shouldExecute) return;
         if (SIM_HOLDINGS.find(h => h.sym === order.sym)) { executed.push(order.id); return; } // already open — clean up stale order
+        if (_orderAlreadyFilled(order)) { executed.push(order.id); return; }   // 别处已成交过 / 用户删了那笔持仓
 
         const entryDate = new Date(order.entryDate + "T00:00:00");
         const today     = new Date(); today.setHours(0, 0, 0, 0);
@@ -7299,7 +7606,7 @@ function rsAdjustGrade(grade, rsResult) {
           ...(order.entryATR > 0 && { entryATR: order.entryATR }),
         };
         recomputeHolding(newPos, simNotional);
-        newPos._tid = newTradeId();
+        newPos._tid = fillTid(order); newPos._in = order.qty; newPos._fat = nowStamp();
         SIM_HOLDINGS.push(newPos);
         executed.push(order.id);
         changed = true;
@@ -7325,10 +7632,14 @@ function rsAdjustGrade(grade, rsResult) {
           order.orderType === "market" ||
           (order.orderType === "limit" && execPrice >= order.limitPrice));
         if (!shouldClose) return;
+        // 这张出场单已经成交过（证据在账本里）或持仓已不在：只清掉挂单，绝不再卖第二遍
+        if (SIM_CLOSED.some(c => c._xid === fillXid(order)) || !SIM_HOLDINGS.some(h => h.sym === order.sym)) {
+          closedIds.push(order.id); return;
+        }
         const prevCtx = pendingCloseCtx;
         pendingCloseCtx = "sim";
         const today = new Date().toISOString().slice(0, 10);
-        closePosition(order.sym, execPrice, today, order.qty);
+        closePosition(order.sym, execPrice, today, order.qty, { xid: fillXid(order) });
         pendingCloseCtx = prevCtx;
         closedIds.push(order.id);
         changed = true;
@@ -7992,6 +8303,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderSim() {
     renderSimOverview();
     renderSimPending();
+    renderDupBanner();
     renderSimTable();
     renderSimAnalytics();
     renderSimMonthly();
@@ -11818,7 +12130,7 @@ function rsAdjustGrade(grade, rsResult) {
         for (let i = SIM_CLOSED.length - 1; i >= 0; i--) {
           const c = SIM_CLOSED[i];
           if (c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001) {
-            tombAdd("sc", `${tradeIdOf(c)}|${c.closedAt || ""}`);
+            tombAddExit("sc", c);
             SIM_CLOSED.splice(i, 1);
           }
         }
@@ -11827,14 +12139,14 @@ function rsAdjustGrade(grade, rsResult) {
           c.sym === sym && c.entry === entry && Math.abs(c.cost - cost) < 0.001 &&
           (!closedAt || c.closedAt === closedAt));
         if (idx !== -1) {
-          tombAdd("sc", `${tradeIdOf(SIM_CLOSED[idx])}|${SIM_CLOSED[idx].closedAt || ""}`);
+          tombAddExit("sc", SIM_CLOSED[idx]);
           SIM_CLOSED.splice(idx, 1);
         }
       }
     } else {
       const idx = SIM_CLOSED.findIndex(h => h.sym === sym);
       if (idx === -1) return;
-      tombAdd("sc", `${tradeIdOf(SIM_CLOSED[idx])}|${SIM_CLOSED[idx].closedAt || ""}`);
+      tombAddExit("sc", SIM_CLOSED[idx]);
       SIM_CLOSED.splice(idx, 1);
     }
     saveToStorage();
