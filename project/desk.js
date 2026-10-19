@@ -15673,7 +15673,7 @@ function rsAdjustGrade(grade, rsResult) {
       label: "恐惧贪婪指数", cap: 100,
       zones: [
         { max: 25,  color: "var(--up)",    label: "极端恐惧 · 分批进", badge: "极端恐惧" },
-        { max: 40,  color: "var(--accent)", label: "偏冷 · 可加仓",     badge: "偏冷" },
+        { max: 40,  color: "var(--vix-normal)", label: "偏冷 · 可加仓",     badge: "偏冷" },
         { max: 60,  color: "var(--warn)",   label: "中性 · 正常",       badge: "中性" },
         { max: 75,  color: "var(--orange)", label: "偏热 · 不追高",     badge: "偏热" },
         { max: 9999,color: "var(--down)",   label: "极端过热 · 止盈",   badge: "极端过热" },
@@ -15683,7 +15683,7 @@ function rsAdjustGrade(grade, rsResult) {
       label: "VOO RSI(14)", cap: 100,
       zones: [
         { max: 38,  color: "var(--up)",    label: "极弱 · 分批进",   badge: "极弱" },
-        { max: 45,  color: "var(--accent)", label: "偏弱 · 可加仓",   badge: "偏弱" },
+        { max: 45,  color: "var(--vix-normal)", label: "偏弱 · 可加仓",   badge: "偏弱" },
         { max: 65,  color: "var(--warn)",   label: "中性 · 正常",     badge: "中性" },
         { max: 72,  color: "var(--orange)", label: "偏热 · 不追高",   badge: "偏热" },
         { max: 9999,color: "var(--down)",   label: "超买 · 止盈",     badge: "超买" },
@@ -16139,7 +16139,7 @@ function rsAdjustGrade(grade, rsResult) {
       { label: "恐慌降温期", color: "var(--orange)",
         cond: "此前 60 日内 VIX 曾 > 30，且现已跌回 20 以下<br><span class=\"pb3-gloss\">恐慌已经过去、市场回到平静——容易的钱赚完了</span>",
         action: "不开新仓，分批兑现这一轮的利润。依据：历史同形态之后 60 个交易日中位比基线低 1.9pp、胜率从 70% 掉到 57%（n=21，样本偏少，当作倾斜而非铁律）。" },
-      { label: "偏冷", color: "var(--accent)",
+      { label: "偏冷", color: "var(--vix-normal)",
         cond: "FGI < 40 或 RSI < 45<br><span class=\"pb3-gloss\">任一指标偏冷即触发</span>",
         action: "可小幅加仓，优先补强已经盈利的仓位，不追当日大涨的标的。" },
       { label: "中性", color: "var(--warn)",
@@ -16428,7 +16428,7 @@ function rsAdjustGrade(grade, rsResult) {
     // 极端过热那么急迫。n=21 是小样本，界面上如实标注。
     const cooled = vix != null && vix60Max != null && vix60Max > 30 && vix < 20;
     if (fg > 75 || rsi > 72)
-      return { id: "euphoria", label: "极端过热", color: "var(--adv-trim)", tilt: "trim",
+      return { id: "euphoria", label: "极端过热", color: "var(--down)", tilt: "trim",
         desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
     if (cooled)
       return { id: "cooldown", label: "恐慌降温期", color: "var(--adv-cooldown)", tilt: "cooldown",
@@ -16447,7 +16447,7 @@ function rsAdjustGrade(grade, rsResult) {
         evidence: byVix ? "历史 VIX≥30 后 60 日中位高于基线 4.4pp、胜率 78%（n=736 个交易日，约 7 轮危机）" : null };
     }
     if (fg < 40 || rsi < 45)
-      return { id: "cool", label: "偏冷", color: "var(--adv-scale)", tilt: "scale",
+      return { id: "cool", label: "偏冷", color: "var(--vix-normal)", tilt: "scale",
         desc: "可小幅分批加仓，不追高" };
     return { id: "neutral", label: "中性", color: "var(--adv-normal)", tilt: "normal", desc: "正常操作" };
   }
