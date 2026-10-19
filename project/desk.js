@@ -15656,7 +15656,7 @@ function rsAdjustGrade(grade, rsResult) {
         { max: 20,  color: "var(--accent)",label: "中性 · 75%上限",   badge: "中性 75%" },
         { max: 30,  color: "var(--orange)",label: "恐惧 · 50%上限",   badge: "恐惧 50%" },
         { max: 50,  color: "var(--down)",  label: "恐慌 · 25%上限",   badge: "恐慌 25%" },
-        { max: 9999,color: MKT_DEEP_DOWN,  label: "极恐 · 清仓观望",  badge: "极恐" },
+        { max: 9999,color: var(--vix-panic),  label: "极恐 · 清仓观望",  badge: "极恐" },
       ]
     },
     vxn: {
@@ -15666,7 +15666,7 @@ function rsAdjustGrade(grade, rsResult) {
         { max: 26,  color: "var(--accent)",label: "中性", badge: "中性" },
         { max: 40,  color: "var(--orange)",label: "恐惧", badge: "恐惧" },
         { max: 55,  color: "var(--down)",  label: "恐慌", badge: "恐慌" },
-        { max: 9999,color: MKT_DEEP_DOWN,  label: "极恐", badge: "极恐" },
+        { max: 9999,color: var(--vix-panic),  label: "极恐", badge: "极恐" },
       ]
     },
     fg: {
@@ -16116,19 +16116,19 @@ function rsAdjustGrade(grade, rsResult) {
         action: "禁止开新多仓——VIX 再低、情绪再冷都不能推翻。已有仓位按原止损执行；反弹到 EMA50 附近是减仓机会而不是加仓点。" },
     ];
     const axisB = [
-      { label: "贪婪", color: "var(--up)",
+      { label: "贪婪", color: "var(--vix-calm)",
         cond: "VIX < 15<br><span class=\"pb3-gloss\">隐含日波动约 0.9%，市场预期未来一个月平静</span>",
         action: "仓位上限 100%。止损可放宽到 −10%：波动小，−10% 需要走很久才会触发，放宽反而减少被洗出去的概率。" },
-      { label: "中性", color: "var(--accent)",
+      { label: "中性", color: "var(--vix-normal)",
         cond: "VIX 15–20<br><span class=\"pb3-gloss\">隐含日波动 0.9%–1.3%，处在长期均值附近</span>",
         action: "仓位上限 75%，止损 −8%。常态节奏，不因波动率额外加减仓。" },
-      { label: "恐惧", color: "var(--orange)",
+      { label: "恐惧", color: "var(--vix-warn)",
         cond: "VIX 20–30<br><span class=\"pb3-gloss\">隐含日波动 1.3%–1.9%，出现持续性抛压</span>",
         action: "仓位上限 50%，止损收紧到 −5%。注意：同样的止损百分比在这种波动下更容易被打到，所以单笔规模要同步缩小，否则等于悄悄放大了每笔的风险。" },
-      { label: "恐慌", color: "var(--down)",
+      { label: "恐慌", color: "var(--vix-high)",
         cond: "VIX 30–50<br><span class=\"pb3-gloss\">隐含日波动 1.9%–3.1%，恐慌性去杠杆</span>",
         action: "仓位上限 25%，只保留最强的持仓。新仓只能小额分批试探——这个区间往往是长期机会区，但也可能只是去往更高 VIX 的中途。" },
-      { label: "极恐", color: MKT_DEEP_DOWN,
+      { label: "极恐", color: "var(--vix-panic)",
         cond: "VIX ≥ 50<br><span class=\"pb3-gloss\">隐含日波动 > 3%，流动性与相关性同时崩坏</span>",
         action: "清仓观望。此时任何仓位的单日波动都可能吃掉数周的盈利，分散也失效（所有资产一起跌）。" },
     ];
