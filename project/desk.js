@@ -15652,20 +15652,20 @@ function rsAdjustGrade(grade, rsResult) {
     vix: {
       label: "VIX", cap: 60,
       zones: [
-        { max: 15,  color: "var(--up)",    label: "贪婪 · 100%上限",  badge: "贪婪 100%" },
-        { max: 20,  color: "var(--accent)",label: "中性 · 75%上限",   badge: "中性 75%" },
-        { max: 30,  color: "var(--orange)",label: "恐惧 · 50%上限",   badge: "恐惧 50%" },
-        { max: 50,  color: "var(--down)",  label: "恐慌 · 25%上限",   badge: "恐慌 25%" },
+        { max: 15,  color: "var(--vix-calm)",    label: "贪婪 · 100%上限",  badge: "贪婪 100%" },
+        { max: 20,  color: "var(--vix-normal)",label: "中性 · 75%上限",   badge: "中性 75%" },
+        { max: 30,  color: "var(--vix-warn)",label: "恐惧 · 50%上限",   badge: "恐惧 50%" },
+        { max: 50,  color: "var(--vix-high)",  label: "恐慌 · 25%上限",   badge: "恐慌 25%" },
         { max: 9999,color: "var(--vix-panic)",  label: "极恐 · 清仓观望",  badge: "极恐" },
       ]
     },
     vxn: {
       label: "VXN (Nasdaq)", cap: 80,
       zones: [
-        { max: 20,  color: "var(--up)",    label: "贪婪", badge: "贪婪" },
-        { max: 26,  color: "var(--accent)",label: "中性", badge: "中性" },
-        { max: 40,  color: "var(--orange)",label: "恐惧", badge: "恐惧" },
-        { max: 55,  color: "var(--down)",  label: "恐慌", badge: "恐慌" },
+        { max: 20,  color: "var(--vix-calm)",    label: "贪婪", badge: "贪婪" },
+        { max: 26,  color: "var(--vix-normal)",label: "中性", badge: "中性" },
+        { max: 40,  color: "var(--vix-warn)",label: "恐惧", badge: "恐惧" },
+        { max: 55,  color: "var(--vix-high)",  label: "恐慌", badge: "恐慌" },
         { max: 9999,color: "var(--vix-panic)",  label: "极恐", badge: "极恐" },
       ]
     },
