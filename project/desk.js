@@ -6280,9 +6280,8 @@ function rsAdjustGrade(grade, rsResult) {
     const wk = Math.ceil(((t - yStart) / 86400000 + 1) / 7);
     return `${t.getUTCFullYear()}-W${String(wk).padStart(2, "0")}`;
   }
-  // The session a batch entered right now will actually be priced at: the next US trading
-  // day whose 09:30 ET open has not happened yet. The batch's week and weekOf both come from
-  // it. Keying the week off the ET calendar date instead had two faults:
+  // v884: weekOf = 当周周一（首个交易日），不论周几录入（见函数体）。以下为 v807 的历史背景：
+  // Keying the week off the ET calendar date instead had two faults:
   //  · From Asia, Monday morning is still Sunday in New York, so "this week" resolved to
   //    last week's already-priced batch — locked, so the entry box disappeared.
   //  · A batch entered after an open (e.g. Friday evening) was dated that day and priced at
@@ -6294,11 +6293,17 @@ function rsAdjustGrade(grade, rsResult) {
       const t = new Date(s + "T12:00:00Z"), dow = t.getUTCDay();
       return dow !== 0 && dow !== 6 && !usMarketHolidays(t.getUTCFullYear()).includes(s);
     };
+    // 入场价固定取「当周周一」的开盘价，与周几录入无关：先定位所属的一周（周末录入算即将
+    // 开始的下一周），再取该周第一个交易日（周一休市则顺延到周二…）。周三录入时周一已开盘，
+    // 入场价是已知的历史价——这是有意的约定，不是 look-ahead 疏漏。
     let d = et ? et.date : fmtD(now);
-    if (et && isSession(d) && et.mins < 9 * 60 + 30) return d;
-    do {
-      const t = new Date(d + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() + 1); d = fmtD(t);
-    } while (!isSession(d));
+    let t = new Date(d + "T12:00:00Z");
+    while (t.getUTCDay() === 0 || t.getUTCDay() === 6) t.setUTCDate(t.getUTCDate() + 1);
+    t.setUTCDate(t.getUTCDate() - (t.getUTCDay() - 1));   // 回到该周周一
+    d = fmtD(t);
+    while (!isSession(d)) {
+      const n = new Date(d + "T12:00:00Z"); n.setUTCDate(n.getUTCDate() + 1); d = fmtD(n);
+    }
     return d;
   }
   const mpThisWeek = () => {
@@ -6485,7 +6490,7 @@ function rsAdjustGrade(grade, rsResult) {
               : `本周批次已于 ${(cur.pickedAt || "").slice(0, 10)} 录入，只能在录入当天修改；入场价将取 ${cur.weekOf} 开盘价。`)
             : cur
             ? `本周批次仍在起草：可继续补录代码，或删除录错的。入场价取 <b>${sessLbl}开盘价</b>，拿到后即锁定。`
-            : `粘贴或输入股票代码，空格或逗号分隔。入场价自动取下一个未开盘交易日 <b>${sessLbl}的开盘价</b>，无需手动挂单。`}</div>
+            : `粘贴或输入股票代码，空格或逗号分隔。入场价固定取当周周一（首个交易日）<b>${sessLbl}的开盘价</b>，周几录入都一样，无需手动挂单。`}</div>
         </div>
         ${has ? "" : `
         <div class="mp-entry">
