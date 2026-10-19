@@ -15656,7 +15656,7 @@ function rsAdjustGrade(grade, rsResult) {
         { max: 20,  color: "var(--accent)",label: "中性 · 75%上限",   badge: "中性 75%" },
         { max: 30,  color: "var(--orange)",label: "恐惧 · 50%上限",   badge: "恐惧 50%" },
         { max: 50,  color: "var(--down)",  label: "恐慌 · 25%上限",   badge: "恐慌 25%" },
-        { max: 9999,color: var(--vix-panic),  label: "极恐 · 清仓观望",  badge: "极恐" },
+        { max: 9999,color: "var(--vix-panic)",  label: "极恐 · 清仓观望",  badge: "极恐" },
       ]
     },
     vxn: {
@@ -15666,7 +15666,7 @@ function rsAdjustGrade(grade, rsResult) {
         { max: 26,  color: "var(--accent)",label: "中性", badge: "中性" },
         { max: 40,  color: "var(--orange)",label: "恐惧", badge: "恐惧" },
         { max: 55,  color: "var(--down)",  label: "恐慌", badge: "恐慌" },
-        { max: 9999,color: var(--vix-panic),  label: "极恐", badge: "极恐" },
+        { max: 9999,color: "var(--vix-panic)",  label: "极恐", badge: "极恐" },
       ]
     },
     fg: {
