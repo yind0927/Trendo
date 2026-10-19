@@ -16293,7 +16293,7 @@ function rsAdjustGrade(grade, rsResult) {
     return !!et && dateStr === et.date && et.mins < 16 * 60;
   }
 
-  function buildPhaseHistory(vooCloses, vooDates, vixByDate, maxSessions) {
+  function buildPhaseHistory(vooCloses, vooDates, vixByDate, maxSessions, vxnByDate) {
     if (!vooCloses?.length) return null;
     const e50 = calcEMASeries(vooCloses, 50);
     const e200 = calcEMASeries(vooCloses, 200);
@@ -16302,7 +16302,9 @@ function rsAdjustGrade(grade, rsResult) {
       if (e200[i] == null) continue;                 // no 200MA yet — not replayable
       const d = getDirectionAxis(vooCloses[i], +e50[i].toFixed(2), +e200[i].toFixed(2));
       const vix = vixByDate?.[vooDates[i]] ?? null;
+      const vxn = vxnByDate?.[vooDates[i]] ?? null;
       days.push({
+        vxn,
         date: vooDates[i], px: vooCloses[i],
         ma50: +e50[i].toFixed(2), ma200: +e200[i].toFixed(2),
         id: d.id, label: d.label, color: d.color,
@@ -16389,6 +16391,17 @@ function rsAdjustGrade(grade, rsResult) {
     if (vix < 30)  return { id: "reduced", label: "恐惧", color: "var(--vix-warn)",   posMax: 50,  stop: "收紧 −5%" };
     if (vix < 50)  return { id: "minimal", label: "恐慌", color: "var(--vix-high)",   posMax: 25,  stop: "极紧 −5%" };
     return           { id: "panic",   label: "极恐", color: "var(--vix-panic)",  posMax: 0,   stop: "清仓观望" };
+  }
+
+  // VXN（Nasdaq 波动率）分档：与 VIX 同一套五档词汇与 --vix-* 色阶，只是阈值按 VXN 自己的
+  // 量级走（与 MKT_ZONES.vxn 的边界一致：20/27/40/65）。只做展示，不参与综合建议。
+  const VXN_EDGES = [20, 27, 40, 65];
+  function getVxnAxis(vxn) {
+    if (vxn < 20) return { id: "full",    label: "贪婪", color: "var(--vix-calm)" };
+    if (vxn < 27) return { id: "normal",  label: "中性", color: "var(--vix-normal)" };
+    if (vxn < 40) return { id: "reduced", label: "恐惧", color: "var(--vix-warn)" };
+    if (vxn < 65) return { id: "minimal", label: "恐慌", color: "var(--vix-high)" };
+    return           { id: "panic",   label: "极恐", color: "var(--vix-panic)" };
   }
 
   // 轴C：情绪（FGI + RSI）—— 对方向的倾斜修正：过热减仓、恐惧分批进。
@@ -16925,7 +16938,7 @@ function rsAdjustGrade(grade, rsResult) {
   // How far each axis is from the threshold that would flip it. Needs no history and is
   // the only forward-looking piece here: a phase label sitting 0.4% from its boundary is
   // far more fragile than the same label 8% clear of it, and nothing on the page said so.
-  function mkThresholdsHTML({ price, ma50, ma200, vix, fg, rsi }) {
+  function mkThresholdsHTML({ price, ma50, ma200, vix, vxn, fg, rsi }) {
     const rows = [];
     const gapPct = (v, ref) => (v - ref) / ref * 100;
     const row = (name, txt, gap, note, invert = false) => {
@@ -16953,6 +16966,12 @@ function rsAdjustGrade(grade, rsResult) {
       const d = vix - e;
       row("VIX vs " + e, `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}`, -d,
           vix < e ? `涨破降到 ${getRiskAxis(e).posMax}% 仓位` : `跌破升到 ${getRiskAxis(e - 0.01).posMax}% 仓位`, true);
+    }
+    if (vxn) {
+      const e = VXN_EDGES.reduce((b2, x) => Math.abs(x - vxn) < Math.abs(b2 - vxn) ? x : b2, VXN_EDGES[0]);
+      const d = vxn - e;
+      row("VXN vs " + e, `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}`, -d,
+          vxn < e ? `涨破进入「${getVxnAxis(e).label}」` : `跌破回到「${getVxnAxis(e - 0.01).label}」`, true);
     }
     if (fg != null) {
       const edges = [25, 40, 60, 75];
@@ -17053,6 +17072,16 @@ function rsAdjustGrade(grade, rsResult) {
         return `<span style="flex:1;background-color:${carried || "var(--bg-3)"}"></span>`;
       }).join("")}</div>` : "";
 
+    // VXN 色带：与 VIX 同一套逻辑（缺口沿用前值、每交易日一格），阈值走 getVxnAxis。
+    const hasVxn = ph.days.some(d => d.vxn != null);
+    let carriedX = null;
+    const vxnBand = hasVxn ? `
+      <span class="mkp-bar-k">VXN</span>
+      <div class="mkp-band" aria-hidden="true">${ph.days.map(d => {
+        if (d.vxn != null) carriedX = getVxnAxis(d.vxn).color;
+        return `<span style="flex:1;background-color:${carriedX || "var(--bg-3)"}"></span>`;
+      }).join("")}</div>` : "";
+
     const monthTicks = `
       <div class="mkp-ticks">${ph.months.map(m => `
         <span class="mkp-tick" style="flex:${m.n}"><i>${+m.m.slice(5)}月</i></span>`).join("")}</div>`;
@@ -17070,6 +17099,10 @@ function rsAdjustGrade(grade, rsResult) {
         ${hasVix ? `<span class="mkp-legend-g">${
           [[14, "<15"], [17, "15–20"], [25, "20–30"], [40, "≥30"]].map(([v, t]) =>
             `<span class="mkp-key"><i class="sq" style="background:${getRiskAxis(v).color}"></i>${t}</span>`).join("")
+        }</span>` : ""}
+        ${hasVxn ? `<span class="mkp-legend-g"><span class="mkp-key" style="opacity:.7">VXN</span>${
+          [[19, "<20"], [23, "20–27"], [33, "27–40"], [50, "≥40"]].map(([v, t]) =>
+            `<span class="mkp-key"><i class="sq" style="background:${getVxnAxis(v).color}"></i>${t}</span>`).join("")
         }</span>` : ""}
       </div>`;
 
@@ -17106,6 +17139,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="mkp-bar-k">阶段</span>
           <div class="mkp-ribbon">${ribbon}</div>
           ${vixBand}
+          ${vxnBand}
           <span></span>
           ${monthTicks}
         </div>
@@ -17124,7 +17158,7 @@ function rsAdjustGrade(grade, rsResult) {
              phase transition. The heading now names what every row actually is. -->
         <div class="mkp-sub"><span>离触发还差多少</span><em>Distance to Triggers</em>
           <span class="mkp-sub-note">越过这些线，上面的判断就会变</span></div>
-        <div class="mkp-th">${mkThresholdsHTML(axes)}</div>
+        <div class="mkp-th">${mkThresholdsHTML({ ...axes, vxn: ph.vxnLive })}</div>
         <div class="mkp-note">均线是回看的，阶段只能事后确认 —— 这里说明现在处在什么阶段、已经多久，不预测下一阶段。</div>
       </div>`;
   }
@@ -18247,7 +18281,7 @@ function rsAdjustGrade(grade, rsResult) {
       let rsi = 0, rsiPrev = null;
       // VOO price + moving averages for the direction axis (轴A)
       let benchPrice = null, benchMA50 = null, benchMA200 = null, benchSettled = null;
-      let vooDates = null, vooCloses = null, vixByDate = null;
+      let vooDates = null, vooCloses = null, vixByDate = null, vxnByDate = null;
       if (histRes.status === "fulfilled" && histRes.value?.results?.["VOO"]) {
         const raw = histRes.value.results["VOO"];
         const closes = Object.keys(raw).sort().map(k => raw[k]);
@@ -18266,6 +18300,8 @@ function rsAdjustGrade(grade, rsResult) {
       // VIX by trading day, for the band stripe under the ribbon.
       if (histRes.status === "fulfilled" && histRes.value?.results?.["^VIX"])
         vixByDate = histRes.value.results["^VIX"];
+      if (histRes.status === "fulfilled" && histRes.value?.results?.["^VXN"])
+        vxnByDate = histRes.value.results["^VXN"];
 
       // VIX / VXN EMA10 + trend direction
       const calcEMA10Trend = (results, sym) => {
@@ -18334,7 +18370,8 @@ function rsAdjustGrade(grade, rsResult) {
         return vals.length ? Math.max(...vals) : null;
       })();
       const axes = buildAxes({ price: benchPrice, ma50: benchMA50, ma200: benchMA200, vix, fg, rsi, vixTrend, vix60Max });
-      const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS);
+      const phase = buildPhaseHistory(vooCloses, vooDates, vixByDate, PHASE_SESSIONS, vxnByDate);
+      if (phase) phase.vxnLive = vxn || null;
       // 综合建议逐日回放。用的全是上面那两次请求已经拿回来的数据，无额外调用。
       const advice = buildAdviceHistory(vooCloses, vooDates, vixByDate, fgByDate, ADVICE_SESSIONS);
       // 距下一状态：概率与日波动标准差全部由上面已经拿到的序列现算，无额外请求。
