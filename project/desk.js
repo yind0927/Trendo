@@ -15681,7 +15681,7 @@ function rsAdjustGrade(grade, rsResult) {
         { max: 40,  color: "var(--vix-normal)", label: "偏冷 · 可加仓",     badge: "偏冷" },
         { max: 60,  color: "var(--warn)",   label: "中性 · 正常",       badge: "中性" },
         { max: 75,  color: "var(--orange)", label: "偏热 · 不追高",     badge: "偏热" },
-        { max: 9999,color: "var(--down)",   label: "极端过热 · 止盈",   badge: "极端过热" },
+        { max: 9999,color: "var(--mkt-red)",   label: "极端过热 · 止盈",   badge: "极端过热" },
       ]
     },
     rsi: {
@@ -15691,7 +15691,7 @@ function rsAdjustGrade(grade, rsResult) {
         { max: 45,  color: "var(--vix-normal)", label: "偏弱 · 可加仓",   badge: "偏弱" },
         { max: 65,  color: "var(--warn)",   label: "中性 · 正常",     badge: "中性" },
         { max: 72,  color: "var(--orange)", label: "偏热 · 不追高",   badge: "偏热" },
-        { max: 9999,color: "var(--down)",   label: "超买 · 止盈",     badge: "超买" },
+        { max: 9999,color: "var(--mkt-red)",   label: "超买 · 止盈",     badge: "超买" },
       ]
     }
   };
@@ -15711,7 +15711,7 @@ function rsAdjustGrade(grade, rsResult) {
     {
       id: "defense",
       regime: "🔴 防守",
-      color: "var(--down)",
+      color: "var(--mkt-red)",
       condition: v => v.vix >= 30 || v.fg < 20,
       cond:    "VIX ≥ 30 或 FGI < 20",
       meaning: "高波动或极度恐惧",
@@ -15966,7 +15966,7 @@ function rsAdjustGrade(grade, rsResult) {
            desc: "VOO 还在 50 日 EMA 上，RSP 已跌到下方——指数表面稳，内部已走弱",
            cond: "VOO 上、RSP 下",
            mean: "VOO 靠大市值股票撑着，等权的 RSP 已经转弱，上涨的参与面在变窄。" },
-    "C": { cap: ["o","o","n","n","n"], zh: "全面收缩", color: "var(--down)",
+    "C": { cap: ["o","o","n","n","n"], zh: "全面收缩", color: "var(--mkt-red)",
            desc: "VOO、RSP 都在 50 日 EMA 下——市值加权与等权同时转弱",
            cond: "VOO 下、RSP 下",
            mean: "下跌波及面广，不是少数龙头拖累。" },
@@ -16090,7 +16090,7 @@ function rsAdjustGrade(grade, rsResult) {
     else if (r < 1.15) zone = { color: "var(--warn)",   badge: "比例压缩",  desc: "两者风险接近，常见于系统性市场冲击或科技相对稳定" };
     else if (r < 1.30) zone = { color: "var(--up)",     badge: "常态区间",  desc: "Nasdaq存在正常的结构性波动溢价，科技无特别压力" };
     else if (r < 1.50) zone = { color: "var(--orange)", badge: "科技波动偏贵", desc: "市场更担忧科技、成长股或大型科技公司的风险" };
-    else               zone = { color: "var(--down)",   badge: "极端溢价",  desc: "可能存在科技板块事件风险，或VIX自身处于异常低位" };
+    else               zone = { color: "var(--mkt-red)",   badge: "极端溢价",  desc: "可能存在科技板块事件风险，或VIX自身处于异常低位" };
     return `
       <div class="mkt-vix-ratio-strip">
         <span class="mkt-vxr-key">VXN ÷ VIX</span>
@@ -16116,7 +16116,7 @@ function rsAdjustGrade(grade, rsResult) {
       { label: "中性", color: "var(--warn)",
         cond: "价格跌回 EMA50 之下，但仍在 EMA200 之上<br><span class=\"pb3-gloss\">均线本身的顺序没有破坏，属于上升趋势中的回调</span>",
         action: "不开新仓。已有仓位继续持有，把止损上移到成本价附近。等价格重新站上 EMA50 再考虑加仓。" },
-      { label: "做空", color: "var(--down)",
+      { label: "做空", color: "var(--mkt-red)",
         cond: "价格跌破 EMA200，或 EMA50 下穿 EMA200<br><span class=\"pb3-gloss\">中期均线掉到长期均线之下，趋势结构已经改变</span>",
         action: "禁止开新多仓——VIX 再低、情绪再冷都不能推翻。已有仓位按原止损执行；反弹到 EMA50 附近是减仓机会而不是加仓点。" },
     ];
@@ -16153,7 +16153,7 @@ function rsAdjustGrade(grade, rsResult) {
       { label: "偏热", color: "var(--orange)",
         cond: "FGI 60–75 或 RSI 65–72<br><span class=\"pb3-gloss\">任一指标偏热即触发</span>",
         action: "持仓不加码。把止损上移到成本价之上，先把这一段的利润锁住。" },
-      { label: "极端过热", color: "var(--down)",
+      { label: "极端过热", color: "var(--mkt-red)",
         cond: "FGI > 75 或 RSI > 72<br><span class=\"pb3-gloss\">任一指标越过极端线即触发</span>",
         action: "禁止开新仓；盈利仓减去 1/3 落袋，其余收紧止损。这一条会推翻方向轴给出的做多资格。" },
     ];
@@ -16374,10 +16374,10 @@ function rsAdjustGrade(grade, rsResult) {
     if (ma200 == null)
       return price > ma50
         ? { id: "tailwind", label: "做多", color: "var(--up)", desc: "价格 > EMA50，趋势偏多", eligible: true }
-        : { id: "headwind", label: "做空", color: "var(--down)", desc: "价格跌破 EMA50", eligible: false };
+        : { id: "headwind", label: "做空", color: "var(--mkt-red)", desc: "价格跌破 EMA50", eligible: false };
     const deathCross = ma50 < ma200;
     if (deathCross || price < ma200)
-      return { id: "headwind", label: "做空", color: "var(--down)",
+      return { id: "headwind", label: "做空", color: "var(--mkt-red)",
         desc: deathCross ? "EMA50 下穿 EMA200，长期趋势走弱" : "价格跌破 EMA200，回避新多单", eligible: false };
     if (price > ma50 && ma50 > ma200)
       return { id: "tailwind", label: "做多", color: "var(--up)", desc: "价格 > EMA50 > EMA200，多头结构完整", eligible: true };
@@ -16433,7 +16433,7 @@ function rsAdjustGrade(grade, rsResult) {
     // 极端过热那么急迫。n=21 是小样本，界面上如实标注。
     const cooled = vix != null && vix60Max != null && vix60Max > 30 && vix < 20;
     if (fg > 75 || rsi > 72)
-      return { id: "euphoria", label: "极端过热", color: "var(--down)", tilt: "trim",
+      return { id: "euphoria", label: "极端过热", color: "var(--mkt-red)", tilt: "trim",
         desc: "禁止新仓，盈利仓位减仓 1/3，收紧止损" };
     if (cooled)
       return { id: "cooldown", label: "恐慌降温期", color: "var(--adv-cooldown)", tilt: "cooldown",

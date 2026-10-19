@@ -47,7 +47,7 @@
     /* sky blue — 浅蓝色，比 --blue 更淡更亮，用于「正常配置」这类不需要方向色的基线状态 */
     /* 综合建议 7 档状态色（单一来源：combineAxes / 情绪轴 / 周期分析色带 / 距下一状态全部读这组）。
        按 OKLab 距离选定，任意两档最小距离 0.108（旧配色 0.076，分批参与与正常配置最接近）。 */
-    --adv-defense:    var(--down);
+    --adv-defense:    var(--mkt-red);
     --adv-trim:       oklch(0.76 0.16 55);
     --adv-hold:       oklch(0.85 0.15 95);
     --adv-accumulate: oklch(0.77 0.15 155);
@@ -64,6 +64,7 @@
     --up-dim: oklch(0.77 0.15 158 / .14);
     --up-line: oklch(0.77 0.15 158 / .25);
     --down: oklch(0.71 0.17 25);
+    --mkt-red: oklch(0.62 0.20 24);   /* Market 页统一红：比 --down 稍深，不到深红 */
     --down-faint: oklch(0.71 0.17 25 / .07);
     --down-dim: oklch(0.71 0.17 25 / .14);
     --down-line: oklch(0.71 0.17 25 / .25);
@@ -113,7 +114,7 @@
     --vix-normal: oklch(0.70 0.13 244);
     --vix-warn:   oklch(0.86 0.16 92);
     --vix-high:   oklch(0.72 0.18 46);
-    --vix-panic:  var(--down);
+    --vix-panic:  var(--mkt-red);
     /* horizontal inset of a .panel-head's content; see the .panel-head rule below */
     --panel-inset: 20px;
     --radius-sm: 7px;
@@ -1268,7 +1269,8 @@
   /* ============ LIGHT THEME ============ */
   body[data-theme="light"]{
     --bg-0: oklch(0.985 0.003 250);
-    --adv-defense:    var(--down);
+    --adv-defense:    var(--mkt-red);
+    --mkt-red:        oklch(0.56 0.19 25);
     --adv-trim:       oklch(0.62 0.17 55);
     --adv-hold:       oklch(0.68 0.15 90);
     --adv-accumulate: oklch(0.56 0.15 155);
@@ -6961,8 +6963,8 @@
   </div>
 </div>
 
-<script src="data.js?v=885"></script>
-<script src="desk.js?v=885"></script>
+<script src="data.js?v=886"></script>
+<script src="desk.js?v=886"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
