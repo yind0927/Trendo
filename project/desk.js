@@ -15663,9 +15663,9 @@ function rsAdjustGrade(grade, rsResult) {
       label: "VXN (Nasdaq)", cap: 80,
       zones: [
         { max: 20,  color: "var(--up)",    label: "贪婪", badge: "贪婪" },
-        { max: 27,  color: "var(--accent)",label: "中性", badge: "中性" },
+        { max: 26,  color: "var(--accent)",label: "中性", badge: "中性" },
         { max: 40,  color: "var(--orange)",label: "恐惧", badge: "恐惧" },
-        { max: 65,  color: "var(--down)",  label: "恐慌", badge: "恐慌" },
+        { max: 55,  color: "var(--down)",  label: "恐慌", badge: "恐慌" },
         { max: 9999,color: MKT_DEEP_DOWN,  label: "极恐", badge: "极恐" },
       ]
     },
@@ -16394,13 +16394,13 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   // VXN（Nasdaq 波动率）分档：与 VIX 同一套五档词汇与 --vix-* 色阶，只是阈值按 VXN 自己的
-  // 量级走（与 MKT_ZONES.vxn 的边界一致：20/27/40/65）。只做展示，不参与综合建议。
-  const VXN_EDGES = [20, 27, 40, 65];
+  // 量级走（与 MKT_ZONES.vxn 的边界一致：20/26/40/55）。只做展示，不参与综合建议。
+  const VXN_EDGES = [20, 26, 40, 55];
   function getVxnAxis(vxn) {
     if (vxn < 20) return { id: "full",    label: "贪婪", color: "var(--vix-calm)" };
-    if (vxn < 27) return { id: "normal",  label: "中性", color: "var(--vix-normal)" };
+    if (vxn < 26) return { id: "normal",  label: "中性", color: "var(--vix-normal)" };
     if (vxn < 40) return { id: "reduced", label: "恐惧", color: "var(--vix-warn)" };
-    if (vxn < 65) return { id: "minimal", label: "恐慌", color: "var(--vix-high)" };
+    if (vxn < 55) return { id: "minimal", label: "恐慌", color: "var(--vix-high)" };
     return           { id: "panic",   label: "极恐", color: "var(--vix-panic)" };
   }
 
@@ -17093,16 +17093,22 @@ function rsAdjustGrade(grade, rsResult) {
       .map(([id, t]) => `<span class="mkp-key"><i style="background:${
         ph.segs.find(sg => sg.id === id).color}"></i>${t}</span>`).join("");
     // Group captions moved onto the bands themselves, so the legend is just the keys.
+    const lgKey = (color, t, sq) => `<span class="mkp-key"><i${sq ? ' class="sq"' : ""} style="background:${color}"></i>${t}</span>`;
+    const lgHead = t => `<span class="mkp-key" style="opacity:.7">${t}</span>`;
     const legend = `
       <div class="mkp-legend">
-        <span class="mkp-legend-g">${phaseKeys}</span>
-        ${hasVix ? `<span class="mkp-legend-g">${
-          [[14, "<15"], [17, "15–20"], [25, "20–30"], [40, "≥30"]].map(([v, t]) =>
-            `<span class="mkp-key"><i class="sq" style="background:${getRiskAxis(v).color}"></i>${t}</span>`).join("")
+        <span class="mkp-legend-g">${lgHead("VOO")}${
+          [["tailwind", "做多", "价>50MA>200MA"], ["neutral", "中性", "均线之间"], ["headwind", "做空", "死叉或破200MA"]]
+            .filter(([id]) => ph.segs.some(sg => sg.id === id))
+            .map(([id, t, d]) => lgKey(ph.segs.find(sg => sg.id === id).color, `${t} ${d}`, false)).join("")
+        }</span>
+        ${hasVix ? `<span class="mkp-legend-g">${lgHead("VIX")}${
+          [[14, "贪婪 <15"], [17, "中性 15–20"], [25, "恐惧 20–30"], [40, "恐慌 30–50"], [60, "极恐 ≥50"]].map(([v, t]) =>
+            lgKey(getRiskAxis(v).color, t, true)).join("")
         }</span>` : ""}
-        ${hasVxn ? `<span class="mkp-legend-g"><span class="mkp-key" style="opacity:.7">VXN</span>${
-          [[19, "<20"], [23, "20–27"], [33, "27–40"], [50, "≥40"]].map(([v, t]) =>
-            `<span class="mkp-key"><i class="sq" style="background:${getVxnAxis(v).color}"></i>${t}</span>`).join("")
+        ${hasVxn ? `<span class="mkp-legend-g">${lgHead("VXN")}${
+          [[19, "贪婪 <20"], [23, "中性 20–26"], [33, "恐惧 26–40"], [47, "恐慌 40–55"], [60, "极恐 ≥55"]].map(([v, t]) =>
+            lgKey(getVxnAxis(v).color, t, true)).join("")
         }</span>` : ""}
       </div>`;
 
