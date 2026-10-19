@@ -3768,7 +3768,12 @@ function rsAdjustGrade(grade, rsResult) {
                 <span class="exec-type open">开仓</span>
                 <span class="exec-date">${fmt.date(h.entry)}</span>
                 <span class="exec-price mono">$${price(h.cost)}</span>
-                <span class="exec-qty muted">${h.qty} 股</span>
+                <span class="exec-qty muted">${(() => {
+                  // 入场股数＝最初买入的总数，减仓/平仓不改它（h.qty 是剩余股数，会随减仓变小）
+                  if (+h._in > 0) return +h._in;
+                  if (isClosed) return allCloseRecords.reduce((s, c) => s + (+c.qty || 0), 0) || h.qty;
+                  return h.qty + partialCloses.reduce((s, c) => s + (+c.qty || 0), 0);
+                })()} 股</span>
               </div>`}
             ${isClosed
               ? allCloseRecords.map(c => `
