@@ -3045,6 +3045,26 @@
   .eq-after-verdict.miss { background: var(--down-dim); color: var(--down); }
   .eq-after-verdict.good { background: var(--up-dim); color: var(--up); }
   .eq-after-verdict.flat { background: var(--bg-3); color: var(--fg-2); }
+  .eq-after-verdict.pend { background: transparent; color: var(--fg-3); box-shadow: inset 0 0 0 1px var(--line); }
+
+  /* ── 出场对错汇总：筛选 chip + 三格金额 + 盈亏×对错 2×2 ── */
+  .eqv-chips { margin: 4px 0 10px; flex-wrap: wrap; }
+  .eqv-money { margin-bottom: 10px; }
+  .eqv-grid { display: grid; grid-template-columns: 76px 1fr 1fr; gap: 6px; align-items: stretch; }
+  .eqv-colh, .eqv-rowh { font-size: 10.5px; font-weight: 600; color: var(--fg-2); display: flex; flex-direction: column; justify-content: center; }
+  .eqv-colh { text-align: center; align-items: center; }
+  .eqv-colh small, .eqv-rowh small { font-size: 9.5px; font-weight: 400; color: var(--fg-3); margin-top: 1px; }
+  .eqv-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px; border-radius: 10px;
+    background: var(--bg-2); border: 1px solid var(--line); color: var(--fg-1); cursor: pointer; font-family: inherit;
+    transition: border-color .15s, background .15s; }
+  .eqv-cell:hover { border-color: var(--accent); }
+  .eqv-cell.active { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 12%, transparent); }
+  .eqv-cell-name { font-size: 10.5px; font-weight: 600; color: var(--fg-2); }
+  .eqv-cell-n { font-size: 18px; font-weight: 700; font-family: var(--f-mono); letter-spacing: -0.01em; }
+  .eqv-cell-n small { font-size: 10px; font-weight: 400; opacity: .7; margin-left: 2px; }
+  .eqv-cell-pct { font-size: 10px; font-family: var(--f-mono); color: var(--fg-3); }
+  .eqv-note { font-size: 10.5px; color: var(--fg-3); line-height: 1.6; margin: 8px 0 4px; }
+  @media (max-width: 768px) { .eqv-grid { grid-template-columns: 64px 1fr 1fr; } }
   @media (max-width: 768px) {
     .eq-after-verdict { font-size: 9.5px; padding: 2px 7px; }
     .eq-after-verdict b { margin-right: 4px; }
@@ -6963,8 +6983,8 @@
   </div>
 </div>
 
-<script src="data.js?v=886"></script>
-<script src="desk.js?v=886"></script>
+<script src="data.js?v=887"></script>
+<script src="desk.js?v=887"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

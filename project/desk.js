@@ -12803,6 +12803,19 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   let _eqSortMode = "loss_asc"; // "loss_desc"|"loss_asc"|"date_desc"|"date_asc"
+  // 汇总上的筛选：all | right | wrong | flat | pending | w-right | w-wrong | l-right | l-wrong
+  // 真实仓与模拟仓各一份，互不影响。
+  const _eqFilterBy = { real: "all", sim: "all" };
+  function eqRerender(isSim) {
+    if (isSim) { renderSimExitQuality(); return; }
+    const el = $("#eq-content");
+    if (el) el.innerHTML = exitQualityHTML();
+  }
+  window._eqSetFilter = (key, isSim) => {
+    const k = isSim ? "sim" : "real";
+    _eqFilterBy[k] = _eqFilterBy[k] === key ? "all" : key;   // 再点一次取消
+    eqRerender(isSim);
+  };
   window._eqResort = (field, isSim) => {
     const [curField, curDir] = _eqSortMode.split("_");
     if (curField === field) {
@@ -12861,52 +12874,53 @@ function rsAdjustGrade(grade, rsResult) {
   //
   // 刻意只显示相对出场价的百分比，不显示收盘价绝对值：$63.40 这个数要先跟出场价
   // 心算一次才有意义，而那个心算的结果恰好就是百分比本身。
-  //
-  // 颜色不按涨跌给：出场后上涨在这里是「走早了」的信号，用绿色会读成「好事」。
-  // 改为按结论着色，并把结论用文字写出来，不让颜色单独承担含义。
   const EQ_AFTER_DAYS = [5, 10, 20];
-  function eqAfterExitHTML(h, records, totalQty) {
+  const EQ_VERDICT_DAYS = 20;   // 判定与汇总统一锚在第 20 个交易日
+  const EQ_VERDICT_PCT = 3;     // ±3% 以内分不出对错
+  // 一笔交易的出场判定。逐笔徽章与顶部汇总共用这一处，两边的口径不可能对不上。
+  // status: right 躲开回落 / wrong 走早了 / flat ±3% 以内 / pending 第 20 日还没到 / null 没有数据
+  function eqVerdict(h, records) {
     const ySym = h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
     const prices = histCache[ySym];
     const exitDate = (h.closedAt || "").slice(0, 10);
-    if (!prices || !exitDate) return "";
+    if (!prices || !exitDate) return null;
     // 多次减仓时用数量加权的平均出场价——单看某一条腿的价格不能代表这笔交易。
     const soldQty = records.reduce((s, r) => s + (r.qty || 0), 0);
     const exitPx = soldQty > 0
       ? records.reduce((s, r) => s + (r.closePrice || 0) * (r.qty || 0), 0) / soldQty
       : null;
-    if (!(exitPx > 0)) return "";
-
+    if (!(exitPx > 0)) return null;
     const after = Object.keys(prices).filter(d => d > exitDate).sort();
+    if (!after.length) return null;   // 刚平仓：一个交易日都还没有
     const cells = EQ_AFTER_DAYS.map(n => {
       const d = after[n - 1];
       return d != null ? { n, d, px: prices[d], pct: (prices[d] - exitPx) / exitPx * 100 } : { n, pct: null };
     });
-    const known = cells.filter(c => c.pct != null);
-    if (!known.length) return "";   // 刚平仓不久，一个都还没走满：整行不显示，不摆三个横杠
+    const elapsed = Math.min(after.length, EQ_VERDICT_DAYS);
+    const lastPx = prices[after[elapsed - 1]];
+    const pct = (lastPx - exitPx) / exitPx * 100;
+    const done = after.length >= EQ_VERDICT_DAYS;
+    const status = !done ? "pending"
+      : pct >= EQ_VERDICT_PCT ? "wrong" : pct <= -EQ_VERDICT_PCT ? "right" : "flat";
+    // 金额＝出场之后这些股票的价格变动 × 卖出股数：wrong 是少赚的，right 是躲开的。
+    return { status, cells, exitPx, soldQty, elapsed, pct, px: lastPx, amt: (lastPx - exitPx) * soldQty };
+  }
 
-    // 结论锚在已知的最长期限上：它最能说明趋势有没有延续。
-    // 判定的是「这个出场时点」对不对，不是这笔交易赚没赚 —— 出场后继续涨＝走早了＝错误，
-    // 出场后跌了＝躲开了回落＝正确。±3% 以内不下结论，那个幅度分不出对错。
-    // 徽章＝判定词 + 它依据的那个数值，桌面与手机同一套文案（不再按视口裁剪）。
-    // 数值跟左边对应的 cell 是同一个，重复是有意的：结论旁边直接有依据，
-    // 不用回头去对是哪一档。不带 title：手机端本来就悬停不了，桌面端藏一半
-    // 文案在悬停里等于两套信息，不如页面上写什么就是什么。
-    // 样式与行首那枚「出场效率」chip 对齐（同为 pill + 填充底色）：两者都是这一行的
-    // 结论性标签，此前一个是描边方角、一个是填充圆角，并排看像两套系统。
-    const last = known[known.length - 1];
-    const num = `${last.n}日 ${last.pct >= 0 ? "+" : "−"}${Math.abs(last.pct).toFixed(1)}%`;
-    const v = last.pct >= 3  ? { cls: "miss", tag: "错误", txt: num }
-      : last.pct <= -3       ? { cls: "good", tag: "正确", txt: num }
-      :                        { cls: "flat", tag: "持平", txt: num };
-    // 绝对价格对比（出场均价 $X → 第N日 $Y）已删除：三个 cell 的百分比已经表达了
-    // 同一件事，绝对价位在这一行里没有被用来做任何判断，只是让行更长。
-
+  // 颜色不按涨跌给：出场后上涨在这里是「走早了」的信号，用绿色会读成「好事」。
+  // 改为按结论着色，并把结论用文字写出来，不让颜色单独承担含义。
+  // 判定固定看第 20 个交易日（5/10 日仍并排给出作参考）。20 日没走满的写「待定」，
+  // 不拿 5 日、10 日的涨跌去下结论——短期噪声会让同一笔交易几天后翻面。
+  function eqAfterExitHTML(h, records) {
+    const v = eqVerdict(h, records);
+    if (!v) return "";
+    const sg = x => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}%`;
+    const num = v.status === "pending" ? `第${v.elapsed}日 ${sg(v.pct)}` : `${EQ_VERDICT_DAYS}日 ${sg(v.pct)}`;
+    const tag = { right: ["good", "正确"], wrong: ["miss", "错误"], flat: ["flat", "持平"], pending: ["pend", "待定"] }[v.status];
     return `<div class="eq-after">
       <span class="eq-after-lbl">出场后</span>
-      ${cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"><i>${c.n}日</i>${
+      ${v.cells.map(c => `<span class="eq-after-cell${c.pct == null ? " pending" : ""}"><i>${c.n}日</i>${
         c.pct == null ? "—" : (c.pct >= 0 ? "+" : "") + c.pct.toFixed(1) + "%"}</span>`).join("")}
-      <span class="eq-after-verdict ${v.cls}"><b>${v.tag}</b><i>${v.txt}</i></span>
+      <span class="eq-after-verdict ${tag[0]}"><b>${tag[1]}</b><i>${num}</i></span>
     </div>`;
   }
 
@@ -12932,6 +12946,7 @@ function rsAdjustGrade(grade, rsResult) {
 
     const rows = [];
     const pureLossRows = []; // trades where price never exceeded entry cost
+    const trades = [];       // 汇总口径：所有有出场后数据的交易，不管峰值有没有超过成本
     for (const [, records] of tradeMap) {
       const h0 = records[0];
       const ySym   = h0.kind === "crypto" ? `${h0.sym}-USD` : h0.sym;
@@ -12946,10 +12961,16 @@ function rsAdjustGrade(grade, rsResult) {
       const datesInRange = Object.keys(prices).filter(d => d > entryDate && d <= closeDate);
       if (!datesInRange.length) continue;
 
+      const hv = { ...h0, closedAt: closeDate };
+      const tradePnl = records.reduce((s, r) => s + (r.pnlFinal ?? 0), 0);
+      const verdict = eqVerdict(hv, records);
+      const trade = { h: hv, records, actualPnl: tradePnl, v: verdict, pnlSide: tradePnl > 0 ? "w" : tradePnl < 0 ? "l" : "z" };
+      trades.push(trade);
+
       const peakPrice = Math.max(...datesInRange.map(d => prices[d]));
       if (peakPrice <= h0.cost) {
         const actualPnl = records.reduce((s, r) => s + (r.pnlFinal ?? 0), 0);
-        pureLossRows.push({ h: { ...h0, closedAt: closeDate }, actualPnl });
+        pureLossRows.push({ h: { ...h0, closedAt: closeDate }, actualPnl, records, trade });
         continue;
       }
 
@@ -12962,7 +12983,7 @@ function rsAdjustGrade(grade, rsResult) {
 
       rows.push({ h: { ...h0, closedAt: closeDate }, peakPnl, actualPnl, leftOnTable, efficiency, isPartial,
                   trancheCnt: records.length, records, totalQty,
-                  stillOpen: stillOpenKeys.has(`${h0.sym}|${h0.entry || ""}|${h0.cost ?? ""}`) });
+                  stillOpen: stillOpenKeys.has(`${h0.sym}|${h0.entry || ""}|${h0.cost ?? ""}`), trade });
     }
 
     const _loading = isSimMode ? simHistLoading : histLoading;
@@ -13036,6 +13057,73 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).join("")}</div>`;
 
+    // ── 出场对错汇总（固定看出场后第 20 个交易日）──
+    // 分母只含「已判定」的交易；待定（20 日没走满）与没有数据的单列，不稀释比例。
+    const fkey = isSimMode ? "sim" : "real";
+    const flt = _eqFilterBy[fkey];
+    const cnt = { right: 0, wrong: 0, flat: 0, pending: 0 };
+    const money = { right: 0, wrong: 0 };       // 躲开的回落 / 少赚的涨幅（美元）
+    const pctSum = { right: 0, wrong: 0 };
+    const grid = { "w-right": 0, "w-wrong": 0, "l-right": 0, "l-wrong": 0 };
+    for (const t of trades) {
+      if (!t.v) continue;
+      cnt[t.v.status]++;
+      if (t.v.status === "wrong") { money.wrong += t.v.amt; pctSum.wrong += t.v.pct; }
+      if (t.v.status === "right") { money.right += -t.v.amt; pctSum.right += -t.v.pct; }
+      if ((t.v.status === "right" || t.v.status === "wrong") && t.pnlSide !== "z") grid[`${t.pnlSide}-${t.v.status}`]++;
+    }
+    const decided = cnt.right + cnt.wrong + cnt.flat;
+    const usd = x => `$${Math.round(Math.abs(x)).toLocaleString("en-US")}`;
+    const netEff = money.right - money.wrong;
+    const avgPct = (s, n) => n ? `平均 ${(s / n).toFixed(1)}%` : "";
+    const fb = (key, label, n) =>
+      `<button class="eq-sort-chip${flt === key ? " active" : ""}" aria-pressed="${flt === key}" onclick="_eqSetFilter('${key}',${isSimMode})">${label} ${n}</button>`;
+    const cell = (key, name, n, rowTotal) =>
+      `<button class="eqv-cell${flt === key ? " active" : ""}" aria-pressed="${flt === key}" onclick="_eqSetFilter('${key}',${isSimMode})">
+         <span class="eqv-cell-name">${name}</span>
+         <span class="eqv-cell-n">${n}<small>笔</small></span>
+         <span class="eqv-cell-pct">${rowTotal ? Math.floor(n / rowTotal * 100) + "%" : "—"}</span>
+       </button>`;
+    const wTot = grid["w-right"] + grid["w-wrong"], lTot = grid["l-right"] + grid["l-wrong"];
+    const verdictHTML = decided + cnt.pending === 0 ? "" : `
+      <div class="simb-subtitle">
+        <span class="simb-sub-zh">出场对错</span><span class="simb-sub-en">Exit Verdict</span>
+        <span class="simb-sub-note">出场后第 ${EQ_VERDICT_DAYS} 个交易日 · ±${EQ_VERDICT_PCT}% 为界</span>
+      </div>
+      <div class="eq-sort-bar eqv-chips">
+        <button class="eq-sort-chip${flt === "all" ? " active" : ""}" aria-pressed="${flt === "all"}" onclick="_eqSetFilter('all',${isSimMode})">全部 ${trades.length}</button>
+        ${fb("right", "正确", cnt.right)}${fb("wrong", "错误", cnt.wrong)}${fb("flat", "持平", cnt.flat)}${fb("pending", "待定", cnt.pending)}
+      </div>
+      <div class="eq-summary eqv-money">
+        <div class="eq-summary-card">
+          <div class="eq-summary-label">AVOIDED · 躲开的回落</div>
+          <div class="eq-summary-value up">${cnt.right ? "+" + usd(money.right) : "—"}</div>
+          <div class="eq-summary-sub">${cnt.right} 笔正确${cnt.right ? " · " + avgPct(pctSum.right, cnt.right) : ""}</div>
+        </div>
+        <div class="eq-summary-card">
+          <div class="eq-summary-label">MISSED · 少赚的涨幅</div>
+          <div class="eq-summary-value down">${cnt.wrong ? "−" + usd(money.wrong) : "—"}</div>
+          <div class="eq-summary-sub">${cnt.wrong} 笔错误${cnt.wrong ? " · " + avgPct(pctSum.wrong, cnt.wrong) : ""}</div>
+        </div>
+        <div class="eq-summary-card">
+          <div class="eq-summary-label">NET · 出场净效果</div>
+          <div class="eq-summary-value ${cnt.right + cnt.wrong === 0 ? "neu" : netEff >= 0 ? "up" : "down"}">${
+            cnt.right + cnt.wrong === 0 ? "—" : (netEff >= 0 ? "+" : "−") + usd(netEff)}</div>
+          <div class="eq-summary-sub">躲开 − 少赚</div>
+        </div>
+      </div>
+      <div class="eqv-grid">
+        <div class="eqv-corner"></div><div class="eqv-colh">出场正确<small>之后跌了</small></div><div class="eqv-colh">出场错误<small>之后又涨</small></div>
+        <div class="eqv-rowh">盈利出场<small>${wTot} 笔</small></div>
+        ${cell("w-right", "止盈得当", grid["w-right"], wTot)}${cell("w-wrong", "止盈太早", grid["w-wrong"], wTot)}
+        <div class="eqv-rowh">亏损出场<small>${lTot} 笔</small></div>
+        ${cell("l-right", "止损得当", grid["l-right"], lTot)}${cell("l-wrong", "止损后又涨回", grid["l-wrong"], lTot)}
+      </div>
+      <div class="eqv-note">${
+        cnt.right + cnt.wrong < 20
+          ? `已判定 ${decided} 笔（正确+错误 ${cnt.right + cnt.wrong}），样本偏少，比例大多是随机波动，仅供参考。`
+          : `已判定 ${decided} 笔。`}${cnt.pending ? ` 另有 ${cnt.pending} 笔出场不满 ${EQ_VERDICT_DAYS} 个交易日，待定，不计入比例与金额。` : ""} 方格比例＝占该行（盈利/亏损出场）的比例；持平与盈亏为 0 的不在方格内。金额＝出场后价格变动 × 卖出股数。</div>`;
+
     const lossArrow = sortField === "loss" ? (sortDir === "asc" ? "↑" : "↓") : "↑";
     const dateArrow = sortField === "date" ? (sortDir === "asc" ? "↑" : "↓") : "↑";
     const sortBar = `<div class="eq-sort-bar">
@@ -13044,7 +13132,26 @@ function rsAdjustGrade(grade, rsResult) {
       <button class="eq-sort-chip${sortField === "date" ? " active" : ""}" onclick="_eqResort('date',${isSimMode})">按日期${dateArrow}</button>
     </div>`;
 
-    const listHTML = rows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt, records, totalQty, stillOpen }, rowIdx) => {
+    const fmatch = t => {
+      if (flt === "all") return true;
+      if (!t.v) return false;
+      if (flt.includes("-")) { const [side, st] = flt.split("-"); return t.pnlSide === side && t.v.status === st; }
+      return t.v.status === flt;
+    };
+    const shownRows = rows.filter(r => fmatch(r.trade));
+    const shownPure = flt === "all" ? [] : pureLossRows.filter(r => fmatch(r.trade));
+    const pureRowsHTML = shownPure.map(({ h, actualPnl, records }) => {
+      const totalQty = records.reduce((s, r) => s + (r.qty ?? 0), 0);
+      return `<div class="eq-row">
+        <div class="eq-row-header">
+          <div><span class="eq-sym">${h.sym}</span><span class="eq-dates">${h.entry?.slice(0,10)} → ${h.closedAt?.slice(0,10)}</span></div>
+          <span class="eq-eff-chip low">${fmt.signed(Math.round(actualPnl))} · 未曾浮盈</span>
+        </div>
+        ${eqLegsHTML(h, records, totalQty)}
+        ${eqAfterExitHTML(h, records)}
+      </div>`;
+    }).join("");
+    const listHTML = shownRows.map(({ h, peakPnl, actualPnl, leftOnTable, efficiency, isPartial, trancheCnt, records, totalQty, stillOpen }, rowIdx) => {
       const hiddenCls = (limit && rowIdx >= limit) ? ' eq-row-hidden' : '';
       const actualW   = Math.max(0, Math.round(Math.min(actualPnl, peakPnl) / peakPnl * 100));
       const actualCls = actualPnl >= 0 ? "up" : "down";
@@ -13063,7 +13170,7 @@ function rsAdjustGrade(grade, rsResult) {
           <span class="eq-eff-chip ${chip}">${effLabel(efficiency)}</span>
         </div>
         ${eqLegsHTML(h, records, totalQty)}
-        ${eqAfterExitHTML(h, records, totalQty)}
+        ${eqAfterExitHTML(h, records)}
         <div class="eq-bar-row">
           <span class="eq-bar-label">峰值</span>
           <div class="eq-bar-track"><div class="eq-bar-fill peak" style="width:100%"></div></div>
@@ -13078,11 +13185,11 @@ function rsAdjustGrade(grade, rsResult) {
       </div>`;
     }).join("");
 
-    const expandBtn = (limit && rows.length > limit)
-      ? `<button class="eq-expand-btn" onclick="this.previousElementSibling.querySelectorAll('.eq-row-hidden').forEach(r=>r.classList.remove('eq-row-hidden'));this.remove()">查看全部 ${rows.length} 笔 ↓</button>`
+    const expandBtn = (limit && shownRows.length > limit)
+      ? `<button class="eq-expand-btn" onclick="this.previousElementSibling.querySelectorAll('.eq-row-hidden').forEach(r=>r.classList.remove('eq-row-hidden'));this.remove()">查看全部 ${shownRows.length} 笔 ↓</button>`
       : "";
 
-    const pureLossFooter = pureLossRows.length
+    const pureLossFooter = (flt === "all" && pureLossRows.length)
       ? `<div style="margin-top:12px;padding:10px 14px;background:var(--bg-2);border-radius:8px;border:1px solid var(--line)">
            <div style="font-size:10.5px;color:var(--fg-3);margin-bottom:6px;letter-spacing:0.04em">以下交易持仓期间价格未超过入场成本，无峰值盈利参考，不计入效率统计</div>
            <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -13091,7 +13198,9 @@ function rsAdjustGrade(grade, rsResult) {
          </div>`
       : "";
 
-    return summaryHTML + bucketsHTML + sortBar + `<div class="eq-rows-wrap">${listHTML}</div>` + expandBtn + pureLossFooter;
+    const emptyMsg = (!shownRows.length && !shownPure.length)
+      ? `<div class="eq-empty">没有符合当前筛选的交易 · 再点一次已高亮的项取消筛选</div>` : "";
+    return summaryHTML + bucketsHTML + verdictHTML + sortBar + `<div class="eq-rows-wrap">${listHTML}${pureRowsHTML}${emptyMsg}</div>` + expandBtn + pureLossFooter;
   }
 
   function equityCurveSVG(points, h) {
