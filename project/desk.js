@@ -12890,28 +12890,37 @@ function rsAdjustGrade(grade, rsResult) {
   function eqVerdict(h, records) {
     const ySym = h.kind === "crypto" ? `${h.sym}-USD` : h.sym;
     const prices = histCache[ySym];
-    const exitDate = (h.closedAt || "").slice(0, 10);
-    if (!prices || !exitDate) return null;
-    // 多次减仓时用数量加权的平均出场价——单看某一条腿的价格不能代表这笔交易。
-    const soldQty = records.reduce((s, r) => s + (r.qty || 0), 0);
-    const exitPx = soldQty > 0
-      ? records.reduce((s, r) => s + (r.closePrice || 0) * (r.qty || 0), 0) / soldQty
-      : null;
-    if (!(exitPx > 0)) return null;
-    const after = Object.keys(prices).filter(d => d > exitDate).sort();
-    if (!after.length) return null;   // 刚平仓：一个交易日都还没有
+    if (!prices) return null;
+    // 盘中那根未走完的今天不算一个交易日（与周期回放同一口径，见 isLiveSession）：
+    // 否则第 20 个「交易日」可能是盘中实时价，判定会随盘中价格翻面。
+    const dates = Object.keys(prices).filter(d => !isLiveSession(d)).sort();
+    // 逐笔出场各自对照「自己出场日之后」的价格。多次减仓时不能把所有出场价平均后，
+    // 再去比「最后一次出场」之后的价格——早出的那几笔会少算（或多算）它们自己的后续走势。
+    // 价格取 closePrice，缺失退回 last（与 eqLegsHTML 同一口径）；不能当 0，否则均价被拉低、
+    // 凭空出一个巨大的「错误」。
+    const legs = records.map(r => ({
+      d: (r.closedAt || "").slice(0, 10), px: r.closePrice ?? r.last, q: r.qty || 0,
+    })).filter(l => l.d && l.px > 0 && l.q > 0);
+    if (!legs.length) return null;
+    for (const l of legs) l.after = dates.filter(x => x > l.d);
+    const soldQty = legs.reduce((s, l) => s + l.q, 0);
+    const base = legs.reduce((s, l) => s + l.px * l.q, 0);     // 出场总额
+    const exitPx = base / soldQty;
+    // 第 n 个交易日相对出场价的总变动（美元）；任何一笔还没走到第 n 日就是 null
+    const at = n => legs.every(l => l.after.length >= n)
+      ? legs.reduce((s, l) => s + (prices[l.after[n - 1]] - l.px) * l.q, 0) : null;
     const cells = EQ_AFTER_DAYS.map(n => {
-      const d = after[n - 1];
-      return d != null ? { n, d, px: prices[d], pct: (prices[d] - exitPx) / exitPx * 100 } : { n, pct: null };
+      const a = at(n);
+      return a == null ? { n, pct: null } : { n, pct: a / base * 100 };
     });
-    const elapsed = Math.min(after.length, EQ_VERDICT_DAYS);
-    const lastPx = prices[after[elapsed - 1]];
-    const pct = (lastPx - exitPx) / exitPx * 100;
-    const done = after.length >= EQ_VERDICT_DAYS;
-    const status = !done ? "pending"
+    const minAfter = Math.min(...legs.map(l => l.after.length));
+    const elapsed = Math.min(minAfter, EQ_VERDICT_DAYS);
+    const amt = elapsed > 0 ? at(elapsed) : 0;
+    const pct = amt / base * 100;
+    const status = minAfter < EQ_VERDICT_DAYS ? "pending"
       : pct >= EQ_VERDICT_PCT ? "wrong" : pct <= -EQ_VERDICT_PCT ? "right" : "flat";
     // 金额＝出场之后这些股票的价格变动 × 卖出股数：wrong 是少赚的，right 是躲开的。
-    return { status, cells, exitPx, soldQty, elapsed, pct, px: lastPx, amt: (lastPx - exitPx) * soldQty };
+    return { status, cells, exitPx, soldQty, elapsed, pct, amt };
   }
 
   // 颜色不按涨跌给：出场后上涨在这里是「走早了」的信号，用绿色会读成「好事」。
@@ -12920,7 +12929,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 不拿 5 日、10 日的涨跌去下结论——短期噪声会让同一笔交易几天后翻面。
   function eqAfterExitHTML(h, records) {
     const v = eqVerdict(h, records);
-    if (!v) return "";
+    if (!v || v.elapsed === 0) return "";   // 刚平仓、一个交易日都还没走：整行不显示
     const sg = x => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}%`;
     const num = v.status === "pending" ? `第${v.elapsed}日 ${sg(v.pct)}` : `${EQ_VERDICT_DAYS}日 ${sg(v.pct)}`;
     const tag = { right: ["good", "正确"], wrong: ["miss", "错误"], flat: ["flat", "持平"], pending: ["pend", "待定"] }[v.status];
@@ -13074,8 +13083,9 @@ function rsAdjustGrade(grade, rsResult) {
     const money = { right: 0, wrong: 0 };       // 躲开的回落 / 少赚的涨幅（美元）
     const pctSum = { right: 0, wrong: 0 };
     const grid = { "w-right": 0, "w-wrong": 0, "l-right": 0, "l-wrong": 0 };
+    let noVerdict = 0;   // 出场价无效等判不了的：单列，不让「全部」与四个分项对不上
     for (const t of trades) {
-      if (!t.v) continue;
+      if (!t.v) { noVerdict++; continue; }
       cnt[t.v.status]++;
       if (t.v.status === "wrong") { money.wrong += t.v.amt; pctSum.wrong += t.v.pct; }
       if (t.v.status === "right") { money.right += -t.v.amt; pctSum.right += -t.v.pct; }
@@ -13131,7 +13141,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="eqv-note">${
         cnt.right + cnt.wrong < 20
           ? `已判定 ${decided} 笔（正确+错误 ${cnt.right + cnt.wrong}），样本偏少，比例大多是随机波动，仅供参考。`
-          : `已判定 ${decided} 笔。`}${cnt.pending ? ` 另有 ${cnt.pending} 笔出场不满 ${EQ_VERDICT_DAYS} 个交易日，待定，不计入比例与金额。` : ""} 方格比例＝占该行（盈利/亏损出场）的比例；持平与盈亏为 0 的不在方格内。金额＝出场后价格变动 × 卖出股数。</div>`;
+          : `已判定 ${decided} 笔。`}${cnt.pending ? ` 另有 ${cnt.pending} 笔出场不满 ${EQ_VERDICT_DAYS} 个交易日，待定（含刚平仓、还没有后续交易日的），不计入比例与金额。` : ""}${noVerdict ? ` ${noVerdict} 笔出场价无效，判不了。` : ""} 方格比例＝占该行（盈利/亏损出场）的比例；持平与盈亏为 0 的不在方格内。金额＝出场后价格变动 × 卖出股数。</div>`;
 
     const lossArrow = sortField === "loss" ? (sortDir === "asc" ? "↑" : "↓") : "↑";
     const dateArrow = sortField === "date" ? (sortDir === "asc" ? "↑" : "↓") : "↑";
