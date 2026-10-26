@@ -7128,13 +7128,21 @@ function rsAdjustGrade(grade, rsResult) {
     if (needed.length) {
       histLoading = true;
       if (currentPage === "analytics") renderAnalytics();
-      try {
-        const r = await fetch(`/api/history?symbols=${needed.join(",")}&from=${fromDate}`);
-        if (r.ok) {
-          const { results } = await r.json();
-          if (results) Object.assign(histCache, results);
-        }
-      } catch (_) {}
+      // 分批：服务端对单次请求 .slice(0, 50) 截断，已平仓的代码一多（>50 个不同标的），
+      // 排在后面的就被静默截掉——出场质量/盈亏日历拿不到它们的日线，整笔交易被算漏。
+      // 某一批失败只影响那一批，其余照常（失败的下次进页面再补）。
+      const HCHUNK = 25;
+      const batches = [];
+      for (let i = 0; i < needed.length; i += HCHUNK) batches.push(needed.slice(i, i + HCHUNK));
+      await Promise.all(batches.map(async batch => {
+        try {
+          const r = await fetch(`/api/history?symbols=${batch.join(",")}&from=${fromDate}`);
+          if (r.ok) {
+            const { results } = await r.json();
+            if (results) Object.assign(histCache, results);
+          }
+        } catch (_) {}
+      }));
       histLoading = false;
     } else {
       histLoading = false;
@@ -12947,25 +12955,26 @@ function rsAdjustGrade(grade, rsResult) {
     const rows = [];
     const pureLossRows = []; // trades where price never exceeded entry cost
     const trades = [];       // 汇总口径：所有有出场后数据的交易，不管峰值有没有超过成本
+    const noPeakRows = [];   // 当日进出（日线里没有「入场之后、出场当天」的任何一根）：算不出峰值，但出场对错照常判
+    const missing = [];      // 拿不到历史价格 / 记录不完整，整笔没法分析：如实列在卡片上，不静默漏掉
     for (const [, records] of tradeMap) {
       const h0 = records[0];
       const ySym   = h0.kind === "crypto" ? `${h0.sym}-USD` : h0.sym;
       const prices = histCache[ySym];
-      if (!prices) continue;
-
       const entryDate = h0.entry?.slice(0, 10);
       const lastClose = records.reduce((mx, r) => (r.closedAt || "") > mx ? (r.closedAt || "") : mx, "");
       const closeDate = lastClose.slice(0, 10);
-      if (!entryDate || !closeDate || !h0.cost) continue;
+      if (!prices || !Object.keys(prices).length) { missing.push({ sym: h0.sym, why: "无历史价格" }); continue; }
+      if (!entryDate || !closeDate || !h0.cost) { missing.push({ sym: h0.sym, why: "记录缺入场/平仓日期或成本" }); continue; }
 
       const datesInRange = Object.keys(prices).filter(d => d > entryDate && d <= closeDate);
-      if (!datesInRange.length) continue;
 
       const hv = { ...h0, closedAt: closeDate };
       const tradePnl = records.reduce((s, r) => s + (r.pnlFinal ?? 0), 0);
       const verdict = eqVerdict(hv, records);
       const trade = { h: hv, records, actualPnl: tradePnl, v: verdict, pnlSide: tradePnl > 0 ? "w" : tradePnl < 0 ? "l" : "z" };
       trades.push(trade);
+      if (!datesInRange.length) { noPeakRows.push({ h: hv, actualPnl: tradePnl, records, trade }); continue; }
 
       const peakPrice = Math.max(...datesInRange.map(d => prices[d]));
       if (peakPrice <= h0.cost) {
@@ -12987,12 +12996,12 @@ function rsAdjustGrade(grade, rsResult) {
     }
 
     const _loading = isSimMode ? simHistLoading : histLoading;
-    if (!rows.length && !pureLossRows.length) {
+    if (!rows.length && !pureLossRows.length && !noPeakRows.length) {
       return _loading
         ? `<div class="eq-empty">加载历史价格中…</div>`
         : `<div class="eq-empty">暂无数据 · 需要已平仓记录和历史价格</div>`;
     }
-    if (!rows.length && pureLossRows.length) {
+    if (!rows.length && pureLossRows.length && !noPeakRows.length) {
       return _loading
         ? `<div class="eq-empty">加载历史价格中…</div>`
         : `<div class="eq-empty" style="text-align:left;padding:12px 0">
@@ -13139,13 +13148,13 @@ function rsAdjustGrade(grade, rsResult) {
       return t.v.status === flt;
     };
     const shownRows = rows.filter(r => fmatch(r.trade));
-    const shownPure = flt === "all" ? [] : pureLossRows.filter(r => fmatch(r.trade));
-    const pureRowsHTML = shownPure.map(({ h, actualPnl, records }) => {
+    const shownPure = flt === "all" ? [] : [...pureLossRows.map(r => ({ ...r, tag: "未曾浮盈" })), ...noPeakRows.map(r => ({ ...r, tag: "当日进出" }))].filter(r => fmatch(r.trade));
+    const pureRowsHTML = shownPure.map(({ h, actualPnl, records, tag }) => {
       const totalQty = records.reduce((s, r) => s + (r.qty ?? 0), 0);
       return `<div class="eq-row">
         <div class="eq-row-header">
           <div><span class="eq-sym">${h.sym}</span><span class="eq-dates">${h.entry?.slice(0,10)} → ${h.closedAt?.slice(0,10)}</span></div>
-          <span class="eq-eff-chip low">${fmt.signed(Math.round(actualPnl))} · 未曾浮盈</span>
+          <span class="eq-eff-chip low">${fmt.signed(Math.round(actualPnl))} · ${tag}</span>
         </div>
         ${eqLegsHTML(h, records, totalQty)}
         ${eqAfterExitHTML(h, records)}
@@ -13198,9 +13207,17 @@ function rsAdjustGrade(grade, rsResult) {
          </div>`
       : "";
 
+    // 没进上面效率统计的交易，如实交代去向：当日进出算不出峰值（但对错照判，筛选时可见）；
+    // 拿不到价格/记录不全的整笔分析不了——不能让「167 笔有效记录」读成「全部交易」。
+    const noPeakNote = (flt === "all" && noPeakRows.length)
+      ? `<div class="eqv-note">另有 ${noPeakRows.length} 笔当日进出（日线里没有入场之后的峰值可算），不计入效率统计，出场对错照常判定：${
+          noPeakRows.map(r => `${r.h.sym} ${fmt.signed(Math.round(r.actualPnl))}`).join("、")}</div>` : "";
+    const missingNote = (flt === "all" && missing.length)
+      ? `<div class="eqv-note" style="color:var(--warn)">有 ${missing.length} 笔没法分析、未计入任何一项：${
+          missing.map(m => `${m.sym}（${m.why}）`).join("、")}${_loading ? "" : "。历史价格可能还在加载或拉取失败，刷新后重试。"}</div>` : "";
     const emptyMsg = (!shownRows.length && !shownPure.length)
       ? `<div class="eq-empty">没有符合当前筛选的交易 · 再点一次已高亮的项取消筛选</div>` : "";
-    return summaryHTML + bucketsHTML + verdictHTML + sortBar + `<div class="eq-rows-wrap">${listHTML}${pureRowsHTML}${emptyMsg}</div>` + expandBtn + pureLossFooter;
+    return summaryHTML + bucketsHTML + verdictHTML + sortBar + `<div class="eq-rows-wrap">${listHTML}${pureRowsHTML}${emptyMsg}</div>` + expandBtn + pureLossFooter + noPeakNote + missingNote;
   }
 
   function equityCurveSVG(points, h) {
