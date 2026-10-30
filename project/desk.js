@@ -17579,8 +17579,8 @@ function rsAdjustGrade(grade, rsResult) {
   const CYCLE_BASELINE = {
     date: "2026-10-30",
     items: {
-      capex_guide:   { state: "watch", note: "出现了<b>第一笔字面意义上的下调</b>：MSFT 10/28 把 FY2027 capex 指引从约 1,750 亿下调到约 1,700 亿，Q1 实际 452 亿低于预期的 507 亿。但给出的原因是第三方算力交付推迟到下半年（供给端排期），不是需求收缩；同期 Azure +48% 超预期。其余三家：Alphabet 维持 2026 年 195–205B 并明说「2027 年 capex 会显著增加」，Amazon 维持 220B（低于市场预期的约 245B），Meta 把区间下沿从 130B 上调到 135–145B。规则是「增速放缓不算，要实际 guide-down」——MSFT 字面上满足，但一家因交付排期下修 3%、另外三家维持或上调，不是这一条要测的「需求见顶」。<b>点亮它会直接判第 6 阶段</b>，不该由一笔供给侧的排期调整来触发，故记观察中；下一季若 MSFT 再下调、或有第二家下调且理由是需求，就该点亮。" },
-      depreciation:  { state: "watch", note: "本季未见新的折旧年限调整。存量仍是 2020–24 一路拉长到 5.5–6 年（各增净利 4–5%），2025 年 Amazon 把一部分设备 6→5 年主动缩短——最新的边际动作仍是方向相反的那一笔，所以维持观察中，不升不降。" },
+      capex_guide:   { state: "watch", note: "出现了<b>第一笔字面意义上的下调</b>：MSFT 10/28 把 FY2027 capex 指引从约 1,750 亿下调到约 1,700 亿，Q1 实际约 452 亿、Q2 预计超过 500 亿。给出的原因是第三方算力交付推迟（供给端排期）与零部件涨价，不是需求收缩；同期 Azure +48% 超预期，并称 FY27 自由现金流仍为正。注意那 1,750 亿本身已经是 7 月<b>改了折旧口径</b>之后的数（见折旧年限一条），两次「下调」不是一回事。其余三家：Alphabet 维持 2026 年 195–205B、说 2027 年会「显著增加」但没有给出上调的数，Amazon 维持 220B（低于市场预期约 245B），Meta 把区间下沿从 130B 上调到 135–145B——市场读作「Google 和 MSFT 推迟上调」。规则是「增速放缓不算，要实际 guide-down」：MSFT 字面上满足，但一家因交付排期下修约 3%、另外三家维持或上调，不是这一条要测的需求见顶。<b>点亮它会直接判第 6 阶段</b>，不该由一笔供给侧排期调整触发，故记观察中；下一季若 MSFT 再下调、或有第二家以需求为由下调，就该点亮。" },
+      depreciation:  { state: "lit",   note: "<b>本轮由观察中升为已触发</b>：MSFT 在 7/29 的财报会上宣布自 FY2027 起把<b>数据中心与办公楼的折旧年限从 15 年拉长到 25 年</b>。直接后果有两层：年折旧变少、利润表好看；更多数据中心租约随之被归为经营租赁、不计入它口径里的 capex——日历 2026 年 capex 预估因此从约 1,900 亿「降」到约 1,750 亿，CFO 自己说除去这一项、支出预期不变。延长的是建筑而不是服务器，但判据问的正是「有没有哪家又把年限往后拉了」：这是 2025 年 Amazon 主动缩短之后，头部厂商第一次重新往后拉，而且同时改变了 capex 这个数本身的口径。存量上 2020–24 服务器年限一路拉到 5.5–6 年的护垫仍在。" },
       semi_orders:   { state: "clear", note: "仍是强烈反向：TSMC Q3 营收 467 亿美元、毛利率 66.4%，把 2026 年美元营收增速指引上调到约 44%，Q4 指引 523–543 亿，管理层原话「把电力和存储瓶颈都算上，需求仍大于供给」；ASML 表示 2027–28 年的需求可能满足不了、计划扩产 30% 以上，新订单多已排到 2028 年交付；Broadcom 披露 AI 订单 backlog 730 亿、2027 年 AI 芯片收入能见度超 1,000 亿。无取消、无交期缩短。（有一篇二手报道称 Broadcom 定制芯片需求不及预期、费半单日跌约 10%，未能用一手材料核实，未计入。）" },
       credit_spread: { state: "lit",   note: "较上季<b>继续恶化</b>：Oracle 5 年 CDS 10/15 创 288bp 纪录（上次基线 218bp）；CoreWeave CDS 约 1,000–1,200bp、2031 年到期债收益率约 16%，2028 年底前约 150 亿债务到期；SoftBank 424bp；AMZN/GOOGL/META/NVDA 的 CDS 也在纪录宽位（绝对水平仍窄得多）；10 年美债收益率 19 年新高。2026 年超大厂发债约 1,820 亿。" },
       debt_ratio:    { state: "num",   value: 33, note: "各家口径仍落在四分之一到三分之一：高盛约 33%（债务占超大厂 capex），FactSet 统计截至 2026 年 6 月的 LTM 新增债务占 capex 32%，渣打估 2026 年约 25%、<b>2027 年升到约 40%</b>。沿用 33%，仍在 25–40% 的观察区间；方向向上，若 2027 年真到 40% 就会越过已触发线。摩根士丹利估截至 9 月 AI 相关债务累计发行（含私募）约 4,660 亿。" },
@@ -17609,6 +17609,7 @@ function rsAdjustGrade(grade, rsResult) {
       // 每条下方的 `.cyc-base` 里，两者是两回事，不要混。
       rec.at = cycToday();
       rec.seeded = false;
+      rec.base = B.date;
     });
     saveToStorage();
     renderCycleCard();
@@ -17634,6 +17635,22 @@ function rsAdjustGrade(grade, rsResult) {
 
   function cycleSeed() {
     let changed = false;
+    // 基线换了一轮（CYCLE_BASELINE.date 变了）→ 已存过数据的设备也自动吃到新读数，
+    // 不必等用户点「载入基线」。标记打在每条判据自己身上（rec.base），因为 items 是
+    // 按判据合并同步的、整块的附加字段会在云同步里丢；每条每轮只套用一次，之后用户
+    // 手动改的状态不会被再次覆盖。状态变化照常写进变更记录。
+    const B = CYCLE_BASELINE;
+    for (const it of CYCLE_ITEMS) {
+      const rec = CYCLE_CHECK.items[it.id], b = B.items[it.id];
+      if (it.auto || !rec || !b || rec.base === B.date) continue;
+      const st = b.state === "num" ? cycNumState(b.value, it) : b.state;
+      if ((rec.state || "unset") !== st) cycLog(it.id, rec.state || "unset", st);
+      rec.state = st;
+      if (b.value != null) rec.value = b.value;
+      if (!rec.at || rec.at < B.date) rec.at = B.date;
+      rec.base = B.date;
+      changed = true;
+    }
     for (const it of CYCLE_ITEMS) {
       if (it.auto || CYCLE_CHECK.items[it.id]) continue;
       const b = CYCLE_BASELINE.items[it.id];
@@ -17643,6 +17660,7 @@ function rsAdjustGrade(grade, rsResult) {
         ...(b && b.value != null ? { value: b.value } : {}),
         at: st === "unset" ? null : CYCLE_BASELINE.date,
         seeded: true,
+        base: CYCLE_BASELINE.date,
       };
       changed = true;
     }
