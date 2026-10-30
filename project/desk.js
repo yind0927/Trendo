@@ -17561,10 +17561,11 @@ function rsAdjustGrade(grade, rsResult) {
       how: "填当前目标区间的<b>上限</b>（如 3.75–4.00% 就填 4.00），阈值由系统判色",
       warn: "<3% 未出现 · 3–4.5% 观察中 · >4.5% 已触发（3% 附近是 FOMC 点阵图的长期中性估计）。方向和水平一样重要：同样是 4%，处在加息通道里比处在降息通道里对 capex 的压制更强——方向写进下方备注，评分只看水平。参照：2023–24 峰值 5.25–5.50%" },
 
-    { id: "ipo_window", tier: 3, days: 0, zh: "IPO 窗口状态", short: "IPO 窗口",
+    { id: "ipo_window", tier: 3, days: 90, zh: "IPO 窗口状态", short: "IPO 窗口",
       what: "测的是市场能不能消化叙事顶点的最大供给量。",
-      where: "近期大型科技 IPO 的定价与首月表现",
-      how: "有没有大型 IPO 破发、或发行人主动推迟？" },
+      where: "最近一季大型科技 IPO 的定价、首月表现与发行节奏",
+      how: "最近一季：有没有大型 IPO 破发、或发行人主动推迟？反过来，巨型发行按计划定价且首月守住发行价，就是窗口还开着。",
+      warn: "看最近一季，不是看历史上发生过什么——几个月前的破发不该一直挂着" },
 
     { id: "capex_breadth", tier: 2, days: 90, zh: "AI 资本开支参与广度", short: "参与广度",
       what: "整轮周期能不能撑住，最终取决于愿意掏钱的人够不够多——如果只剩头部四五家自筹资金硬扛，边际买家已经先退场了。这条问的是「钱从哪来」里被其余判据忽略的一侧：`circular`/`debt_ratio` 测的是头部自己的融资结构，这条测的是头部之外还有没有新玩家愿意加码。",
@@ -17578,6 +17579,8 @@ function rsAdjustGrade(grade, rsResult) {
   // 所以另配一个「载入核实基线」按钮，把整轮结果一次写进去并逐条留痕。
   const CYCLE_BASELINE = {
     date: "2026-10-30",
+    // 同一天内订正基线时递增：rec.base 比的是「日期#rev」，不递增的话已套用过的设备吃不到订正。
+    rev: 2,
     items: {
       capex_guide:   { state: "watch", note: "出现了<b>第一笔字面意义上的下调</b>：MSFT 10/28 把 FY2027 capex 指引从约 1,750 亿下调到约 1,700 亿，Q1 实际约 452 亿、Q2 预计超过 500 亿。给出的原因是第三方算力交付推迟（供给端排期）与零部件涨价，不是需求收缩；同期 Azure +48% 超预期，并称 FY27 自由现金流仍为正。注意那 1,750 亿本身已经是 7 月<b>改了折旧口径</b>之后的数（见折旧年限一条），两次「下调」不是一回事。其余三家：Alphabet 维持 2026 年 195–205B、说 2027 年会「显著增加」但没有给出上调的数，Amazon 维持 220B（低于市场预期约 245B），Meta 把区间下沿从 130B 上调到 135–145B——市场读作「Google 和 MSFT 推迟上调」。规则是「增速放缓不算，要实际 guide-down」：MSFT 字面上满足，但一家因交付排期下修约 3%、另外三家维持或上调，不是这一条要测的需求见顶。<b>点亮它会直接判第 6 阶段</b>，不该由一笔供给侧排期调整触发，故记观察中；下一季若 MSFT 再下调、或有第二家以需求为由下调，就该点亮。" },
       depreciation:  { state: "lit",   note: "<b>本轮由观察中升为已触发</b>：MSFT 在 7/29 的财报会上宣布自 FY2027 起把<b>数据中心与办公楼的折旧年限从 15 年拉长到 25 年</b>。直接后果有两层：年折旧变少、利润表好看；更多数据中心租约随之被归为经营租赁、不计入它口径里的 capex——日历 2026 年 capex 预估因此从约 1,900 亿「降」到约 1,750 亿，CFO 自己说除去这一项、支出预期不变。延长的是建筑而不是服务器，但判据问的正是「有没有哪家又把年限往后拉了」：这是 2025 年 Amazon 主动缩短之后，头部厂商第一次重新往后拉，而且同时改变了 capex 这个数本身的口径。存量上 2020–24 服务器年限一路拉到 5.5–6 年的护垫仍在。" },
@@ -17588,7 +17591,7 @@ function rsAdjustGrade(grade, rsResult) {
       good_news_fail:{ state: "watch", note: "本季更接近触发但仍不干净：Amazon AWS 加速到 +39% 并超预期，盘后仍跌约 7%；Alphabet 云收入 +103%，盘后跌约 10%；Meta 财报后反而上涨。但 Amazon 营收与 EPS 双双小幅不及、Alphabet 的 EPS 不及主要来自 SpaceX 持股的账面损失——都不是纯粹的「全面 beat 却大跌」。市场惩罚的更像是「capex 继续加码 + 自由现金流转负」，而不是拒绝好消息本身。维持观察中；判据仍是四家都干净 beat 且一起跌。" },
       ai_roi:        { state: "clear", note: "<b>本轮改为未出现</b>：产出侧连续两个季度在加速，而不是变薄——Google Cloud 增速 63%→82%→<b>103%</b>（单季约 307 亿，经营利润约 111 亿），AWS 37%→<b>39%</b>（单季约 460 亿、经营利润约 178 亿），Azure +48% 超预期。云收入增速已经追上甚至超过 capex 增速。判据要求「连续两季转弱」，现实是连续两季转强。<b>代价仍在</b>：Alphabet 与 Amazon 本季自由现金流为负——但那是融资问题，已由债务融资占比与信用利差两条承担，不在这里重复计分。" },
       fed_rate:      { state: "num", value: 4.00, note: "10/28 FOMC 维持 3.75–4.00%，填上限 4.00 → 仍在 3–4.5% 的观察区间。<b>方向偏鹰</b>：投票 10–2，两位异议者（Hammack、Cook）主张<b>再加息 25bp</b>，市场对 12 月加息的定价约八成；9 月点阵图的年底中位在 4.1–4.4%。若 12 月真的加息，上限到 4.25，仍在观察区间，但离 4.5% 的已触发线只差一步。与信用利差那条不重叠——那条测的是借给 AI 行业的额外溢价，这条测的是基准资金本身的价格。" },
-      ipo_window:    { state: "lit",   note: "未修复：SpaceX 上市后最高约 $225，近期在 $110 附近、<b>低于发行价</b>，以致 Alphabet 本季为持股记了一笔约 80 多亿的账面损失；OpenAI 已秘密递交材料但倾向推迟到 2027 年，据报 CEO 不接受低于 1 万亿美元的估值。市场仍消化不了叙事顶点的最大供给。" },
+      ipo_window:    { state: "watch", note: "<b>本轮由已触发降为观察中</b>，两个方向的证据同时出现：①<b>Anthropic 10/26 递交 S-1</b>，拟以 ANT 在纳斯达克上市、最早 11 月中旬，媒体估算估值 1.5–2 万亿美元（S-1 未给价格区间与发行规模；5 月私募轮投后约 9,650 亿）——发行人不是在推迟，而是在叙事顶点附近推出有史以来最大的一笔供给；②但近几个月上市的大型科技股首月之后普遍走弱：SpaceX 从上市初期约 $225 的高点跌到 7 月约 $111，10/28 回到约 $145、在发行价附近徘徊，Cerebras 10 月初回落到发行价，Figma 跌破发行价；OpenAI 仍倾向推迟到 2027 年；2026 年美股 IPO 数量同比约少 12%。判据问的是「市场能不能消化」，而最关键的那笔还没定价，此前按 7 月 SpaceX 的回撤记为已触发、之后再没复核过——这条以前设成了永不过期，等于一个几个月前的事件一直挂着。<b>Anthropic 的定价与首月表现就是这一条的答案</b>：破发或推迟 → 已触发；按区间定价且首月守住发行价 → 未出现。" },
       capex_breadth: { state: "lit",   note: "<b>本轮由观察中升为已触发</b>：头部之外的买家在退场而不是进场。CoreWeave 10 月跌约 35%、Nebius 跌约 31%，Musk 10/26 公开说 200 多家 neocloud 会大批倒下；没有非 AI 收入的公司已基本发不出债，「拿 GPU 当抵押」不再够用（CoreWeave CDS 千点以上、债券收益率约 16%）；Nebius 约 156 亿融资多为可转债。MSFT 下调指引的盘后 neocloud 集体下挫——二线厂商的生意本身就依赖头部的外包订单。与此同时头部四家 2027 年合计 capex 预计超过 1 万亿：投入<b>重新集中回头部</b>，正是这一条要测的「广度收缩」。主权基金配置上升仍在，但抵不过二线厂商融资渠道的收窄。" },
     },
   };
@@ -17609,7 +17612,7 @@ function rsAdjustGrade(grade, rsResult) {
       // 每条下方的 `.cyc-base` 里，两者是两回事，不要混。
       rec.at = cycToday();
       rec.seeded = false;
-      rec.base = B.date;
+      rec.base = cycBaseTag();
     });
     saveToStorage();
     renderCycleCard();
@@ -17633,6 +17636,8 @@ function rsAdjustGrade(grade, rsResult) {
     return { total: ids.length, same, diff: ids.length - same, loaded: same === ids.length, at };
   }
 
+  function cycBaseTag() { return CYCLE_BASELINE.date + "#" + (CYCLE_BASELINE.rev || 1); }
+
   function cycleSeed() {
     let changed = false;
     // 基线换了一轮（CYCLE_BASELINE.date 变了）→ 已存过数据的设备也自动吃到新读数，
@@ -17642,13 +17647,13 @@ function rsAdjustGrade(grade, rsResult) {
     const B = CYCLE_BASELINE;
     for (const it of CYCLE_ITEMS) {
       const rec = CYCLE_CHECK.items[it.id], b = B.items[it.id];
-      if (it.auto || !rec || !b || rec.base === B.date) continue;
+      if (it.auto || !rec || !b || rec.base === cycBaseTag()) continue;
       const st = b.state === "num" ? cycNumState(b.value, it) : b.state;
       if ((rec.state || "unset") !== st) cycLog(it.id, rec.state || "unset", st);
       rec.state = st;
       if (b.value != null) rec.value = b.value;
       if (!rec.at || rec.at < B.date) rec.at = B.date;
-      rec.base = B.date;
+      rec.base = cycBaseTag();
       changed = true;
     }
     for (const it of CYCLE_ITEMS) {
@@ -17660,7 +17665,7 @@ function rsAdjustGrade(grade, rsResult) {
         ...(b && b.value != null ? { value: b.value } : {}),
         at: st === "unset" ? null : CYCLE_BASELINE.date,
         seeded: true,
-        base: CYCLE_BASELINE.date,
+        base: cycBaseTag(),
       };
       changed = true;
     }
