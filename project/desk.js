@@ -16988,8 +16988,14 @@ function rsAdjustGrade(grade, rsResult) {
     for (const [id, r] of jointBy) if (r.p > bestOf(id)) out.push(r);
 
     // 概率降序（没算出概率的沉到最后，组内退回 σ 距离升序）
-    out.sort((a, b) => (b.p ?? -1) - (a.p ?? -1)
+    // 先按**屏幕上显示的那一档**排，同档内按 σ 距离（越近越前），最后才看精确概率。
+    // 此前直接按精确概率排：卡上只显示三档（精度撑不起两位数），同一档里「28%」排在
+    // 「26%」前面读者根本看不出为什么，而 3 点之外的布局会因此被 12 点之外的正常配置压在下面——
+    // 看起来就是「明明更接近布局，却写成正常」。同档内的概率差在 ±14pp 误差里本来就是噪声。
+    const bandRank = p => p == null ? -1 : p >= 0.40 ? 2 : p >= 0.10 ? 1 : 0;
+    out.sort((a, b) => bandRank(b.p) - bandRank(a.p)
       || (a.z ?? Infinity) - (b.z ?? Infinity)
+      || (b.p ?? -1) - (a.p ?? -1)
       || Math.abs(a.parts[0].gap) - Math.abs(b.parts[0].gap));
     return { now, list: out, horizon: NEXT_HORIZON };
   }
