@@ -18461,10 +18461,19 @@ function rsAdjustGrade(grade, rsResult) {
       if (histRes.status === "fulfilled" && histRes.value?.results?.["VOO"]) {
         const raw = histRes.value.results["VOO"];
         const closes = Object.keys(raw).sort().map(k => raw[k]);
-        const r = calcRSI(closes);
+        // RSI 与顶部 VOO 现价同口径：/api/history 服务端缓存 30 分钟，盘中那根要么是半小时前的价、
+        // 要么还没生成，券商/TradingView 的 RSI 用的是实时价。开盘中用实时价替换（或追加）今天这一根；
+        // 昨日 RSI 只用已收盘的 bar（丢掉今天那根），休市时两者都退回历史最后一根，与原行为一致。
+        const rsiDates = Object.keys(raw).sort();
+        const todayBar = rsiDates.length && isLiveSession(rsiDates[rsiDates.length - 1]);
+        const settledCl = todayBar ? closes.slice(0, -1) : closes;
+        let liveCl = closes;
+        if (vooLive != null && isUSMarketOpen()) liveCl = [...settledCl, vooLive];
+        const r = calcRSI(liveCl);
         if (r != null) rsi = r;
-        if (closes.length > 1) {
-          const rp = calcRSI(closes.slice(0, -1));
+        const prevSrc = (vooLive != null && isUSMarketOpen()) || todayBar ? settledCl : closes.slice(0, -1);
+        if (prevSrc.length > 1) {
+          const rp = calcRSI(prevSrc);
           if (rp != null) rsiPrev = rp;
         }
         benchSettled = closes.length ? +closes[closes.length - 1].toFixed(2) : null;
