@@ -17751,6 +17751,18 @@ function rsAdjustGrade(grade, rsResult) {
   const CYCLE_RATIO_CUT = [[0.60, 5, "派发", "down"], [0.35, 4, "金融化", "warn"],
                            [0.15, 3, "机构化", "flat"]];
   const sc10 = r => Math.floor(r * 100) / 10;   // 向下取整到 0.1，显示值永不高于实际
+  // 小数阶段：在相邻两条分档线之间线性插值（<1.5 分 = 2.0–3.0，1.5–3.5 = 3.0–4.0，
+  // 3.5–6.0 = 4.0–5.0，≥6.0 = 5.0–6.0），读数 4.8 比整数「第 4 阶段」更能看出离第 5 阶段多近。
+  // 只用于显示；判定、门控、分档线仍全部按整数阶段。非终点读数封顶 5.9——6.0 只由硬规则触达。
+  const CYCLE_POS_KNOTS = [[0, 2], [0.15, 3], [0.35, 4], [0.60, 5], [1, 6]];
+  function cycPos(ratio) {
+    const r = Math.max(0, Math.min(1, ratio));
+    for (let i = 1; i < CYCLE_POS_KNOTS.length; i++) {
+      const [c1, n1] = CYCLE_POS_KNOTS[i], [c0, n0] = CYCLE_POS_KNOTS[i - 1];
+      if (r <= c1) return Math.min(5.9, Math.floor((n0 + (r - c0) / (c1 - c0) * (n1 - n0)) * 10 + 1e-9) / 10);
+    }
+    return 5.9;
+  }
 
   // 证据完整度三档门控。核心：阶段是**有状态**的——低可信时不重新判定，
   // 保留上一次在高可信下确认的阶段，避免「填了一条就跳一档」。
@@ -17835,7 +17847,9 @@ function rsAdjustGrade(grade, rsResult) {
       .map(([cut, n, zh]) => ({ cut, n, zh, d: ratio - cut }))
       .filter(e => Math.abs(e.d) <= 0.02)
       .sort((a, b) => Math.abs(a.d) - Math.abs(b.d))[0] || null;
-    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, tiers, terminal, prev, edge, staleN, wAll };
+    const rawPos = lead ? Math.max(cycPos(ratio), 5.0) : cycPos(ratio);
+    const shownPos = terminal ? 6.0 : held ? null : rawPos;   // 保留上次确认值时无小数位置
+    return { shown, raw, held, band, conf, ratio, score, maxV, cnt, tiers, terminal, prev, edge, staleN, wAll, rawPos, shownPos };
   }
 
   // 高可信（或直接观测到终点信号）时才把阶段"确认"下来并落盘——这是
@@ -17959,12 +17973,12 @@ function rsAdjustGrade(grade, rsResult) {
 
     // 阶段标题。三种情形：正常显示 / 保留上次确认值（带待确认标记）/ 从未确认过。
     const headCls = p.shown ? p.shown.cls : "flat";
-    const headTxt = p.shown ? `第 ${p.shown.n} 阶段 · ${p.shown.zh}` : "暂不判定";
+    const headTxt = p.shown ? `第 ${p.shownPos != null ? p.shownPos.toFixed(1) : p.shown.n} 阶段 · ${p.shown.zh}` : "暂不判定";
     const heldTag = p.held
       ? `<span class="cyc-held ${p.band.k}">${p.shown ? "证据不足，待确认" : "证据不足"}</span>` : "";
     // 被门控压住时，把「本次读数」单独摆出来——不采信它，但不隐瞒它。
     const rawLine = p.held
-      ? `<div class="cyc-raw">本次读数 <b>第 ${p.raw.n} 阶段 · ${p.raw.zh}</b>（得分 ${sc10(p.ratio).toFixed(1)}/10）` +
+      ? `<div class="cyc-raw">本次读数 <b>第 ${p.rawPos.toFixed(1)} 阶段 · ${p.raw.zh}</b>（得分 ${sc10(p.ratio).toFixed(1)}/10）` +
         (p.prev ? ` · 当前显示的是 ${CYCLE_CHECK.confirmedAt || ""} 在高可信下确认的阶段，未随本次读数切换`
                 : ` · 尚无高可信下确认过的阶段，故不下判定`) + `</div>`
       : "";
