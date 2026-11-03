@@ -8441,6 +8441,7 @@ function rsAdjustGrade(grade, rsResult) {
     for (const pos of REAL_OPTIONS) {
       if (pos.status !== "open") continue;
       if (pos.expiry >= today) continue;
+      if (pos.noAutoSettle) continue;   // 用户撤回过：已过期的合约不再自动按今天的价结算
       const spot = optSpot(pos.sym);
       if (!spot) continue;
       const intrinsic = _optIntrinsic(pos, spot);
@@ -8681,6 +8682,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="opts-card-hd-r">
           <button class="opts-mini-btn" data-opt-roll="${pos.id}">滚仓</button>
           <button class="opts-mini-btn" data-opt-close="${pos.id}">平仓</button>
+          <button class="opts-mini-btn" data-opt-early="${pos.id}" title="对手方在到期前就行权了（美式期权）">提前行权</button>
           <button class="opts-mini-btn opts-del" data-opt-del="${pos.id}">✕</button>
         </div>
       </div>
@@ -8809,7 +8811,7 @@ function rsAdjustGrade(grade, rsResult) {
     const isCSP = pos.strat === "csp";
     const stMap = { expired: ["到期OTM", "var(--up)"], assigned: ["被指派", "var(--warn)"], closed: ["已平仓", "var(--fg-3)"] };
     const [stTxt, stColor] = stMap[pos.status] || ["—", "var(--fg-3)"];
-    const delBtn = `<button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button>`;
+    const delBtn = `<button class="opts-mini-btn" data-opt-reopen="${pos.id}" title="撤回到持仓中（清除结算结果）">撤回</button><button class="opts-mini-btn opts-del" data-opt-del="${pos.id}" title="删除">✕</button>`;
     // Settled records feed every aggregate on the page, and until now a mistyped buy-back
     // price could only be fixed by deleting and re-recording — which throws away the entry
     // snapshot (entryDelta / entryDTE / underlyingAtEntry / linkedCspId), none of which can
@@ -9797,6 +9799,46 @@ function rsAdjustGrade(grade, rsResult) {
       const qty = parseInt(btn.dataset.ccQty) || 1;
       const linkedCspId = btn.dataset.optSellCc; // pos.id of the parent CSP
       openOptionsSellModal({ sym, strat: "cc", qty, linkedCspId });
+    }));
+    $$("[data-opt-early]", root).forEach(btn => btn.addEventListener("click", () => {
+      const pos = arr.find(p => p.id === btn.dataset.optEarly);
+      if (!pos || pos.status !== "open") return;
+      const today = new Date().toISOString().slice(0, 10);
+      const d = prompt(`${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"} 提前行权（被指派）\n权利金全额保留；${pos.strat === "csp" ? "将持有正股，之后可记录出仓" : "正股按行权价被卖出"}。\n请输入行权日期 (YYYY-MM-DD)：`, today);
+      if (d == null) return;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d > today || d < (pos.entryDate || "0000")) { toast("日期无效：需在开仓日与今天之间", "error"); return; }
+      pos.status = "assigned";
+      pos.earlyAssigned = true;
+      pos.closedAt = d;
+      pos.realized = pos.premium * 100 * pos.qty;
+      if (pos.strat === "csp") {
+        pos.assignedStockSold = false; pos.assignedExitPrice = null; pos.assignedExitDate = null;
+      } else if (pos.linkedCspId) {
+        const parent = arr.find(p => p.id === pos.linkedCspId);
+        if (parent && parent.status === "assigned" && !parent.assignedStockSold) {
+          parent.assignedStockSold = true; parent.assignedExitPrice = pos.strike; parent.assignedExitDate = d;
+        }
+      }
+      saveToStorage(); renderOptions();
+    }));
+    $$("[data-opt-reopen]", root).forEach(btn => btn.addEventListener("click", () => {
+      const pos = arr.find(p => p.id === btn.dataset.optReopen);
+      if (!pos || pos.status === "open" || pos.status === "pending") return;
+      const kids = pos.strat === "csp" ? arr.filter(p => p.linkedCspId === pos.id) : [];
+      if (!confirm(`撤回 ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"} 到持仓中？\n将清除结算结果（平仓价、指派、出仓记录）。${kids.length ? `\n注意：有 ${kids.length} 笔关联 CC，不会被改动。` : ""}`)) return;
+      if (pos.status === "assigned" && pos.strat === "cc" && pos.linkedCspId) {
+        const parent = arr.find(p => p.id === pos.linkedCspId);
+        if (parent && parent.assignedStockSold && parent.assignedExitPrice === pos.strike && parent.assignedExitDate === pos.closedAt) {
+          parent.assignedStockSold = false; parent.assignedExitPrice = null; parent.assignedExitDate = null;
+        }
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      pos.status = "open";
+      pos.closedAt = null; pos.closePremium = null; pos.realized = null; pos.settleSpot = null;
+      pos.assignedStockSold = null; pos.assignedExitPrice = null; pos.assignedExitDate = null;
+      pos.earlyAssigned = null; pos.editedAt = null;
+      if (pos.expiry < today) pos.noAutoSettle = true;
+      saveToStorage(); renderOptions();
     }));
     $$("[data-opt-del]", root).forEach(btn => btn.addEventListener("click", () => {
       const idx = arr.findIndex(p => p.id === btn.dataset.optDel);
