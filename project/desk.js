@@ -11743,7 +11743,7 @@ function rsAdjustGrade(grade, rsResult) {
   function renderSimOverview() {
     const el = $("#sim-overview");
     if (!el) return;
-    const hasAny = SIM_HOLDINGS.length > 0 || SIM_CLOSED.length > 0;
+    const hasAny = true;   // v900：空的新一期也显示总览（本金等），不然整页只剩一张空表
     el.style.display = hasAny ? "" : "none";
     const label = $("#sim-analytics-label");
     if (label) label.style.display = hasAny ? "" : "none";
