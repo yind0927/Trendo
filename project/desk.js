@@ -6785,11 +6785,13 @@ function rsAdjustGrade(grade, rsResult) {
   // hidden. Neither can happen now: the renderers write inline display freely, and the
   // picks-mode rule overrides all of it for as long as that mode is on.
   function setSimSubTab(tab) {
+    if (_archView && tab !== "book") exitArchiveView(true);
     simSubTab = tab;
     const view = $("#sim-view"); if (!view) return;
     $$("[data-sim-tab]").forEach(b => b.classList.toggle("active", b.dataset.simTab === tab));
     view.dataset.subtab = tab;
     if (tab === "picks") { wireModelPicks(); renderModelPicks(); mpRefresh(); }
+    else if (tab === "archive") renderArchivePanel();
     else renderSim();
   }
 
@@ -12295,8 +12297,8 @@ function rsAdjustGrade(grade, rsResult) {
 
   // 与 closePosition 的「整笔平仓」分支同一套算法，但不碰任何全局状态（不落盘、不重画）：
   // 先在副本上算好，云端确认存下之后才动本地。
-  function archBuildClose(pos, cd) {
-    const cp = pos.last > 0 ? pos.last : pos.cost;
+  function archBuildClose(pos, cd, px) {
+    const cp = px > 0 ? px : (pos.last > 0 ? pos.last : pos.cost);
     const r = JSON.parse(JSON.stringify(pos));
     delete r.spark;
     r.closedAt = cd; r.closePrice = cp;
@@ -12307,8 +12309,29 @@ function rsAdjustGrade(grade, rsResult) {
     r.pnlFinal = r.pnlDollar;
     r.exitReason = "manual";
     r._xid = newExitId(); r._xat = nowStamp();
-    r._arch = true;          // 存档时按现价平掉的，不是用户自己平的
+    r._arch = true;          // 存档时按上一交易日收盘价平掉的，不是用户自己平的
     return r;
+  }
+
+  // 存档时仍在持仓的仓位：按「上一个已收盘交易日」的收盘价平仓（不是现价）
+  async function archPrevCloses(holdings) {
+    const day = getLastTradingDayStr();
+    const out = {};
+    const syms = [...new Set(holdings.map(h => _histYahooSym(h)))];
+    const from = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+    for (let i = 0; i < syms.length; i += 25) {
+      try {
+        const r = await fetch(`/api/history?symbols=${encodeURIComponent(syms.slice(i, i + 25).join(","))}&from=${from}`);
+        if (!r.ok) continue;
+        const j = await r.json();
+        for (const s of syms.slice(i, i + 25)) {
+          const ser = j.results?.[s]; if (!ser) continue;
+          const ds = Object.keys(ser).filter(d => d <= day && ser[d] > 0).sort();
+          if (ds.length) out[s] = { date: ds[ds.length - 1], price: ser[ds[ds.length - 1]] };
+        }
+      } catch (_) {}
+    }
+    return { day, map: out };
   }
 
   async function archiveAndResetSim(name) {
@@ -12319,13 +12342,20 @@ function rsAdjustGrade(grade, rsResult) {
     for (let i = 0; i < 20 && _syncActive > 0; i++) await new Promise(r => setTimeout(r, 250));
     const today = new Date().toISOString().slice(0, 10);
     const closedCopy = SIM_CLOSED.map(h => { const x = JSON.parse(JSON.stringify(h)); delete x.spark; return x; });
-    const archClosed = SIM_HOLDINGS.map(h => archBuildClose(h, today));
+    const pc = await archPrevCloses(SIM_HOLDINGS);
+    const archClosed = SIM_HOLDINGS.map(h => {
+      const q = pc.map[_histYahooSym(h)];
+      if (q && q.date >= (h.entry || "")) return archBuildClose(h, q.date, q.price);
+      // 拿不到收盘价，或昨天还没入场：按入场价平（不盈不亏），平仓日不早于入场日
+      return archBuildClose(h, (h.entry && h.entry > pc.day) ? h.entry : pc.day, h.cost);
+    });
+    const noPx = SIM_HOLDINGS.filter(h => !pc.map[_histYahooSym(h)]).length;
     const all = [...closedCopy, ...archClosed];
     const sum = archSummary(all);
     const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const meta = {
       name: (name || "").trim() || `模拟仓 ${sum.from || ""} → ${today}`,
-      createdAt: new Date().toISOString(), from: sum.from, to: today,
+      createdAt: new Date().toISOString(), from: sum.from, to: sum.to || today,
       notional: simNotional, trades: sum.trades, records: sum.records,
       realized: Math.round(sum.realized), winRate: sum.winRate,
       closedAtArchive: archClosed.length, canceledOrders: SIM_PENDING.length + SIM_CLOSE_PENDING.length,
@@ -12359,7 +12389,7 @@ function rsAdjustGrade(grade, rsResult) {
     _archList = null;
     $("#sim-tab-open")?.click();
     renderSim();
-    toast(`已存档「${meta.name}」并开始新的模拟仓`, "ok");
+    toast(`已存档「${meta.name}」并开始新的模拟仓` + (noPx ? `（${noPx} 笔拿不到收盘价，按入场价平）` : ""), "ok");
     return true;
   }
 
@@ -12375,9 +12405,9 @@ function rsAdjustGrade(grade, rsResult) {
     const m = _archView.meta || {};
     el.innerHTML = `<div class="sab-txt"><b>正在查看存档</b>「${archEsc(_archView.name)}」
       <span class="sab-sub">${archEsc(m.from || "")} → ${archEsc(m.to || "")} · 只读，改动不会保存</span></div>
-      <button class="btn" id="sim-archive-exit">返回当前模拟仓</button>`;
+      <button class="btn" id="sim-archive-exit">返回存档列表</button>`;
     el.style.display = "";
-    $("#sim-archive-exit")?.addEventListener("click", () => exitArchiveView());
+    $("#sim-archive-exit")?.addEventListener("click", () => { exitArchiveView(); setSimSubTab("archive"); });
   }
 
   async function enterArchiveView(id) {
@@ -12444,7 +12474,7 @@ function rsAdjustGrade(grade, rsResult) {
         <span><i>本金</i><b>${fmt.usd(a.notional || 0)}</b></span>
       </div>
       <div class="sa-foot">
-        <span class="sa-meta">存档于 ${when}${a.closedAtArchive ? ` · 含 ${a.closedAtArchive} 笔存档时按现价平仓` : ""}</span>
+        <span class="sa-meta">存档于 ${when}${a.closedAtArchive ? ` · 含 ${a.closedAtArchive} 笔存档时按上一交易日收盘价平仓` : ""}</span>
         <span class="sa-acts">
           <button class="btn primary sa-view">查看</button>
           <button class="btn sa-del" title="永久删除这份存档">删除</button>
@@ -12453,8 +12483,8 @@ function rsAdjustGrade(grade, rsResult) {
     </div>`;
   }
 
-  async function renderArchiveModal() {
-    const body = $("#sim-archive-body"); if (!body) return;
+  async function renderArchivePanel() {
+    const body = $("#sim-archive-panel"); if (!body) return;
     const usable = !!syncKey && !_demoMode;
     const open = SIM_HOLDINGS.length, pend = SIM_PENDING.length + SIM_CLOSE_PENDING.length;
     const sum = archSummary(SIM_CLOSED);
@@ -12462,18 +12492,18 @@ function rsAdjustGrade(grade, rsResult) {
     body.innerHTML = `
       <div class="sa-sec">
         <div class="sa-sec-t">存档当前模拟仓，并开始新的一期</div>
-        ${_archView ? `<div class="sa-note warn">正在查看存档，先点上方「返回当前模拟仓」再存档。</div>` : ""}
+        
         ${usable ? "" : `<div class="sa-note warn">存档存在云端，需要先设置同步密钥（演示模式不可用）。</div>`}
         <div class="form-row"><label>存档名称</label>
           <input class="form-input" id="sim-archive-name" maxlength="40" placeholder="模拟仓 ${archEsc(sum.from || today)} → ${today}"/></div>
         <ul class="sa-list">
           <li>已平仓 <b>${SIM_CLOSED.length}</b> 条记录（${sum.trades} 笔交易）原样存档</li>
-          <li>持仓中 <b>${open}</b> 笔会<b>按当前价平仓</b>并记入存档（平仓日 ${today}）</li>
+          <li>持仓中 <b>${open}</b> 笔会<b>按上一交易日收盘价平仓</b>并记入存档</li>
           <li>挂单 <b>${pend}</b> 张取消，不带入新的一期</li>
           <li>模拟本金 <b>${fmt.usd(simNotional)}</b> 不变，新的一期从零记录开始</li>
           <li>模型选股不受影响</li>
         </ul>
-        <button class="btn primary" id="sim-archive-do" ${usable && !_archView && (open || SIM_CLOSED.length) ? "" : "disabled"}>存档并重置模拟仓</button>
+        <button class="btn primary" id="sim-archive-do" ${usable && (open || SIM_CLOSED.length) ? "" : "disabled"}>存档并重置模拟仓</button>
       </div>
       <div class="sa-sec">
         <div class="sa-sec-t">已有存档</div>
@@ -12483,27 +12513,18 @@ function rsAdjustGrade(grade, rsResult) {
     if (!usable) { listEl.innerHTML = `<div class="sa-note">—</div>`; return; }
     const list = await archFetchList();
     _archList = list;
-    if (!$("#sim-archive-list")) return;     // 期间弹窗已关
+    if (!$("#sim-archive-list")) return;     // 期间已切走
     if (list === null) listEl.innerHTML = `<div class="sa-note warn">存档目录读取失败 <button class="btn" id="sim-archive-retry">重试</button></div>`;
     else if (!list.length) listEl.innerHTML = `<div class="sa-note">还没有存档。</div>`;
     else listEl.innerHTML = list.map(archCardHTML).join("");
   }
 
-  function openArchiveModal() {
-    openModal("sim-archive-modal");
-    renderArchiveModal();
-  }
-
   function wireSimArchive() {
-    $("#sim-archive-btn")?.addEventListener("click", openArchiveModal);
-    $("#sim-archive-close")?.addEventListener("click", () => closeModal("sim-archive-modal"));
-    $("#sim-archive-modal")?.addEventListener("click", async e => {
-      if (e.target === e.currentTarget) { closeModal("sim-archive-modal"); return; }
-      if (e.target.closest("#sim-archive-retry")) { renderArchiveModal(); return; }
+    $("#sim-archive-panel")?.addEventListener("click", async e => {
+      if (e.target.closest("#sim-archive-retry")) { renderArchivePanel(); return; }
       const card = e.target.closest(".sa-card");
       if (card && e.target.closest(".sa-view")) {
-        const ok = await enterArchiveView(card.dataset.archId);
-        if (ok) closeModal("sim-archive-modal");
+        await enterArchiveView(card.dataset.archId);
         return;
       }
       if (card && e.target.closest(".sa-del")) {
@@ -12515,17 +12536,17 @@ function rsAdjustGrade(grade, rsResult) {
           delete ARCH_CACHE[card.dataset.archId];
           toast("存档已删除", "ok");
         } catch (err) { toast("删除失败：" + err.message, "error"); }
-        renderArchiveModal();
+        renderArchivePanel();
         return;
       }
       if (e.target.closest("#sim-archive-do")) {
         const btn = $("#sim-archive-do");
         const name = $("#sim-archive-name")?.value || "";
-        const msg = `存档并重置模拟仓？\n\n· ${SIM_HOLDINGS.length} 笔持仓将按当前价平仓并记入存档\n· ${SIM_PENDING.length + SIM_CLOSE_PENDING.length} 张挂单取消\n· 已有记录整套存档，新的一期从零开始（本金不变）`;
+        const msg = `存档并重置模拟仓？\n\n· ${SIM_HOLDINGS.length} 笔持仓将按上一交易日收盘价平仓并记入存档\n· ${SIM_PENDING.length + SIM_CLOSE_PENDING.length} 张挂单取消\n· 已有记录整套存档，新的一期从零开始（本金不变）`;
         if (!confirm(msg)) return;
         btn.disabled = true; btn.textContent = "存档中…";
         const ok = await archiveAndResetSim(name);
-        if (ok) renderArchiveModal(); else { btn.disabled = false; btn.textContent = "存档并重置模拟仓"; }
+        if (ok) { setSimSubTab("book"); } else { btn.disabled = false; btn.textContent = "存档并重置模拟仓"; }
       }
     });
   }
