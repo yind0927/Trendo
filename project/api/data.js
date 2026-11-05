@@ -4,6 +4,14 @@
 // GET  /api/data?key=xxxx&snap=N   → { data: <第 N 个快照> }
 // DELETE /api/data?key=xxxx&snap=N&at=<savedAt> → 删掉那一份历史（at 用于防止索引后移误删）
 // POST /api/data?key=xxxx          → { ok: true, rev }  (body = data payload)
+// 模拟仓存档（独立 key，写一次不再改，不进 rev/CAS，不被同步合并碰到）：
+// GET    /api/data?key=xxxx&archives=1      → { archives: [meta...] }
+// GET    /api/data?key=xxxx&archive=<id>    → { archive: { meta, simClosed, notional... } | null }
+// POST   /api/data?key=xxxx&archive=1       → body { id, meta, data }，先写正文再写目录
+// DELETE /api/data?key=xxxx&archive=<id>    → 删除一份存档
+// **模拟仓纪元 `simEpoch`**：存档并重置模拟仓时客户端把它设为更大的数。POST 若带来的纪元
+// 比云端小（旧纪元的设备/旧 JS），模拟仓那几个字段一律保留云端的——否则一台没刷新的设备
+// 就能把已经存档掉的旧持仓/挂单整块推回来。
 //
 // **冲突判定用的是服务端维护的 `rev`（单调整数），不是墙上时钟。**
 // 客户端在载荷里带 `_baseRev` = 它这份内容所基于的云端版本号：
@@ -179,6 +187,52 @@ export default async function handler(req, res) {
     return t && !isNaN(t) ? t.toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" }) : "";
   };
 
+  // ── 模拟仓存档 ────────────────────────────────────────────────────────────
+  const archIdx  = `trendo:archidx:${syncKey}`;
+  const archBody = id => `trendo:arch:${syncKey}:${id}`;
+  const okId     = id => typeof id === "string" && /^[A-Za-z0-9_-]{4,48}$/.test(id);
+  if (req.query.archives || req.query.archive) {
+    try {
+      if (req.method === "GET" && req.query.archives) {
+        const [{ result }] = await redis([["HGETALL", archIdx]]);
+        const arr = Array.isArray(result) ? result : [];
+        const out = [];
+        for (let i = 0; i + 1 < arr.length; i += 2) {
+          try { out.push({ id: arr[i], ...JSON.parse(arr[i + 1]) }); } catch (_) {}
+        }
+        out.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+        return res.status(200).json({ archives: out });
+      }
+      if (req.method === "GET") {
+        const id = String(req.query.archive);
+        if (!okId(id)) return res.status(400).json({ error: "Bad archive id" });
+        const [{ result }] = await redis([["GET", archBody(id)]]);
+        return res.status(200).json({ archive: result ? JSON.parse(result) : null });
+      }
+      if (req.method === "POST") {
+        const b = req.body || {};
+        if (!okId(b.id) || !b.data || typeof b.data !== "object")
+          return res.status(400).json({ error: "Bad archive payload" });
+        const raw = JSON.stringify(b.data);
+        const res1 = await redis([
+          ["SET", archBody(b.id), raw],
+          ["HSET", archIdx, b.id, JSON.stringify(b.meta || {})],
+        ]);
+        const ok = res1[0]?.result === "OK";
+        return res.status(ok ? 200 : 500).json({ ok, id: b.id, bytes: raw.length });
+      }
+      if (req.method === "DELETE") {
+        const id = String(req.query.archive);
+        if (!okId(id)) return res.status(400).json({ error: "Bad archive id" });
+        await redis([["DEL", archBody(id)], ["HDEL", archIdx, id]]);
+        return res.status(200).json({ ok: true });
+      }
+      return res.status(405).json({ error: "Method not allowed" });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   if (req.method === "GET") {
     try {
       // 快照目录：只回元信息（时间戳 + 各数组条数），避免把 5 份完整 blob 一次吐出来。
@@ -241,9 +295,6 @@ export default async function handler(req, res) {
       // sync key in `trendo:order_keys` iff the pushed blob has pending sim orders,
       // so the every-minute cron only scans accounts that actually need checking.
       const body = req.body || {};
-      const hasPending =
-        (Array.isArray(body.simPending)      && body.simPending.length      > 0) ||
-        (Array.isArray(body.simClosePending) && body.simClosePending.length > 0);
 
       // 先读现有快照：①比它更旧的推送一律拒收（整块覆盖 = 不可逆的数据丢失，宁可让这
       // 台设备先把云端拉下来）；②跨天的第一次写入前，把旧快照留一份进历史，供用户回滚。
@@ -278,7 +329,10 @@ export default async function handler(req, res) {
         if (prev) {
           const KEYED = ["holdings", "closed", "simHoldings", "simClosed",
                          "watchlist", "realOptions", "modelPicks"];
+          // 存档并重置模拟仓（纪元变大）时，模拟仓那两个集合本来就应当变少
+          const newEpoch = (Number(body.simEpoch) || 0) > (Number(prev.simEpoch) || 0);
           const shrunk = KEYED.find(k =>
+            !(newEpoch && (k === "simHoldings" || k === "simClosed")) &&
             Array.isArray(prev[k]) && Array.isArray(body[k]) && body[k].length < prev[k].length);
           if (shrunk) {
             await unlock();
@@ -292,6 +346,20 @@ export default async function handler(req, res) {
       const toStore = { ...body };
       delete toStore._baseRev;
       toStore.rev = storedRev + 1;
+      // 模拟仓纪元：旧纪元的推送不许把已存档掉的模拟仓内容带回来
+      const cloudEpoch = Number(prev?.simEpoch) || 0;
+      const bodyEpoch  = Number(body.simEpoch)  || 0;
+      let simStripped = false;
+      if (prev && bodyEpoch < cloudEpoch) {
+        for (const k of ["simHoldings", "simClosed", "simPending", "simClosePending", "simNotional"]) {
+          if (prev[k] === undefined) delete toStore[k]; else toStore[k] = prev[k];
+        }
+        toStore.simEpoch = cloudEpoch;
+        simStripped = true;
+      }
+      const hasPending =
+        (Array.isArray(toStore.simPending)      && toStore.simPending.length      > 0) ||
+        (Array.isArray(toStore.simClosePending) && toStore.simClosePending.length > 0);
 
       const cmds = [];
       // 留档的是**被覆盖的那一份**（更新前的内容），不是这次写进去的新内容——它存在的
@@ -314,7 +382,7 @@ export default async function handler(req, res) {
       if (locked) { cmds.push(["DEL", lockKey]); locked = false; }
       const results = await redis(cmds);
       const ok = results[setIdx]?.result === "OK";
-      return res.status(ok ? 200 : 500).json({ ok, rev: toStore.rev });
+      return res.status(ok ? 200 : 500).json({ ok, rev: toStore.rev, simStripped });
     } catch (e) {
       await unlock();
       return res.status(500).json({ error: e.message });

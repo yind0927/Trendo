@@ -2551,6 +2551,35 @@
   .opts-calc b.down { color: var(--down); }
   .opts-empty, .opts-loading { padding: 18px 14px; color: var(--fg-3); font-size: 12px; text-align: center; }
   .sim-topbar-actions { display: flex; gap: 8px; align-items: center; }
+  /* 模拟仓存档 */
+  #sim-archive-banner { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    margin:0 0 14px; padding:10px 14px; border:1px solid var(--warn); border-radius:var(--radius);
+    background:color-mix(in oklch, var(--warn) 10%, var(--bg-1)); }
+  #sim-archive-banner .sab-txt { font-size:12.5px; color:var(--fg-1); line-height:1.5; min-width:0; }
+  #sim-archive-banner .sab-sub { display:block; font-size:11px; color:var(--fg-3); }
+  #sim-view.arch-mode #sim-new-pos-btn, #sim-view.arch-mode #sim-archive-btn,
+  #sim-view.arch-mode .sim-notional-edit-btn, #sim-view.arch-mode .sim-restore-btn,
+  #sim-view.arch-mode .delete-btn, #sim-view.arch-mode .close-pos-btn, #sim-view.arch-mode .sim-flag-btn,
+  #sim-view.arch-mode #sim-holdings-cards .hc-action, #sim-view.arch-mode #sim-pending-section,
+  #sim-view.arch-mode #sim-dup-banner, body.sim-arch-mode #mobile-fab { display:none !important; }
+  .sa-sec { margin:0 0 20px; }
+  .sa-sec-t { font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--fg-3); text-transform:uppercase; margin:0 0 10px; }
+  .sa-list { margin:10px 0 14px; padding-left:18px; font-size:12.5px; color:var(--fg-2); line-height:1.8; }
+  .sa-list b { color:var(--fg-0); }
+  .sa-note { font-size:12px; color:var(--fg-3); padding:8px 0; }
+  .sa-note.warn { color:var(--warn); }
+  .sa-card { border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; margin:0 0 10px; background:var(--bg-2); }
+  .sa-card-hd { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .sa-name { font-size:14px; color:var(--fg-0); }
+  .sa-range { font-size:11px; color:var(--fg-3); font-family:var(--f-mono); }
+  .sa-stats { display:flex; flex-wrap:wrap; gap:6px 18px; margin:10px 0; }
+  .sa-stats span { display:flex; flex-direction:column; gap:2px; min-width:64px; }
+  .sa-stats i { font-style:normal; font-size:10px; color:var(--fg-3); letter-spacing:.04em; }
+  .sa-stats b { font-size:13.5px; font-family:var(--f-mono); color:var(--fg-1); }
+  .sa-stats b.up { color:var(--up); } .sa-stats b.down { color:var(--down); }
+  .sa-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .sa-meta { font-size:11px; color:var(--fg-3); }
+  .sa-acts { display:flex; gap:8px; }
   @media (max-width: 640px) {
     /* Sim topbar: allow the two action buttons to wrap onto a second line */
     .sim-topbar-actions { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
@@ -6259,6 +6288,10 @@
       <span class="sim-sub" id="sim-subtitle" style="color:var(--fg-3);font-size:12px;margin-left:4px">— 笔持仓</span>
     </div>
     <div class="sim-topbar-actions">
+      <button class="btn" id="sim-archive-btn" title="存档当前模拟仓并开始新的一期，或查看历史存档">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/></svg>
+        存档 Archives
+      </button>
       <button class="btn primary" id="sim-new-pos-btn">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
         New Sim Position
@@ -6736,6 +6769,16 @@
 </div>
 
 <!-- Sim Notional Edit Modal -->
+<div id="sim-archive-modal" class="modal-backdrop">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2>模拟仓存档 · Archives</h2>
+      <button class="modal-close" id="sim-archive-close">✕</button>
+    </div>
+    <div id="sim-archive-body"></div>
+  </div>
+</div>
+
 <div id="sim-notional-modal" class="modal-backdrop">
   <div class="modal">
     <div class="modal-header">
@@ -6983,8 +7026,8 @@
   </div>
 </div>
 
-<script src="data.js?v=897"></script>
-<script src="desk.js?v=897"></script>
+<script src="data.js?v=898"></script>
+<script src="desk.js?v=898"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

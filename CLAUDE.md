@@ -67,7 +67,7 @@ project/
                          不可达（连续三版都超时）已整块删除，不要再往这里加
     news.js            — 个股新闻
     stock-analysis.js  — 个股 AI 分析
-    data.js            — 跨设备云同步（Upstash Redis）；POST 时按blob是否含挂单维护 `trendo:order_keys` 注册表；**冲突判定用服务端单调版本号 `rev`、不是时钟**（v839）：客户端载荷带 `_baseRev`，与云端 `rev` 不等→409 不写；不带 `_baseRev` 的老客户端退回按 `savedAt` 拦旧盖新（v837）；跨天首次写入前把旧快照 LPUSH 进 `trendo:snap:<key>`（留 10 份/90 天），`?snaps=1` 列目录、`?snap=N` 取回
+    data.js            — 跨设备云同步（Upstash Redis）；**同一函数里还承载模拟仓存档的读写（`?archive=`/`?archives=`，v898）**；POST 时按blob是否含挂单维护 `trendo:order_keys` 注册表；**冲突判定用服务端单调版本号 `rev`、不是时钟**（v839）：客户端载荷带 `_baseRev`，与云端 `rev` 不等→409 不写；不带 `_baseRev` 的老客户端退回按 `savedAt` 拦旧盖新（v837）；跨天首次写入前把旧快照 LPUSH 进 `trendo:snap:<key>`（留 10 份/90 天），`?snaps=1` 列目录、`?snap=N` 取回
     order-check.js     — 模拟仓挂单后台成交 worker（扫描 `trendo:order_keys` → 读用户blob → 镜像客户端成交逻辑（市价/限价、部分/全部平仓、CC结算、calcTradingDays）→ **写回前重新 GET 一次，只覆盖 simHoldings/simClosed/simPending/simClosePending 四个字段并 `rev++`**（v839：此前整块写回函数开头读到的 data，期间别的设备推的期权/持仓记录会被几十秒前的旧副本抹掉，而且绕过 POST 闸门、还把 savedAt 刷新成"现在"）；客户端 visibilitychange 时按 rev 拉取接收成交结果
     market-summary.js  — 市场日报 AI 简报（Claude Sonnet 4.6，含新闻+市场数据）
     holdings-brief.js  — 持仓分析 AI 简报（Claude Sonnet 4.6，含个股新闻+市场环境）
@@ -168,6 +168,8 @@ trendo_v4_sim_pending / trendo_v4_sim_close_pending
 trendo_v4_sim_tombstones     → SIM_TOMBSTONES[]（删除墓碑，30天过期/上限200）
                                类型：rh 真实持仓 / rc 真实已平仓 / h 模拟持仓 / sc 模拟已平仓 /
                                o 挂单 / p 期权。**「撤回平仓」也算删除，同样要立墓碑**
+trendo_v4_sim_epoch          → 模拟仓「纪元」（数字，存档并重置时换更大的）。云端 blob 同名字段 `simEpoch`，
+                               **旧纪元的模拟仓数据一律不许覆盖/并回新纪元**，见「模拟仓存档」一节
 trendo_v4_watchlist / trendo_v4_model_picks
 trendo_v4_real_options
 trendo_v4_cycle_check        → CYCLE_CHECK（周期系统分析：items/log/history/confirmedPhase）
@@ -826,6 +828,34 @@ initHoldingsBriefCard()          // 初始化：读缓存或显示生成按钮
 pull-if-newer，接收后台成交结果；页面活跃时客户端 30 秒周期自己成交并推送覆盖，两边结果等价、
 数组整体替换不会重复开仓。**注意：Vercel Hobby 计划 cron 仅支持每日级别调度，每分钟 cron 需
 Pro 计划；Hobby 可改用外部定时器（如 cron-job.org）每分钟 GET /api/order-check 达到同样效果。**
+
+### 模拟仓存档（v898）——把这一期整套存起来，以同样本金开始全新一期
+
+入口：Sim 页顶部「存档 Archives」→ 弹窗：①「存档并重置模拟仓」②已有存档列表（查看 / 删除）。
+
+- **存档内容**：当前 `SIM_CLOSED` 全部记录 + 存档时仍在持仓中的仓位**按当前价平仓**后的记录（`archBuildClose`，
+  与 `closePosition` 整笔平仓同一套算法，标 `_arch:true`，平仓日=今天）+ 本金 + 汇总元信息（名称/起止/笔数/已实现/胜率…）。
+  **挂单取消、不带入新一期**；模型选股不受影响；`spark` 剥掉控体积。存档里只有已平仓记录，所以分析复盘/月度回测/
+  出场质量/交易日志原样可用。
+- **存储**：独立 Redis key（`api/data.js` 的 `?archive=` / `?archives=`，**不新增 serverless 函数**）——
+  `trendo:arch:<key>:<id>` 存正文，`trendo:archidx:<key>`（hash）存目录。写一次不再改，不进 `rev`/CAS，不被同步合并碰到。
+  **先上传、读回核对条数，确认云端真的有了才动本地**；失败时本地一个字不动。
+- **重置靠「纪元」`simEpoch`**（不是逐条立墓碑——墓碑只有 200 条上限，而且挡不住旧设备整块推回来）：
+  - 重置时 `simEpoch = max(Date.now(), simEpoch+1)`，随 `_buildSyncPayload` 推上云端。
+  - `applyCloudData`：云端纪元 > 本机 → 整块采用云端（它就是新一期）；云端纪元 < 本机 → 本机刚重置、还没推上去，
+    **模拟仓保留本机的**。结果记在 `_simRel`（same/cloudAhead/localAhead）。
+  - `_mergeLocalOnly` 与「本地较新」分支的打捞：**只在纪元相同（`_simRel==="same"`）时才合并模拟仓**，否则就是复活旧一期。
+  - 服务端 POST：带来的 `simEpoch` < 云端 → 模拟仓五个字段（四个数组 + `simNotional`）保留云端的、响应带 `simStripped`
+    （旧 JS 没有纪元，按 0 算，同样被拦）；客户端见到 `simStripped` 会重新拉取。纪元变大的推送放行，且不受「记录数不许变少」闸门限制。
+  - 后台 worker 本来就在锁里重新 GET 后只改四个字段，天然保留 `simEpoch`，无需改。
+- **查看存档 = 临时换内存数组**：`enterArchiveView` 把 `SIM_HOLDINGS/CLOSED/PENDING/CLOSE_PENDING`、`simNotional` 暂存进
+  `stash`，换成存档内容，整页复用现有渲染（所以所有分析天然齐全）；`exitArchiveView` 原样换回。期间 `_archView` 非空：
+  `saveLocalOnly`/`saveToStorage`/`saveDerived`/`syncPush`/`_syncFlush` **全部直接返回**（存档内容绝不能落盘/推送；
+  `saveToStorage` 会 toast「存档是只读的」）；`simMonthlyPeakDrawdown` 改用存档专属的 localStorage key；
+  `_histMonthCache` 里 `#sim-` 开头的缓存进出时清掉；`applyCloudData` 开头与 `switchPage` 离开 sim 页时自动退出。
+  只读样式靠 `#sim-view.arch-mode` / `body.sim-arch-mode`（隐藏新建/存档/撤回/删除/FAB/挂单区）。
+- **已知边界**：另一台设备在存档**之后、拉取之前**新记的模拟仓内容会被丢弃（它属于旧纪元）；存档第一期不提供「恢复为当前」；
+  存档删除不可撤销。测试 `arch898.mjs`（真实 UI + 真实 `api/data.js` + 内存 Redis，49 项）。
 
 ### 补回放 `catchUpPendingOrders()` 的四条硬约束（v822）
 
@@ -1641,6 +1671,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v894 | **Market 页 VOO RSI 改用实时价（与顶部 VOO 现价同口径）**（用户：「VOO RSI 好像不太对需要验证」）。**先验证公式**：`calcRSI` 与教科书 Wilder RSI（前 14 个涨跌幅 SMA 作种子、之后 RMA 平滑）在 200 组随机序列上逐值一致（唯一不一致是全平盘序列的 0/0，无意义）——公式没错。**偏差来源是数据时点**：RSI 用的是 `/api/history` 的最后一根 bar，而该接口服务端缓存 30 分钟，盘中那根要么是半小时前的价、要么还没生成；顶部 VOO、方向轴、宽度用的都是实时价，券商/TradingView 的 RSI 也是实时价，所以盘中会对不上。**修法**：开盘中把今天那根（`isLiveSession`）替换/追加为 `vooLive` 再算；昨日 RSI 只用已收盘 bar；休市时仍用历史最后一根，行为不变。周期分析回放与「离下一阶段」的 RSI 序列仍只含已收盘 bar（与 v834 同口径）。测试 `rsi894.js`（盘中 live 价与最后一根相差 6 时页面 RSI 与独立重算一致 19.7；休市 44.8）。 |
 | v896 | **周期系统分析回到整数阶段（撤销 v895 的小数阶段）+ Market 页 VOO RSI 精确到两位小数**（用户：「周期系统分析回到老版本」「这里说的是 Market 页的状态，VOO RSI 使用详细的小数点来定义现在的状态和阶段」）。v895 的 `cycPos` 小数阶段整块撤销，周期系统分析回到「第 N 阶段」。真正要小数的是 Market 页的 RSI：`calcRSI`/`calcRSISeries` 原来 `toFixed(1)` 取整到一位，而综合建议用 `rsi < 45`、`rsi >= 65` 这类阈值判档——44.96 会被舍成 45.0 而判到「正常配置」，实际仍在「情绪偏冷」。现返回两位小数（判定用这个值），RSI 指标卡、三轴卡 `RSI x.xx`、「离触发还差多少」、「离下一阶段」的现值/阈值/差值都显示两位。周期分析回放与离下一阶段用的 RSI 序列同为两位，保持「回放最后一格 = 卡片 RSI」。测试 `rsi896.js`（盘中 19.72、休市 44.80 与独立重算一致）。 |
 | v897 | **期权页：已结算记录可「撤回」到持仓中 + 持仓中新增「提前行权」**（用户）。①撤回：已了结卡片（到期OTM/已平仓/被指派）与「持有正股」卡新增「撤回」按钮，确认后 `status=open`，清除 `closedAt/closePremium/realized/settleSpot/assigned*`（置 null 而非 delete，三方合并按字段比较看得出）；若是行权的 CC，会把当时写进父 CSP 的出仓记录一并还原（仅当价格与日期都对得上）；到期日已过的合约打 `noAutoSettle`，`settleExpiredOptions()` 跳过它，避免立刻又按今天的价自动结算——需用户自己改到期日或重新选结算结果。②提前行权：持仓中卡片新增按钮，输入行权日期（开仓日~今天），`status=assigned`、`earlyAssigned=true`、`realized`＝100% 权利金（与 `_optMigrate` 自愈规则一致）；CSP 持有正股（`assignedStockSold=false`，之后「记录出仓」），CC 若有关联 CSP 则把行权价写入父 CSP 出仓。测试 `opt897.js`（桌面+手机）。 |
+| v898 | **模拟仓存档：把这一期整套存起来，以同样本金开始全新一期**（用户讨论后选定：模型选股不管；存档时持仓按现价平掉；本金沿用；存档要带齐分析复盘/出场质量等全部元素；新的挂单和开仓从新一期开始）。详细设计见「模拟仓存档」一节。要点：①存档放独立云端 key（`api/data.js` 新增 `?archive=`，不新增函数），先上传、读回核对、再动本地；②重置用**纪元 `simEpoch`** 防复活——旧设备/旧 JS 推上来的旧一期模拟仓内容被服务端与合并逻辑一律丢弃；③查看存档=临时换内存数组、整页只读复用现有渲染，期间所有落盘与推送被 `_archView` 拦住。入口 Sim 页「存档 Archives」。测试 `arch898.mjs` 49 项（存档内容/目录/平仓盈亏、查看期间本地存储零变化与零推送、退出原样换回、B 设备带旧状态打开不复活、旧 JS 推送被 `simStripped`、上传失败本地不动、手机端无溢出），`devices` 74 / `race` 19 / `worker` 15 / `api837` 21 等同步套件复跑全绿。 |
 
 ---
 

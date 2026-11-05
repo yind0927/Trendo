@@ -1353,6 +1353,11 @@ function rsAdjustGrade(grade, rsResult) {
   let simSelectedSym = null;
   let simSelectedEntry = null, simSelectedCost = null;
   let simNotional = 100000;
+  // 模拟仓「纪元」：存档并重置时换一个更大的数。云端、合并、后台 worker 都按它判断一份模拟仓
+  // 数据是不是「已经存档掉的旧一期」——不用它的话，一台没刷新的设备会把旧持仓/挂单整块推回来。
+  let simEpoch = 0;
+  let _simRel = "same";      // 最近一次 applyCloudData 时，云端纪元相对本机：same | cloudAhead | localAhead
+  let _archView = null;      // 正在只读查看某份存档时：{ id, name, meta, stash }
   // Options module state — wheel strategy (CSP / Covered Call), manual entry.
   // Only the underlying ETF spot is live (via /api/quote, same path as stock
   // positions); strikes/premiums/expiries are typed in from the broker.
@@ -1453,7 +1458,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   async function syncPush() {
-    if (!syncKey || _demoMode) return;
+    if (!syncKey || _demoMode || _archView) return;
     // Reuse the exact savedAt written by saveLocalOnly — generating a fresh timestamp
     // here made the cloud copy permanently ~2s "newer" than local, so every
     // visibilitychange pull-if-newer re-applied identical cloud data and blanked the
@@ -1468,7 +1473,9 @@ function rsAdjustGrade(grade, rsResult) {
         body: JSON.stringify(payload)
       });
       if (r.ok) {
-        try { setRev((await r.json())?.rev); } catch (_) {}
+        let _stripped = false;
+        try { const j = await r.json(); setRev(j?.rev); _stripped = !!j?.simStripped; } catch (_) {}
+        if (_stripped) { clearTimeout(syncTimer); setTimeout(() => syncOnStartup(), 400); }   // 云端保留了新一期的模拟仓：拉下来
         clearDirty();            // 云端已确认收到，保险丝可以摘了
         saveSyncBase(payload);   // 这份内容现在与云端一致，记作下次三方合并的基线
         lastSyncAt = new Date(); _dirtySinceSync = false; renderSyncStatus(); return;
@@ -1527,7 +1534,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 立刻把待推送的内容送上云端，不等 2 秒去抖。sendBeacon 在页面关闭/切后台后仍保证送达，
   // 且不需要鉴权头（key 走 URL）。
   function _syncFlush() {
-    if (!syncKey) return;
+    if (!syncKey || _archView) return;
     clearTimeout(syncTimer);
     try {
       const blob = new Blob([JSON.stringify(_buildSyncPayload())], { type: "application/json" });
@@ -1600,7 +1607,7 @@ function rsAdjustGrade(grade, rsResult) {
     return {
       holdings: noMarket(HOLDINGS), closed: CLOSED_POSITIONS, notional: totalNotional,
       watchlist: WATCHLIST, simHoldings: noMarket(SIM_HOLDINGS), simClosed: SIM_CLOSED,
-      simNotional, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
+      simNotional, simEpoch, simPending: SIM_PENDING, simClosePending: SIM_CLOSE_PENDING, dailyPnlLog,
       simTombstones: SIM_TOMBSTONES,
       realOptions: REAL_OPTIONS,
       modelPicks: MODEL_PICKS,
@@ -1875,10 +1882,10 @@ function rsAdjustGrade(grade, rsResult) {
       const cid = x => x.id;
       const ed = [
         _mergeEdits(HOLDINGS,          snap.holdings || [],    snap._base.holdings,    h => tradeIdOf(h)),
-        _mergeEdits(SIM_HOLDINGS,      snap.simHoldings || [], snap._base.simHoldings, h => tradeIdOf(h)),
+        _simRel === "same" && _mergeEdits(SIM_HOLDINGS,      snap.simHoldings || [], snap._base.simHoldings, h => tradeIdOf(h)),
         _mergeEdits(REAL_OPTIONS,      snap.realOptions || [], snap._base.realOptions, cid),
         _mergeEdits(CLOSED_POSITIONS,  snap.closed || [],      snap._base.closed,    exitKey),
-        _mergeEdits(SIM_CLOSED,        snap.simClosed || [],   snap._base.simClosed,   exitKey),
+        _simRel === "same" && _mergeEdits(SIM_CLOSED,        snap.simClosed || [],   snap._base.simClosed,   exitKey),
       ];
       if (ed.some(Boolean)) {
         merged = true;
@@ -1909,7 +1916,9 @@ function rsAdjustGrade(grade, rsResult) {
     // 里一排复活的持仓；等价格轮询或补回放再跑一遍，它们会被**第二次卖出**，已平仓记录重复。
     // 同一笔交易的 `_tid` 在持仓与已平仓里是同一个；部分平仓时剩余仓位仍在云端持仓里，
     // `have` 会先拦下，不受影响。（真实仓的 HOLDINGS 同理。）
-    add(SIM_HOLDINGS,      (snap.simHoldings || []).filter(h => !cloudClosedSim.has(tradeIdOf(h))),  h => tradeIdOf(h), "h");
+    // 模拟仓四个集合只在纪元相同时才并：纪元不同 = 其中一边是已经存档掉的旧一期，并回去就是复活
+    const simSame = _simRel === "same";
+    if (simSame) add(SIM_HOLDINGS,      (snap.simHoldings || []).filter(h => !cloudClosedSim.has(tradeIdOf(h))),  h => tradeIdOf(h), "h");
 
     // 已平仓记录：除了墓碑，还要挡掉「这笔交易现在是持仓中」的情形——另一台设备把它
     // **撤回平仓**了（restoreClosedPosition 把记录从已平仓里删掉、放回持仓中），而本机
@@ -1923,15 +1932,15 @@ function rsAdjustGrade(grade, rsResult) {
     // 撤回平仓留下的旧减仓记录由墓碑（exitKey）挡住。
     add(CLOSED_POSITIONS, (snap.closed || []).filter(h => h.exitReason === "partial" || !openReal.has(tradeIdOf(h))),
         exitKey, "rc");
-    add(SIM_CLOSED, (snap.simClosed || []).filter(h => h.exitReason === "partial" || !openSim.has(tradeIdOf(h))),
+    if (simSame) add(SIM_CLOSED, (snap.simClosed || []).filter(h => h.exitReason === "partial" || !openSim.has(tradeIdOf(h))),
         exitKey, "sc");
 
     // 挂单：symbol 已经有持仓了 = 这笔单早就成交过，并回去就是个永久孤儿（v822）。
     // 平仓挂单反过来——对应的持仓已经不在了就不该再挂着。
     const pendSyms = new Set(SIM_PENDING.map(p => p.sym));
-    add(SIM_PENDING, (snap.simPending || []).filter(p =>
+    if (simSame) add(SIM_PENDING, (snap.simPending || []).filter(p =>
         !SIM_HOLDINGS.some(h => h.sym === p.sym) && !pendSyms.has(p.sym)), p => p.id, "o");
-    add(SIM_CLOSE_PENDING, (snap.simClosePending || []).filter(p =>
+    if (simSame) add(SIM_CLOSE_PENDING, (snap.simClosePending || []).filter(p =>
         SIM_HOLDINGS.some(h => h.sym === p.sym)), p => p.id, "o");
 
     // 周期清单：items 按判据 id 并，log / history 只追加（各自按唯一键判重）
@@ -2063,6 +2072,8 @@ function rsAdjustGrade(grade, rsResult) {
       // and a blind push would overwrite cloud and destroy them forever).
       // Match by order id (Date.now().toString(36)); orders without id are legacy.
       let pendingMerged = false;
+      // 纪元不同（本机刚存档重置、还没推上去）时，云端的模拟仓是已存档掉的旧一期，不许打捞回来
+      const _epochSame = (Number(cloudData.simEpoch) || 0) === simEpoch;
       // 先吸收云端的墓碑，再做下面的打捞——否则在另一台设备上删掉的东西，会被这台设备
       // 从自己的旧快照里当成"云端没有的新数据"救回来，方向正好反过来。
       if (Array.isArray(cloudData.simTombstones) && cloudData.simTombstones.length) {
@@ -2070,7 +2081,7 @@ function rsAdjustGrade(grade, rsResult) {
         cloudData.simTombstones.forEach(x => { if (x && !have.has(x.t + "|" + x.k)) SIM_TOMBSTONES.push(x); });
         tombPrune();
       }
-      if (Array.isArray(cloudData.simPending) && cloudData.simPending.length) {
+      if (_epochSame && Array.isArray(cloudData.simPending) && cloudData.simPending.length) {
         const localIds  = new Set(SIM_PENDING.map(p => p.id).filter(Boolean));
         // Also skip if same sym is already open or already pending locally — prevents
         // orders from two devices targeting the same sym from both surviving the merge.
@@ -2094,7 +2105,7 @@ function rsAdjustGrade(grade, rsResult) {
       // and the next fetchPrices tick auto-closes it a second time → duplicate
       // closed record for the same trade.
       const closedKeys = new Set(SIM_CLOSED.map(tradeIdOf));
-      if (Array.isArray(cloudData.simHoldings) && cloudData.simHoldings.length) {
+      if (_epochSame && Array.isArray(cloudData.simHoldings) && cloudData.simHoldings.length) {
         const localKeys = new Set(SIM_HOLDINGS.map(tradeIdOf));
         const newH = cloudData.simHoldings.filter(h =>
           !localKeys.has(tradeIdOf(h)) && !closedKeys.has(tradeIdOf(h)) && !tombHas("h", tradeIdOf(h)));
@@ -2104,7 +2115,7 @@ function rsAdjustGrade(grade, rsResult) {
           pendingMerged = true;
         }
       }
-      if (Array.isArray(cloudData.simClosePending) && cloudData.simClosePending.length) {
+      if (_epochSame && Array.isArray(cloudData.simClosePending) && cloudData.simClosePending.length) {
         const localIds  = new Set(SIM_CLOSE_PENDING.map(p => p.id).filter(Boolean));
         // Skip close orders for syms already queued locally, and orders whose
         // position isn't (or is no longer, per the rescue/exclusion above) open
@@ -2156,7 +2167,15 @@ function rsAdjustGrade(grade, rsResult) {
 
   function applyCloudData(data) {
     if (!data) return;
+    // 云端内容要落地了：先把只读查看的存档退出来，让内存里的模拟仓回到真实内容
+    if (_archView) { exitArchiveView(true); toast("云端有更新，已退出存档查看", "info"); }
     if (data._demo) _showDemoBanner();
+    // 模拟仓纪元：云端比本机大 = 别的设备存档并重置过，整块采用云端的（它就是新一期）；
+    // 云端比本机小 = 本机刚重置、还没推上去，模拟仓保留本机的，云端那份是已存档掉的旧一期。
+    const _cEpoch = Number(data.simEpoch) || 0;
+    _simRel = _cEpoch > simEpoch ? "cloudAhead" : _cEpoch < simEpoch ? "localAhead" : "same";
+    if (_cEpoch > simEpoch) simEpoch = _cEpoch;
+    const _simApply = _simRel !== "localAhead";
     // Carry this session's live market fields across the array replacement. They came
     // from the current session's API fetch (never from storage — noMarket guarantees
     // the cloud blob has none), so restoring them is safe and keeps 今日盈亏 / tape
@@ -2242,6 +2261,7 @@ function rsAdjustGrade(grade, rsResult) {
       data.simTombstones.forEach(x => { if (x && !have.has(x.t + "|" + x.k)) SIM_TOMBSTONES.push(x); });
       tombPrune();
     }
+    if (_simApply) {
     if (Array.isArray(data.simHoldings))
       SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...data.simHoldings.filter(h => !tombHas("h", tradeIdOf(h))));
     if (Array.isArray(data.simClosed))   SIM_CLOSED.splice(0, SIM_CLOSED.length, ...data.simClosed);
@@ -2250,6 +2270,7 @@ function rsAdjustGrade(grade, rsResult) {
       SIM_PENDING.splice(0, SIM_PENDING.length, ...data.simPending.filter(p => !tombHas("o", p.id)));
     if (Array.isArray(data.simClosePending))
       SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...data.simClosePending.filter(p => !tombHas("o", p.id)));
+    }
     if (Array.isArray(data.realOptions))
       REAL_OPTIONS.splice(0, REAL_OPTIONS.length, ...data.realOptions.filter(o => !tombHas("p", o.id)));
     if (Array.isArray(data.modelPicks))      MODEL_PICKS.splice(0, MODEL_PICKS.length, ...data.modelPicks);
@@ -2392,6 +2413,7 @@ function rsAdjustGrade(grade, rsResult) {
   try { localStorage.removeItem("trendo_mv_recent"); } catch (_) {}
 
   function saveLocalOnly(updateTimestamp = true) {
+    if (_archView) return;   // 只读查看存档时，内存里的模拟仓是存档内容，绝不能落盘
     try {
       localStorage.setItem("trendo_v4_holdings",     JSON.stringify(noMarket(HOLDINGS)));
       localStorage.setItem("trendo_v4_closed",       JSON.stringify(CLOSED_POSITIONS));
@@ -2400,6 +2422,7 @@ function rsAdjustGrade(grade, rsResult) {
       localStorage.setItem("trendo_v4_sim_holdings", JSON.stringify(noMarket(SIM_HOLDINGS)));
       localStorage.setItem("trendo_v4_sim_closed",   JSON.stringify(SIM_CLOSED));
       localStorage.setItem("trendo_v4_sim_notional", String(simNotional));
+      localStorage.setItem("trendo_v4_sim_epoch", String(simEpoch));
       localStorage.setItem("trendo_v4_sim_pending",       JSON.stringify(SIM_PENDING));
       localStorage.setItem("trendo_v4_sim_close_pending", JSON.stringify(SIM_CLOSE_PENDING));
       localStorage.setItem("trendo_v4_sim_tombstones",    JSON.stringify(SIM_TOMBSTONES));
@@ -2415,6 +2438,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function saveToStorage() {
+    if (_archView) { toast("存档是只读的：这次改动不会保存", "warn"); return; }
     saveLocalOnly();
     if (_syncSettled) _dirtySinceSync = true;
     markDirty();                 // 跨会话的「有未推送改动」标志，见 DIRTY_KEY
@@ -2431,6 +2455,7 @@ function rsAdjustGrade(grade, rsResult) {
   // 较新，转而去覆盖云端。推送照样安排（别的设备也用得上），但载荷带的是原来那个时间戳，
   // 服务端按「相等」接收，不会把谁的版本挤掉。
   function saveDerived() {
+    if (_archView) return;
     saveLocalOnly(false);
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncPush, 2000);
@@ -2456,6 +2481,8 @@ function rsAdjustGrade(grade, rsResult) {
       if (sh) { const parsed = JSON.parse(sh); SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...parsed); }
       if (sc) { const parsed = JSON.parse(sc); SIM_CLOSED.splice(0, SIM_CLOSED.length, ...parsed); }
       if (sn) simNotional = parseFloat(sn) || simNotional;
+      const se = localStorage.getItem("trendo_v4_sim_epoch");
+      if (se) simEpoch = Number(se) || 0;
       const sp  = localStorage.getItem("trendo_v4_sim_pending");
       if (sp)  { const parsed = JSON.parse(sp);  SIM_PENDING.splice(0, SIM_PENDING.length, ...parsed); }
       const scp = localStorage.getItem("trendo_v4_sim_close_pending");
@@ -7869,6 +7896,7 @@ function rsAdjustGrade(grade, rsResult) {
   }
 
   function switchPage(page) {
+    if (_archView && page !== "sim") exitArchiveView(true);
     currentPage = page;
     localStorage.setItem("trendo_last_page", page);
     const VIEWS = { desk: "desk-view", inspirations: "inspirations-view", sim: "sim-view", analytics: "analytics-view", options: "options-view", market: "market-view" };
@@ -10578,6 +10606,7 @@ function rsAdjustGrade(grade, rsResult) {
   // （HOLDINGS/CLOSED_POSITIONS vs SIM_HOLDINGS/SIM_CLOSED）、DOM 挂载点、峰值追踪的 localStorage
   // key、以及"已平仓交易去哪看"的提示文案不同。
   function simMonthlyPeakDrawdown(storageKey, monthKey, currentPnl) {
+    if (_archView) storageKey = `trendo_archview_${_archView.id}_${storageKey}`;   // 不许写到真实模拟仓的峰值上
     let data = {};
     try { data = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch (e) {}
     if (data.month !== monthKey) data = { month: monthKey, peak: currentPnl };
@@ -12217,7 +12246,292 @@ function rsAdjustGrade(grade, rsResult) {
     renderSimTable(); renderSimOverview(); renderSimMonthly();
   }
 
+  // ============ 模拟仓存档 ============
+  // 把当前这一期模拟仓整套记录存成一份只读存档，然后以同样的本金开始全新的一期。
+  //   · 存档存在独立的云端 key（api/data.js ?archive=），写一次不再改，不进 rev/CAS，不被同步合并碰到。
+  //   · 持仓中的仓位先按现价平掉（记入存档、标 _arch），挂单直接取消——存档里只有已平仓记录，
+  //     分析复盘 / 月度回测 / 出场质量 / 交易日志因此原样可用。
+  //   · 重置靠「纪元」simEpoch：新纪元写进云端后，旧纪元的设备推上来的模拟仓内容一律被丢弃。
+  //   · 查看存档 = 把内存里的模拟仓数组临时换成存档内容，整页复用现有渲染；期间所有落盘/推送
+  //     全部被 _archView 拦住，退出时原样换回。
+  const ARCH_CACHE = {};
+  let _archList = null;
+  const archUrl = q => `/api/data?key=${encodeURIComponent(syncKey)}&${q}`;
+  const archEsc = s => String(s ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+  async function archFetchList() {
+    if (!syncKey || _demoMode) return [];
+    try {
+      const r = await fetch(archUrl("archives=1"));
+      if (!r.ok) return null;
+      const j = await r.json();
+      return Array.isArray(j.archives) ? j.archives : [];
+    } catch (_) { return null; }
+  }
+  async function archFetchOne(id) {
+    if (ARCH_CACHE[id]) return ARCH_CACHE[id];
+    try {
+      const r = await fetch(archUrl(`archive=${encodeURIComponent(id)}`));
+      if (!r.ok) return null;
+      const j = await r.json();
+      if (j.archive) ARCH_CACHE[id] = j.archive;
+      return j.archive || null;
+    } catch (_) { return null; }
+  }
+
+  // 一期记录的汇总：写进目录卡片，不用点开就能看每期表现
+  function archSummary(closedArr) {
+    const grouped = groupTrades(closedArr);
+    const wins = grouped.filter(h => (h.pnlFinal || 0) > 0).length;
+    const realized = closedArr.reduce((s, h) => s + (h.pnlFinal || 0), 0);
+    const entries = closedArr.map(h => h.entry).filter(Boolean).sort();
+    const exits = closedArr.map(h => h.closedAt).filter(Boolean).sort();
+    return {
+      trades: grouped.length, records: closedArr.length, wins,
+      winRate: grouped.length ? wins / grouped.length : null,
+      realized, from: entries[0] || null, to: exits[exits.length - 1] || null,
+    };
+  }
+
+  // 与 closePosition 的「整笔平仓」分支同一套算法，但不碰任何全局状态（不落盘、不重画）：
+  // 先在副本上算好，云端确认存下之后才动本地。
+  function archBuildClose(pos, cd) {
+    const cp = pos.last > 0 ? pos.last : pos.cost;
+    const r = JSON.parse(JSON.stringify(pos));
+    delete r.spark;
+    r.closedAt = cd; r.closePrice = cp;
+    r.days = calcTradingDays(pos.entry, cd);
+    r.pnlDollar = Math.round((cp - pos.cost) * pos.qty + ccNet(pos));
+    r.pnlPct = (pos.cost > 0 && pos.qty > 0) ? r.pnlDollar / (pos.cost * pos.qty) : 0;
+    r.rMult = pos.risk1R > 0 ? (cp - pos.cost) / pos.risk1R : 0;
+    r.pnlFinal = r.pnlDollar;
+    r.exitReason = "manual";
+    r._xid = newExitId(); r._xat = nowStamp();
+    r._arch = true;          // 存档时按现价平掉的，不是用户自己平的
+    return r;
+  }
+
+  async function archiveAndResetSim(name) {
+    if (_archView) { toast("请先退出存档查看", "warn"); return false; }
+    if (!syncKey || _demoMode) { toast("存档需要云同步（先设置同步密钥）", "error"); return false; }
+    if (!SIM_HOLDINGS.length && !SIM_CLOSED.length) { toast("当前模拟仓没有任何记录可存", "warn"); return false; }
+    // 等进行中的同步落地，免得存的是半新半旧的内容
+    for (let i = 0; i < 20 && _syncActive > 0; i++) await new Promise(r => setTimeout(r, 250));
+    const today = new Date().toISOString().slice(0, 10);
+    const closedCopy = SIM_CLOSED.map(h => { const x = JSON.parse(JSON.stringify(h)); delete x.spark; return x; });
+    const archClosed = SIM_HOLDINGS.map(h => archBuildClose(h, today));
+    const all = [...closedCopy, ...archClosed];
+    const sum = archSummary(all);
+    const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const meta = {
+      name: (name || "").trim() || `模拟仓 ${sum.from || ""} → ${today}`,
+      createdAt: new Date().toISOString(), from: sum.from, to: today,
+      notional: simNotional, trades: sum.trades, records: sum.records,
+      realized: Math.round(sum.realized), winRate: sum.winRate,
+      closedAtArchive: archClosed.length, canceledOrders: SIM_PENDING.length + SIM_CLOSE_PENDING.length,
+    };
+    const data = { version: 1, meta, notional: simNotional, simClosed: all };
+    // 先存档、读回核对，确认云端真的有了，才动本地——失败时本地原封不动
+    try {
+      const r = await fetch(archUrl("archive=1"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, meta, data }),
+      });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      delete ARCH_CACHE[id];
+      const back = await archFetchOne(id);
+      if (!back || !Array.isArray(back.simClosed) || back.simClosed.length !== all.length)
+        throw new Error("读回核对失败");
+    } catch (e) {
+      toast("存档没有存成功，当前模拟仓未做任何改动（" + e.message + "）", "error");
+      return false;
+    }
+    // —— 云端已确认：重置本地 ——
+    SIM_HOLDINGS.splice(0); SIM_CLOSED.splice(0); SIM_PENDING.splice(0); SIM_CLOSE_PENDING.splice(0);
+    simEpoch = Math.max(Date.now(), simEpoch + 1);
+    try { localStorage.removeItem("trendo_sim_month_peak"); localStorage.removeItem("trendo_sim_closed_lifetime_peak"); } catch (_) {}
+    Object.keys(_histMonthCache).forEach(k => { if (k.startsWith("#sim-")) delete _histMonthCache[k]; });
+    simActiveTab = "open"; simSelectedSym = null;
+    try { closeSimDrawer(); } catch (_) {}
+    saveToStorage();
+    clearTimeout(syncTimer);
+    syncPush();                    // 新纪元立刻送上云端，不等去抖
+    _archList = null;
+    $("#sim-tab-open")?.click();
+    renderSim();
+    toast(`已存档「${meta.name}」并开始新的模拟仓`, "ok");
+    return true;
+  }
+
+  function enterArchiveBanner() {
+    const view = $("#sim-view"); if (!view) return;
+    let el = $("#sim-archive-banner");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "sim-archive-banner";
+      const bar = view.querySelector(".page-topbar");
+      bar ? bar.after(el) : view.prepend(el);
+    }
+    const m = _archView.meta || {};
+    el.innerHTML = `<div class="sab-txt"><b>正在查看存档</b>「${archEsc(_archView.name)}」
+      <span class="sab-sub">${archEsc(m.from || "")} → ${archEsc(m.to || "")} · 只读，改动不会保存</span></div>
+      <button class="btn" id="sim-archive-exit">返回当前模拟仓</button>`;
+    el.style.display = "";
+    $("#sim-archive-exit")?.addEventListener("click", () => exitArchiveView());
+  }
+
+  async function enterArchiveView(id) {
+    if (_archView) exitArchiveView(true);
+    const meta = (_archList || []).find(a => a.id === id) || {};
+    const d = await archFetchOne(id);
+    if (!d || !Array.isArray(d.simClosed)) { toast("存档读取失败，请重试", "error"); return false; }
+    try { closeSimDrawer(); } catch (_) {}
+    const stash = {
+      holdings: SIM_HOLDINGS.slice(), closed: SIM_CLOSED.slice(),
+      pending: SIM_PENDING.slice(), closePending: SIM_CLOSE_PENDING.slice(),
+      notional: simNotional, tab: simActiveTab, selected: simSelectedSym,
+    };
+    _archView = { id, name: d.meta?.name || meta.name || "存档", meta: d.meta || meta, stash };
+    SIM_HOLDINGS.splice(0); SIM_PENDING.splice(0); SIM_CLOSE_PENDING.splice(0);
+    SIM_CLOSED.splice(0, SIM_CLOSED.length, ...JSON.parse(JSON.stringify(d.simClosed)));
+    simNotional = d.notional || simNotional;
+    simSelectedSym = null;
+    Object.keys(_histMonthCache).forEach(k => { if (k.startsWith("#sim-")) delete _histMonthCache[k]; });
+    $("#sim-view")?.classList.add("arch-mode");
+    document.body.classList.add("sim-arch-mode");
+    enterArchiveBanner();
+    if (currentPage !== "sim") switchPage("sim");
+    if (simSubTab !== "book") setSimSubTab("book");
+    $("#sim-tab-closed")?.click();
+    renderSim();
+    window.scrollTo({ top: 0 });
+    return true;
+  }
+
+  function exitArchiveView(silent) {
+    if (!_archView) return;
+    const s = _archView.stash;
+    _archView = null;
+    try { closeSimDrawer(); } catch (_) {}
+    SIM_HOLDINGS.splice(0, SIM_HOLDINGS.length, ...s.holdings);
+    SIM_CLOSED.splice(0, SIM_CLOSED.length, ...s.closed);
+    SIM_PENDING.splice(0, SIM_PENDING.length, ...s.pending);
+    SIM_CLOSE_PENDING.splice(0, SIM_CLOSE_PENDING.length, ...s.closePending);
+    simNotional = s.notional; simSelectedSym = null;
+    Object.keys(_histMonthCache).forEach(k => { if (k.startsWith("#sim-")) delete _histMonthCache[k]; });
+    $("#sim-view")?.classList.remove("arch-mode");
+    document.body.classList.remove("sim-arch-mode");
+    const b = $("#sim-archive-banner"); if (b) b.style.display = "none";
+    ($(s.tab === "closed" ? "#sim-tab-closed" : "#sim-tab-open"))?.click();
+    if (!silent) renderSim();
+  }
+
+  function archCardHTML(a) {
+    const pnl = Number(a.realized) || 0;
+    const wr = a.winRate == null ? "—" : Math.round(a.winRate * 100) + "%";
+    const ret = a.notional > 0 ? (pnl / a.notional * 100) : null;
+    const when = a.createdAt ? new Date(a.createdAt).toLocaleDateString("sv-SE") : "";
+    return `<div class="sa-card" data-arch-id="${archEsc(a.id)}">
+      <div class="sa-card-hd">
+        <b class="sa-name">${archEsc(a.name)}</b>
+        <span class="sa-range">${archEsc(a.from || "—")} → ${archEsc(a.to || "—")}</span>
+      </div>
+      <div class="sa-stats">
+        <span><i>已实现</i><b class="${pnl >= 0 ? "up" : "down"}">${fmt.signed(pnl)}</b></span>
+        <span><i>收益率</i><b class="${pnl >= 0 ? "up" : "down"}">${ret == null ? "—" : (ret >= 0 ? "+" : "") + ret.toFixed(1) + "%"}</b></span>
+        <span><i>胜率</i><b>${wr}</b></span>
+        <span><i>交易</i><b>${a.trades ?? "—"} 笔</b></span>
+        <span><i>本金</i><b>${fmt.usd(a.notional || 0)}</b></span>
+      </div>
+      <div class="sa-foot">
+        <span class="sa-meta">存档于 ${when}${a.closedAtArchive ? ` · 含 ${a.closedAtArchive} 笔存档时按现价平仓` : ""}</span>
+        <span class="sa-acts">
+          <button class="btn primary sa-view">查看</button>
+          <button class="btn sa-del" title="永久删除这份存档">删除</button>
+        </span>
+      </div>
+    </div>`;
+  }
+
+  async function renderArchiveModal() {
+    const body = $("#sim-archive-body"); if (!body) return;
+    const usable = !!syncKey && !_demoMode;
+    const open = SIM_HOLDINGS.length, pend = SIM_PENDING.length + SIM_CLOSE_PENDING.length;
+    const sum = archSummary(SIM_CLOSED);
+    const today = new Date().toISOString().slice(0, 10);
+    body.innerHTML = `
+      <div class="sa-sec">
+        <div class="sa-sec-t">存档当前模拟仓，并开始新的一期</div>
+        ${_archView ? `<div class="sa-note warn">正在查看存档，先点上方「返回当前模拟仓」再存档。</div>` : ""}
+        ${usable ? "" : `<div class="sa-note warn">存档存在云端，需要先设置同步密钥（演示模式不可用）。</div>`}
+        <div class="form-row"><label>存档名称</label>
+          <input class="form-input" id="sim-archive-name" maxlength="40" placeholder="模拟仓 ${archEsc(sum.from || today)} → ${today}"/></div>
+        <ul class="sa-list">
+          <li>已平仓 <b>${SIM_CLOSED.length}</b> 条记录（${sum.trades} 笔交易）原样存档</li>
+          <li>持仓中 <b>${open}</b> 笔会<b>按当前价平仓</b>并记入存档（平仓日 ${today}）</li>
+          <li>挂单 <b>${pend}</b> 张取消，不带入新的一期</li>
+          <li>模拟本金 <b>${fmt.usd(simNotional)}</b> 不变，新的一期从零记录开始</li>
+          <li>模型选股不受影响</li>
+        </ul>
+        <button class="btn primary" id="sim-archive-do" ${usable && !_archView && (open || SIM_CLOSED.length) ? "" : "disabled"}>存档并重置模拟仓</button>
+      </div>
+      <div class="sa-sec">
+        <div class="sa-sec-t">已有存档</div>
+        <div id="sim-archive-list"><div class="sa-note">读取中…</div></div>
+      </div>`;
+    const listEl = $("#sim-archive-list");
+    if (!usable) { listEl.innerHTML = `<div class="sa-note">—</div>`; return; }
+    const list = await archFetchList();
+    _archList = list;
+    if (!$("#sim-archive-list")) return;     // 期间弹窗已关
+    if (list === null) listEl.innerHTML = `<div class="sa-note warn">存档目录读取失败 <button class="btn" id="sim-archive-retry">重试</button></div>`;
+    else if (!list.length) listEl.innerHTML = `<div class="sa-note">还没有存档。</div>`;
+    else listEl.innerHTML = list.map(archCardHTML).join("");
+  }
+
+  function openArchiveModal() {
+    openModal("sim-archive-modal");
+    renderArchiveModal();
+  }
+
+  function wireSimArchive() {
+    $("#sim-archive-btn")?.addEventListener("click", openArchiveModal);
+    $("#sim-archive-close")?.addEventListener("click", () => closeModal("sim-archive-modal"));
+    $("#sim-archive-modal")?.addEventListener("click", async e => {
+      if (e.target === e.currentTarget) { closeModal("sim-archive-modal"); return; }
+      if (e.target.closest("#sim-archive-retry")) { renderArchiveModal(); return; }
+      const card = e.target.closest(".sa-card");
+      if (card && e.target.closest(".sa-view")) {
+        const ok = await enterArchiveView(card.dataset.archId);
+        if (ok) closeModal("sim-archive-modal");
+        return;
+      }
+      if (card && e.target.closest(".sa-del")) {
+        const a = (_archList || []).find(x => x.id === card.dataset.archId);
+        if (!confirm(`永久删除存档「${a?.name || ""}」？此操作不可撤销。`)) return;
+        try {
+          const r = await fetch(archUrl(`archive=${encodeURIComponent(card.dataset.archId)}`), { method: "DELETE" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          delete ARCH_CACHE[card.dataset.archId];
+          toast("存档已删除", "ok");
+        } catch (err) { toast("删除失败：" + err.message, "error"); }
+        renderArchiveModal();
+        return;
+      }
+      if (e.target.closest("#sim-archive-do")) {
+        const btn = $("#sim-archive-do");
+        const name = $("#sim-archive-name")?.value || "";
+        const msg = `存档并重置模拟仓？\n\n· ${SIM_HOLDINGS.length} 笔持仓将按当前价平仓并记入存档\n· ${SIM_PENDING.length + SIM_CLOSE_PENDING.length} 张挂单取消\n· 已有记录整套存档，新的一期从零开始（本金不变）`;
+        if (!confirm(msg)) return;
+        btn.disabled = true; btn.textContent = "存档中…";
+        const ok = await archiveAndResetSim(name);
+        if (ok) renderArchiveModal(); else { btn.disabled = false; btn.textContent = "存档并重置模拟仓"; }
+      }
+    });
+  }
+
   function wireSimControls() {
+    wireSimArchive();
     // Sim notional modal — event delegation survives re-renders
     document.addEventListener("click", e => {
       if (e.target.closest(".sim-notional-edit-btn")) {
