@@ -12403,8 +12403,9 @@ function rsAdjustGrade(grade, rsResult) {
       bar ? bar.after(el) : view.prepend(el);
     }
     const m = _archView.meta || {};
+    const toD = m.createdAt ? new Date(m.createdAt).toLocaleDateString("sv-SE") : (m.to || "");
     el.innerHTML = `<div class="sab-txt"><b>正在查看存档</b>「${archEsc(_archView.name)}」
-      <span class="sab-sub">${archEsc(m.from || "")} → ${archEsc(m.to || "")} · 只读，改动不会保存</span></div>
+      <span class="sab-sub">${archEsc(m.from || "")} → ${archEsc(toD)} · 只读，改动不会保存</span></div>
       <button class="btn" id="sim-archive-exit">返回存档列表</button>`;
     el.style.display = "";
     $("#sim-archive-exit")?.addEventListener("click", () => { exitArchiveView(); setSimSubTab("archive"); });
@@ -12461,10 +12462,11 @@ function rsAdjustGrade(grade, rsResult) {
     const wr = a.winRate == null ? "—" : Math.round(a.winRate * 100) + "%";
     const ret = a.notional > 0 ? (pnl / a.notional * 100) : null;
     const when = a.createdAt ? new Date(a.createdAt).toLocaleDateString("sv-SE") : "";
+    const toD = when || a.to || "—";      // 结束日期＝存档当天，全页统一
     return `<div class="sa-card" data-arch-id="${archEsc(a.id)}">
       <div class="sa-card-hd">
         <b class="sa-name">${archEsc(a.name)}</b>
-        <span class="sa-range">${archEsc(a.from || "—")} → ${archEsc(a.to || "—")}</span>
+        <span class="sa-range">${archEsc(a.from || "—")} → ${archEsc(toD)}</span>
       </div>
       <div class="sa-stats">
         <span><i>已实现</i><b class="${pnl >= 0 ? "up" : "down"}">${fmt.signed(pnl)}</b></span>
