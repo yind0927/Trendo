@@ -12355,7 +12355,7 @@ function rsAdjustGrade(grade, rsResult) {
     const id = "a" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const meta = {
       name: (name || "").trim() || `模拟仓 ${sum.from || ""} → ${today}`,
-      createdAt: new Date().toISOString(), from: sum.from, to: sum.to || today,
+      createdAt: new Date().toISOString(), from: sum.from, to: today,
       notional: simNotional, trades: sum.trades, records: sum.records,
       realized: Math.round(sum.realized), winRate: sum.winRate,
       closedAtArchive: archClosed.length, canceledOrders: SIM_PENDING.length + SIM_CLOSE_PENDING.length,
