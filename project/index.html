@@ -2566,6 +2566,16 @@
   #sim-view.arch-mode #sim-holdings-cards .hc-action, #sim-view.arch-mode #sim-pending-section,
   #sim-view.arch-mode #sim-dup-banner, body.sim-arch-mode #mobile-fab { display:none !important; }
   .sa-sec { margin:0 0 20px; }
+  .opts-pool-card { border-left:3px solid var(--accent); }
+  .opts-pool-note { font-size:11px; margin:8px 0 6px; }
+  .opts-pool-rows { display:flex; flex-direction:column; gap:6px; margin:8px 0; }
+  .opts-pool-row { display:flex; align-items:center; flex-wrap:wrap; gap:4px 10px; font-size:12px; cursor:pointer; }
+  .opts-pool-tag { font-size:10px; padding:1px 6px; border-radius:8px; border:1px solid var(--warn); color:var(--warn); }
+  .opts-pool-acts { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0 4px; font-size:11.5px; }
+  .opts-pool-acts .opts-mini-btn[disabled] { opacity:.45; cursor:not-allowed; }
+  .opts-pool-detail { margin-top:8px; }
+  .opts-pool-detail > summary { cursor:pointer; font-size:11.5px; color:var(--fg-3); padding:4px 0; }
+  .opts-pool-detail .opts-pos-card { margin-top:8px; }
   #sim-archive-panel { padding:22px 0 8px; }
   #sim-archive-panel .sa-sec { margin:0 0 28px; padding-top:24px; }
   #sim-archive-panel .sa-sec-t { font-size:12px; margin:0 0 16px; }
@@ -6928,12 +6938,12 @@
       <label>标的 ETF</label>
       <div style="display:flex;gap:8px;align-items:center">
         <div class="seg" style="width:fit-content;flex-shrink:0">
-          <button type="button" class="opts-sym-chip" data-optsym="MAGS">MAGS</button>
           <button type="button" class="opts-sym-chip" data-optsym="SMH">SMH</button>
           <button type="button" class="opts-sym-chip" data-optsym="SOXL">SOXL</button>
-          <button type="button" class="opts-sym-chip" data-optsym="GLD">GLD</button>
           <button type="button" class="opts-sym-chip" data-optsym="IWM">IWM</button>
+          <button type="button" class="opts-sym-chip" data-optsym="GLD">GLD</button>
           <button type="button" class="opts-sym-chip" data-optsym="QQQ">QQQ</button>
+          <button type="button" class="opts-sym-chip" data-optsym="TQQQ">TQQQ</button>
         </div>
         <input type="text" id="opts-sym-input" class="form-input" style="flex:1;min-width:0;text-transform:uppercase;font-family:var(--f-mono)" placeholder="自定义"/>
       </div>
@@ -7023,8 +7033,8 @@
   </div>
 </div>
 
-<script src="data.js?v=902"></script>
-<script src="desk.js?v=902"></script>
+<script src="data.js?v=903"></script>
+<script src="desk.js?v=903"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

@@ -1371,7 +1371,7 @@ function rsAdjustGrade(grade, rsResult) {
   const _optsSymGroupsOpen  = new Set(); // which symbol groups are expanded in settled section // group IDs of expanded wheel combo cards
   let optSellSym   = "QQQ";  // sell-modal default
   let optSellStrat = "csp";  // "csp" 卖Put | "cc" 备兑Call
-  const OPT_WATCH_SYMS = ["MAGS", "SMH", "SOXL", "GLD", "IWM", "QQQ"];
+  const OPT_WATCH_SYMS = ["SMH", "SOXL", "IWM", "GLD", "QQQ", "TQQQ"];
   let _optSpot = {};            // { sym: last } — refreshed by fetchPrices()
   let newPositionContext = "desk"; // "desk" | "sim"
   let pendingCloseCtx = "desk";
@@ -8494,14 +8494,7 @@ function rsAdjustGrade(grade, rsResult) {
           // separately by callers (see comment above).
           pos.realized = pos.premium * 100 * pos.qty;
           // Auto-complete Wheel: linked CSP's stock was called away at this strike
-          if (pos.linkedCspId) {
-            const parentCsp = REAL_OPTIONS.find(p => p.id === pos.linkedCspId);
-            if (parentCsp && parentCsp.status === "assigned" && !parentCsp.assignedStockSold) {
-              parentCsp.assignedStockSold = true;
-              parentCsp.assignedExitPrice = pos.strike;
-              parentCsp.assignedExitDate  = pos.closedAt;
-            }
-          }
+          _optSettleParents(pos, pos.strike, pos.closedAt);
         }
       } else {
         pos.status = "expired";
@@ -8534,6 +8527,41 @@ function rsAdjustGrade(grade, rsResult) {
   //     held) → the CC owns it: (strike − underlyingAtEntry), the only basis available here.
   //   • CC exercised WITH a parent CSP that is carrying the stock leg → 0, parent owns it.
   // Anything else (OTM expiry, bought-to-close, still-held shares) has no realized stock leg.
+  // ── 正股池：同标的、多批已被指派且还持有的 CSP ────────────────────────────
+  // 一笔 CC 可以挂在一批（linkedCspId）或合并挂在好几批上（linkedCspIds，linkedCspId 仍
+  // 存第一批 id 以兼容旧逻辑）。合并 CC 必须整批整批地覆盖，不拆分某一批的股数：行权时
+  // 所有关联批次一起出仓，盈亏仍按「每批各自 出仓价−本批行权价」归属，加起来等于池子按
+  // 加权均价算的结果，汇总页数字不会变。
+  function _optCcIds(cc) {
+    if (Array.isArray(cc.linkedCspIds) && cc.linkedCspIds.length) return cc.linkedCspIds;
+    return cc.linkedCspId ? [cc.linkedCspId] : [];
+  }
+  // 这笔 CC 的权利金归到某一批上的比例（按各批张数）
+  function _optCcShare(cc, cspId) {
+    const ids = _optCcIds(cc);
+    if (ids.length <= 1) return 1;
+    const arr = _activeOpts();
+    let tot = 0, mine = 0;
+    ids.forEach(i => { const p = arr.find(x => x.id === i); const q = p ? p.qty : 0; tot += q; if (i === cspId) mine = q; });
+    return tot > 0 ? mine / tot : 1 / ids.length;
+  }
+  // CC 被行权：关联的每一批一起记为出仓
+  function _optSettleParents(cc, price, date) {
+    _optCcIds(cc).forEach(id => {
+      const p = REAL_OPTIONS.find(x => x.id === id);
+      if (p && p.status === "assigned" && !p.assignedStockSold) {
+        p.assignedStockSold = true; p.assignedExitPrice = price; p.assignedExitDate = date;
+      }
+    });
+  }
+  const _optPoolOff = new Set();   // 正股池里被取消勾选的批次 id（只在本次会话里）
+  function _optLiveBatches(sym) {
+    return _activeOpts().filter(p => p.sym === sym && p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold);
+  }
+  function _optCoveredByOpenCc(cspId) {
+    return _activeOpts().some(p => p.strat === "cc" && (p.status === "open" || p.status === "pending") && _optCcIds(p).includes(cspId));
+  }
+
   function _optOwnsStockLeg(pos) {
     if (pos.status !== "assigned") return false;
     if (pos.strat === "csp") return !!(pos.assignedStockSold && pos.assignedExitPrice != null);
@@ -8836,6 +8864,58 @@ function rsAdjustGrade(grade, rsResult) {
   // Expired records have nothing to edit but can still be reclassified as bought-back.
   const _optEditable = pos => !!_optExitSlot(pos) || pos.status === "expired";
 
+  // 持有正股：同标的有 2 批以上时先给一张「正股池」汇总卡（合并做 CC / 合并出仓），
+  // 下面保留每一批自己的卡片（分批做 CC / 分批出仓），两种做法都在。
+  function _optLiveStockHTML(live) {
+    const bySym = new Map();
+    live.forEach(p => { if (!bySym.has(p.sym)) bySym.set(p.sym, []); bySym.get(p.sym).push(p); });
+    return [...bySym.entries()].map(([sym, batches]) => {
+      if (batches.length < 2) return _optDonePosCard(batches[0]);
+      const spot = optSpot(sym);
+      const sel = batches.filter(b => !_optPoolOff.has(b.id));
+      const shares = n => n.reduce((s, b) => s + b.qty * 100, 0);
+      const totSh = shares(batches);
+      const avg = batches.reduce((s, b) => s + b.strike * b.qty * 100, 0) / totSh;
+      const cspPrem = batches.reduce((s, b) => s + b.premium * 100 * b.qty, 0);
+      const ccPrem = batches.reduce((s, b) => s + _activeOpts().filter(p => p.strat === "cc" && _optCcIds(p).includes(b.id))
+        .reduce((a, p) => a + (p.status === "closed" ? (p.premium - (p.closePremium || 0)) : p.premium) * 100 * p.qty * _optCcShare(p, b.id), 0), 0);
+      const adj = avg - ccPrem / totSh;
+      const eq = spot ? (spot - avg) * totSh : null;
+      const selSh = shares(sel);
+      const selAvg = selSh ? sel.reduce((s, b) => s + b.strike * b.qty * 100, 0) / selSh : 0;
+      const selFree = sel.filter(b => !_optCoveredByOpenCc(b.id));
+      const freeContracts = selFree.reduce((s, b) => s + b.qty, 0);
+      const rows = batches.map(b => {
+        const cov = _optCoveredByOpenCc(b.id);
+        return `<label class="opts-pool-row"><input type="checkbox" data-opt-pool-chk="${b.id}" ${_optPoolOff.has(b.id) ? "" : "checked"}/>
+          <span class="mono">$${b.strike}P × ${b.qty}张</span><span class="muted">${(b.closedAt || "").slice(5)} 行权 · ${b.qty * 100}股</span>
+          ${cov ? `<span class="opts-pool-tag">已有 CC 覆盖</span>` : ""}</label>`;
+      }).join("");
+      return `<div class="opts-pos-card opts-pool-card">
+        <div class="opts-card-hd">
+          <span class="opts-badge opts-badge-stock">正股池</span>
+          <span class="opts-card-sym">${sym}</span>
+          <span class="opts-st-tag" style="color:var(--fg-3);border-color:var(--line)">${batches.length} 批已行权 CSP</span>
+          ${spot ? `<span class="opts-card-spot">$${spot.toFixed(2)}</span>` : ""}
+        </div>
+        <div class="opts-card-metrics">
+          <div class="opts-card-m"><div class="opts-card-ml">总股数</div><div class="opts-card-mv">${totSh}股</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">加权均价</div><div class="opts-card-mv">$${avg.toFixed(2)}</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">调整成本</div><div class="opts-card-mv">$${adj.toFixed(2)}</div></div>
+          <div class="opts-card-m"><div class="opts-card-ml">正股浮盈(估)</div><div class="opts-card-mv ${eq == null ? "" : eq >= 0 ? "up" : "down"}">${eq == null ? "—" : (eq >= 0 ? "+" : "−") + fmt.usd(Math.abs(eq))}</div></div>
+        </div>
+        <div class="opts-pool-note muted">CSP 权利金 +${fmt.usd(cspPrem)}${ccPrem ? ` · CC 累计 +${fmt.usd(ccPrem)}` : ""}　（调整成本只扣 CC 权利金，与单批卡片同一口径）</div>
+        <div class="opts-pool-rows">${rows}</div>
+        <div class="opts-pool-acts">
+          <span class="muted">已选 ${sel.length} 批 · ${selSh}股${selSh ? ` · 均价 $${selAvg.toFixed(2)}` : ""}</span>
+          <button class="opts-mini-btn opts-sell-cc-btn" data-opt-pool-cc="${sym}" ${freeContracts ? "" : "disabled"} title="把所选批次合并成一笔 CC，覆盖 ${freeContracts} 张">合并卖 CC · ${freeContracts}张</button>
+          <button class="opts-mini-btn" data-opt-pool-exit="${sym}" ${sel.length ? "" : "disabled"}>合并出仓</button>
+        </div>
+        <details class="opts-pool-detail"><summary>分批明细 · 每批可单独卖 CC / 出仓</summary>${batches.map(_optDonePosCard).join("")}</details>
+      </div>`;
+    }).join("");
+  }
+
   function _optDonePosCard(pos) {
     const typeL = pos.type === "call" ? "C" : "P";
     const isCSP = pos.strat === "csp";
@@ -8859,10 +8939,11 @@ function rsAdjustGrade(grade, rsResult) {
       const stockShares = pos.qty * 100;
 
       // Accumulate all linked CC premiums (open + expired + closed, net of buyback)
-      const allLinkedCC  = _activeOpts().filter(p => p.linkedCspId === pos.id && p.strat === "cc");
+      const allLinkedCC  = _activeOpts().filter(p => p.strat === "cc" && _optCcIds(p).includes(pos.id));
       const totalCcPrem  = allLinkedCC.reduce((s, p) => {
-        if (p.status === "closed") return s + (p.premium - (p.closePremium || 0)) * 100 * p.qty;
-        return s + p.premium * 100 * p.qty;
+        const sh = _optCcShare(p, pos.id);      // 合并 CC 的权利金按各批张数分摊
+        if (p.status === "closed") return s + (p.premium - (p.closePremium || 0)) * 100 * p.qty * sh;
+        return s + p.premium * 100 * p.qty * sh;
       }, 0);
       const hasCc        = allLinkedCC.length > 0;
       const ccPerShare   = hasCc ? totalCcPrem / stockShares : 0;
@@ -8922,11 +9003,12 @@ function rsAdjustGrade(grade, rsResult) {
         </div>
         `}
         ${(() => {
-          const activeCC = _activeOpts().find(p => p.linkedCspId === pos.id && p.strat === "cc" && p.status === "open");
+          const activeCC = _activeOpts().find(p => p.strat === "cc" && p.status === "open" && _optCcIds(p).includes(pos.id));
           if (!activeCC) return "";
           const ccDTE  = _optDTE(activeCC.expiry);
           const ccPrem = activeCC.premium * 100 * activeCC.qty;
-          return `<div class="opts-linked-cc-row"><span class="opts-wheel-badge">轮组</span><span class="muted">备兑CC中:</span> $${activeCC.strike}C · 到期 ${activeCC.expiry.slice(5)} · DTE ${ccDTE}d · <b class="up">+${fmt.usd(ccPrem)}</b></div>`;
+          const nIds   = _optCcIds(activeCC).length;
+          return `<div class="opts-linked-cc-row"><span class="opts-wheel-badge">${nIds > 1 ? "合并 " + nIds + " 批" : "轮组"}</span><span class="muted">备兑CC中:</span> $${activeCC.strike}C ×${activeCC.qty}张 · 到期 ${activeCC.expiry.slice(5)} · DTE ${ccDTE}d · <b class="up">+${fmt.usd(ccPrem)}</b></div>`;
         })()}
       </div>`;
     }
@@ -9291,7 +9373,7 @@ function rsAdjustGrade(grade, rsResult) {
         { name: "Bull Put Spread",  zh: "牛市看跌价差",
           prin: "同CSP方向，但买入更低行权价Put对冲，把最大亏损锁定在价差宽度内，保证金大幅减少",
           method: "卖高Put + 买低Put（同期限） · 最大亏损=价差宽度−净权利金",
-          timing: "支撑位 · IV高 · SMH/MAGS等高波动标的" },
+          timing: "支撑位 · IV高 · SMH/SOXL/TQQQ等高波动标的" },
         { name: "Bull Call Spread", zh: "牛市看涨价差",
           prin: "以卖出更高行权价Call来抵消买Call成本，在定义范围内博涨，IV高时卖出份权利金厚",
           method: "买低Call + 卖高Call（同期限） · 最大收益=价差宽度−净权利金",
@@ -9398,10 +9480,11 @@ function rsAdjustGrade(grade, rsResult) {
   // 每只ETF的固定区间分界点（单位：%），5个断点生成6档
   const ETF_DIST_THRESHOLDS = {
     SOXL: [0.75, 1.5, 3, 6, 15],   // 3x杠杆，日波动极大
+    TQQQ: [0.75, 1.5, 3, 6, 15],   // 纳指3x，与 SOXL 同档（≈ QQQ 默认档 ×3）
     _default: [0.25, 0.5, 1, 2, 5], // 普通权益ETF（含GLD）
   };
   const ETF_DIST_NAMES = {
-    MAGS: "Magnificent 7", SMH: "VanEck 半导体", SOXL: "半导体3x",
+    SMH: "VanEck 半导体", SOXL: "半导体3x", TQQQ: "纳指3x",
     GLD: "黄金 ETF", IWM: "Russell 2000", QQQ: "纳斯达克 100", DRAM: "存储与内存",
     XLK: "科技", XLY: "消费", XLV: "医疗", XLF: "金融",
   };
@@ -9413,7 +9496,7 @@ function rsAdjustGrade(grade, rsResult) {
   // in _etfDistCardHTML (stats.bars undefined), which aborted renderOptions() before
   // the module's innerHTML was ever assigned — the whole module silently vanished.
   // Bump this suffix whenever the _calcEtfDailyStats return shape changes.
-  const ETF_DIST_KEY = "trendo_etf_dist_v2";
+  const ETF_DIST_KEY = "trendo_etf_dist_v3";   // v3：观察列表换成 SMH/SOXL/IWM/GLD/QQQ/TQQQ，同日旧缓存里没有 TQQQ
   // Shape guard: never trust a cached blob just because its date matches.
   function _etfDistStatsValid(s) {
     if (s === null) return true; // legitimate "insufficient data" marker
@@ -9753,7 +9836,7 @@ function rsAdjustGrade(grade, rsResult) {
            return (oCsp.length ? `<div class="opts-sub-label opts-sub-strat">CSP · ${oCsp.length}</div>${oCsp.map(_optOpenPosCard).join("")}` : "") +
              (oCc.length  ? `<div class="opts-sub-label opts-sub-strat">CC · ${oCc.length}</div>${oCc.map(_optOpenPosCard).join("")}` : "");
          })() : ""}
-         ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${liveAssigned.map(_optDonePosCard).join("")}` : ""}
+         ${liveAssigned.length ? `<div class="opts-sub-label" style="color:var(--warn)">持有正股 · Holding Stock · ${liveAssigned.length}</div>${_optLiveStockHTML(liveAssigned)}` : ""}
          ${settledSection}
          ${_optWheelStatsHTML(all)}`;
 
@@ -9824,6 +9907,24 @@ function rsAdjustGrade(grade, rsResult) {
       const pos = arr.find(p => p.id === btn.dataset.optExit);
       if (pos) openAssignedExitModal(pos);
     }));
+    $$("[data-opt-pool-chk]", root).forEach(cb => cb.addEventListener("change", () => {
+      if (cb.checked) _optPoolOff.delete(cb.dataset.optPoolChk); else _optPoolOff.add(cb.dataset.optPoolChk);
+      renderOptions();
+    }));
+    $$("[data-opt-pool-cc]", root).forEach(btn => btn.addEventListener("click", () => {
+      const sym = btn.dataset.optPoolCc;
+      const ids = _optLiveBatches(sym).filter(b => !_optPoolOff.has(b.id) && !_optCoveredByOpenCc(b.id));
+      if (!ids.length) return;
+      const qty = ids.reduce((s, b) => s + b.qty, 0);
+      // 只选了一批就等同于分批做：走原来的单批关联
+      if (ids.length === 1) openOptionsSellModal({ sym, strat: "cc", qty, linkedCspId: ids[0].id });
+      else openOptionsSellModal({ sym, strat: "cc", qty, linkedCspIds: ids.map(b => b.id) });
+    }));
+    $$("[data-opt-pool-exit]", root).forEach(btn => btn.addEventListener("click", () => {
+      const sym = btn.dataset.optPoolExit;
+      const sel = _optLiveBatches(sym).filter(b => !_optPoolOff.has(b.id));
+      if (sel.length) openAssignedExitModal(sel[0], sel);
+    }));
     $$("[data-opt-sell-cc]", root).forEach(btn => btn.addEventListener("click", () => {
       const sym = btn.dataset.ccSym;
       const qty = parseInt(btn.dataset.ccQty) || 1;
@@ -9843,24 +9944,23 @@ function rsAdjustGrade(grade, rsResult) {
       pos.realized = pos.premium * 100 * pos.qty;
       if (pos.strat === "csp") {
         pos.assignedStockSold = false; pos.assignedExitPrice = null; pos.assignedExitDate = null;
-      } else if (pos.linkedCspId) {
-        const parent = arr.find(p => p.id === pos.linkedCspId);
-        if (parent && parent.status === "assigned" && !parent.assignedStockSold) {
-          parent.assignedStockSold = true; parent.assignedExitPrice = pos.strike; parent.assignedExitDate = d;
-        }
+      } else if (_optCcIds(pos).length) {
+        _optSettleParents(pos, pos.strike, d);
       }
       saveToStorage(); renderOptions();
     }));
     $$("[data-opt-reopen]", root).forEach(btn => btn.addEventListener("click", () => {
       const pos = arr.find(p => p.id === btn.dataset.optReopen);
       if (!pos || pos.status === "open" || pos.status === "pending") return;
-      const kids = pos.strat === "csp" ? arr.filter(p => p.linkedCspId === pos.id) : [];
+      const kids = pos.strat === "csp" ? arr.filter(p => _optCcIds(p).includes(pos.id)) : [];
       if (!confirm(`撤回 ${pos.sym} $${pos.strike}${pos.type === "call" ? "C" : "P"} 到持仓中？\n将清除结算结果（平仓价、指派、出仓记录）。${kids.length ? `\n注意：有 ${kids.length} 笔关联 CC，不会被改动。` : ""}`)) return;
-      if (pos.status === "assigned" && pos.strat === "cc" && pos.linkedCspId) {
-        const parent = arr.find(p => p.id === pos.linkedCspId);
-        if (parent && parent.assignedStockSold && parent.assignedExitPrice === pos.strike && parent.assignedExitDate === pos.closedAt) {
-          parent.assignedStockSold = false; parent.assignedExitPrice = null; parent.assignedExitDate = null;
-        }
+      if (pos.status === "assigned" && pos.strat === "cc") {
+        _optCcIds(pos).forEach(id => {
+          const parent = arr.find(p => p.id === id);
+          if (parent && parent.assignedStockSold && parent.assignedExitPrice === pos.strike && parent.assignedExitDate === pos.closedAt) {
+            parent.assignedStockSold = false; parent.assignedExitPrice = null; parent.assignedExitDate = null;
+          }
+        });
       }
       const today = new Date().toISOString().slice(0, 10);
       pos.status = "open";
@@ -10023,7 +10123,10 @@ function rsAdjustGrade(grade, rsResult) {
         : `${openIn.value || "开仓日"} 当天的标的价`;
     };
     qtyEl.value = String(prefill.qty || 1);
-    qtyEl.disabled = false;
+    // 合并 CC 必须覆盖所选批次的全部张数（不拆分某一批的股数），张数锁定
+    qtyEl.disabled = Array.isArray(prefill.linkedCspIds) && prefill.linkedCspIds.length > 1;
+    if (qtyEl.disabled) modal.querySelector("#opts-modal-meta").textContent =
+      `合并卖出 CC：覆盖 ${prefill.linkedCspIds.length} 批已行权 CSP，共 ${prefill.qty} 张（${prefill.qty * 100} 股），张数不可改；权利金按各批张数分摊`;
     premEl.value = "";
     if (deltaEl) deltaEl.value = "";
     const calcEl = modal.querySelector("#opts-calc");
@@ -10121,7 +10224,8 @@ function rsAdjustGrade(grade, rsResult) {
       const optArr = _activeOpts();
       if (isPending) {
         // Carry through explicit link; do NOT auto-detect here — CC isn't open yet
-        const pendingLink = prefill.linkedCspId || null;
+        const pendingIds  = Array.isArray(prefill.linkedCspIds) && prefill.linkedCspIds.length > 1 ? prefill.linkedCspIds : null;
+        const pendingLink = pendingIds ? pendingIds[0] : (prefill.linkedCspId || null);
         optArr.push({
           id: Date.now().toString(36),
           sym, strat: isCSP ? "csp" : "cc", type: isCSP ? "put" : "call",
@@ -10129,12 +10233,14 @@ function rsAdjustGrade(grade, rsResult) {
           targetPremium: prem > 0 ? prem : null,
           ...(entryDelta > 0 ? { entryDelta } : {}),
           ...(pendingLink ? { linkedCspId: pendingLink } : {}),
+          ...(pendingIds ? { linkedCspIds: pendingIds } : {}),
           status: "pending",
           createdAt: new Date().toISOString().slice(0, 10),
         });
       } else {
         // Auto-detect parent CSP when not explicitly provided (direct sell)
-        let linkedCspId = prefill.linkedCspId || null;
+        const mergedIds = Array.isArray(prefill.linkedCspIds) && prefill.linkedCspIds.length > 1 ? prefill.linkedCspIds : null;
+        let linkedCspId = mergedIds ? mergedIds[0] : (prefill.linkedCspId || null);
         if (!linkedCspId && !isCSP) {
           const parentCsp = optArr.find(p =>
             p.sym === sym && p.strat === "csp" && p.status === "assigned" && !p.assignedStockSold
@@ -10149,6 +10255,7 @@ function rsAdjustGrade(grade, rsResult) {
           entryDTE,
           ...(entryDelta > 0 ? { entryDelta } : {}),
           ...(linkedCspId ? { linkedCspId } : {}),
+          ...(mergedIds ? { linkedCspIds: mergedIds } : {}),
           underlyingAtEntry,
           entryDate, openedAt: entryDate, status: "open",
         };
@@ -10227,7 +10334,7 @@ function rsAdjustGrade(grade, rsResult) {
       pos.closedAt = (closeDateEl && closeDateEl.value) || new Date().toISOString().slice(0, 10);
       saveToStorage();
       modal.style.display = "none";
-      if (isRoll) openOptionsSellModal({ sym: pos.sym, strat: pos.strat, qty: pos.qty, linkedCspId: pos.linkedCspId });
+      if (isRoll) openOptionsSellModal({ sym: pos.sym, strat: pos.strat, qty: pos.qty, linkedCspId: pos.linkedCspId, linkedCspIds: pos.linkedCspIds });
       else renderSimOptions();
     };
     modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
@@ -10246,7 +10353,7 @@ function rsAdjustGrade(grade, rsResult) {
     // would split the wheel group's 合看/分看 totals. Warn instead of blocking — the user
     // may legitimately be correcting the CC's strike-price fill.
     const linkedCC = pos.strat === "csp" && pos.status === "assigned"
-      ? _activeOpts().find(p => p.linkedCspId === pos.id && p.strat === "cc" && p.status === "assigned")
+      ? _activeOpts().find(p => p.strat === "cc" && p.status === "assigned" && _optCcIds(p).includes(pos.id))
       : null;
 
     const premRow  = modal.querySelector("#opts-row-premium");
@@ -10455,22 +10562,24 @@ function rsAdjustGrade(grade, rsResult) {
     modal.querySelector("#opts-cancel-btn").onclick = () => { modal.style.display = "none"; };
   }
   // ── CSP-assigned stock exit (record when you sell the held shares) ────────
-  function openAssignedExitModal(pos) {
+  function openAssignedExitModal(pos, group = null) {
     const modal = _optModalMode("exit");
     if (!modal) return;
     const spot = optSpot(pos.sym);
-    const stockShares = pos.qty * 100;
-    const premIncome = pos.premium * 100 * pos.qty;
-    modal.querySelector(".opts-modal-title").textContent = `记录出仓 · ${pos.sym} 正股`;
+    const batches = group && group.length > 1 ? group : [pos];     // 合并出仓：所选各批用同一个出仓价
+    const stockShares = batches.reduce((s, b) => s + b.qty * 100, 0);
+    const premIncome = batches.reduce((s, b) => s + b.premium * 100 * b.qty, 0);
+    const avgCost = batches.reduce((s, b) => s + b.strike * b.qty * 100, 0) / stockShares;
+    modal.querySelector(".opts-modal-title").textContent = `记录出仓 · ${pos.sym} 正股${batches.length > 1 ? "（合并 " + batches.length + " 批）" : ""}`;
     modal.querySelector("#opts-modal-meta").textContent =
-      `持有 ${stockShares} 股 @ $${pos.strike.toFixed(2)} (CSP指派) · 期权收入 +${fmt.usd(premIncome)}`;
+      `持有 ${stockShares} 股 @ $${avgCost.toFixed(2)} ${batches.length > 1 ? "(加权均价)" : "(CSP指派)"} · 期权收入 +${fmt.usd(premIncome)}`;
     const exitEl = modal.querySelector("#opts-exit-price");
     exitEl.value = spot ? spot.toFixed(2) : "";
     const calcEl = modal.querySelector("#opts-calc");
     const recalc = () => {
       const exitPrice = parseFloat(exitEl.value);
       if (isNaN(exitPrice) || exitPrice <= 0) { calcEl.innerHTML = ""; return; }
-      const equityPnl = (exitPrice - pos.strike) * stockShares;
+      const equityPnl = (exitPrice - avgCost) * stockShares;
       const equityCls = equityPnl >= 0 ? "up" : "down";
       const total = premIncome + equityPnl;
       const totalCls = total >= 0 ? "up" : "down";
@@ -10487,9 +10596,8 @@ function rsAdjustGrade(grade, rsResult) {
     modal.querySelector("#opts-confirm-btn").onclick = () => {
       const exitPrice = parseFloat(exitEl.value);
       if (isNaN(exitPrice) || exitPrice <= 0) { formErr("请填写出仓价", "#opts-premium"); return; }
-      pos.assignedStockSold = true;
-      pos.assignedExitPrice = exitPrice;
-      pos.assignedExitDate = new Date().toISOString().slice(0, 10);
+      const exitDate = new Date().toISOString().slice(0, 10);
+      batches.forEach(b => { b.assignedStockSold = true; b.assignedExitPrice = exitPrice; b.assignedExitDate = exitDate; });
       // pos.realized stays as the option-only premium set at assignment — the stock's
       // own exit P&L (strike → exitPrice) is derived directly from these fields wherever
       // it's needed (_optPnlBreakdown), not folded back into the option's settled P&L.
