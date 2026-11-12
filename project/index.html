@@ -1808,30 +1808,32 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ov-bw-pct { font-family: var(--f-mono); font-size: 14px; font-weight: 700; letter-spacing: -.02em; flex-shrink: 0; }
   /* 仓位分布：更松的节奏——头部与列表之间一条细线，板块之间发丝分隔，轨道加粗，chip 圆角柔和 */
-  .ov-alloc { gap: 14px; }
+  .ov-alloc { gap: 10px; }
+  /* 与上方指标卡之间多留一档，让它读成独立的一块而不是第五张卡 */
+  #sim-overview > .ov-alloc, .overview > .ov-alloc { margin-top: 8px; }
   .alloc-head { display: flex; align-items: baseline; justify-content: space-between;
-    padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    padding-bottom: 10px; border-bottom: 1px solid color-mix(in oklab, var(--line) 60%, transparent); }
   .alloc-head .label {
     border-bottom: none; padding-bottom: 0;
     font-family: var(--f-mono); font-size: 10px; font-weight: 700;
     letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-2);
   }
   .alloc-head-r { display: flex; align-items: baseline; gap: 8px; }
-  .alloc-head .big { font-family: var(--f-mono); font-size: 20px; font-weight: 700; color: var(--fg-0); letter-spacing: -.02em;
+  .alloc-head .big { font-family: var(--f-mono); font-size: 18px; font-weight: 700; color: var(--fg-0); letter-spacing: -.02em;
     font-variant-numeric: tabular-nums; }
   .alloc-head-sub { font-size: var(--fs-small); font-weight: 500; color: var(--fg-3); }
   .alloc-bars { display: flex; flex-direction: column; gap: 0; }
-  .alloc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 11px 0;
-    border-top: 1px solid color-mix(in oklab, var(--line) 55%, transparent); }
+  .alloc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 0;
+    border-top: 1px solid color-mix(in oklab, var(--line) 35%, transparent); }
   .alloc-row:first-child { border-top: none; padding-top: 2px; }
   .alloc-row:last-child { padding-bottom: 0; }
-  .alloc-name { font-size: 12px; font-weight: 600; color: var(--fg-0); width: 96px; flex-shrink: 0; white-space: nowrap;
+  .alloc-name { font-size: 11.5px; font-weight: 500; color: var(--fg-1); width: 96px; flex-shrink: 0; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
   .alloc-n { font-style: normal; font-family: var(--f-mono); font-size: 9px; font-weight: 600; color: var(--fg-3);
     background: var(--bg-2); border-radius: 8px; padding: 1px 6px; flex-shrink: 0; line-height: 1.5; }
-  .alloc-track { flex: 1; min-width: 40px; height: 8px; background: var(--bg-3); border-radius: 4px; overflow: hidden; }
-  .alloc-fill { height: 100%; border-radius: 4px; transition: width .5s cubic-bezier(.2,.7,.2,1); }
-  .alloc-amt { font-family: var(--f-mono); font-size: 12px; font-weight: 700; color: var(--fg-0);
+  .alloc-track { flex: 1; min-width: 40px; height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+  .alloc-fill { height: 100%; border-radius: 3px; transition: width .5s cubic-bezier(.2,.7,.2,1); }
+  .alloc-amt { font-family: var(--f-mono); font-size: 11.5px; font-weight: 600; color: var(--fg-0);
     letter-spacing: -.02em; min-width: 72px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
   .alloc-pct { font-family: var(--f-mono); font-size: 11px; color: var(--fg-3); width: 46px; text-align: right; flex-shrink: 0;
     font-variant-numeric: tabular-nums; }
@@ -1840,15 +1842,15 @@
   .alloc-empty { font-size: 11px; color: var(--fg-3); padding: 6px 0; }
   .alloc-syms { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; flex-basis: 100%; margin-top: 2px; }
   .alloc-sym-chip { display: inline-flex; align-items: center; gap: 6px;
-    font-family: var(--f-mono); font-size: 10px; font-weight: 500; letter-spacing: .03em;
-    padding: 2px 9px 2px 7px; border-radius: 999px; border: 1px solid var(--line);
+    font-family: var(--f-mono); font-size: 9.5px; font-weight: 500; letter-spacing: .03em;
+    padding: 0 8px 0 6px; border-radius: 999px; border: 1px solid var(--line);
     color: var(--fg-2); background: var(--bg-2); line-height: 1.6; }
   /* 整个 chip 统一用灰字，金额只靠字重比代码重一档 */
   .alloc-sym-chip b { font-weight: 700; color: var(--fg-3); letter-spacing: -.02em; }
   .alloc-sym-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   @media (max-width: 768px) {
     .alloc-name { width: 78px; }
-    .alloc-row { gap: 6px 10px; padding: 10px 0; }
+    .alloc-row { gap: 4px 10px; padding: 8px 0; }
     .alloc-amt { min-width: 64px; }
   }
 
@@ -7048,8 +7050,8 @@
   </div>
 </div>
 
-<script src="data.js?v=905"></script>
-<script src="desk.js?v=905"></script>
+<script src="data.js?v=906"></script>
+<script src="desk.js?v=906"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
