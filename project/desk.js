@@ -292,13 +292,13 @@
     return `<div class="disc-bars">${weeks.map((w, i) => `<span style="height:${w * 0.22}px${i === weeks.length - 1 ? ';background:var(--accent);opacity:1' : ''}"></span>`).join("")}</div>`;
   }
 
-  function pieCard() {
+  function pieCard(list = HOLDINGS, baseNotional = totalNotional) {
     // Allocation is computed from the REAL committed capital (cost × qty), not from the
     // user-entered `size` field — size can drift from the actual position value, and once
     // dollar amounts are shown next to the percentages any drift becomes visible nonsense.
     const sectorMap = {};
     let investedAmt = 0;
-    HOLDINGS.forEach(h => {
+    list.forEach(h => {
       const amt = (h.cost || 0) * (h.qty || 0);
       if (amt <= 0) return;
       const nm  = h.bx?.sector?.name  || "未分类";
@@ -309,7 +309,7 @@
       sectorMap[nm].syms.push({ sym: h.sym, amt });
       investedAmt += amt;
     });
-    const base     = totalNotional > 0 ? totalNotional : investedAmt;
+    const base     = baseNotional > 0 ? baseNotional : investedAmt;
     const cashAmt  = Math.max(0, base - investedAmt);
     const rows     = Object.values(sectorMap).sort((a, b) => b.amt - a.amt);
     // 板块内按投入金额降序——此前是 HOLDINGS 的录入顺序，第一个代码不一定是最大的那只。
@@ -11920,7 +11920,8 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="sim-card-label">平均资金使用率</div>
         <div class="sim-card-value neu">${utilStr}</div>
         <div class="sim-card-sub">${utilTotal} 笔 · 持仓中+已平仓</div>
-      </div>`;
+      </div>
+      ${pieCard(SIM_HOLDINGS, simNotional)}`;
 
 
     // Update subtitle
