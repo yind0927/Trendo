@@ -7039,24 +7039,15 @@ function rsAdjustGrade(grade, rsResult) {
     const latest = `<div class="bp-sec">最新一期 · ${lc.entryDay} 周${dowOf(lc.entryDay)}开盘入场</div>
       <div class="bp-latest">${col("long", "做多")}${col("short", "做空")}</div>`;
 
-    const hzTbl = [["做多 · 超额", longs], ["做空 · 之后跑输", shorts]].map(([nm, list]) => `<tr><td>${nm}</td>` + BP_HZ.map(([k]) => {
-      const a = agg(list, k), e = agg(list, k, "etf");
-      return `<td>${a.n ? `${pp(a.mean)} · ${a.hit.toFixed(0)}% <span class="bp-na">(${a.n})</span>` : `<span class="bp-na">—</span>`}${e.n ? `<br><span class="bp-na">板块ETF</span> ${pp(e.mean)}` : ""}</td>`;
-    }).join("") + `</tr>`).join("")
-      + `<tr class="bp-tr-sum"><td>多空差</td>` + BP_HZ.map(([k]) => {
-        const a = aggSpread(k);
-        return `<td>${a.n ? `${pp(a.mean)} · ${a.hit.toFixed(0)}% <span class="bp-na">(${a.n}天)</span>` : `<span class="bp-na">—</span>`}</td>`;
-      }).join("") + `</tr>`;
     const whyTbl = Object.keys(BP_WHY).map(w => {
       const list = indep.filter(r => r.why === w); if (!list.length) return "";
       const a5 = agg(list, "d5"), a20 = agg(list, "d20");
       return `<tr><td>${BP_WHY[w]} <span class="bp-na">(${list.length})</span></td><td>${a5.n ? `${pp(a5.mean)} · ${a5.hit.toFixed(0)}%` : "—"}</td><td>${a20.n ? `${pp(a20.mean)} · ${a20.hit.toFixed(0)}%` : "—"}</td></tr>`;
     }).join("");
     const days = [...cohorts].reverse().map(c => {
-      const sp = c.spread.d5;
       return `<details class="bp-day"${_bpOpen.has(c.slot) ? " open" : ""} data-bp="${c.slot}"><summary>
         <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dowOf(c.entryDay)}</span>
-        <span class="bp-day-m">${sp != null ? `5日多空差 ${pp(sp)}` : `<span class="bp-na">5日未走完</span>`}</span></summary>
+</summary>
         <div class="bp-pk-list">${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<div class="bp-pk${r.dup ? " is-dup" : ""}">
           <div class="bp-pk-top"><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>
             <span class="bp-why">${BP_WHY[r.why] || "其他"}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</span>
@@ -7071,8 +7062,6 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="bp-head"><span class="bp-na">更新于 ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}</span>
         <button class="bp-refresh" id="bp-refresh" title="重新读取记录与行情">↻</button></div>
       ${cards}${warn}${latest}
-      <div class="bp-sec">按期限 · 超额(pp) · 命中率 · 样本</div>
-      <div style="overflow-x:auto"><table class="bp-tbl"><thead><tr><th></th>${BP_HZ.map(([, n]) => `<th>${n}日</th>`).join("")}</tr></thead><tbody>${hzTbl}</tbody></table></div>
       <div class="bp-sec">按理由类型（做多与做空合并，正 = 判断对）</div>
       <table class="bp-tbl"><thead><tr><th>类型</th><th>5日</th><th>20日</th></tr></thead><tbody>${whyTbl}</tbody></table>
       <div class="bp-sec">逐日记录</div>${days}
