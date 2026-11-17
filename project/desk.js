@@ -6895,9 +6895,29 @@ function rsAdjustGrade(grade, rsResult) {
     if (!force && _bp.data && Date.now() - _bp.at < 10 * 60 * 1000) return;
     _bp.loading = true; _bp.err = null; renderBriefTab();
     try {
-      const r = await fetch("/api/market-summary?picks=1");
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const days = (await r.json()).days || {};
+      const getDays = async () => {
+        const r = await fetch("/api/market-summary?picks=1");
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return (await r.json()).days || {};
+      };
+      let days = await getDays();
+      // 今天这一档还没有记录（cron 没跑、或这是上线前生成的老简报没带标的清单）→ 直接生成。
+      // force 才会绕过 Redis 里那份没有标的的旧简报；服务端 HSETNX 只记第一份有标的的，
+      // 所以每个会话最多试一次，AI 没给出标的也不会反复烧 API。
+      if (!days[_briefSlotKey()] && !_bp.genTried) {
+        _bp.genTried = true; _bp.generating = true; renderBriefTab();
+        try {
+          const q = new URLSearchParams({ force: "1", cron: "1" });
+          const m = _lastMktCtx;
+          if (m?.vix != null) q.set("vix", m.vix);
+          if (m?.fg != null) q.set("fg", m.fg);
+          if (m?.rsi != null) q.set("rsi", m.rsi);
+          if (m?.regime) q.set("regime", m.regime);
+          await fetch("/api/market-summary?" + q, { signal: AbortSignal.timeout(40000) });
+          days = await getDays();
+        } catch (_) { /* 生成失败不影响已有记录的展示 */ }
+        _bp.generating = false;
+      }
       const cohorts = Object.keys(days).sort().map(slot => ({
         slot, at: days[slot].at, picks: days[slot].picks || [],
         entryDay: days[slot].at ? bpEntryDay(days[slot].at) : null,
@@ -6936,11 +6956,12 @@ function rsAdjustGrade(grade, rsResult) {
 
   function renderBriefTab() {
     const el = $("#insp-brief-panel"); if (!el) return;
-    if (_bp.loading && !_bp.data) { el.innerHTML = `<div class="bp-empty">加载简报标的记录…</div>`; return; }
+    if (_bp.generating) { el.innerHTML = `<div class="bp-empty">正在生成今天的 AI 总结并记录推荐标的…（约 10–20 秒）</div>`; return; }
+    if (_bp.loading && !_bp.data) { el.innerHTML = `<div class="bp-empty">加载记录…</div>`; return; }
     if (_bp.err && !_bp.data) { el.innerHTML = `<div class="bp-empty">加载失败：${bpEsc(_bp.err)}　<button class="btn" id="bp-retry">重试</button></div>`; $("#bp-retry")?.addEventListener("click", () => bpLoad(true)); return; }
     const cohorts = _bp.data || [];
     if (!cohorts.length) {
-      el.innerHTML = `<div class="bp-wrap"><div class="bp-empty">还没有记录。市场简报每天生成时会把「机会」里推荐的标的（以及明确建议回避的）记下来，
+      el.innerHTML = `<div class="bp-wrap"><div class="bp-empty">还没有记录。AI 总结每天生成时会把「机会」里推荐的标的（以及明确建议回避的）记下来，
         从下一次简报生成起开始累积；记录在服务端，不需要打开 app。</div></div>`;
       return;
     }
