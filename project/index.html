@@ -2140,6 +2140,17 @@
   .bp-refresh { background:none; border:1px solid var(--line); color:var(--fg-2); border-radius:8px; width:26px; height:24px; cursor:pointer; font-size:13px; line-height:1; }
   .bp-refresh:hover { color:var(--fg-0); background:var(--line); }
   .bp-u { font-size:12px; color:var(--fg-3); font-weight:500; }
+  .bp-lh { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:22px 0 4px; }
+  .bp-lh-t { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; font-size:12.5px; }
+  .bp-lh-k { font-size:10.5px; font-weight:700; letter-spacing:.06em; color:var(--fg-2); }
+  .bp-lh-nav { display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .bp-lh-pos { font-family:var(--f-mono); font-size:11px; color:var(--fg-3); min-width:34px; text-align:center; }
+  .bp-nav { width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:var(--bg-2); color:var(--fg-1); font-size:16px; line-height:1; cursor:pointer; }
+  .bp-nav:disabled { opacity:.35; cursor:default; }
+  .bp-lh-sum { font-size:11px; color:var(--fg-2); margin:0 0 10px; }
+  .bp-col-n { margin-left:6px; font-weight:500; color:var(--fg-3); }
+  .bp-item-sub { margin-top:4px; font-family:var(--f-mono); font-size:11px; display:flex; gap:6px; align-items:baseline; }
+  .bp-item-sub i { font-style:normal; font-size:10px; color:var(--fg-3); font-family:inherit; }
   .bp-latest { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .bp-col { background:var(--bg-2); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
   .bp-col-h { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
@@ -7115,8 +7126,8 @@
   </div>
 </div>
 
-<script src="data.js?v=914"></script>
-<script src="desk.js?v=914"></script>
+<script src="data.js?v=915"></script>
+<script src="desk.js?v=915"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
