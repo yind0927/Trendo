@@ -2311,6 +2311,12 @@
   .mp-thesis { font-size:11.5px; color:var(--fg-2); line-height:1.55; margin-top:5px; }
   .mp-pick-foot { font-size:10.5px; color:var(--fg-3); margin-top:6px; font-family:var(--f-mono); }
   .mp-nopx { color:var(--warn); }
+  .mp-edit { background:none; border:none; color:var(--fg-3); cursor:pointer; font-size:12px; padding:2px 4px; opacity:.55; }
+  .mp-edit:hover { color:var(--accent); opacity:1; }
+  .mp-fixed { font-size:10px; color:var(--fg-3); border:1px solid var(--line); border-radius:8px; padding:0 6px; }
+  .mp-sym-in { width:72px; font:700 13px var(--f-mono); text-transform:uppercase; padding:1px 6px;
+    background:var(--bg-2); border:1px solid var(--accent); border-radius:5px; color:var(--fg-0); outline:none; }
+  @media (max-width:768px) { .mp-sym-in { font-size:16px; } }
   .mp-order { background:none; border:1px solid var(--accent); color:var(--accent); border-radius:5px;
               font-size:10px; padding:2px 8px; cursor:pointer; font-family:var(--f-sans); }
   .mp-order:hover { background:var(--accent); color:var(--bg-0); }
@@ -7050,8 +7056,8 @@
   </div>
 </div>
 
-<script src="data.js?v=906"></script>
-<script src="desk.js?v=906"></script>
+<script src="data.js?v=907"></script>
+<script src="desk.js?v=907"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
