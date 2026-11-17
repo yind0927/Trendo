@@ -120,6 +120,26 @@ export default async function handler(req, res) {
   const kvUrl        = process.env.KV_REST_API_URL;
   const kvToken      = process.env.KV_REST_API_TOKEN;
 
+  // ?picks=1 —— 读取历次简报推荐的标的记录（Redis hash，按简报日一条，只增不改）。
+  // 放在这里而不是新开 serverless 函数：Hobby 计划上限 12 个。
+  if (req.query.picks === "1") {
+    if (!kvUrl || !kvToken) return res.json({ days: {} });
+    try {
+      const r = await fetch(`${kvUrl}/pipeline`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify([["HGETALL", "trendo:brief_picks"]]),
+      });
+      const [{ result }] = await r.json();
+      const days = {};
+      for (let i = 0; Array.isArray(result) && i < result.length; i += 2) {
+        try { days[result[i]] = JSON.parse(result[i + 1]); } catch (_) {}
+      }
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ days });
+    } catch (e) { return res.status(502).json({ error: String(e.message || e) }); }
+  }
+
   if (!anthropicKey)
     return res.status(503).json({ error: "ANTHROPIC_API_KEY not configured" });
 
@@ -240,8 +260,12 @@ ${newsText}
 风险：（1-2个具体风险点，结合当前数据说明触发条件）
 机会：（1-2个相对冷门、市场还未充分定价的潜力赛道或细分方向——避免泛泛的"科技/AI"等大板块，优先挖掘：受益于宏观变化但关注度不高的细分行业、政策催化下的特定标的方向、资金刚开始轮动但尚未拥挤的板块、或当前新闻中被忽视的结构性机会。每条给出赛道名称 + 一句逻辑）
 
+在全部正文之后，另起一行输出 @@PICKS@@，其后紧跟一个 JSON 数组（不要代码块、不要解释），列出上面「机会」里提到、以及「风险」里明确建议回避的美股/ETF 具体标的，最多 6 个，每个形如：
+{"sym":"代码","dir":"long 或 avoid","why":"catalyst|rotation|earnings|technical 之一","etf":"所属板块ETF代码，只能从 XLK XLY XLV XLF XLB XLP XLE XLI XLU XLC XLRE SMH ITA COPX IWM 中选，拿不准就留空字符串","note":"不超过20字的理由"}
+sym 必须是真实存在的美股上市代码（1-5 位大写字母）；没有具体标的就输出 @@PICKS@@ 后接 []。
+
 分析时请遵循三轴框架：VIX 只决定仓位大小（多少），趋势方向决定能否做多，情绪极端（FGI/RSI）决定何时止盈或反向——低 VIX + 情绪过热时应提示止盈而非追高，方向逆风时无论 VIX 多低都不建议新多单。
-语言直接专业，融合具体数字，避免废话，总字数控制在400字以内。`;
+语言直接专业，融合具体数字，避免废话，总字数控制在400字以内（不含 @@PICKS@@ 之后的 JSON）。`;
 
   // ── 4. Claude Sonnet ──────────────────────────────────────────────────────
   let summary = "";
@@ -255,7 +279,7 @@ ${newsText}
       },
       body: JSON.stringify({
         model:      "claude-sonnet-4-6",
-        max_tokens: 1200,
+        max_tokens: 1600,
         messages:   [{ role: "user", content: prompt }],
       }),
       signal: AbortSignal.timeout(30000),
@@ -272,11 +296,32 @@ ${newsText}
 
   if (!summary) return res.status(500).json({ error: "Empty AI response" });
 
+  // 拆出结构化标的清单（失败只丢清单，不连累正文）
+  let picks = [];
+  const mi = summary.indexOf("@@PICKS@@");
+  if (mi >= 0) {
+    const tail = summary.slice(mi + 9);
+    summary = summary.slice(0, mi).trim();
+    try {
+      const m = tail.match(/\[[\s\S]*\]/);
+      const ETFS = ["XLK","XLY","XLV","XLF","XLB","XLP","XLE","XLI","XLU","XLC","XLRE","SMH","ITA","COPX","IWM"];
+      const seen = new Set();
+      picks = (JSON.parse(m[0]) || []).map(p => ({
+        sym: String(p.sym || "").toUpperCase().trim(),
+        dir: p.dir === "avoid" ? "avoid" : p.dir === "long" ? "long" : null,
+        why: ["catalyst","rotation","earnings","technical"].includes(p.why) ? p.why : "other",
+        etf: ETFS.includes(String(p.etf || "").toUpperCase()) ? String(p.etf).toUpperCase() : null,
+        note: String(p.note || "").slice(0, 40),
+      })).filter(p => /^[A-Z]{1,5}$/.test(p.sym) && p.dir && !seen.has(p.sym) && seen.add(p.sym)).slice(0, 6);
+    } catch (_) { picks = []; }
+  }
+
   // ── 5. Cache and return ───────────────────────────────────────────────────
   const result = {
     summary,
     headlines: headlines.slice(0, 3).map(h => h.title),
     source,
+    picks,
     updatedAt: new Date().toISOString(),
   };
 
@@ -289,6 +334,15 @@ ${newsText}
           ["EXPIRE", cacheKey, 93600],
         ]),
       });
+      // 标的记录：每个简报日只记第一次有标的的那份（HSETNX），之后手动重生成不改写，
+      // 否则「当时推荐了什么」会被事后覆盖。at 决定入场价取哪个开盘。
+      if (picks.length) {
+        await fetch(`${kvUrl}/pipeline`, {
+          method: "POST", headers: kvHeaders,
+          body: JSON.stringify([["HSETNX", "trendo:brief_picks", bjSlotKey(now),
+            JSON.stringify({ at: result.updatedAt, picks })]]),
+        });
+      }
     } catch (_) {}
   }
 

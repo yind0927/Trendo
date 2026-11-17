@@ -1365,7 +1365,7 @@ function rsAdjustGrade(grade, rsResult) {
   // simOptions）已按要求整体删除：数组、本地存储、云端字段、以及首次加载时的一次性清理
   // 都在下方 _purgeSimOptions() 里处理。
   // Inspirations 子页签：准备 Preparation（"watchlist"）在前、复盘 Journal 在后；记住上次停留的那个
-  let inspSubTab      = (() => { try { return localStorage.getItem("trendo_insp_tab") === "journal" ? "journal" : "watchlist"; } catch (_) { return "watchlist"; } })();
+  let inspSubTab      = (() => { try { return (v => v === "journal" || v === "brief" ? v : "watchlist")(localStorage.getItem("trendo_insp_tab")); } catch (_) { return "watchlist"; } })();
   let _optsSettledOpen = false; // collapsed by default
   const _optsWheelExpanded  = new Set();
   const _optsSymGroupsOpen  = new Set(); // which symbol groups are expanded in settled section // group IDs of expanded wheel combo cards
@@ -2347,7 +2347,7 @@ function rsAdjustGrade(grade, rsResult) {
     renderEvents();
     fetchAllEarnings();
     fetchPeakPrices();
-    if (currentPage === "inspirations") { if (inspSubTab === "journal") renderJournal(); else { renderWatchlist(); renderMoveProfile(); } }
+    if (currentPage === "inspirations") renderInspActive();
     renderSim();
     if (currentPage === "analytics") renderAnalytics();
     if (currentPage === "options") renderOptions();
@@ -6841,9 +6841,176 @@ function rsAdjustGrade(grade, rsResult) {
     else renderSim();
   }
 
+
+  // ============ AI 简报标的跟踪（Inspirations → AI 简报） ============
+  // 记录来自服务端：每天的简报生成时，api/market-summary.js 把当天推荐的标的写进 Redis hash
+  // （只记第一次、不被手动重生成改写），所以不依赖这台设备有没有打开过 app。
+  // 客户端这里全是「派生」：入场价与各期收益都由服务端记录 + 历史日线重新算出，不落盘、不进云同步。
+  // 入场价 = 简报生成之后的第一个美股开盘价（不是当周周一，否则会引入事后已知的价格）；
+  // 跳空 = 入场开盘价相对简报生成前最后一个收盘价，用来看简报是不是在追已经涨完的票。
+  const BP_HZ = [["d1", 1], ["d5", 5], ["d10", 10], ["d20", 20]];
+  const BP_MIN_N = 30;
+  const BP_WHY = { catalyst: "催化剂", rotation: "板块轮动", earnings: "财报", technical: "技术形态", other: "其他" };
+  const _bp = { loading: false, data: null, at: 0, err: null };
+  const bpEsc = s => String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+  function bpEntryDay(atIso) {
+    const et = etNow(new Date(atIso)); if (!et) return null;
+    const isSess = s => {
+      const t = new Date(s + "T12:00:00Z"), dw = t.getUTCDay();
+      return dw !== 0 && dw !== 6 && !usMarketHolidays(t.getUTCFullYear()).includes(s);
+    };
+    let d = et.date;
+    if (isSess(d) && et.mins < 9 * 60 + 30) return d;        // 开盘前生成 → 当天开盘
+    do { const n = new Date(d + "T12:00:00Z"); n.setUTCDate(n.getUTCDate() + 1); d = n.toISOString().slice(0, 10); }
+    while (!isSess(d));
+    return d;
+  }
+
+  // 一个标的从入场日起的价格路径。口径与模型选股一致：入场价取原始开盘价，后续价格换算到
+  // 入场日美元（adj_n / f0），这样入场后的分红算进收益、入场后才发生的分红不会压低已走完的期限。
+  function bpSeries(J, sym, entryDay) {
+    const res = J.results?.[sym] || {}; const days = Object.keys(res).sort();
+    const i0 = days.findIndex(d => d >= entryDay);
+    if (i0 < 0 || days[i0] !== entryDay) return null;
+    const d0 = days[i0], open = J.openResults?.[sym]?.[d0];
+    if (open == null) return null;
+    const adj = J.adjResults?.[sym];
+    const f0 = (adj && res[d0] && adj[d0] != null) ? adj[d0] / res[d0] : null;
+    const fut = days.slice(i0);
+    const useAdj = f0 && fut.every(d => adj[d] != null);
+    const px = d => useAdj ? adj[d] / f0 : res[d];
+    const out = { open, prev: i0 > 0 ? res[days[i0 - 1]] : null, hz: {}, last: null };
+    for (const [k, n] of BP_HZ) {
+      const d = fut[n];
+      if (d != null && !isLiveSession(d) && px(d) != null) out.hz[k] = (px(d) - open) / open * 100;
+    }
+    const ld = [...fut].reverse().find(d => !isLiveSession(d) && px(d) != null);
+    if (ld) out.last = (px(ld) - open) / open * 100;
+    return out;
+  }
+
+  async function bpLoad(force) {
+    if (_bp.loading) return;
+    if (!force && _bp.data && Date.now() - _bp.at < 10 * 60 * 1000) return;
+    _bp.loading = true; _bp.err = null; renderBriefTab();
+    try {
+      const r = await fetch("/api/market-summary?picks=1");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const days = (await r.json()).days || {};
+      const cohorts = Object.keys(days).sort().map(slot => ({
+        slot, at: days[slot].at, picks: days[slot].picks || [],
+        entryDay: days[slot].at ? bpEntryDay(days[slot].at) : null,
+      })).filter(c => c.entryDay && c.picks.length);
+      const J = { results: {}, adjResults: {}, openResults: {} };
+      if (cohorts.length) {
+        const syms = new Set(["VOO"]);
+        cohorts.forEach(c => c.picks.forEach(p => { syms.add(p.sym); if (p.etf) syms.add(p.etf); }));
+        const f = new Date(cohorts[0].entryDay + "T12:00:00Z"); f.setUTCDate(f.getUTCDate() - 7);
+        const from = f.toISOString().slice(0, 10);
+        const list = [...syms], chunks = [];                  // 服务端单次上限 50，分批
+        for (let i = 0; i < list.length; i += 25) chunks.push(list.slice(i, i + 25));
+        const parts = await Promise.all(chunks.map(ch =>
+          fetch(`/api/history?symbols=${encodeURIComponent(ch.join(","))}&from=${from}`)
+            .then(x => x.ok ? x.json() : null).catch(() => null)));
+        parts.forEach(j => { if (!j) return; for (const k of Object.keys(J)) Object.assign(J[k], j[k] || {}); });
+      }
+      const seen = new Set();
+      cohorts.forEach(c => {
+        const v = bpSeries(J, "VOO", c.entryDay);
+        c.rows = c.picks.map(p => {
+          const hasData = Object.keys(J.results[p.sym] || {}).length > 0;
+          const s = bpSeries(J, p.sym, c.entryDay);
+          const e = p.etf ? bpSeries(J, p.etf, c.entryDay) : null;
+          const key = p.sym + "|" + p.dir, dup = seen.has(key); seen.add(key);
+          const ex = (a, b, k) => (a && b && a.hz[k] != null && b.hz[k] != null) ? a.hz[k] - b.hz[k] : null;
+          const exV = {}, exE = {};
+          BP_HZ.forEach(([k]) => { exV[k] = ex(s, v, k); exE[k] = ex(s, e, k); });
+          return { ...p, dup, bad: !hasData, pending: hasData && !s, s, gap: (s && s.prev) ? (s.open / s.prev - 1) * 100 : null, exV, exE };
+        });
+      });
+      _bp.data = cohorts; _bp.at = Date.now();
+    } catch (e) { _bp.err = String(e.message || e); }
+    _bp.loading = false; renderBriefTab();
+  }
+
+  function renderBriefTab() {
+    const el = $("#insp-brief-panel"); if (!el) return;
+    if (_bp.loading && !_bp.data) { el.innerHTML = `<div class="bp-empty">加载简报标的记录…</div>`; return; }
+    if (_bp.err && !_bp.data) { el.innerHTML = `<div class="bp-empty">加载失败：${bpEsc(_bp.err)}　<button class="btn" id="bp-retry">重试</button></div>`; $("#bp-retry")?.addEventListener("click", () => bpLoad(true)); return; }
+    const cohorts = _bp.data || [];
+    if (!cohorts.length) {
+      el.innerHTML = `<div class="bp-wrap"><div class="bp-empty">还没有记录。市场简报每天生成时会把「机会」里推荐的标的（以及明确建议回避的）记下来，
+        从下一次简报生成起开始累积；记录在服务端，不需要打开 app。</div></div>`;
+      return;
+    }
+    const rows = cohorts.flatMap(c => c.rows.map(r => ({ ...r, slot: c.slot, entryDay: c.entryDay })));
+    const indep = rows.filter(r => !r.dup && !r.bad);
+    // edge：正 = 简报判断对了（看多：跑赢基准；回避：跑输基准）
+    const edgeOf = (r, k, bench) => { const x = (bench === "etf" ? r.exE : r.exV)[k]; return x == null ? null : (r.dir === "avoid" ? -x : x); };
+    const agg = (list, k, bench = "voo") => {
+      const v = list.map(r => edgeOf(r, k, bench)).filter(x => x != null);
+      if (!v.length) return { n: 0 };
+      const s = [...v].sort((a, b) => a - b), m = s.length >> 1;
+      return { n: v.length, mean: v.reduce((a, b) => a + b, 0) / v.length, med: s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2, hit: v.filter(x => x > 0).length / v.length * 100 };
+    };
+    const pc = (x, d = 1) => x == null ? `<span class="bp-na">—</span>` : `<span class="${x > 0 ? "bp-up" : x < 0 ? "bp-dn" : ""}">${x > 0 ? "+" : ""}${x.toFixed(d)}%</span>`;
+    const pp = x => x == null ? `<span class="bp-na">—</span>` : `<span class="${x > 0 ? "bp-up" : x < 0 ? "bp-dn" : ""}">${x > 0 ? "+" : ""}${x.toFixed(1)}</span>`;
+    const longs = indep.filter(r => r.dir === "long"), avoids = indep.filter(r => r.dir === "avoid");
+    const a5L = agg(longs, "d5"), a20L = agg(longs, "d20"), a5A = agg(avoids, "d5");
+    const card = (k, a, extra) => `<div class="bp-card"><div class="k">${k}</div>
+      <div class="v">${a.n ? pp(a.mean) + `<span style="font-size:12px;color:var(--fg-3)"> pp</span>` : `<span class="bp-na">—</span>`}</div>
+      <div class="s">${a.n ? `命中 ${a.hit.toFixed(0)}% · 中位 ${a.med > 0 ? "+" : ""}${a.med.toFixed(1)} · ${a.n} 只` : "样本未走完该期限"}${extra || ""}</div></div>`;
+    const hzTbl = [["看多", longs], ["回避", avoids]].map(([nm, list]) => `<tr><td>${nm}</td>` + BP_HZ.map(([k]) => {
+      const a = agg(list, k), e = agg(list, k, "etf");
+      return `<td>${a.n ? `${pp(a.mean)} · ${a.hit.toFixed(0)}% <span class="bp-na">(${a.n})</span>` : `<span class="bp-na">—</span>`}${e.n ? `<br><span class="bp-na">板块ETF</span> ${pp(e.mean)}` : ""}</td>`;
+    }).join("") + `</tr>`).join("");
+    const whyTbl = Object.keys(BP_WHY).map(w => {
+      const list = indep.filter(r => r.why === w); if (!list.length) return "";
+      const a5 = agg(list, "d5"), a20 = agg(list, "d20");
+      return `<tr><td>${BP_WHY[w]} <span class="bp-na">(${list.length})</span></td><td>${a5.n ? `${pp(a5.mean)} · ${a5.hit.toFixed(0)}%` : "—"}</td><td>${a20.n ? `${pp(a20.mean)} · ${a20.hit.toFixed(0)}%` : "—"}</td></tr>`;
+    }).join("");
+    const gaps = indep.map(r => r.gap).filter(x => x != null);
+    const gapMean = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
+    const warn = indep.length < BP_MIN_N
+      ? `<div class="bp-warn">目前只有 ${indep.length} 个独立标的（首次推荐才计一次）。样本不到 ${BP_MIN_N} 个之前，上面的平均与命中率大多是随机波动，不足以判断简报靠不靠谱；同一天推荐的标的会一起涨跌，也不是彼此独立的证据。</div>` : "";
+    const days = [...cohorts].reverse().map(c => {
+      const dow = "日一二三四五六"[new Date(c.entryDay + "T12:00:00Z").getUTCDay()];
+      const n = c.rows.length, nl = c.rows.filter(r => r.dir === "long").length;
+      return `<details class="bp-day"${_bpOpen.has(c.slot) ? " open" : ""} data-bp="${c.slot}"><summary>
+        <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dow}开盘入场</span>
+        <span class="bp-day-m">${nl} 看多 · ${n - nl} 回避</span></summary>
+        <div class="bp-rows"><table class="bp-tbl"><thead><tr><th>代码</th><th>理由</th><th title="入场开盘价相对简报前最后收盘">跳空</th>${BP_HZ.map(([k, n2]) => `<th>${n2}日</th>`).join("")}<th>至今</th></tr></thead><tbody>
+        ${c.rows.map(r => `<tr style="${r.dup ? "opacity:.55" : ""}"><td><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "看多" : "回避"}</span>${r.dup ? ` <span class="bp-badge dup">重复</span>` : ""}${r.bad ? ` <span class="bp-badge dup">代码无数据</span>` : ""}${r.pending ? ` <span class="bp-badge dup">待开盘</span>` : ""}
+          ${r.note ? `<div style="font-size:10.5px;color:var(--fg-3);font-family:inherit">${bpEsc(r.note)}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</div>` : ""}</td>
+          <td style="font-family:inherit">${BP_WHY[r.why] || "其他"}</td><td>${pc(r.gap)}</td>
+          ${BP_HZ.map(([k]) => `<td>${r.s ? pc(r.s.hz[k]) : "—"}${r.exV[k] != null ? `<div class="bp-na" style="font-size:10px">超额 ${pp(r.exV[k])}</div>` : ""}</td>`).join("")}
+          <td>${r.s ? pc(r.s.last) : "—"}</td></tr>`).join("")}
+        </tbody></table></div></details>`;
+    }).join("");
+    el.innerHTML = `<div class="bp-wrap">
+      <div class="bp-sum">
+        <div class="bp-card"><div class="k">独立标的</div><div class="v">${indep.length}</div><div class="s">${cohorts.length} 个简报日 · 看多 ${longs.length} · 回避 ${avoids.length}</div></div>
+        ${card("看多 · 5日超额", a5L)}${card("看多 · 20日超额", a20L)}${card("回避 · 5日后跑输", a5A)}
+      </div>
+      ${warn}
+      <div class="bp-sec">按期限 · 对 VOO 的超额（pp）· 命中率 · 样本</div>
+      <div style="overflow-x:auto"><table class="bp-tbl"><thead><tr><th></th>${BP_HZ.map(([, n]) => `<th>${n}日</th>`).join("")}</tr></thead><tbody>${hzTbl}</tbody></table></div>
+      <div class="bp-sec">按理由类型（看多与回避合并，正 = 判断对）</div>
+      <table class="bp-tbl"><thead><tr><th>类型</th><th>5日</th><th>20日</th></tr></thead><tbody>${whyTbl}</tbody></table>
+      ${gapMean != null ? `<div class="bp-note">入场跳空平均 ${gapMean > 0 ? "+" : ""}${gapMean.toFixed(2)}%：简报生成前最后收盘 → 入场开盘。长期明显为正，说明推荐的是已经涨完的票。</div>` : ""}
+      <div class="bp-sec">逐日记录</div>${days}
+      <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 入场日之后第 N 个已收盘交易日，相对入场价；超额 = 减去同期 VOO。回避类按相反方向计分（跑输才算对）。
+      同一代码连续几天被推荐只算第一次，其余标「重复」、不进统计。简报没再提某只票，不代表简报认为它不行。统计覆盖的是被推荐之后的表现，没有「没被推荐的票」作对照，板块 ETF 超额只在简报标注了所属板块时才有。</div></div>`;
+    el.querySelectorAll("details.bp-day").forEach(d => d.addEventListener("toggle", () => {
+      d.open ? _bpOpen.add(d.dataset.bp) : _bpOpen.delete(d.dataset.bp);
+    }));
+  }
+  const _bpOpen = new Set();
+
   // Inspirations 子页签：状态、ARIA、面板显隐、淡入、记住选择都在这一处
   function setInspSubTab(tab, opt = {}) {
-    inspSubTab = tab === "journal" ? "journal" : "watchlist";
+    inspSubTab = tab === "journal" ? "journal" : tab === "brief" ? "brief" : "watchlist";
     try { localStorage.setItem("trendo_insp_tab", inspSubTab); } catch (_) {}
     $$("[data-insp-tab]").forEach(b => {
       const on = b.dataset.inspTab === inspSubTab;
@@ -6851,19 +7018,24 @@ function rsAdjustGrade(grade, rsResult) {
       b.setAttribute("aria-selected", on ? "true" : "false");
       b.tabIndex = on ? 0 : -1;
     });
-    const jp = document.getElementById("insp-journal-panel");
-    const wp = document.getElementById("insp-watchlist-panel");
-    if (jp) jp.style.display = inspSubTab === "journal" ? "" : "none";
-    if (wp) wp.style.display = inspSubTab === "watchlist" ? "" : "none";
+    const panels = { journal: "insp-journal-panel", watchlist: "insp-watchlist-panel", brief: "insp-brief-panel" };
+    for (const k of Object.keys(panels)) {
+      const p = document.getElementById(panels[k]);
+      if (p) p.style.display = inspSubTab === k ? "" : "none";
+    }
+    const shown = document.getElementById(panels[inspSubTab]);
     if (opt.user) {
-      // 两个面板高度差很大：停在上一个面板的滚动位置会落在新面板中间，回到页签行
-      const bar = document.querySelector("#inspirations-view .page-topbar");
+      // 面板高度差很大：停在上一个面板的滚动位置会落在新面板中间，回到页签行
+      const bar = document.querySelector("#inspirations-view .page-subtab-bar");
       if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block: "start" });
-      const shown = inspSubTab === "journal" ? jp : wp;
       if (shown) { shown.classList.remove("insp-panel-in"); void shown.offsetWidth; shown.classList.add("insp-panel-in"); }
     }
     if (opt.render === false) return;
+    renderInspActive();
+  }
+  function renderInspActive() {
     if (inspSubTab === "journal") renderJournal();
+    else if (inspSubTab === "brief") { renderBriefTab(); bpLoad(false); }
     else { renderWatchlist(); renderMoveProfile(); }
   }
 
@@ -7974,7 +8146,7 @@ function rsAdjustGrade(grade, rsResult) {
     $$(".navlink[data-page]").forEach(a => a.classList.toggle("active", a.dataset.page === page));
     positionNavPill();
     applySidebarActiveColor(page);
-    if (page === "inspirations") { if (inspSubTab === "journal") renderJournal(); else { renderWatchlist(); renderMoveProfile(); } }
+    if (page === "inspirations") renderInspActive();
     if (page === "sim")          setSimSubTab(simSubTab);
     if (page === "analytics")    { fetchAndBuildHistory(); }
     if (page === "options")      renderOptions();

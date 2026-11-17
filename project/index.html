@@ -2135,6 +2135,32 @@
   .page-subtab.active { background: var(--accent); color: var(--bg-0); font-weight: 600; }
   .page-subtab:not(.active):hover { color: var(--fg-1); background: var(--line); }
   .page-subtab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .bp-wrap { max-width:960px; }
+  .bp-sum { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+  .bp-card { background:var(--bg-2); border-radius:12px; padding:12px 14px; }
+  .bp-card .k { font-size:10px; letter-spacing:.06em; color:var(--fg-3); text-transform:uppercase; }
+  .bp-card .v { font-size:22px; font-weight:700; font-family:var(--f-mono); margin-top:4px; }
+  .bp-card .s { font-size:11px; color:var(--fg-3); margin-top:3px; }
+  .bp-warn { font-size:11.5px; color:var(--warn); background:var(--bg-2); border-radius:8px; padding:8px 12px; margin-bottom:14px; line-height:1.5; }
+  .bp-sec { font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--fg-3); text-transform:uppercase; margin:18px 0 8px; }
+  .bp-tbl { width:100%; border-collapse:collapse; font-size:12px; }
+  .bp-tbl th { text-align:left; font-weight:600; color:var(--fg-3); font-size:10.5px; padding:4px 8px; border-bottom:1px solid var(--line); }
+  .bp-tbl td { padding:6px 8px; border-bottom:1px solid var(--line); font-family:var(--f-mono); }
+  .bp-tbl td:first-child, .bp-tbl th:first-child { font-family:inherit; }
+  .bp-day { border:1px solid var(--line); border-radius:12px; margin-bottom:8px; overflow:hidden; }
+  .bp-day > summary { cursor:pointer; padding:10px 14px; display:flex; gap:10px; align-items:center; font-size:12.5px; list-style:none; }
+  .bp-day > summary::-webkit-details-marker { display:none; }
+  .bp-day-d { font-weight:700; font-family:var(--f-mono); }
+  .bp-day-m { color:var(--fg-3); font-size:11.5px; margin-left:auto; }
+  .bp-badge { font-size:10px; font-weight:600; border-radius:10px; padding:1px 8px; }
+  .bp-badge.long { color:var(--up); background:var(--up-dim); }
+  .bp-badge.avoid { color:var(--down); background:var(--down-dim); }
+  .bp-badge.dup { color:var(--fg-3); background:var(--bg-3); }
+  .bp-rows { padding:0 8px 8px; overflow-x:auto; }
+  .bp-up { color:var(--up); } .bp-dn { color:var(--down); } .bp-na { color:var(--fg-3); }
+  .bp-empty { color:var(--fg-3); font-size:12.5px; padding:24px 4px; line-height:1.7; }
+  .bp-note { color:var(--fg-3); font-size:11px; line-height:1.6; margin-top:14px; }
+  @media (max-width:768px) { .bp-sum { grid-template-columns:repeat(2,1fr); } .bp-card .v { font-size:19px; } }
   .insp-panel-in { animation: insp-in .18s cubic-bezier(.22,1,.36,1) both; }
   @keyframes insp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .insp-panel-in { animation: none; } }
@@ -6253,11 +6279,16 @@
       <span class="page-title-en">Inspirations</span>
       <span class="page-title-zh">灵感</span>
     </div>
-    <div class="page-subtab-bar" role="tablist" aria-label="灵感">
-      <button class="page-subtab active" role="tab" aria-selected="true" data-insp-tab="watchlist">准备 Preparation</button>
-      <button class="page-subtab" role="tab" aria-selected="false" tabindex="-1" data-insp-tab="journal">复盘 Journal</button>
-    </div>
   </div>
+
+  <div class="page-subtab-bar" role="tablist" aria-label="灵感" style="margin:0 0 14px">
+    <button class="page-subtab active" role="tab" aria-selected="true" data-insp-tab="watchlist">准备 Preparation</button>
+    <button class="page-subtab" role="tab" aria-selected="false" tabindex="-1" data-insp-tab="journal">复盘 Journal</button>
+    <button class="page-subtab" role="tab" aria-selected="false" tabindex="-1" data-insp-tab="brief">AI 简报 AI Brief</button>
+  </div>
+
+  <!-- AI Brief sub-panel: 市场简报推荐标的的跟踪 -->
+  <div id="insp-brief-panel" style="display:none"></div>
 
   <!-- Journal sub-panel -->
   <div id="insp-journal-panel" style="margin-top:8px;display:none">
@@ -7055,8 +7086,8 @@
   </div>
 </div>
 
-<script src="data.js?v=908"></script>
-<script src="desk.js?v=908"></script>
+<script src="data.js?v=909"></script>
+<script src="desk.js?v=909"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
