@@ -2152,6 +2152,20 @@
   .bp-item-r { margin-left:auto; font-family:var(--f-mono); font-size:12px; }
   .bp-item-note { font-size:11px; color:var(--fg-2); margin-top:2px; line-height:1.45; }
   .bp-tr-sum td { border-top:1px solid var(--fg-3); font-weight:600; }
+  .bp-day { background:var(--bg-0); }
+  .bp-dup td:not(:first-child), .bp-dup td:first-child > * { opacity:.55; }
+  .bp-swipe { display:none; }
+  @media (max-width:768px) {
+    /* 逐日记录：7 列塞进 390px 会互相挤压 → 表格给足宽度、容器横滑，代码列钉在左侧 */
+    .bp-rows { -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scroll-snap-type:x proximity; padding:0 0 8px; }
+    .bp-rows .bp-tbl.bp-wide { min-width:640px; table-layout:auto; }
+    .bp-rows .bp-tbl.bp-wide th, .bp-rows .bp-tbl.bp-wide td { padding:8px 10px; white-space:nowrap; }
+    .bp-rows .bp-tbl.bp-wide td:first-child, .bp-rows .bp-tbl.bp-wide th:first-child {
+      position:sticky; left:0; z-index:1; background:var(--bg-0); min-width:118px;
+      box-shadow:1px 0 0 var(--line), 6px 0 8px -6px rgba(0,0,0,.45); }
+    .bp-rows .bp-tbl.bp-wide td:first-child .bp-badge { margin-right:2px; }
+    .bp-swipe { display:block; font-size:10.5px; color:var(--fg-3); padding:2px 14px 6px; letter-spacing:.04em; }
+  }
   .bp-sum { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
   .bp-card { background:var(--bg-2); border-radius:12px; padding:12px 14px; }
   .bp-card .k { font-size:10px; letter-spacing:.06em; color:var(--fg-3); text-transform:uppercase; }
@@ -7102,8 +7116,8 @@
   </div>
 </div>
 
-<script src="data.js?v=912"></script>
-<script src="desk.js?v=912"></script>
+<script src="data.js?v=913"></script>
+<script src="desk.js?v=913"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
