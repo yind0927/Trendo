@@ -2136,6 +2136,22 @@
   .page-subtab:not(.active):hover { color: var(--fg-1); background: var(--line); }
   .page-subtab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .bp-wrap { max-width:960px; }
+  .bp-head { display:flex; align-items:center; gap:8px; justify-content:flex-end; font-size:11px; margin:-2px 0 8px; }
+  .bp-refresh { background:none; border:1px solid var(--line); color:var(--fg-2); border-radius:8px; width:26px; height:24px; cursor:pointer; font-size:13px; line-height:1; }
+  .bp-refresh:hover { color:var(--fg-0); background:var(--line); }
+  .bp-u { font-size:12px; color:var(--fg-3); font-weight:500; }
+  .bp-latest { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .bp-col { background:var(--bg-2); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px; }
+  .bp-col-h { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+  .bp-col-h.long { color:var(--up); } .bp-col-h.short { color:var(--down); }
+  .bp-item { border-top:1px solid var(--line); padding-top:7px; }
+  .bp-item:first-of-type { border-top:none; padding-top:0; }
+  .bp-item.is-dup { opacity:.55; }
+  .bp-item-top { display:flex; align-items:baseline; gap:8px; font-size:13px; }
+  .bp-why { font-size:10.5px; color:var(--fg-3); }
+  .bp-item-r { margin-left:auto; font-family:var(--f-mono); font-size:12px; }
+  .bp-item-note { font-size:11px; color:var(--fg-2); margin-top:2px; line-height:1.45; }
+  .bp-tr-sum td { border-top:1px solid var(--fg-3); font-weight:600; }
   .bp-sum { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
   .bp-card { background:var(--bg-2); border-radius:12px; padding:12px 14px; }
   .bp-card .k { font-size:10px; letter-spacing:.06em; color:var(--fg-3); text-transform:uppercase; }
@@ -2160,7 +2176,7 @@
   .bp-up { color:var(--up); } .bp-dn { color:var(--down); } .bp-na { color:var(--fg-3); }
   .bp-empty { color:var(--fg-3); font-size:12.5px; padding:24px 4px; line-height:1.7; }
   .bp-note { color:var(--fg-3); font-size:11px; line-height:1.6; margin-top:14px; }
-  @media (max-width:768px) { .bp-sum { grid-template-columns:repeat(2,1fr); } .bp-card .v { font-size:19px; } }
+  @media (max-width:768px) { .bp-latest { grid-template-columns:1fr; } .bp-sum { grid-template-columns:repeat(2,1fr); } .bp-card .v { font-size:19px; } }
   .insp-panel-in { animation: insp-in .18s cubic-bezier(.22,1,.36,1) both; }
   @keyframes insp-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .insp-panel-in { animation: none; } }
@@ -7086,8 +7102,8 @@
   </div>
 </div>
 
-<script src="data.js?v=911"></script>
-<script src="desk.js?v=911"></script>
+<script src="data.js?v=912"></script>
+<script src="desk.js?v=912"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

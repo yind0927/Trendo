@@ -6849,10 +6849,11 @@ function rsAdjustGrade(grade, rsResult) {
   // 入场价 = 简报生成之后的第一个美股开盘价（不是当周周一，否则会引入事后已知的价格）；
   // 跳空 = 入场开盘价相对简报生成前最后一个收盘价，用来看简报是不是在追已经涨完的票。
   const BP_HZ = [["d1", 1], ["d5", 5], ["d10", 10], ["d20", 20]];
-  const BP_MIN_N = 30;
+  const BP_MIN_DAYS = 20;          // 多空差至少要有这么多个已走满的简报日，平均才不只是噪声
   const BP_WHY = { catalyst: "催化剂", rotation: "板块轮动", earnings: "财报", technical: "技术形态", other: "其他" };
-  const _bp = { loading: false, data: null, at: 0, err: null };
+  const _bp = { loading: false, data: null, at: 0, err: null, sig: "" };
   const bpEsc = s => String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+  const _bpOpen = new Set();
 
   function bpEntryDay(atIso) {
     const et = etNow(new Date(atIso)); if (!et) return null;
@@ -6866,10 +6867,18 @@ function rsAdjustGrade(grade, rsResult) {
     while (!isSess(d));
     return d;
   }
+  // 简报生成那一刻「已知的最后一个收盘」所在日期（含）：美东 16:00 之后生成 → 当天收盘已知；否则只到前一天。
+  // 跳空要拿它做参照——不能直接取入场日的前一根：盘中生成时那一根是简报生成之后才收的盘。
+  function bpRefLimit(atIso) {
+    const et = etNow(new Date(atIso)); if (!et) return null;
+    if (et.mins >= 16 * 60) return et.date;
+    const t = new Date(et.date + "T12:00:00Z"); t.setUTCDate(t.getUTCDate() - 1);
+    return t.toISOString().slice(0, 10);
+  }
 
   // 一个标的从入场日起的价格路径。口径与模型选股一致：入场价取原始开盘价，后续价格换算到
   // 入场日美元（adj_n / f0），这样入场后的分红算进收益、入场后才发生的分红不会压低已走完的期限。
-  function bpSeries(J, sym, entryDay) {
+  function bpSeries(J, sym, entryDay, refLimit) {
     const res = J.results?.[sym] || {}; const days = Object.keys(res).sort();
     const i0 = days.findIndex(d => d >= entryDay);
     if (i0 < 0 || days[i0] !== entryDay) return null;
@@ -6880,7 +6889,8 @@ function rsAdjustGrade(grade, rsResult) {
     const fut = days.slice(i0);
     const useAdj = f0 && fut.every(d => adj[d] != null);
     const px = d => useAdj ? adj[d] / f0 : res[d];
-    const out = { open, prev: i0 > 0 ? res[days[i0 - 1]] : null, hz: {}, last: null };
+    const refDay = [...days.slice(0, i0)].reverse().find(d => !refLimit || d <= refLimit);
+    const out = { open, prev: refDay ? res[refDay] : null, hz: {}, last: null };
     for (const [k, n] of BP_HZ) {
       const d = fut[n];
       if (d != null && !isLiveSession(d) && px(d) != null) out.hz[k] = (px(d) - open) / open * 100;
@@ -6901,11 +6911,14 @@ function rsAdjustGrade(grade, rsResult) {
         return (await r.json()).days || {};
       };
       let days = await getDays();
-      // 今天这一档还没有记录（cron 没跑、或这是上线前生成的老简报没带标的清单）→ 直接生成。
-      // force 才会绕过 Redis 里那份没有标的的旧简报；服务端 HSETNX 只记第一份有标的的，
-      // 所以每个会话最多试一次，AI 没给出标的也不会反复烧 API。
-      if (!days[_briefSlotKey()] && !_bp.genTried) {
-        _bp.genTried = true; _bp.generating = true; renderBriefTab();
+      // 今天这一档还没有记录（cron 没跑、或那天的简报是上线前生成、没带标的清单）→ 直接生成。
+      // force 才能绕过 Redis 里没有标的的旧简报；服务端 HSETNX 只记第一份有标的的。
+      // 「每个简报日每台设备只试一次」落盘，否则 AI 总给不出标的时每开一次 app 都会烧一次 API。
+      const slot = _briefSlotKey();
+      let tried = ""; try { tried = localStorage.getItem("trendo_bp_gen") || ""; } catch (_) {}
+      if (!days[slot] && tried !== slot) {
+        try { localStorage.setItem("trendo_bp_gen", slot); } catch (_) {}
+        _bp.generating = true; renderBriefTab();
         try {
           const q = new URLSearchParams({ force: "1", cron: "1" });
           const m = _lastMktCtx;
@@ -6923,30 +6936,46 @@ function rsAdjustGrade(grade, rsResult) {
         entryDay: days[slot].at ? bpEntryDay(days[slot].at) : null,
       })).filter(c => c.entryDay && c.picks.length);
       const J = { results: {}, adjResults: {}, openResults: {} };
+      const failed = new Set();          // 行情那一批没拉到的代码——和「代码根本不存在」是两回事
       if (cohorts.length) {
         const syms = new Set(["VOO"]);
         cohorts.forEach(c => c.picks.forEach(p => { syms.add(p.sym); if (p.etf) syms.add(p.etf); }));
-        const f = new Date(cohorts[0].entryDay + "T12:00:00Z"); f.setUTCDate(f.getUTCDate() - 7);
+        const f = new Date(cohorts[0].entryDay + "T12:00:00Z"); f.setUTCDate(f.getUTCDate() - 10);
         const from = f.toISOString().slice(0, 10);
         const list = [...syms], chunks = [];                  // 服务端单次上限 50，分批
         for (let i = 0; i < list.length; i += 25) chunks.push(list.slice(i, i + 25));
         const parts = await Promise.all(chunks.map(ch =>
           fetch(`/api/history?symbols=${encodeURIComponent(ch.join(","))}&from=${from}`)
             .then(x => x.ok ? x.json() : null).catch(() => null)));
-        parts.forEach(j => { if (!j) return; for (const k of Object.keys(J)) Object.assign(J[k], j[k] || {}); });
+        parts.forEach((j, i) => {
+          if (!j) { chunks[i].forEach(s => failed.add(s)); return; }
+          for (const k of Object.keys(J)) Object.assign(J[k], j[k] || {});
+        });
       }
+      const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
       const seen = new Set();
       cohorts.forEach(c => {
-        const v = bpSeries(J, "VOO", c.entryDay);
+        const ref = bpRefLimit(c.at);
+        const v = bpSeries(J, "VOO", c.entryDay, ref);
         c.rows = c.picks.map(p => {
           const hasData = Object.keys(J.results[p.sym] || {}).length > 0;
-          const s = bpSeries(J, p.sym, c.entryDay);
-          const e = p.etf ? bpSeries(J, p.etf, c.entryDay) : null;
+          const s = bpSeries(J, p.sym, c.entryDay, ref);
+          const e = p.etf ? bpSeries(J, p.etf, c.entryDay, ref) : null;
           const key = p.sym + "|" + p.dir, dup = seen.has(key); seen.add(key);
           const ex = (a, b, k) => (a && b && a.hz[k] != null && b.hz[k] != null) ? a.hz[k] - b.hz[k] : null;
           const exV = {}, exE = {};
           BP_HZ.forEach(([k]) => { exV[k] = ex(s, v, k); exE[k] = ex(s, e, k); });
-          return { ...p, dup, bad: !hasData, pending: hasData && !s, s, gap: (s && s.prev) ? (s.open / s.prev - 1) * 100 : null, exV, exE };
+          const fail = !hasData && failed.has(p.sym);
+          return { ...p, dup, fail, bad: !hasData && !fail, pending: hasData && !s, s, gap: (s && s.prev) ? (s.open / s.prev - 1) * 100 : null, exV, exE };
+        });
+        // 当天多空差 = 做多平均收益 − 做空平均收益。两边同一天、同一入场口径，大盘涨跌在差里互相抵消，
+        // 所以它回答的是「AI 能不能把赢家和输家分开」，而不是「那天大盘涨还是跌」。
+        // 只用首次出现的标的（重复的窗口重叠，不是新证据）。
+        c.spread = {};
+        BP_HZ.forEach(([k]) => {
+          const side = d => avg(c.rows.filter(r => !r.dup && !r.bad && !r.fail && r.dir === d && r.s && r.s.hz[k] != null).map(r => r.s.hz[k]));
+          const l = side("long"), sh = side("short");
+          c.spread[k] = (l != null && sh != null) ? l - sh : null;
         });
       });
       _bp.data = cohorts; _bp.at = Date.now();
@@ -6956,78 +6985,111 @@ function rsAdjustGrade(grade, rsResult) {
 
   function renderBriefTab() {
     const el = $("#insp-brief-panel"); if (!el) return;
-    if (_bp.generating) { el.innerHTML = `<div class="bp-empty">正在生成今天的 AI 总结并记录推荐标的…（约 10–20 秒）</div>`; return; }
-    if (_bp.loading && !_bp.data) { el.innerHTML = `<div class="bp-empty">加载记录…</div>`; return; }
-    if (_bp.err && !_bp.data) { el.innerHTML = `<div class="bp-empty">加载失败：${bpEsc(_bp.err)}　<button class="btn" id="bp-retry">重试</button></div>`; $("#bp-retry")?.addEventListener("click", () => bpLoad(true)); return; }
+    const setHTML = html => {
+      // 价格轮询每 30 秒会调一次渲染；内容没变就不动 DOM，免得闪烁、冲掉选区
+      if (html === _bp.sig && el.firstChild) return false;
+      _bp.sig = html; el.innerHTML = html; return true;
+    };
+    if (_bp.generating) { setHTML(`<div class="bp-empty">正在生成今天的 AI 总结并记录推荐标的…（约 10–20 秒）</div>`); return; }
+    if (_bp.loading && !_bp.data) { setHTML(`<div class="bp-empty">加载记录…</div>`); return; }
+    if (_bp.err && !_bp.data) { setHTML(`<div class="bp-empty">加载失败：${bpEsc(_bp.err)}　<button class="btn" id="bp-retry">重试</button></div>`); $("#bp-retry")?.addEventListener("click", () => bpLoad(true)); return; }
     const cohorts = _bp.data || [];
     if (!cohorts.length) {
-      el.innerHTML = `<div class="bp-wrap"><div class="bp-empty">还没有记录。AI 总结每天生成时会固定记录 3 个做多 + 3 个做空的标的（以及做空的）记下来，
-        从下一次简报生成起开始累积；记录在服务端，不需要打开 app。</div></div>`;
+      setHTML(`<div class="bp-wrap"><div class="bp-empty">还没有记录。AI 总结每天生成时会固定记录 3 个做多 + 3 个做空的标的，从下一次生成起开始累积；记录在服务端，不需要打开 app。</div></div>`);
       return;
     }
     const rows = cohorts.flatMap(c => c.rows.map(r => ({ ...r, slot: c.slot, entryDay: c.entryDay })));
-    const indep = rows.filter(r => !r.dup && !r.bad);
-    // edge：正 = 简报判断对了（看多：跑赢基准；回避：跑输基准）
+    const indep = rows.filter(r => !r.dup && !r.bad && !r.fail);
+    // edge：正 = 判断对了（做多：跑赢基准；做空：跑输基准）
     const edgeOf = (r, k, bench) => { const x = (bench === "etf" ? r.exE : r.exV)[k]; return x == null ? null : (r.dir === "short" ? -x : x); };
-    const agg = (list, k, bench = "voo") => {
-      const v = list.map(r => edgeOf(r, k, bench)).filter(x => x != null);
+    const stat = v => {
       if (!v.length) return { n: 0 };
       const s = [...v].sort((a, b) => a - b), m = s.length >> 1;
       return { n: v.length, mean: v.reduce((a, b) => a + b, 0) / v.length, med: s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2, hit: v.filter(x => x > 0).length / v.length * 100 };
     };
+    const agg = (list, k, bench = "voo") => stat(list.map(r => edgeOf(r, k, bench)).filter(x => x != null));
+    const aggSpread = k => stat(cohorts.map(c => c.spread[k]).filter(x => x != null));
     const pc = (x, d = 1) => x == null ? `<span class="bp-na">—</span>` : `<span class="${x > 0 ? "bp-up" : x < 0 ? "bp-dn" : ""}">${x > 0 ? "+" : ""}${x.toFixed(d)}%</span>`;
     const pp = x => x == null ? `<span class="bp-na">—</span>` : `<span class="${x > 0 ? "bp-up" : x < 0 ? "bp-dn" : ""}">${x > 0 ? "+" : ""}${x.toFixed(1)}</span>`;
-    const longs = indep.filter(r => r.dir === "long"), avoids = indep.filter(r => r.dir === "short");
-    const a5L = agg(longs, "d5"), a20L = agg(longs, "d20"), a5A = agg(avoids, "d5");
-    const card = (k, a, extra) => `<div class="bp-card"><div class="k">${k}</div>
-      <div class="v">${a.n ? pp(a.mean) + `<span style="font-size:12px;color:var(--fg-3)"> pp</span>` : `<span class="bp-na">—</span>`}</div>
-      <div class="s">${a.n ? `命中 ${a.hit.toFixed(0)}% · 中位 ${a.med > 0 ? "+" : ""}${a.med.toFixed(1)} · ${a.n} 只` : "样本未走完该期限"}${extra || ""}</div></div>`;
-    const hzTbl = [["看多", longs], ["做空", avoids]].map(([nm, list]) => `<tr><td>${nm}</td>` + BP_HZ.map(([k]) => {
+    const longs = indep.filter(r => r.dir === "long"), shorts = indep.filter(r => r.dir === "short");
+    const sp5 = aggSpread("d5"), sp20 = aggSpread("d20");
+    const all5 = agg(indep, "d5"), l5 = agg(longs, "d5"), s5 = agg(shorts, "d5");
+
+    const card = (k, a, unit, sub) => `<div class="bp-card"><div class="k">${k}</div>
+      <div class="v">${a.n ? `${unit === "%" ? a.hit.toFixed(0) + "%" : pp(a.mean)}${unit === "pp" ? `<span class="bp-u"> pp</span>` : ""}` : `<span class="bp-na">—</span>`}</div>
+      <div class="s">${a.n ? sub : "还没有走完该期限的记录"}</div></div>`;
+    const cards = `<div class="bp-sum">
+      ${card("多空差 · 5日", sp5, "pp", `做多组 − 做空组 · 赢 ${sp5.n ? sp5.hit.toFixed(0) : 0}% 的日子 · ${sp5.n} 天`)}
+      ${card("多空差 · 20日", sp20, "pp", `做多组 − 做空组 · 赢 ${sp20.n ? sp20.hit.toFixed(0) : 0}% 的日子 · ${sp20.n} 天`)}
+      ${card("单只命中率 · 5日", all5, "%", `做多 ${l5.n ? l5.hit.toFixed(0) + "%" : "—"} · 做空 ${s5.n ? s5.hit.toFixed(0) + "%" : "—"} · 共 ${all5.n} 只`)}
+      <div class="bp-card"><div class="k">已记录</div><div class="v">${cohorts.length}<span class="bp-u"> 天</span></div><div class="s">独立标的 ${indep.length} · 做多 ${longs.length} · 做空 ${shorts.length}</div></div>
+    </div>`;
+    const warn = (sp5.n < BP_MIN_DAYS || sp20.n < BP_MIN_DAYS)
+      ? `<div class="bp-warn">样本还少：多空差目前有 ${sp5.n} 天走满 5 日、${sp20.n} 天走满 20 日，不到 ${BP_MIN_DAYS} 天之前这些平均大多是随机波动。相邻几天的 20 日窗口互相重叠，真正独立的样本比天数还少。</div>` : "";
+
+    // 最新一期：用户打开这个页签最想看的就是「今天推荐了什么、现在怎么样」
+    const lc = cohorts[cohorts.length - 1];
+    const dowOf = d => "日一二三四五六"[new Date(d + "T12:00:00Z").getUTCDay()];
+    const item = r => `<div class="bp-item${r.dup ? " is-dup" : ""}">
+        <div class="bp-item-top"><b>${bpEsc(r.sym)}</b>
+          <span class="bp-why">${BP_WHY[r.why] || "其他"}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</span>
+          <span class="bp-item-r">${r.s ? pc(r.s.last) : `<span class="bp-na">${r.fail ? "行情失败" : r.bad ? "代码无数据" : "待开盘"}</span>`}</span></div>
+        ${r.note ? `<div class="bp-item-note">${bpEsc(r.note)}</div>` : ""}</div>`;
+    const col = (d, nm) => `<div class="bp-col"><div class="bp-col-h ${d}">${nm}</div>${lc.rows.filter(r => r.dir === d).map(item).join("") || `<div class="bp-na" style="font-size:11.5px">没有给出</div>`}</div>`;
+    const latest = `<div class="bp-sec">最新一期 · ${lc.entryDay} 周${dowOf(lc.entryDay)}开盘入场</div>
+      <div class="bp-latest">${col("long", "做多")}${col("short", "做空")}</div>`;
+
+    const hzTbl = [["做多 · 超额", longs], ["做空 · 之后跑输", shorts]].map(([nm, list]) => `<tr><td>${nm}</td>` + BP_HZ.map(([k]) => {
       const a = agg(list, k), e = agg(list, k, "etf");
       return `<td>${a.n ? `${pp(a.mean)} · ${a.hit.toFixed(0)}% <span class="bp-na">(${a.n})</span>` : `<span class="bp-na">—</span>`}${e.n ? `<br><span class="bp-na">板块ETF</span> ${pp(e.mean)}` : ""}</td>`;
-    }).join("") + `</tr>`).join("");
+    }).join("") + `</tr>`).join("")
+      + `<tr class="bp-tr-sum"><td>多空差</td>` + BP_HZ.map(([k]) => {
+        const a = aggSpread(k);
+        return `<td>${a.n ? `${pp(a.mean)} · ${a.hit.toFixed(0)}% <span class="bp-na">(${a.n}天)</span>` : `<span class="bp-na">—</span>`}</td>`;
+      }).join("") + `</tr>`;
     const whyTbl = Object.keys(BP_WHY).map(w => {
       const list = indep.filter(r => r.why === w); if (!list.length) return "";
       const a5 = agg(list, "d5"), a20 = agg(list, "d20");
       return `<tr><td>${BP_WHY[w]} <span class="bp-na">(${list.length})</span></td><td>${a5.n ? `${pp(a5.mean)} · ${a5.hit.toFixed(0)}%` : "—"}</td><td>${a20.n ? `${pp(a20.mean)} · ${a20.hit.toFixed(0)}%` : "—"}</td></tr>`;
     }).join("");
-    const gaps = indep.map(r => r.gap).filter(x => x != null);
-    const gapMean = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
-    const warn = indep.length < BP_MIN_N
-      ? `<div class="bp-warn">目前只有 ${indep.length} 个独立标的（首次推荐才计一次）。样本不到 ${BP_MIN_N} 个之前，上面的平均与命中率大多是随机波动，不足以判断简报靠不靠谱；同一天推荐的标的会一起涨跌，也不是彼此独立的证据。</div>` : "";
+    const gl = longs.map(r => r.gap).filter(x => x != null), gs = shorts.map(r => r.gap).filter(x => x != null);
+    const gm = a => a.reduce((x, y) => x + y, 0) / a.length;
+    const gapNote = (gl.length || gs.length)
+      ? `<div class="bp-note">入场跳空（简报生成时已知的最后收盘 → 入场开盘）：做多平均 ${gl.length ? (gm(gl) > 0 ? "+" : "") + gm(gl).toFixed(2) + "%" : "—"}，做空平均 ${gs.length ? (gm(gs) > 0 ? "+" : "") + gm(gs).toFixed(2) + "%" : "—"}。做多长期明显为正、做空长期明显为负，说明简报在追已经走完的那一段。</div>` : "";
+
     const days = [...cohorts].reverse().map(c => {
-      const dow = "日一二三四五六"[new Date(c.entryDay + "T12:00:00Z").getUTCDay()];
-      const n = c.rows.length, nl = c.rows.filter(r => r.dir === "long").length;
+      const sp = c.spread.d5;
       return `<details class="bp-day"${_bpOpen.has(c.slot) ? " open" : ""} data-bp="${c.slot}"><summary>
-        <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dow}开盘入场</span>
-        <span class="bp-day-m">${nl} 做多 · ${n - nl} 做空</span></summary>
-        <div class="bp-rows"><table class="bp-tbl"><thead><tr><th>代码</th><th>理由</th><th title="入场开盘价相对简报前最后收盘">跳空</th>${BP_HZ.map(([k, n2]) => `<th>${n2}日</th>`).join("")}<th>至今</th></tr></thead><tbody>
-        ${c.rows.map(r => `<tr style="${r.dup ? "opacity:.55" : ""}"><td><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>${r.dup ? ` <span class="bp-badge dup">重复</span>` : ""}${r.bad ? ` <span class="bp-badge dup">代码无数据</span>` : ""}${r.pending ? ` <span class="bp-badge dup">待开盘</span>` : ""}
+        <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dowOf(c.entryDay)}</span>
+        <span class="bp-day-m">${sp != null ? `5日多空差 ${pp(sp)}` : `<span class="bp-na">5日未走完</span>`}</span></summary>
+        <div class="bp-rows"><table class="bp-tbl"><thead><tr><th>代码</th><th>理由</th><th title="简报生成时已知的最后收盘 → 入场开盘">跳空</th>${BP_HZ.map(([, n2]) => `<th>${n2}日</th>`).join("")}<th>至今</th></tr></thead><tbody>
+        ${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<tr style="${r.dup ? "opacity:.55" : ""}"><td><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>${r.dup ? ` <span class="bp-badge dup">重复</span>` : ""}${r.bad ? ` <span class="bp-badge dup">代码无数据</span>` : ""}${r.fail ? ` <span class="bp-badge dup">行情失败</span>` : ""}${r.pending ? ` <span class="bp-badge dup">待开盘</span>` : ""}
           ${r.note ? `<div style="font-size:10.5px;color:var(--fg-3);font-family:inherit">${bpEsc(r.note)}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</div>` : ""}</td>
           <td style="font-family:inherit">${BP_WHY[r.why] || "其他"}</td><td>${pc(r.gap)}</td>
           ${BP_HZ.map(([k]) => `<td>${r.s ? pc(r.s.hz[k]) : "—"}${r.exV[k] != null ? `<div class="bp-na" style="font-size:10px">超额 ${pp(r.exV[k])}</div>` : ""}</td>`).join("")}
           <td>${r.s ? pc(r.s.last) : "—"}</td></tr>`).join("")}
         </tbody></table></div></details>`;
     }).join("");
-    el.innerHTML = `<div class="bp-wrap">
-      <div class="bp-sum">
-        <div class="bp-card"><div class="k">独立标的</div><div class="v">${indep.length}</div><div class="s">${cohorts.length} 个简报日 · 做多 ${longs.length} · 做空 ${avoids.length}</div></div>
-        ${card("做多 · 5日超额", a5L)}${card("做多 · 20日超额", a20L)}${card("做空 · 5日后跑输", a5A)}
-      </div>
-      ${warn}
-      <div class="bp-sec">按期限 · 对 VOO 的超额（pp）· 命中率 · 样本</div>
+    const when = new Date(_bp.at || Date.now());
+    const html = `<div class="bp-wrap">
+      <div class="bp-head"><span class="bp-na">更新于 ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}</span>
+        <button class="bp-refresh" id="bp-refresh" title="重新读取记录与行情">↻</button></div>
+      ${cards}${warn}${latest}
+      <div class="bp-sec">按期限 · 超额(pp) · 命中率 · 样本</div>
       <div style="overflow-x:auto"><table class="bp-tbl"><thead><tr><th></th>${BP_HZ.map(([, n]) => `<th>${n}日</th>`).join("")}</tr></thead><tbody>${hzTbl}</tbody></table></div>
       <div class="bp-sec">按理由类型（做多与做空合并，正 = 判断对）</div>
       <table class="bp-tbl"><thead><tr><th>类型</th><th>5日</th><th>20日</th></tr></thead><tbody>${whyTbl}</tbody></table>
-      ${gapMean != null ? `<div class="bp-note">入场跳空平均 ${gapMean > 0 ? "+" : ""}${gapMean.toFixed(2)}%：简报生成前最后收盘 → 入场开盘。长期明显为正，说明推荐的是已经涨完的票。</div>` : ""}
+      ${gapNote}
       <div class="bp-sec">逐日记录</div>${days}
-      <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 入场日之后第 N 个已收盘交易日，相对入场价；超额 = 减去同期 VOO。做空按相反方向计分（跑输才算对）。
-      同一代码连续几天被推荐只算第一次，其余标「重复」、不进统计。简报没再提某只票，不代表简报认为它不行。统计覆盖的是被推荐之后的表现，没有「没被推荐的票」作对照，板块 ETF 超额只在简报标注了所属板块时才有。</div></div>`;
-    el.querySelectorAll("details.bp-day").forEach(d => d.addEventListener("toggle", () => {
-      d.open ? _bpOpen.add(d.dataset.bp) : _bpOpen.delete(d.dataset.bp);
-    }));
+      <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 入场日之后第 N 个已收盘交易日，相对入场价。<b>多空差</b> = 当天做多组平均收益 − 做空组平均收益（大盘涨跌在差里抵消，回答「分不分得开赢家和输家」）；单只超额 = 减去同期 VOO；做空按相反方向计分（跑输才算对）。
+      同一代码+方向再次出现只算第一次，其余标「重复」；查不到行情的标「代码无数据」或「行情失败」，都不进统计。没有「未被推荐的票」作对照；板块 ETF 超额只在简报标了所属板块时才有。</div></div>`;
+    if (setHTML(html)) {
+      el.querySelectorAll("details.bp-day").forEach(d => d.addEventListener("toggle", () => {
+        d.open ? _bpOpen.add(d.dataset.bp) : _bpOpen.delete(d.dataset.bp);
+      }));
+      $("#bp-refresh")?.addEventListener("click", () => bpLoad(true));
+    }
   }
-  const _bpOpen = new Set();
 
   // Inspirations 子页签：状态、ARIA、面板显隐、淡入、记住选择都在这一处
   function setInspSubTab(tab, opt = {}) {
