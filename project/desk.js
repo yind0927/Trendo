@@ -6694,7 +6694,6 @@ function rsAdjustGrade(grade, rsResult) {
               <div class="mp-pick-top">
                 <span class="mp-sym">${p.sym}</span>
                 <button class="mp-edit" data-mp-edit="${c.id}|${p.sym}" title="代码写错了？点这里改，入场价会按当周周一开盘价重新取">✎</button>
-                ${p.fixed ? `<span class="mp-fixed" title="${p.fixed.at ? p.fixed.at.slice(0, 10) : ""} 由 ${p.fixed.from} 更正">更正自 ${p.fixed.from}</span>` : ""}
                 ${p.entryPrice == null ? `<span class="mp-nopx">等待开盘</span>`
                   : `<span class="mp-pick-foot">开盘入场 $${Number(p.entryPrice).toFixed(2)} · ${p.entryDate}</span>`}
                 ${mpPickDeletable(c, p) ? `<button class="mp-del mp-del-pick" data-mp-delpick="${c.id}|${p.sym}" title="尚未定价，可删除">✕</button>` : ""}
@@ -6726,8 +6725,8 @@ function rsAdjustGrade(grade, rsResult) {
 
   // 更正一个写错的代码。入场价口径不变：仍取该批 `weekOf`（当周周一）的开盘价，所以这里
   // 只需要把这只票的定价与检查点清零，交给 mpRefresh 重新取——不另造一套定价逻辑。
-  // 允许在已定价后改：这是修笔误而不是挑票，所以留一条「更正自 OLD」的痕迹挂在那只票上，
-  // 不静默覆盖；同一批里已有该代码则拒绝（否则同一只票会被算两次）。
+  // 允许在已定价后改：这是修笔误。
+  // 同一批里已有该代码则拒绝（否则同一只票会被算两次）。不留「更正自」痕迹（用户要求）。
   async function mpRenamePick(cid, oldSym, raw) {
     const c = mpCohort(cid); if (!c) return { error: "批次不存在" };
     const p = c.picks.find(x => x.sym === oldSym); if (!p) return { error: "代码不存在" };
@@ -6735,7 +6734,6 @@ function rsAdjustGrade(grade, rsResult) {
     if (sym === oldSym) return { same: true };
     if (!/^[A-Z0-9.\-]{1,6}$/.test(sym)) return { error: "代码格式不对" };
     if (c.picks.some(x => x !== p && x.sym === sym)) return { error: `${sym} 本批已有` };
-    p.fixed = { from: p.fixed?.from || oldSym, at: new Date().toISOString() };
     p.sym = sym; p.name = null;
     p.entryPrice = null; p.entryDate = null; p.checkpoints = {};
     delete p.lastPx; delete p.lastDay;
