@@ -6851,7 +6851,7 @@ function rsAdjustGrade(grade, rsResult) {
   const BP_HZ = [["d1", 1], ["d5", 5], ["d10", 10], ["d20", 20]];
   const BP_MIN_DAYS = 20;          // 多空差至少要有这么多个已走满的简报日，平均才不只是噪声
   const BP_WHY = { catalyst: "催化剂", rotation: "板块轮动", earnings: "财报", technical: "技术形态", other: "其他" };
-  const _bp = { loading: false, data: null, at: 0, err: null, sig: "", view: 0 };
+  const _bp = { loading: false, data: null, at: 0, err: null, sig: "" };
   const bpEsc = s => String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
   const _bpOpen = new Set();
 
@@ -7028,30 +7028,15 @@ function rsAdjustGrade(grade, rsResult) {
       ? `<div class="bp-warn">样本还少：多空差目前有 ${sp5.n} 天走满 5 日、${sp20.n} 天走满 20 日，不到 ${BP_MIN_DAYS} 天之前这些平均大多是随机波动。相邻几天的 20 日窗口互相重叠，真正独立的样本比天数还少。</div>` : "";
 
     // 最新一期：用户打开这个页签最想看的就是「今天推荐了什么、现在怎么样」
-    _bp.view = Math.max(0, Math.min(_bp.view | 0, cohorts.length - 1));
-    const lc = cohorts[cohorts.length - 1 - _bp.view];
+    const lc = cohorts[cohorts.length - 1];
     const dowOf = d => "日一二三四五六"[new Date(d + "T12:00:00Z").getUTCDay()];
     const item = r => `<div class="bp-item${r.dup ? " is-dup" : ""}">
         <div class="bp-item-top"><b>${bpEsc(r.sym)}</b>
           <span class="bp-why">${BP_WHY[r.why] || "其他"}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</span>
-          ${r.dup ? `<span class="bp-badge dup">重复</span>` : ""}
           <span class="bp-item-r">${r.s ? pc(r.s.last) : `<span class="bp-na">${r.fail ? "行情失败" : r.bad ? "代码无数据" : "待开盘"}</span>`}</span></div>
-        ${r.note ? `<div class="bp-item-note">${bpEsc(r.note)}</div>` : ""}
-        ${r.s && r.s.hz.d5 != null ? `<div class="bp-item-sub"><i>5日</i>${pc(r.s.hz.d5)}${r.exV.d5 != null ? `<i>超额</i>${pp(r.exV.d5)}` : ""}</div>` : ""}</div>`;
-    const col = (d, nm) => {
-      const list = lc.rows.filter(r => r.dir === d);
-      return `<div class="bp-col"><div class="bp-col-h ${d}">${nm}<span class="bp-col-n">${list.length}</span></div>${list.map(item).join("") || `<div class="bp-na" style="font-size:11.5px">这一期没有给出</div>`}</div>`;
-    };
-    const lsp5 = lc.spread.d5;
-    const older = _bp.view < cohorts.length - 1, newer = _bp.view > 0;
-    const latest = `<div class="bp-lh">
-        <div class="bp-lh-t"><span class="bp-lh-k">推荐</span><b>${lc.entryDay}</b><span class="bp-na">周${dowOf(lc.entryDay)}开盘入场</span>${_bp.view === 0 ? `<span class="bp-badge long">最新</span>` : ""}</div>
-        <div class="bp-lh-nav" role="group" aria-label="切换期数">
-          <button class="bp-nav" id="bp-prev" ${older ? "" : "disabled"} aria-label="前一期">‹</button>
-          <span class="bp-lh-pos">${cohorts.length - _bp.view} / ${cohorts.length}</span>
-          <button class="bp-nav" id="bp-next" ${newer ? "" : "disabled"} aria-label="后一期">›</button>
-        </div></div>
-      <div class="bp-lh-sum">${lsp5 != null ? `这一期 5 日多空差 ${pp(lsp5)} pp` : `<span class="bp-na">5 日还没走完</span>`}</div>
+        ${r.note ? `<div class="bp-item-note">${bpEsc(r.note)}</div>` : ""}</div>`;
+    const col = (d, nm) => `<div class="bp-col"><div class="bp-col-h ${d}">${nm}</div>${lc.rows.filter(r => r.dir === d).map(item).join("") || `<div class="bp-na" style="font-size:11.5px">没有给出</div>`}</div>`;
+    const latest = `<div class="bp-sec">最新一期 · ${lc.entryDay} 周${dowOf(lc.entryDay)}开盘入场</div>
       <div class="bp-latest">${col("long", "做多")}${col("short", "做空")}</div>`;
 
     const hzTbl = [["做多 · 超额", longs], ["做空 · 之后跑输", shorts]].map(([nm, list]) => `<tr><td>${nm}</td>` + BP_HZ.map(([k]) => {
@@ -7098,8 +7083,6 @@ function rsAdjustGrade(grade, rsResult) {
         d.open ? _bpOpen.add(d.dataset.bp) : _bpOpen.delete(d.dataset.bp);
       }));
       $("#bp-refresh")?.addEventListener("click", () => bpLoad(true));
-      $("#bp-prev")?.addEventListener("click", () => { _bp.view++; renderBriefTab(); });
-      $("#bp-next")?.addEventListener("click", () => { _bp.view--; renderBriefTab(); });
     }
   }
 
