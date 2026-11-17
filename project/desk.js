@@ -6966,7 +6966,7 @@ function rsAdjustGrade(grade, rsResult) {
           const exV = {}, exE = {};
           BP_HZ.forEach(([k]) => { exV[k] = ex(s, v, k); exE[k] = ex(s, e, k); });
           const fail = !hasData && failed.has(p.sym);
-          return { ...p, dup, fail, bad: !hasData && !fail, pending: hasData && !s, s, gap: (s && s.prev) ? (s.open / s.prev - 1) * 100 : null, exV, exE };
+          return { ...p, dup, fail, bad: !hasData && !fail, pending: hasData && !s, s, exV, exE };
         });
         // 当天多空差 = 做多平均收益 − 做空平均收益。两边同一天、同一入场口径，大盘涨跌在差里互相抵消，
         // 所以它回答的是「AI 能不能把赢家和输家分开」，而不是「那天大盘涨还是跌」。
@@ -7052,23 +7052,19 @@ function rsAdjustGrade(grade, rsResult) {
       const a5 = agg(list, "d5"), a20 = agg(list, "d20");
       return `<tr><td>${BP_WHY[w]} <span class="bp-na">(${list.length})</span></td><td>${a5.n ? `${pp(a5.mean)} · ${a5.hit.toFixed(0)}%` : "—"}</td><td>${a20.n ? `${pp(a20.mean)} · ${a20.hit.toFixed(0)}%` : "—"}</td></tr>`;
     }).join("");
-    const gl = longs.map(r => r.gap).filter(x => x != null), gs = shorts.map(r => r.gap).filter(x => x != null);
-    const gm = a => a.reduce((x, y) => x + y, 0) / a.length;
-    const gapNote = (gl.length || gs.length)
-      ? `<div class="bp-note">入场跳空（简报生成时已知的最后收盘 → 入场开盘）：做多平均 ${gl.length ? (gm(gl) > 0 ? "+" : "") + gm(gl).toFixed(2) + "%" : "—"}，做空平均 ${gs.length ? (gm(gs) > 0 ? "+" : "") + gm(gs).toFixed(2) + "%" : "—"}。做多长期明显为正、做空长期明显为负，说明简报在追已经走完的那一段。</div>` : "";
-
     const days = [...cohorts].reverse().map(c => {
       const sp = c.spread.d5;
       return `<details class="bp-day"${_bpOpen.has(c.slot) ? " open" : ""} data-bp="${c.slot}"><summary>
         <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dowOf(c.entryDay)}</span>
         <span class="bp-day-m">${sp != null ? `5日多空差 ${pp(sp)}` : `<span class="bp-na">5日未走完</span>`}</span></summary>
-        <div class="bp-swipe">← 左右滑动查看全部期限 →</div><div class="bp-rows"><table class="bp-tbl bp-wide"><thead><tr><th>代码</th><th>理由</th><th title="简报生成时已知的最后收盘 → 入场开盘">跳空</th>${BP_HZ.map(([, n2]) => `<th>${n2}日</th>`).join("")}<th>至今</th></tr></thead><tbody>
-        ${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<tr class="${r.dup ? "bp-dup" : ""}"><td><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>${r.dup ? ` <span class="bp-badge dup">重复</span>` : ""}${r.bad ? ` <span class="bp-badge dup">代码无数据</span>` : ""}${r.fail ? ` <span class="bp-badge dup">行情失败</span>` : ""}${r.pending ? ` <span class="bp-badge dup">待开盘</span>` : ""}
-          ${r.note ? `<div style="font-size:10.5px;color:var(--fg-3);font-family:inherit">${bpEsc(r.note)}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</div>` : ""}</td>
-          <td style="font-family:inherit">${BP_WHY[r.why] || "其他"}</td><td>${pc(r.gap)}</td>
-          ${BP_HZ.map(([k]) => `<td>${r.s ? pc(r.s.hz[k]) : "—"}${r.exV[k] != null ? `<div class="bp-na" style="font-size:10px">超额 ${pp(r.exV[k])}</div>` : ""}</td>`).join("")}
-          <td>${r.s ? pc(r.s.last) : "—"}</td></tr>`).join("")}
-        </tbody></table></div></details>`;
+        <div class="bp-pk-list">${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<div class="bp-pk${r.dup ? " is-dup" : ""}">
+          <div class="bp-pk-top"><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>
+            <span class="bp-why">${BP_WHY[r.why] || "其他"}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</span>
+            ${r.dup ? `<span class="bp-badge dup">重复</span>` : ""}${r.bad ? `<span class="bp-badge dup">代码无数据</span>` : ""}${r.fail ? `<span class="bp-badge dup">行情失败</span>` : ""}${r.pending ? `<span class="bp-badge dup">待开盘</span>` : ""}
+            <span class="bp-pk-last"><i>至今</i>${r.s ? pc(r.s.last) : "—"}</span></div>
+          ${r.note ? `<div class="bp-pk-note">${bpEsc(r.note)}</div>` : ""}
+          <div class="bp-pk-hz">${BP_HZ.map(([k, n2]) => `<div><i>${n2}日</i>${r.s ? pc(r.s.hz[k]) : "—"}${r.exV[k] != null ? `<em>超额 ${pp(r.exV[k])}</em>` : ""}</div>`).join("")}</div>
+        </div>`).join("")}</div></details>`;
     }).join("");
     const when = new Date(_bp.at || Date.now());
     const html = `<div class="bp-wrap">
@@ -7079,7 +7075,6 @@ function rsAdjustGrade(grade, rsResult) {
       <div style="overflow-x:auto"><table class="bp-tbl"><thead><tr><th></th>${BP_HZ.map(([, n]) => `<th>${n}日</th>`).join("")}</tr></thead><tbody>${hzTbl}</tbody></table></div>
       <div class="bp-sec">按理由类型（做多与做空合并，正 = 判断对）</div>
       <table class="bp-tbl"><thead><tr><th>类型</th><th>5日</th><th>20日</th></tr></thead><tbody>${whyTbl}</tbody></table>
-      ${gapNote}
       <div class="bp-sec">逐日记录</div>${days}
       <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 入场日之后第 N 个已收盘交易日，相对入场价。<b>多空差</b> = 当天做多组平均收益 − 做空组平均收益（大盘涨跌在差里抵消，回答「分不分得开赢家和输家」）；单只超额 = 减去同期 VOO；做空按相反方向计分（跑输才算对）。
       同一代码+方向再次出现只算第一次，其余标「重复」；查不到行情的标「代码无数据」或「行情失败」，都不进统计。没有「未被推荐的票」作对照；板块 ETF 超额只在简报标了所属板块时才有。</div></div>`;
