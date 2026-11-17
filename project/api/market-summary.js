@@ -260,9 +260,9 @@ ${newsText}
 风险：（1-2个具体风险点，结合当前数据说明触发条件）
 机会：（1-2个相对冷门、市场还未充分定价的潜力赛道或细分方向——避免泛泛的"科技/AI"等大板块，优先挖掘：受益于宏观变化但关注度不高的细分行业、政策催化下的特定标的方向、资金刚开始轮动但尚未拥挤的板块、或当前新闻中被忽视的结构性机会。每条给出赛道名称 + 一句逻辑）
 
-在全部正文之后，另起一行输出 @@PICKS@@，其后紧跟一个 JSON 数组（不要代码块、不要解释），列出上面「机会」里提到、以及「风险」里明确建议回避的美股/ETF 具体标的，最多 6 个，每个形如：
-{"sym":"代码","dir":"long 或 avoid","why":"catalyst|rotation|earnings|technical 之一","etf":"所属板块ETF代码，只能从 XLK XLY XLV XLF XLB XLP XLE XLI XLU XLC XLRE SMH ITA COPX IWM 中选，拿不准就留空字符串","note":"不超过20字的理由"}
-sym 必须是真实存在的美股上市代码（1-5 位大写字母）；没有具体标的就输出 @@PICKS@@ 后接 []。
+在全部正文之后，另起一行输出 @@PICKS@@，其后紧跟一个 JSON 数组（不要代码块、不要解释），固定给出 6 个美股/ETF 具体标的：3 个做多（dir=long，优先取自上面「机会」所指的方向）+ 3 个做空（dir=short，取自上面「风险」或领跌方向）。每个形如：
+{"sym":"代码","dir":"long 或 short","why":"catalyst|rotation|earnings|technical 之一","etf":"所属板块ETF代码，只能从 XLK XLY XLV XLF XLB XLP XLE XLI XLU XLC XLRE SMH ITA COPX IWM 中选，拿不准就留空字符串","note":"不超过20字的理由"}
+sym 必须是真实存在的美股上市代码（1-5 位大写字母），6 个互不重复。
 
 分析时请遵循三轴框架：VIX 只决定仓位大小（多少），趋势方向决定能否做多，情绪极端（FGI/RSI）决定何时止盈或反向——低 VIX + 情绪过热时应提示止盈而非追高，方向逆风时无论 VIX 多低都不建议新多单。
 语言直接专业，融合具体数字，避免废话，总字数控制在400字以内（不含 @@PICKS@@ 之后的 JSON）。`;
@@ -308,11 +308,13 @@ sym 必须是真实存在的美股上市代码（1-5 位大写字母）；没有
       const seen = new Set();
       picks = (JSON.parse(m[0]) || []).map(p => ({
         sym: String(p.sym || "").toUpperCase().trim(),
-        dir: p.dir === "avoid" ? "avoid" : p.dir === "long" ? "long" : null,
+        dir: p.dir === "long" ? "long" : (p.dir === "short" || p.dir === "avoid") ? "short" : null,
         why: ["catalyst","rotation","earnings","technical"].includes(p.why) ? p.why : "other",
         etf: ETFS.includes(String(p.etf || "").toUpperCase()) ? String(p.etf).toUpperCase() : null,
         note: String(p.note || "").slice(0, 40),
-      })).filter(p => /^[A-Z]{1,5}$/.test(p.sym) && p.dir && !seen.has(p.sym) && seen.add(p.sym)).slice(0, 6);
+      })).filter(p => /^[A-Z]{1,5}$/.test(p.sym) && p.dir && !seen.has(p.sym) && seen.add(p.sym));
+      // 固定格式：3 做多 + 3 做空（多给的截掉，不足不补）
+      picks = [...picks.filter(p => p.dir === "long").slice(0, 3), ...picks.filter(p => p.dir === "short").slice(0, 3)];
     } catch (_) { picks = []; }
   }
 

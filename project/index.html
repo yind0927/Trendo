@@ -2154,7 +2154,7 @@
   .bp-day-m { color:var(--fg-3); font-size:11.5px; margin-left:auto; }
   .bp-badge { font-size:10px; font-weight:600; border-radius:10px; padding:1px 8px; }
   .bp-badge.long { color:var(--up); background:var(--up-dim); }
-  .bp-badge.avoid { color:var(--down); background:var(--down-dim); }
+  .bp-badge.short { color:var(--down); background:var(--down-dim); }
   .bp-badge.dup { color:var(--fg-3); background:var(--bg-3); }
   .bp-rows { padding:0 8px 8px; overflow-x:auto; }
   .bp-up { color:var(--up); } .bp-dn { color:var(--down); } .bp-na { color:var(--fg-3); }
@@ -6284,7 +6284,7 @@
   <div class="page-subtab-bar" role="tablist" aria-label="灵感" style="margin:0 0 14px">
     <button class="page-subtab active" role="tab" aria-selected="true" data-insp-tab="watchlist">准备 Preparation</button>
     <button class="page-subtab" role="tab" aria-selected="false" tabindex="-1" data-insp-tab="journal">复盘 Journal</button>
-    <button class="page-subtab" role="tab" aria-selected="false" tabindex="-1" data-insp-tab="brief">AI 总结 AI Summary</button>
+    <button class="page-subtab" role="tab" aria-selected="false" tabindex="-1" data-insp-tab="brief">AI 总结 AI Briefing</button>
   </div>
 
   <!-- AI Summary sub-panel: 市场简报推荐标的的跟踪 -->
@@ -7086,8 +7086,8 @@
   </div>
 </div>
 
-<script src="data.js?v=910"></script>
-<script src="desk.js?v=910"></script>
+<script src="data.js?v=911"></script>
+<script src="desk.js?v=911"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
