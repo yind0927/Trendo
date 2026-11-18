@@ -7058,7 +7058,7 @@ function rsAdjustGrade(grade, rsResult) {
         <div class="bp-pk-list">${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<div class="bp-pk${r.dup ? " is-dup" : ""}">
           <div class="bp-pk-top"><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>
             ${r.dup ? `<span class="bp-badge dup">重复</span>` : ""}${r.bad ? `<span class="bp-badge dup">代码无数据</span>` : ""}${r.fail ? `<span class="bp-badge dup">行情失败</span>` : ""}${r.pending ? `<span class="bp-badge dup">待开盘</span>` : ""}
-            <span class="bp-pk-last"><i>至今</i>${r.s ? pc(r.s.last) : "—"}</span></div>
+            <span class="bp-pk-last"><i>${r.s ? `入场 $${r.s.open.toFixed(2)}（${c.entryDay.slice(5)} 开盘）· ` : ""}至今</i>${r.s ? pc(r.s.last) : "—"}</span></div>
           <div class="bp-pk-hz">${BP_HZ.map(([k, n2]) => `<div><i>${n2}日</i>${r.s ? pc(r.s.hz[k]) : "—"}</div>`).join("")}</div>
         </div>`).join("")}</div></details>`;
     }).join("");
