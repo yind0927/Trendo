@@ -7057,11 +7057,9 @@ function rsAdjustGrade(grade, rsResult) {
 </summary>
         <div class="bp-pk-list">${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<div class="bp-pk${r.dup ? " is-dup" : ""}">
           <div class="bp-pk-top"><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>
-            <span class="bp-why">${BP_WHY[r.why] || "其他"}${r.etf ? ` · ${bpEsc(r.etf)}` : ""}</span>
             ${r.dup ? `<span class="bp-badge dup">重复</span>` : ""}${r.bad ? `<span class="bp-badge dup">代码无数据</span>` : ""}${r.fail ? `<span class="bp-badge dup">行情失败</span>` : ""}${r.pending ? `<span class="bp-badge dup">待开盘</span>` : ""}
             <span class="bp-pk-last"><i>至今</i>${r.s ? pc(r.s.last) : "—"}</span></div>
-          ${r.note ? `<div class="bp-pk-note">${bpEsc(r.note)}</div>` : ""}
-          <div class="bp-pk-hz">${BP_HZ.map(([k, n2]) => `<div><i>${n2}日</i>${r.s ? pc(r.s.hz[k]) : "—"}${r.exV[k] != null ? `<em>超额 ${pp(r.exV[k])}</em>` : ""}</div>`).join("")}</div>
+          <div class="bp-pk-hz">${BP_HZ.map(([k, n2]) => `<div><i>${n2}日</i>${r.s ? pc(r.s.hz[k]) : "—"}</div>`).join("")}</div>
         </div>`).join("")}</div></details>`;
     }).join("");
     const when = new Date(_bp.at || Date.now());
@@ -7072,8 +7070,8 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="bp-sec">按理由类型（做多与做空合并，正 = 判断对）</div>
       <table class="bp-tbl"><thead><tr><th>类型</th><th>5日</th><th>20日</th></tr></thead><tbody>${whyTbl}</tbody></table>
       <div class="bp-sec">逐日记录</div>${days}
-      <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 从入场日起算的第 N 个已收盘交易日（入场日当天收盘 = 1 日），相对入场价。<b>多空差</b> = 当天做多组平均收益 − 做空组平均收益（大盘涨跌在差里抵消，回答「分不分得开赢家和输家」）；单只超额 = 减去同期 VOO；做空按相反方向计分（跑输才算对）。
-      同一代码+方向再次出现只算第一次，其余标「重复」；查不到行情的标「代码无数据」或「行情失败」，都不进统计。没有「未被推荐的票」作对照；板块 ETF 超额只在简报标了所属板块时才有。</div></div>`;
+      <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 从入场日起算的第 N 个已收盘交易日（入场日当天收盘 = 1 日），相对入场价。<b>多空差</b> = 当天做多组平均收益 − 做空组平均收益（大盘涨跌在差里抵消，回答「分不分得开赢家和输家」）；做空按相反方向计分（跑输才算对）。
+      同一代码+方向再次出现只算第一次，其余标「重复」；查不到行情的标「代码无数据」或「行情失败」，都不进统计。没有「未被推荐的票」作对照。</div></div>`;
     if (setHTML(html)) {
       el.querySelectorAll("details.bp-day").forEach(d => d.addEventListener("toggle", () => {
         d.open ? _bpOpen.add(d.dataset.bp) : _bpOpen.delete(d.dataset.bp);
