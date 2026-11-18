@@ -2180,6 +2180,10 @@
   .bp-day > summary { cursor:pointer; padding:10px 14px; display:flex; gap:10px; align-items:center; font-size:12.5px; list-style:none; }
   .bp-day > summary::-webkit-details-marker { display:none; }
   .bp-day-d { font-weight:700; font-family:var(--f-mono); }
+  .bp-day-best { margin-left:auto; font-size:11.5px; color:var(--fg-3); white-space:nowrap; }
+  .bp-day-best b { color:var(--fg-1); font-family:var(--f-mono); }
+  .bp-day-best em { font-style:normal; font-family:var(--f-mono); font-weight:600; }
+  .bp-day-best em.up { color:var(--up); } .bp-day-best em.down { color:var(--down); }
   .bp-badge { font-size:10px; font-weight:600; border-radius:10px; padding:1px 8px; }
   .bp-badge.long { color:var(--up); background:var(--up-dim); }
   .bp-badge.short { color:var(--down); background:var(--down-dim); }
@@ -7114,8 +7118,8 @@
   </div>
 </div>
 
-<script src="data.js?v=918"></script>
-<script src="desk.js?v=918"></script>
+<script src="data.js?v=919"></script>
+<script src="desk.js?v=919"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

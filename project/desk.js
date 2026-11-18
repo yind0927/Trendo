@@ -7046,7 +7046,14 @@ function rsAdjustGrade(grade, rsResult) {
     }).join("");
     const days = [...cohorts].reverse().map(c => {
       return `<details class="bp-day"${_bpOpen.has(c.slot) ? " open" : ""} data-bp="${c.slot}"><summary>
-        <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dowOf(c.entryDay)}</span>
+        <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dowOf(c.entryDay)}</span>${(() => {
+          // 最佳表现：按方向计分（做空跌了才算赢），只看有至今收益的、非重复/无数据的
+          const cand = c.rows.filter(r => !r.dup && !r.bad && !r.fail && r.s && r.s.last != null)
+            .map(r => ({ r, v: r.dir === "short" ? -r.s.last : r.s.last }));
+          if (!cand.length) return "";
+          const b = cand.reduce((m, x) => x.v > m.v ? x : m);
+          return `<span class="bp-day-best" title="最佳表现（做空按相反方向计分）">最佳 <b>${bpEsc(b.r.sym)}</b> <em class="${b.v >= 0 ? "up" : "down"}">${b.v >= 0 ? "+" : "−"}${Math.abs(b.v).toFixed(2)}%</em></span>`;
+        })()}
 </summary>
         <div class="bp-pk-list">${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<div class="bp-pk${r.dup ? " is-dup" : ""}">
           <div class="bp-pk-top"><b>${bpEsc(r.sym)}</b> <span class="bp-badge ${r.dir}">${r.dir === "long" ? "做多" : "做空"}</span>
