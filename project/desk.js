@@ -6892,7 +6892,7 @@ function rsAdjustGrade(grade, rsResult) {
     const refDay = [...days.slice(0, i0)].reverse().find(d => !refLimit || d <= refLimit);
     const out = { open, prev: refDay ? res[refDay] : null, hz: {}, last: null };
     for (const [k, n] of BP_HZ) {
-      const d = fut[n];
+      const d = fut[n - 1];   // 入场日当天收盘算第 1 个交易日（开盘买入 → 当天收盘 = 1 日）
       if (d != null && !isLiveSession(d) && px(d) != null) out.hz[k] = (px(d) - open) / open * 100;
     }
     const ld = [...fut].reverse().find(d => !isLiveSession(d) && px(d) != null);
@@ -7065,7 +7065,7 @@ function rsAdjustGrade(grade, rsResult) {
       <div class="bp-sec">按理由类型（做多与做空合并，正 = 判断对）</div>
       <table class="bp-tbl"><thead><tr><th>类型</th><th>5日</th><th>20日</th></tr></thead><tbody>${whyTbl}</tbody></table>
       <div class="bp-sec">逐日记录</div>${days}
-      <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 入场日之后第 N 个已收盘交易日，相对入场价。<b>多空差</b> = 当天做多组平均收益 − 做空组平均收益（大盘涨跌在差里抵消，回答「分不分得开赢家和输家」）；单只超额 = 减去同期 VOO；做空按相反方向计分（跑输才算对）。
+      <div class="bp-note">入场价 = 简报生成后第一个美股开盘价；N 日 = 从入场日起算的第 N 个已收盘交易日（入场日当天收盘 = 1 日），相对入场价。<b>多空差</b> = 当天做多组平均收益 − 做空组平均收益（大盘涨跌在差里抵消，回答「分不分得开赢家和输家」）；单只超额 = 减去同期 VOO；做空按相反方向计分（跑输才算对）。
       同一代码+方向再次出现只算第一次，其余标「重复」；查不到行情的标「代码无数据」或「行情失败」，都不进统计。没有「未被推荐的票」作对照；板块 ETF 超额只在简报标了所属板块时才有。</div></div>`;
     if (setHTML(html)) {
       el.querySelectorAll("details.bp-day").forEach(d => d.addEventListener("toggle", () => {
