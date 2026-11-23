@@ -6935,10 +6935,18 @@ function rsAdjustGrade(grade, rsResult) {
         } catch (_) { /* 生成失败不影响已有记录的展示 */ }
         _bp.generating = false;
       }
-      const cohorts = Object.keys(days).sort().map(slot => ({
-        slot, at: days[slot].at, picks: (days[slot].picks || []).map(p => ({ ...p, dir: p.dir === "long" ? "long" : "short" })),
-        entryDay: days[slot].at ? bpEntryDay(days[slot].at) : null,
-      })).filter(c => c.entryDay && c.picks.length);
+      // 多个简报日（如周六/周日/周一各一份）会落在同一个入场日：合并成一张，同代码+方向只留最早那份，
+      // 否则同一日期会重复出现多张卡片。
+      const byDay = new Map();
+      Object.keys(days).sort().forEach(slot => {
+        const at = days[slot].at, entryDay = at ? bpEntryDay(at) : null;
+        const picks = (days[slot].picks || []).map(p => ({ ...p, dir: p.dir === "long" ? "long" : "short" }));
+        if (!entryDay || !picks.length) return;
+        const g = byDay.get(entryDay);
+        if (!g) { byDay.set(entryDay, { slot, at, picks, entryDay }); return; }
+        picks.forEach(p => { if (!g.picks.some(q => q.sym === p.sym && q.dir === p.dir)) g.picks.push(p); });
+      });
+      const cohorts = [...byDay.values()];
       const J = { results: {}, adjResults: {}, openResults: {} };
       const failed = new Set();          // 行情那一批没拉到的代码——和「代码根本不存在」是两回事
       if (cohorts.length) {
@@ -7051,13 +7059,16 @@ function rsAdjustGrade(grade, rsResult) {
     const days = [...cohorts].reverse().map(c => {
       return `<details class="bp-day"${_bpOpen.has(c.slot) ? " open" : ""} data-bp="${c.slot}"><summary>
         <span class="bp-day-d">${c.entryDay}</span><span style="color:var(--fg-3)">周${dowOf(c.entryDay)}</span>${(() => {
-          // 最佳表现：按方向计分（做空跌了才算赢），只看有至今收益的、非重复/无数据的
-          const cand = c.rows.filter(r => !r.dup && !r.bad && !r.fail && r.s && r.s.last != null)
-            .map(r => ({ r, v: r.dir === "short" ? -r.s.last : r.s.last }));
-          if (!cand.length) return "";
-          const b = cand.reduce((m, x) => x.v > m.v ? x : m);
-          const raw = b.r.s.last;   // 显示标的自己的涨跌幅（与卡片「至今」同值同精度）；只有排名按方向计分
-          return `<span class="bp-day-best" title="按方向计分的最佳一只（做空跌了才算赢）；数字是该股自己的涨跌幅">最佳 <b>${bpEsc(b.r.sym)}</b>${b.r.dir === "short" ? "（空）" : ""} <em class="${raw >= 0 ? "up" : "down"}">${raw >= 0 ? "+" : "−"}${Math.abs(raw).toFixed(1)}%</em></span>`;
+          // 最佳多 / 最佳空：各取本方向表现最好的一只，显示该股自己的涨跌幅（与卡片「至今」同值同精度）
+          const ok = r => !r.dup && !r.bad && !r.fail && r.s && r.s.last != null;
+          const pick = d => {
+            const l = c.rows.filter(r => ok(r) && r.dir === d);
+            if (!l.length) return "";
+            const b = l.reduce((m, r) => (d === "long" ? r.s.last > m.s.last : r.s.last < m.s.last) ? r : m);
+            const v = b.s.last;
+            return `<span class="bp-day-best" title="${d === "long" ? "做多里涨得最多的一只" : "做空里跌得最多的一只"}；数字是该股自己的涨跌幅">${d === "long" ? "多" : "空"} <b>${bpEsc(b.sym)}</b> <em class="${v >= 0 ? "up" : "down"}">${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}%</em></span>`;
+          };
+          return `<span class="bp-day-bests">${pick("long")}${pick("short")}</span>`;
         })()}
 </summary>
         <div class="bp-pk-list">${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<div class="bp-pk${r.dup ? " is-dup" : ""}">
