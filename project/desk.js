@@ -6946,6 +6946,11 @@ function rsAdjustGrade(grade, rsResult) {
         if (!g) { byDay.set(entryDay, { slot, at, picks, entryDay }); return; }
         picks.forEach(p => { if (!g.picks.some(q => q.sym === p.sym && q.dir === p.dir)) g.picks.push(p); });
       });
+      // 每个入场日固定只留 3 多 3 空：按简报先后顺序取，后来的简报补不进来
+      byDay.forEach(g => {
+        const n = { long: 0, short: 0 };
+        g.picks = g.picks.filter(p => n[p.dir]++ < 3);
+      });
       const cohorts = [...byDay.values()];
       const J = { results: {}, adjResults: {}, openResults: {} };
       const failed = new Set();          // 行情那一批没拉到的代码——和「代码根本不存在」是两回事
