@@ -7056,7 +7056,8 @@ function rsAdjustGrade(grade, rsResult) {
             .map(r => ({ r, v: r.dir === "short" ? -r.s.last : r.s.last }));
           if (!cand.length) return "";
           const b = cand.reduce((m, x) => x.v > m.v ? x : m);
-          return `<span class="bp-day-best" title="最佳表现（做空按相反方向计分）">最佳 <b>${bpEsc(b.r.sym)}</b> <em class="${b.v >= 0 ? "up" : "down"}">${b.v >= 0 ? "+" : "−"}${Math.abs(b.v).toFixed(2)}%</em></span>`;
+          const raw = b.r.s.last;   // 显示标的自己的涨跌幅（与卡片「至今」同值同精度）；只有排名按方向计分
+          return `<span class="bp-day-best" title="按方向计分的最佳一只（做空跌了才算赢）；数字是该股自己的涨跌幅">最佳 <b>${bpEsc(b.r.sym)}</b>${b.r.dir === "short" ? "（空）" : ""} <em class="${raw >= 0 ? "up" : "down"}">${raw >= 0 ? "+" : "−"}${Math.abs(raw).toFixed(1)}%</em></span>`;
         })()}
 </summary>
         <div class="bp-pk-list">${[...c.rows].sort((a, b) => (a.dir === b.dir ? 0 : a.dir === "long" ? -1 : 1)).map(r => `<div class="bp-pk${r.dup ? " is-dup" : ""}">
