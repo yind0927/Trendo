@@ -11907,7 +11907,7 @@ function rsAdjustGrade(grade, rsResult) {
 
         <div class="rvw-verdict">
           <div class="rvw-headline">
-            <span class="rvw-hl-item"><b class="num">${combinedItems.length}</b> 笔</span>
+            <span class="rvw-hl-item">已平仓 <b class="num">${combinedItems.length} 笔</b></span>
             <span class="rvw-hl-sep">·</span>
             <span class="rvw-hl-item">已实现 <b class="num ${monthCls}">${fmt.signed(Math.round(monthPnl))}</b></span>
             <span class="rvw-hl-sep">·</span>

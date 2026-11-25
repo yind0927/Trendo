@@ -2791,7 +2791,13 @@
     .rvw-eq-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
     .rvw-eq-op { display: none; }
     .rvw-eq-term.rvw-eq-result { grid-column: 1 / -1; }
-    .rvw-headline b { font-size: 17px; }
+    /* 判定头：横排四项会在「胜率 60% ·」后面折行、留下悬空的分隔点，徽章还被 margin-left:auto
+       顶到折行那一行的右端。手机端改成 2×2 指标格（标签在上、数字在下），分隔点隐藏，徽章独占首行。 */
+    .rvw-headline { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; align-items: start; }
+    .rvw-hl-sep { display: none; }
+    .rvw-hl-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 11px; color: var(--fg-3); }
+    .rvw-hl-item b { font-size: 19px; margin-right: 0; }
+    .rvw-headline .rvw-tag { grid-column: 1 / -1; order: -1; margin-left: 0; justify-self: start; }
   }
   .simb-part-hd { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
   .simb-part-zh { font-size: 12px; font-weight: 700; color: var(--fg-1); letter-spacing: .02em; }
@@ -7119,8 +7125,8 @@
   </div>
 </div>
 
-<script src="data.js?v=925"></script>
-<script src="desk.js?v=925"></script>
+<script src="data.js?v=926"></script>
+<script src="desk.js?v=926"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
