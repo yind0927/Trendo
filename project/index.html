@@ -5731,6 +5731,31 @@
     .modal-backdrop.open > .modal { animation: sheet-up .3s cubic-bezier(.22,1,.36,1); }
   }
 
+  /* ============ DESKTOP + SHARED MOTION (v927) ============ */
+  @media (hover:hover) and (pointer:fine) {
+    .filter-chip, .tab, .btn, .hc-view-toggle, .brief-gen-btn, .brief-refresh {
+      transition: transform .11s cubic-bezier(.2,.8,.2,1), background-color .15s, border-color .15s, color .15s;
+    }
+    .filter-chip:active, .tab:active, .btn:active, .hc-view-toggle:active,
+    .brief-gen-btn:active, .brief-refresh:active { transform: scale(.96); }
+    .hc-card, .journal-card, .wl-card { transition: transform .15s cubic-bezier(.2,.8,.2,1), border-color .15s, background-color .15s; }
+    .hc-card:hover, .journal-card:hover, .wl-card:hover { transform: translateY(-1px); }
+    .hc-card:active, .journal-card:active, .wl-card:active { transform: scale(.99); }
+  }
+  /* Fold content eases in instead of snapping (opacity/transform only). */
+  @keyframes fold-in { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+  details[open] > :not(summary) { animation: fold-in .2s cubic-bezier(.22,1,.36,1); }
+  /* Value flash when a price-driven number changes (class toggled by JS). */
+  @keyframes val-up   { from { background: color-mix(in oklch, var(--up) 28%, transparent); } to { background: transparent; } }
+  @keyframes val-down { from { background: color-mix(in oklch, var(--down) 28%, transparent); } to { background: transparent; } }
+  .val-flash-up   { animation: val-up .9s ease-out; border-radius:4px; }
+  .val-flash-down { animation: val-down .9s ease-out; border-radius:4px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    details[open] > :not(summary), .val-flash-up, .val-flash-down { animation: none !important; }
+    .hc-card:hover, .journal-card:hover, .wl-card:hover { transform: none !important; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .page-enter,
     .modal-backdrop.open,
@@ -7125,8 +7150,8 @@
   </div>
 </div>
 
-<script src="data.js?v=926"></script>
-<script src="desk.js?v=926"></script>
+<script src="data.js?v=927"></script>
+<script src="desk.js?v=927"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

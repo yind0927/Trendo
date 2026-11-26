@@ -3388,7 +3388,15 @@ function rsAdjustGrade(grade, rsResult) {
     const heroPct = $(".hero-price .pct", dr);
     const heroPnl = $(".hero-price .pnl", dr);
     const heroR   = $(".hero-price .hero-r", dr);
-    if (heroP)   heroP.textContent = `$${price(h.last)}`;
+    if (heroP) {
+       const nt = `$${price(h.last)}`;
+       if (heroP.textContent && heroP.textContent !== nt) {
+         const up = parseFloat(nt.replace(/[$,]/g, "")) > parseFloat(heroP.textContent.replace(/[$,]/g, ""));
+         heroP.classList.remove("val-flash-up", "val-flash-down"); void heroP.offsetWidth;
+         heroP.classList.add(up ? "val-flash-up" : "val-flash-down");
+       }
+       heroP.textContent = nt;
+     }
     if (heroPct) { heroPct.textContent = fmt.pct(h.pnlPct); heroPct.className = `pct ${pnlSign}`; }
     if (heroPnl) { heroPnl.textContent = fmt.signed(h.pnlDollar); heroPnl.className = `pnl ${pnlSign}`; }
     if (heroR && h.rMult != null) { heroR.textContent = fmt.rMult(h.rMult); heroR.className = `hero-r ${fmt.sign(h.rMult)}`; }
