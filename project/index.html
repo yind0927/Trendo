@@ -5731,6 +5731,17 @@
     .modal-backdrop.open > .modal { animation: sheet-up .3s cubic-bezier(.22,1,.36,1); }
   }
 
+  /* ============ DASHBOARD TOP CARDS: FILLED STYLE (v928) ============ */
+  /* Same language as Analytics' overview tiles: flat --bg-2 fill, no outline, no decorative glow.
+     Scoped to #overview so the Sim page's own overview is untouched. */
+  #overview .ov-card { background: var(--bg-2); border: none; }
+  #overview .ov-card::before { display: none; }
+  #overview #nav-card { background: color-mix(in oklch, var(--accent) 9%, var(--bg-2)); }
+  #overview .ov-card:has(.value .up)   { background: color-mix(in oklch, var(--up) 7%, var(--bg-2)); }
+  #overview .ov-card:has(.value .down) { background: color-mix(in oklch, var(--down) 7%, var(--bg-2)); }
+  #overview .ov-card:nth-child(2) .value { text-shadow: none; }
+  #overview .ov-alloc, .overview > .ov-alloc { background: var(--bg-2); border: none; }
+
   /* ============ DESKTOP + SHARED MOTION (v927) ============ */
   @media (hover:hover) and (pointer:fine) {
     .filter-chip, .tab, .btn, .hc-view-toggle, .brief-gen-btn, .brief-refresh {
@@ -7150,8 +7161,8 @@
   </div>
 </div>
 
-<script src="data.js?v=927"></script>
-<script src="desk.js?v=927"></script>
+<script src="data.js?v=928"></script>
+<script src="desk.js?v=928"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate
