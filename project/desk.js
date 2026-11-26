@@ -942,6 +942,14 @@ function rsAdjustGrade(grade, rsResult) {
       else if (f === "qty") el.textContent = Math.round(h.qty).toString();
       else el.textContent = `$${price(h[f])}`;
     };
+    const _kindSel = $("[data-kind-edit]", dr);
+    if (_kindSel) _kindSel.addEventListener("change", () => {
+      h.kind = _kindSel.value;
+      saveToStorage();
+      if (currentPage === "sim") { renderSimTable(); renderSimOverview(); }
+      else { renderTable(); renderOverview(); }
+      toast(`${h.sym} 类型已改为 ${_kindSel.selectedOptions[0].textContent}`, "ok");
+    });
     $$("[data-pos-field]", dr).forEach(el => {
       el.addEventListener("focus", () => {
         el.textContent = el.textContent.replace(/^\$/, "");
@@ -3694,7 +3702,7 @@ function rsAdjustGrade(grade, rsResult) {
           </div>
           <div class="drawer-idname">
             <div class="mono" style="font-size:17px;font-weight:600">${h.sym}</div>
-            <div class="muted" style="font-size:11.5px">${h.name} · ${kindLabel}</div>
+            <div class="muted" style="font-size:11.5px">${h.name} · ${isClosed ? kindLabel : `<select class="drawer-kind-sel" data-kind-edit title="类型填错了可在这里改" style="font:inherit;color:inherit;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:0 4px">${[["equity","Equity"],["etf","ETF"],["crypto","Crypto"]].map(([v,l]) => `<option value="${v}"${(h.kind || "equity") === v ? " selected" : ""}>${l}</option>`).join("")}</select>`}</div>
           </div>
           <!-- .drawer-meta and .drawer-btns are display:contents on desktop, so the flex
                row there is exactly as it always was. On a phone they become real groups,
@@ -12597,6 +12605,13 @@ function rsAdjustGrade(grade, rsResult) {
 
   function wireSimDrawerEdits(h) {
     const dr = $("#drawer");
+    const _kindSel = $("[data-kind-edit]", dr);
+    if (_kindSel) _kindSel.addEventListener("change", () => {
+      h.kind = _kindSel.value;
+      saveToStorage();
+      renderSimTable(); renderSimOverview();
+      toast(`${h.sym} 类型已改为 ${_kindSel.selectedOptions[0].textContent}`, "ok");
+    });
     $$("[data-pos-field]", dr).forEach(el => {
       el.addEventListener("focus", () => {
         el.textContent = el.textContent.replace(/^\$/, "");

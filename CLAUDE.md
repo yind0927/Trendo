@@ -1700,6 +1700,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v925 | **AI 总结：同日合并后每个入场日固定只留 3 多 3 空**（v924 合并多份简报后标的会超过 6 个）。按简报先后顺序取，每方向前 3 个，后来的简报补不进来。 |
 | v926 | **分析复盘判定头手机端排版**：横排四项（笔数·已实现·胜率·盈亏因子）在 390px 下会在「胜率 60% ·」后折行，留下悬空分隔点，判定徽章还被顶到折行那一行右端。手机端改为 2×2 指标格（标签在上、数字在下），分隔点隐藏，徽章独占首行；第一项文案改为「已平仓 N 笔」使四项都是「标签+数字」结构。桌面不变（月度回测与现持仓共用同一模板，一并受益）。 |
 | v927 | **微交互与动效第一批（只动 opacity/transform，不改布局与配色）**：①桌面（`hover:hover`+`pointer:fine`）补按压反馈——chip/tab/btn 按下 scale(.96)、卡片悬停上浮 1px、按下 .99（手机端 v7 起已有）；②所有 `<details>` 展开内容 `fold-in` 淡入下移 4px（.2s）；③抽屉实时价变化时 `.hero-price .p` 闪一下涨绿/跌红（`.val-flash-up/down`，.9s，`syncDrawerLive` 里触发）；全部在 `prefers-reduced-motion` 下关闭。 |
+| v929 | **撤回 v928 顶部卡片填充风格（回到 v927 样式）+ 抽屉里可改持仓类型**：用户觉得填充色块奇怪，整体 revert。新增：持仓中抽屉头部「名称 · Equity」改为下拉框（Equity/ETF/Crypto），改后立即 `saveToStorage()` 并重渲染表格与总览，toast 提示；真实仓（`wireDrawerEdits`）与模拟仓（`wireSimDrawerEdits`）各接一份；已平仓抽屉仍只读显示。注意 `kind` 影响筛选分类与 crypto 的 `-USD` 行情代码；挂单（`SIM_PENDING`）里的 kind 不在此处改，需撤单重下。 |
 
 ---
 
