@@ -3450,6 +3450,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
     wireExecRecordDeletes(h, false);
     wireDrawerSwipe(false);
+    drawerIn();
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     document.body.classList.add("drawer-open");
@@ -4515,6 +4516,7 @@ function rsAdjustGrade(grade, rsResult) {
         tab.classList.add("active");
         activeTab = tab.dataset.tab;
         filter = "all"; closedFilter = "all";
+        tabSwap($("#holdings-cards")?.closest(".panel"));
         const isOpen = activeTab === "open";
         // closedAt has no meaning for an open position and pnl-desc has none for a ledger,
         // so each tab lands on its own sensible default instead of carrying the other's over.
@@ -8224,6 +8226,19 @@ function rsAdjustGrade(grade, rsResult) {
     });
   }
 
+  // 切换页签时让下方内容轻轻淡入（仅 opacity/transform，结束后不留 transform，避免形成 containing block）
+  function tabSwap(panel) {
+    if (!panel) return;
+    [...panel.children].forEach(el => {
+      if (el.classList.contains("panel-head")) return;
+      el.classList.remove("tab-swap"); void el.offsetWidth; el.classList.add("tab-swap");
+    });
+  }
+  function drawerIn() {
+    const d = $("#drawer"); if (!d) return;
+    d.classList.remove("drawer-in"); void d.offsetWidth; d.classList.add("drawer-in");
+    clearTimeout(drawerIn._t); drawerIn._t = setTimeout(() => d.classList.remove("drawer-in"), 600);
+  }
   function switchPage(page) {
     if (_archView && page !== "sim") exitArchiveView(true);
     currentPage = page;
@@ -12579,6 +12594,7 @@ function rsAdjustGrade(grade, rsResult) {
     }
     wireExecRecordDeletes(h, true);
     wireDrawerSwipe(true);
+    drawerIn();
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     document.body.classList.add("drawer-open");
@@ -13045,7 +13061,7 @@ function rsAdjustGrade(grade, rsResult) {
       tabClosed?.classList.add("active"); tabOpen?.classList.remove("active");
     }
     if (tabOpen) tabOpen.addEventListener("click", () => {
-      simActiveTab = "open"; simFilter = "all"; simClosedFilter = "all";
+      simActiveTab = "open"; simFilter = "all"; simClosedFilter = "all"; tabSwap($("#sim-holdings-cards")?.closest(".panel"));
       simSortKey = "pnl"; simSortDir = -1; simClosedRange = "all";
       tabOpen.classList.add("active"); if (tabClosed) tabClosed.classList.remove("active");
       const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");
@@ -13054,7 +13070,7 @@ function rsAdjustGrade(grade, rsResult) {
       renderSimTable();
     });
     if (tabClosed) tabClosed.addEventListener("click", () => {
-      simActiveTab = "closed"; simFilter = "all"; simClosedFilter = "all";
+      simActiveTab = "closed"; simFilter = "all"; simClosedFilter = "all"; tabSwap($("#sim-holdings-cards")?.closest(".panel"));
       simSortKey = "closedAt"; simSortDir = -1;
       tabClosed.classList.add("active"); if (tabOpen) tabOpen.classList.remove("active");
       const sfo = $("#sim-filters-open"), sfc = $("#sim-filters-closed");

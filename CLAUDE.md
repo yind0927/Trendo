@@ -1702,6 +1702,7 @@ h.bx.entrySectorEtf  // 板块ETF代码（如 "XLK"）
 | v927 | **微交互与动效第一批（只动 opacity/transform，不改布局与配色）**：①桌面（`hover:hover`+`pointer:fine`）补按压反馈——chip/tab/btn 按下 scale(.96)、卡片悬停上浮 1px、按下 .99（手机端 v7 起已有）；②所有 `<details>` 展开内容 `fold-in` 淡入下移 4px（.2s）；③抽屉实时价变化时 `.hero-price .p` 闪一下涨绿/跌红（`.val-flash-up/down`，.9s，`syncDrawerLive` 里触发）；全部在 `prefers-reduced-motion` 下关闭。 |
 | v929 | **撤回 v928 顶部卡片填充风格（回到 v927 样式）+ 抽屉里可改持仓类型**：用户觉得填充色块奇怪，整体 revert。新增：持仓中抽屉头部「名称 · Equity」改为下拉框（Equity/ETF/Crypto），改后立即 `saveToStorage()` 并重渲染表格与总览，toast 提示；真实仓（`wireDrawerEdits`）与模拟仓（`wireSimDrawerEdits`）各接一份；已平仓抽屉仍只读显示。注意 `kind` 影响筛选分类与 crypto 的 `-USD` 行情代码；挂单（`SIM_PENDING`）里的 kind 不在此处改，需撤单重下。 |
 | v930 | **Dashboard 顶部卡片改为模拟仓总览同款样式 + 按压动效去卡顿**：①`#overview .ov-card` 对齐 Sim 页 `.sim-card`——平 `--bg-1` 底 + 细描边，去掉青色短线（`.ov-tick`）、右上光晕、NAV 渐变底与渐变字，尺寸与网格布局不变（作用域限定 `#overview`）。②按压卡顿处理：卡片（`.hc-card/.journal-card/.wl-card`）不再用 scale / 悬停上浮（大卡片缩放要重绘整块文字，是卡的来源之一，v927 加的悬停 translateY 一并删除），改成按下 opacity .88、松手 .12s 回弹；小控件缩放 .97 且按下瞬时（`transition-duration:.05s`）；全局给按钮/卡片/行加 `touch-action: manipulation` 去掉触屏点击延迟。 |
+| v931 | **页签切换与抽屉弹出的入场微动效**（用户）。①页签内容淡入：`tabSwap(panel)` 给面板内除 `.panel-head` 外的子元素加 `.tab-swap`（opacity + 6px 上移，.22s），接在现持仓/模拟仓的「持仓中/已平仓」页签点击处；Sim 页子页签（模型选股/存档/模拟仓）靠 CSS 动画在 `display` 由无变有时自动触发。②抽屉弹出：`drawerIn()` 在两个 `openDrawer` 里给 `#drawer` 临时加 `.drawer-in`（600ms 后移除，避免之后切换滑动类时动画重播），头部与正文依次上浮淡入（延迟 .08s/.14s，`backwards` 填充）；左右滑动切换的 `swipe-*` 动画不受影响。全部只用 opacity/transform、结束后不留 transform（不形成 containing block），`prefers-reduced-motion` 下关闭。页面级切换原本就有 `.page-enter`。 |
 
 ---
 
