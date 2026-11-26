@@ -5755,13 +5755,9 @@
   .tab-swap { animation: tab-swap-in .22s cubic-bezier(.22,1,.36,1); }
   #sim-view > #sim-picks-panel, #sim-view > #sim-archive-panel,
   #sim-view[data-subtab="book"] > :not(.page-topbar):not(.page-subtab-bar) { animation: tab-swap-in .22s cubic-bezier(.22,1,.36,1); }
-  @keyframes drawer-part-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-  .drawer.drawer-in > .drawer-head { animation: drawer-part-in .3s .08s cubic-bezier(.22,1,.36,1) backwards; }
-  .drawer.drawer-in > .drawer-body { animation: drawer-part-in .32s .14s cubic-bezier(.22,1,.36,1) backwards; }
   @media (prefers-reduced-motion: reduce) {
     .tab-swap, #sim-view > #sim-picks-panel, #sim-view > #sim-archive-panel,
-    #sim-view[data-subtab="book"] > :not(.page-topbar):not(.page-subtab-bar),
-    .drawer.drawer-in > .drawer-head, .drawer.drawer-in > .drawer-body { animation: none !important; }
+    #sim-view[data-subtab="book"] > :not(.page-topbar):not(.page-subtab-bar) { animation: none !important; }
   }
   /* Fold content eases in instead of snapping (opacity/transform only). */
   @keyframes fold-in { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
@@ -7170,8 +7166,8 @@
   </div>
 </div>
 
-<script src="data.js?v=931"></script>
-<script src="desk.js?v=931"></script>
+<script src="data.js?v=932"></script>
+<script src="desk.js?v=932"></script>
 <script>
 if ("serviceWorker" in navigator) {
   // Auto-reload when a new SW activates (skipWaiting in install + claim in activate

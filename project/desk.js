@@ -3450,7 +3450,6 @@ function rsAdjustGrade(grade, rsResult) {
     }
     wireExecRecordDeletes(h, false);
     wireDrawerSwipe(false);
-    drawerIn();
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     document.body.classList.add("drawer-open");
@@ -8234,11 +8233,6 @@ function rsAdjustGrade(grade, rsResult) {
       el.classList.remove("tab-swap"); void el.offsetWidth; el.classList.add("tab-swap");
     });
   }
-  function drawerIn() {
-    const d = $("#drawer"); if (!d) return;
-    d.classList.remove("drawer-in"); void d.offsetWidth; d.classList.add("drawer-in");
-    clearTimeout(drawerIn._t); drawerIn._t = setTimeout(() => d.classList.remove("drawer-in"), 600);
-  }
   function switchPage(page) {
     if (_archView && page !== "sim") exitArchiveView(true);
     currentPage = page;
@@ -12594,7 +12588,6 @@ function rsAdjustGrade(grade, rsResult) {
     }
     wireExecRecordDeletes(h, true);
     wireDrawerSwipe(true);
-    drawerIn();
     $("#drawer").classList.add("open");
     $("#backdrop").classList.add("open");
     document.body.classList.add("drawer-open");
